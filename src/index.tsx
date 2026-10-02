@@ -22,7 +22,7 @@ const RELAY_URL = process.env.APP_RELAY_URL
 // infra/preview-vps/app.Dockerfile); surfaced on /api/config so the deploy
 // health check can prove the running preview is the commit it built.
 const COMMIT_SHA = process.env.APP_COMMIT_SHA || ''
-const NIP46_RELAY_URL = process.env.NIP46_RELAY_URL || 'wss://relay.nsec.app'
+const NIP46_RELAY_URL = process.env.NIP46_RELAY_URL || 'wss://relay.plebeian.market'
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null

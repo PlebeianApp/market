@@ -136,8 +136,30 @@ def is_relay_path(path: str) -> bool:
     The preview app advertises `wss://<subdomain>/relay` (APP_RELAY_URL) so the
     browser has a relay URL it can resolve and that is not mixed-content
     blocked; Caddy forwards the whole host here and this gateway splices it.
+
+    NDK — which the app hands that URL to — normalizes every relay URL with a
+    trailing slash, so the browser actually dials `/relay/`. Accept an optional
+    trailing slash so the upgrade is spliced instead of HTTP-proxied.
     """
-    return urllib.parse.urlparse(path).path == RELAY_PATH
+    return urllib.parse.urlparse(path).path.rstrip("/") == RELAY_PATH
+
+
+def normalize_relay_request_line(raw: bytes) -> bytes:
+    """Rewrite a WS request line for `/relay[/]` to target exactly `/relay`.
+
+    The relay (nak) serves `/relay`; NDK asks for `/relay/`. Forward the form
+    the relay already answers, preserving any query string. Any other request
+    line is returned unchanged.
+    """
+    try:
+        method, target, version = raw.split(b" ", 2)
+    except ValueError:
+        return raw
+    path, sep, query = target.partition(b"?")
+    if path.rstrip(b"/") != RELAY_PATH.encode():
+        return raw
+    normalized = RELAY_PATH.encode() + (sep + query if sep else b"")
+    return method + b" " + normalized + b" " + version
 
 
 def ask_decision(domain: str, allowed_suffixes: Sequence[str] = TLS_ASK_ALLOWED_SUFFIXES) -> bool:
@@ -534,7 +556,7 @@ def make_handler(state: GatewayState) -> type:
                 self._send_503(pr_number, detail=f"relay connect failed: {e}")
                 return
             try:
-                raw = self.raw_requestline
+                raw = normalize_relay_request_line(self.raw_requestline)
                 for key, value in self.headers.items():
                     raw += f"{key}: {value}\r\n".encode("latin-1")
                 raw += b"\r\n"

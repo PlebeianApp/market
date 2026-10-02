@@ -23,6 +23,7 @@
 FROM oven/bun:latest
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
+COPY patches ./patches
 RUN bun install
 # Build identity, baked into the image ENV so the running preview reports the
 # exact commit it was built from (the deploy health check asserts it via

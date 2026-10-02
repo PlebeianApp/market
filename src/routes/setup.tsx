@@ -200,9 +200,14 @@ function SetupRoute() {
 
 	const getOwnerPubkey = async (event: React.FormEvent) => {
 		event.preventDefault()
+		// @ts-ignore - window.nostr is injected by NIP-07 signer extensions
+		const nostr = window.nostr
+		if (!nostr?.getPublicKey) {
+			toast.error('No Nostr extension detected. Unlock or install a signer (e.g. Alby) for this site, or use the private-key login.')
+			return
+		}
 		try {
-			// @ts-ignore - assuming window.nostr is available from extension
-			const user = await window.nostr?.getPublicKey()
+			const user = await nostr.getPublicKey()
 			if (user) {
 				const npub = nip19.npubEncode(user)
 				form.setFieldValue('ownerPk', npub)

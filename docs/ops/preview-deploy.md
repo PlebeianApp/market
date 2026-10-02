@@ -145,10 +145,60 @@ it raw** to the PR's relay port (`10547 + (N % 100) * 10`): HTTP-level proxying
 cannot carry a WebSocket upgrade, so the request line + headers are forwarded
 verbatim and bytes are copied both ways until either side closes.
 
+**Trailing slash.** Clients normalize relay URLs, and NDK in particular appends
+`/` (`normalizeRelayUrl`), so the browser dials `wss://<sub>/relay/`, not
+`/relay`. The gateway matches an optional trailing slash (`is_relay_path`) and
+rewrites the forwarded request target back to exactly `/relay`
+(`normalize_relay_request_line`) — the form the relay answers. A mismatch here
+is invisible to the CI health check, which uses the literal `/relay`, but the
+browser silently fails the upgrade. `submitAppSettings` likewise publishes to
+the configured app relay (`getMainRelay()`), not the page origin, so it goes
+through the same `/relay` route.
+
+**NIP-46 relay.** The compose service pins `NIP46_RELAY_URL` to
+`wss://relay.plebeian.market`, the project's own app relay
+(`MAIN_RELAY_BY_STAGE.production`). `deploy.yml`, `release.yml` and
+`deploy-auctionsdev.yml` used to set `wss://relay.nsec.app` for their
+environments instead. That is not the upstream default but the app's own
+fallback (`NIP46_RELAY_URL` default in `src/index.tsx`), and three of this
+repo's workflows set it explicitly; the host is unreachable (TCP:443 times out),
+which silently breaks the Nostr Connect / remote-signer lane. The app surfaces
+the value as `nip46Relay` on `/api/config`, and `NostrConnectQR` now defaults to
+it (it previously ignored the config and used a hardcoded list). Extension
+(NIP-07) and private-key logins do not use this relay at all.
+
 The health check therefore asserts **both** that `/` serves a non-empty HTML
 document **and** that `wss://<sub>/relay` completes a WebSocket handshake and a
 Nostr `REQ`. An app that serves HTML but cannot reach its relay is not a preview
 of this application, so it is a failed health check.
+
+## The preview relay is seeded with app settings (and optional dev data)
+
+The per-PR `nak-relay` starts empty. An empty relay means the app serves
+`/setup — no app settings found`, and there are no products, collections, or
+orders to exercise. The deploy therefore seeds the relay before the health
+check:
+
+1. `scripts/seed-preview-settings.ts` publishes the minimum the app needs to
+   boot configured — the kind 31990 app settings, the kind 30000 admin list, and
+   the kind 10002 relay list. It signs with the preview app key
+   (`e2e0000…0001`, the same key the app container runs with) and is
+   **idempotent**: if settings already exist for the app pubkey it publishes
+   nothing and prints `already-seeded`.
+2. `market-app` is restarted. The app caches app settings and the admin list at
+   startup (the same reason `e2e/seed-relay.ts` seeds before the dev server), so
+   events published after startup would not take effect until the next restart.
+
+The seed runs on the CI runner (which already has the repo and dependencies)
+against `wss://<prN>.test-market.orangesync.tech/relay`, wrapped in a short
+retry loop so the DNS + Caddy convergence window cannot flake it.
+
+To also load the development fixture data — the same set `bun run dev:seed`
+publishes locally (products, collections, orders, reviews, profiles, V4V,
+wallets, via `scripts/seed.ts`) — set the repository variable
+`PREVIEW_SEED_FULL` to `true`. The full seed runs only when the minimal seed
+created the settings (first deploy on that relay), so redeploys do not
+duplicate it.
 
 ## What a green `Deploy preview` guarantees
 
@@ -229,6 +279,12 @@ deploy package has to carry them:
   `styles/globals.css` → `@import 'tailwindcss'`: ship `styles/` **and**
   `bunfig.toml`, which enables `[serve.static] plugins =
 ["bun-plugin-tailwind"]` (the plugin that resolves that import).
+- `package.json` → `patchedDependencies` (`rxjs@7.8.2` →
+  `patches/rxjs@7.8.2.patch`): ship `patches/`. `bun install` exits 1 with
+  `error: Couldn't find patch file: 'patches/rxjs@7.8.2.patch'` when the patch
+  files are absent, so every partial deploy package (`deploy.yml`, `release.yml`,
+  `deploy-auctionsdev.yml`) stages `patches/` next to `package.json` and
+  `bun.lock` — the same way `infra/preview-vps/app.Dockerfile` copies both in.
 - Install the **full** dependency set — `bun install`, not
   `bun install --production`. The production install drops `tailwindcss` (a
   devDependency) while keeping `bun-plugin-tailwind`, and the bundle then fails

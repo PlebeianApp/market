@@ -614,13 +614,38 @@ def test_relay_port_math():
     assert gw.relay_port_for_pr(1257) == gw.relay_port_for_pr(1157)
 
 
-def test_is_relay_path_accepts_the_relay_path_only():
+def test_is_relay_path_accepts_the_relay_path_with_optional_trailing_slash():
     assert gw.is_relay_path("/relay")
     assert gw.is_relay_path("/relay?since=0")
-    assert not gw.is_relay_path("/relay/")
+    # NDK normalizes relay URLs with a trailing slash, so the browser dials
+    # /relay/ rather than /relay.
+    assert gw.is_relay_path("/relay/")
+    assert gw.is_relay_path("/relay/?since=0")
     assert not gw.is_relay_path("/")
     assert not gw.is_relay_path("/api/config")
     assert not gw.is_relay_path("/relays")
+
+
+def test_normalize_relay_request_line_targets_the_relay_path():
+    # The relay (nak) serves /relay; NDK asks for /relay/. Forward the former.
+    assert (
+        gw.normalize_relay_request_line(b"GET /relay HTTP/1.1\r\n")
+        == b"GET /relay HTTP/1.1\r\n"
+    )
+    assert (
+        gw.normalize_relay_request_line(b"GET /relay/ HTTP/1.1\r\n")
+        == b"GET /relay HTTP/1.1\r\n"
+    )
+    assert (
+        gw.normalize_relay_request_line(b"GET /relay/?since=0 HTTP/1.1\r\n")
+        == b"GET /relay?since=0 HTTP/1.1\r\n"
+    )
+    # Non-relay request lines are left untouched.
+    assert (
+        gw.normalize_relay_request_line(b"GET /api/config HTTP/1.1\r\n")
+        == b"GET /api/config HTTP/1.1\r\n"
+    )
+    assert gw.normalize_relay_request_line(b"garbage") == b"garbage"
 
 
 def test_relay_path_tunnels_instead_of_http_proxying():

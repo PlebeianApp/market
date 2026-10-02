@@ -142,9 +142,19 @@ jobs:
         # here so server-rendered product previews are exercised on every PR.
         # It runs on the local relay/dev server like every other family in this
         # job: no new triggers, permissions, secrets, or env are introduced.
+        # `Preview relay content` (e2e/tests/preview-content-seed.spec.ts) is
+        # gated here for the same reason: before this term existed the spec was
+        # collectable but never SELECTED (83 of 186 tests were selected; the
+        # spec's own test was not among them), so the local lane could not fail
+        # on an unseeded relay. On this lane the spec takes its documented
+        # local branch — `ensureScenario('marketplace')` seeds the suite's own
+        # relay and the read must reach a TERMINAL state (a rendered card, or
+        # the app's explicit empty-feed state); the preview-only fixture
+        # assertions stay behind `TARGETS_EXTERNAL_APP` and are exercised by the
+        # post-deploy preview-lane step in `.github/workflows/preview-deploy.yml`.
         # `src/lib/__tests__/e2e-workflow-gate-membership.test.ts` fails if a
-        # describe in that spec stops matching this pattern.
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock|OG Meta Tags|Authentication' --repeat-each=2
+        # describe in either spec stops matching this pattern.
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock|OG Meta Tags|Authentication|Preview relay content' --repeat-each=2
 
       - name: Show server logs on failure
         if: failure()
