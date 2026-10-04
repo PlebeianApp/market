@@ -58,13 +58,48 @@ A bid is timely only when:
 
 `accepted_time < effective_end`
 
-Anti-sniping currently uses:
+The frozen P0 prototype tested this anti-sniping profile:
 
 - trigger: final **60 s**;
 - extension: **60 s**;
 - maximum total extension: **1,800 s / 30 min**.
 
-These are tested prototype values, not automatically final production tuning.
+These are historical prototype values, not the selected proposed architecture
+profile.
+
+Separately, a maintainer parameter decision dated 2026-10-04 selects this
+profile for the proposed architecture:
+
+- trigger window: final **300 seconds**;
+- response window: restore **300 seconds** after a qualifying bid;
+- maximum total extension: **1,800 seconds**.
+
+For this rule, `t` is the canonical committed accepted bid time in consensus
+seconds, `E` is the current effective end, and `B` is the original/base end. A
+canonically committed valid bid qualifies when `t >= E - 300` and `t < E`.
+Only for such a qualifying bid:
+
+`candidate_end = t + 300`
+
+`E' = min(max(E, candidate_end), B + 1800)`
+
+This restores 300 seconds after the qualifying bid; it does not add 300
+seconds to the previous effective end. At the boundaries:
+
+- `t == E - 300` qualifies but need not increase `E`;
+- `t < E - 300` does not qualify;
+- `t == E` is late under the strict end comparison;
+- the total-extension cap can leave fewer than 300 seconds after a qualifying
+  bid.
+
+Invalid or rejected bids cannot extend the auction. The proposed 300-second
+profile has not been verified by the frozen P0 evidence; it requires focused
+verification during implementation and must pass that verification before the
+implementation candidate can be accepted. That verification is **NOT_RUN** for
+this documentation-only amendment. The longer response window does not
+guarantee near-deadline inclusion or eliminate proposer omission or bounded
+timestamp influence. The pre-existing timestamp arithmetic-domain and overflow
+policy remains a future implementation issue.
 
 ## Winner and collateral rules
 
@@ -143,7 +178,8 @@ The frozen P0 survived adversarial testing for:
 - racing bids;
 - global collateral conflicts;
 - canonical winner derivation;
-- anti-sniping boundaries;
+- anti-sniping boundaries for the historical P0 60-second trigger,
+  60-second extension, and 1,800-second cap;
 - receipt reconstruction;
 - replay/operation-ID ownership;
 - malformed and ambiguous JSON/Unicode inputs;
@@ -186,6 +222,11 @@ Before real value is enabled, a separate review must cover at minimum:
 - Production still needs independent hosts/operators and real-money review.
 
 ## Maintainer decision requested
+
+On 2026-10-04, a maintainer selected the proposed 300-second trigger window,
+300-second response window, and unchanged 1,800-second total-extension cap
+documented above. That parameter decision does not ratify this proposed ADR or
+its seven broader architecture choices.
 
 Approve this ADR only if maintainers agree with:
 
