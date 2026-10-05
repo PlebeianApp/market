@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Date
 
@@ -221,14 +221,15 @@ Before real value is enabled, a separate review must cover at minimum:
 - Last-second inclusion is not perfectly fair.
 - Production still needs independent hosts/operators and real-money review.
 
-## Maintainer decision requested
+## Maintainer ratification
 
-On 2026-10-04, a maintainer selected the proposed 300-second trigger window,
+On 2026-10-04, a maintainer selected the 300-second trigger window,
 300-second response window, and unchanged 1,800-second total-extension cap
-documented above. That parameter decision does not ratify this proposed ADR or
-its seven broader architecture choices.
+documented above.
 
-Approve this ADR only if maintainers agree with:
+On 2026-10-05, this ADR was ratified and PR #1407 was merged.
+
+The accepted architecture choices are:
 
 1. **4 validators / 3-of-4 / f=1** for the MVP;
 2. **CometBFT** as the consensus engine;
