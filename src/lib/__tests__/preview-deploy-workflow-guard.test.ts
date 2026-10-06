@@ -15,6 +15,19 @@
  *  2. The `teardown` job never checked the repository out, so `gh pr comment`
  *     failed with `fatal: not a git repository` and the "Preview torn down"
  *     comment was never posted (observed on the closed predecessor PR #1257).
+ *  3. The fix for (2) removed the checkout entirely — while the job's cleanup
+ *     steps run repository-local scripts (`infra/preview-vps/*.sh`). On the
+ *     first IN-REPO PR close the job therefore died with
+ *
+ *       bash: infra/preview-vps/ssh-prepare.sh: No such file or directory
+ *       ##[error]Process completed with exit code 127
+ *
+ *     every cleanup step was skipped, and the notification step still published
+ *     "Preview torn down … DNS record deleted" (run 35327856582, issue #1358).
+ *     The checkout is back, pinned to the default branch so it cannot fail on a
+ *     vanished head branch; `GH_REPO` stays, because the two are not
+ *     alternatives. The job now also verifies its own work, and the notification
+ *     derives its claim from the removal steps' real outcomes.
  *
  * These are text-level assertions on purpose: the workflow is the artifact under
  * test, and the repo carries no YAML dependency to parse it with.
@@ -58,6 +71,11 @@ function stepNamed(job: string, name: string): string {
 	return hit
 }
 
+/** Step names of a job, in execution order. */
+function stepNames(job: string): string[] {
+	return stepsOf(job).map((s) => /- name: (.+)/.exec(s)?.[1]?.trim() ?? '')
+}
+
 /** Secret names a step injects via `NAME: ${{ secrets.NAME }}` (env blocks). */
 function secretsInjectedBy(step: string): string[] {
 	return [...step.matchAll(/([A-Z][A-Z0-9_]*): \$\{\{ secrets\.[A-Z0-9_]+ \}\}/g)].map((m) => m[1])
@@ -85,6 +103,14 @@ function runBody(step: string): string {
 const required = provisionRequiredSecrets()
 const deployJob = jobBlock('deploy')
 const teardownJob = jobBlock('teardown')
+
+const CHECKOUT_STEP = 'Checkout code (teardown scripts)'
+const TARGET_STEP = 'Resolve teardown target'
+const PROBE_STEP = 'Probe VPS state (dry run, removes nothing)'
+const CLEANUP_STEP = 'Release port offset, stop containers, clean up VPS directory'
+const DNS_STEP = 'Delete Cloudflare DNS record'
+const VERIFY_STEP = 'Verify teardown (fail loudly when resources remain)'
+const REPORT_STEP = 'Report teardown outcome (PR comment on a close, log on a probe)'
 
 describe('preview deploy preflight guard', () => {
 	test('provision.sh hard-requires the six preview secrets', () => {
@@ -135,26 +161,184 @@ describe('preview deploy preflight guard', () => {
 
 describe('preview teardown job', () => {
 	test('gives the gh CLI a repository context so the comment can be posted', () => {
-		// The teardown job intentionally has no checkout (the PR's head branch may
-		// be gone once it closes), so `gh` must be told the repo explicitly —
-		// otherwise `gh pr comment` dies with
-		// `failed to run git: fatal: not a git repository`.
-		expect(stepNamed(teardownJob, 'Update PR comment (torn down)')).toContain('GH_REPO: ${{ github.repository }}')
+		// `gh` must not depend on the working tree: the PR's head branch may be
+		// gone once it closes, so `gh` is told the repo explicitly — otherwise
+		// `gh pr comment` dies with
+		// `failed to run git: fatal: not a git repository`. The job also checks
+		// out now (issue #1358): the two are not alternatives.
+		expect(stepNamed(teardownJob, REPORT_STEP)).toContain('GH_REPO: ${{ github.repository }}')
 	})
 
 	test('guards its VPS and DNS steps on the same secret set', () => {
 		const guard = stepNamed(teardownJob, 'Check preview VPS secrets')
 		expect(secretsInjectedBy(guard).sort()).toEqual(required)
 
-		for (const name of ['Release port offset, stop containers, clean up VPS directory', 'Delete Cloudflare DNS record']) {
+		for (const name of [CLEANUP_STEP, DNS_STEP]) {
 			expect(stepNamed(teardownJob, name)).toContain('steps.secrets.outputs.previews_ready == ')
 		}
 	})
 
-	test('always updates the PR comment, even when secrets are absent', () => {
-		const body = stepNamed(teardownJob, 'Update PR comment (torn down)')
-		expect(body).toContain('!cancelled()')
-		expect(body).not.toMatch(/steps\.secrets\.outputs\.previews_ready == /)
+	test('always reports the teardown outcome, even when secrets are absent', () => {
+		const report = stepNamed(teardownJob, REPORT_STEP)
+		expect(report).toContain('!cancelled()')
+		expect(report).not.toMatch(/steps\.secrets\.outputs\.previews_ready == /)
+	})
+})
+
+/**
+ * Issue #1358. The teardown job was red by construction on every in-repo PR
+ * close, its cleanup was dead code, and its own guard test certified the defect
+ * by asserting the no-checkout design. These assertions are the ones that were
+ * missing.
+ */
+describe('preview teardown job (issue #1358)', () => {
+	test('checks the teardown scripts out, pinned to the default branch', () => {
+		const checkout = stepNamed(teardownJob, CHECKOUT_STEP)
+		expect(checkout).toContain('actions/checkout')
+		// The head branch can be gone by the time a PR closes, so the ref must
+		// not depend on it. `infra/preview-vps/*` lives on the default branch.
+		expect(checkout).toContain('ref: ${{ github.event.repository.default_branch }}')
+		expect(checkout).not.toContain('pull_request.head')
+		// Ordering is the substance: a checkout that ran after the first
+		// repo-script step would not save it from exit 127.
+		expect(stepNames(teardownJob)[0]).toBe(CHECKOUT_STEP)
+		expect(stepNames(teardownJob).indexOf(CHECKOUT_STEP)).toBeLessThan(stepNames(teardownJob).indexOf('Prepare SSH key + pinned host key'))
+	})
+
+	test('never lets the notification claim work a step did not do', () => {
+		const report = stepNamed(teardownJob, REPORT_STEP)
+		// The verdict is derived from the removal steps' real outcomes, so a
+		// `skipped` or `failure` step can no longer produce "torn down".
+		for (const id of ['ssh', 'cleanup', 'dns', 'verify']) {
+			expect(report).toContain(`steps.${id}.outcome`)
+		}
+		expect(report).toContain('Preview torn down')
+		expect(report).toContain('Preview teardown incomplete')
+		expect(report).toContain('did not succeed')
+		// A claim of removal is only reachable when nothing is left un-done.
+		expect(report).toContain('NOT_DONE')
+	})
+
+	test('every step outcome the notification reads is a real step id in the job', () => {
+		const report = stepNamed(teardownJob, REPORT_STEP)
+		const ids = new Set([...teardownJob.matchAll(/^\s+id: (\S+)\s*$/gm)].map((m) => m[1]))
+		const referenced = [...report.matchAll(/steps\.([a-z0-9_-]+)\.outcome/g)].map((m) => m[1])
+		expect(referenced.length).toBeGreaterThanOrEqual(4)
+		for (const id of referenced) expect(ids.has(id)).toBe(true)
+	})
+
+	test('a step that publishes a state claim is not continue-on-error', () => {
+		// continue-on-error made the false "torn down" comment unkillable.
+		expect(stepNamed(teardownJob, REPORT_STEP)).not.toContain('continue-on-error')
+	})
+
+	test('verifies its own work and fails loudly when resources remain', () => {
+		const verify = stepNamed(teardownJob, VERIFY_STEP)
+		expect(verify).toContain("steps.target.outputs.mode == 'execute'")
+		// DNS: the zone API is authoritative and uncached, so it is the gate
+		// (a DoH lookup can still serve a cached answer for ttl=60).
+		expect(verify).toContain('dns_records?type=A&name=')
+		expect(verify).toContain('FAILED=1')
+		// VPS: an answer that proves nothing must fail the step, not pass it.
+		expect(verify).toContain('app_dir=absent')
+		expect(verify).toContain('SSH_FAILED')
+		// And the step must actually turn the check red.
+		expect(verify).toContain('exit "$FAILED"')
+		// Verification only means something after the deletes.
+		const order = stepNames(teardownJob)
+		expect(order.indexOf(CLEANUP_STEP)).toBeLessThan(order.indexOf(VERIFY_STEP))
+		expect(order.indexOf(DNS_STEP)).toBeLessThan(order.indexOf(VERIFY_STEP))
+	})
+
+	test('the notification derives the verdict but never posts on a manual probe', () => {
+		const report = stepNamed(teardownJob, REPORT_STEP)
+		expect(report).toContain('!= "pull_request"')
+		expect(report).toContain('not posted to the PR')
+	})
+
+	test('the dry-run/execute switch fails closed when the target never resolves', () => {
+		// A target step that failed (a probe refused because the PR is still
+		// open, say) leaves `mode` empty. Every destructive step must be gated
+		// on the target having succeeded, and the dry-run verdict must require
+		// `mode == 'dry-run'` explicitly — otherwise an unresolved target would
+		// be reported as a harmless probe.
+		for (const name of [PROBE_STEP, CLEANUP_STEP, DNS_STEP, VERIFY_STEP]) {
+			expect(stepNamed(teardownJob, name)).toContain("steps.target.outcome == 'success'")
+		}
+		const report = stepNamed(teardownJob, REPORT_STEP)
+		expect(report).toContain('[ "$MODE" = "dry-run" ]')
+		expect(report).toContain('[ "$MODE" = "execute" ] && [ -z "$NOT_DONE" ]')
+		expect(report).not.toContain('[ "$MODE" != "execute" ]')
+		// The target's own outcome is part of the verdict, so a failed target is
+		// named in the "incomplete" message instead of being invisible.
+		expect(report).toContain('resolve-target:${{ steps.target.outcome }}')
+	})
+
+	test('an unanswered question is never reported as verified', () => {
+		const verify = stepNamed(teardownJob, VERIFY_STEP)
+		// DNS: an unreadable zone answer is a failure, not an empty zone.
+		expect(verify).toContain('so DNS teardown is unverified')
+		expect(verify).toContain('DOH_STATUS')
+		// VPS: the SSH-failure branch is matched before the absence branch, so a
+		// partial answer followed by a failed connection cannot read as "gone".
+		expect(verify.indexOf('*SSH_FAILED*)')).toBeGreaterThanOrEqual(0)
+		expect(verify.indexOf('*SSH_FAILED*)')).toBeLessThan(verify.indexOf('*app_dir=absent*)'))
+	})
+})
+
+/**
+ * Issue #1358, item 5: the `closed` path was unreachable before merge, which is
+ * exactly why the exit-127 defect could not be caught in the PR that introduced
+ * it. A `workflow_dispatch` probe makes the next change to this job verifiable
+ * without closing a PR.
+ */
+describe('preview teardown on-demand probe (issue #1358)', () => {
+	test('the workflow offers a manual entry point that defaults to a dry run', () => {
+		expect(workflow).toContain('workflow_dispatch:')
+		expect(workflow).toMatch(/pr_number:[\s\S]{0,200}?required: true/)
+		expect(workflow).toMatch(/execute:[\s\S]{0,300}?default: false/)
+	})
+
+	test('the teardown job runs for a dispatch or a close, and nothing else', () => {
+		expect(teardownJob).toMatch(/if: github\.event_name == 'workflow_dispatch' \|\| github\.event\.action == 'closed'/)
+	})
+
+	test('the deploy job never runs on a dispatch', () => {
+		// Without the event guard, `github.event.action` is empty on a dispatch
+		// and `!= 'closed'` is true — a probe would deploy.
+		expect(deployJob).toMatch(/if: github\.event_name == 'pull_request' && github\.event\.action != 'closed'/)
+	})
+
+	test('a probe can only target a PR that is already closed', () => {
+		const target = stepNamed(teardownJob, TARGET_STEP)
+		expect(target).toContain('pulls/$PR')
+		expect(target).toContain('[ "$STATE" != "closed" ]')
+		expect(target).toContain('exit 1')
+	})
+
+	test('every removal step is skipped in a dry run', () => {
+		for (const name of [CLEANUP_STEP, DNS_STEP, VERIFY_STEP]) {
+			expect(stepNamed(teardownJob, name)).toContain("steps.target.outputs.mode == 'execute'")
+		}
+		expect(stepNamed(teardownJob, PROBE_STEP)).toContain("steps.target.outputs.mode != 'execute'")
+	})
+
+	test('the dry run proves the script and SSH path works and removes nothing', () => {
+		// This is the part that would have caught exit 127 before merge.
+		const probe = stepNamed(teardownJob, PROBE_STEP)
+		expect(probe).toContain('infra/preview-vps/remote-ssh.sh')
+		expect(probe).not.toContain('rm -rf')
+		expect(probe).not.toContain('docker image rm')
+		expect(probe).not.toContain('--release-port-offset')
+		expect(probe).not.toContain('docker compose down')
+	})
+
+	test('the probe group cannot cancel a live deploy run', () => {
+		// `concurrency` keys on the PR number, so an event-name-independent
+		// group would let a probe cancel the in-flight deploy of the same PR.
+		expect(workflow).toMatch(
+			/group: preview-pr-\$\{\{ github\.event_name \}\}-\$\{\{ github\.event\.pull_request\.number \|\| inputs\.pr_number \}\}/,
+		)
 	})
 })
 
