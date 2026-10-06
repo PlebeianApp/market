@@ -19,7 +19,7 @@
  * These are text-level assertions on purpose: the workflow is the artifact under
  * test, and the repo carries no YAML dependency to parse it with.
  */
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, test } from 'bun:test'
@@ -80,6 +80,24 @@ function previewSecretRefs(step: string): string[] {
 function runBody(step: string): string {
 	const at = step.indexOf('\n        run:')
 	return at < 0 ? '' : step.slice(at)
+}
+
+const WORKFLOWS_DIR = '.github/workflows'
+const WORKFLOW_PATHS = readdirSync(join(REPO_ROOT, WORKFLOWS_DIR))
+	.filter((file) => file.endsWith('.yml'))
+	.map((file) => `${WORKFLOWS_DIR}/${file}`)
+	.sort()
+
+/** Workflows that assemble a partial application package for deployment. */
+function packagingWorkflows(): string[] {
+	return WORKFLOW_PATHS.filter((file) => readFileSync(join(REPO_ROOT, file), 'utf8').includes('mkdir -p deploy-package'))
+}
+
+/** Whole paths copied into deploy-package/ by a workflow. */
+function stagedSources(file: string): string[] {
+	const body = readFileSync(join(REPO_ROOT, file), 'utf8')
+	const sources = [...body.matchAll(/^\s*cp (?:-r |--recursive )?(.+?) deploy-package\/?$/gm)].flatMap((match) => match[1].split(/\s+/))
+	return [...new Set(sources)].sort()
 }
 
 const required = provisionRequiredSecrets()
@@ -256,6 +274,26 @@ describe('preview app serves a real document', () => {
 	test('the deploy package ships Bun patchedDependencies inputs', () => {
 		const body = runBody(stepNamed(deployJob, PACKAGE_STEP))
 		expect(body).toContain('cp -r patches deploy-package/')
+	})
+
+	test('every partial deploy package stages its Bun dependency inputs', () => {
+		const packageWorkflows = packagingWorkflows()
+		for (const file of [
+			'.github/workflows/deploy-auctionsdev.yml',
+			'.github/workflows/deploy.yml',
+			'.github/workflows/preview-deploy.yml',
+			'.github/workflows/release.yml',
+		]) {
+			expect(packageWorkflows).toContain(file)
+		}
+
+		const requiredSources = ['package.json', 'bun.lock', 'patches']
+		const missing = packageWorkflows.flatMap((file) => {
+			const sources = stagedSources(file)
+			return requiredSources.filter((source) => !sources.includes(source)).map((source) => `${file}: no ${source} in deploy-package/`)
+		})
+
+		expect(missing).toEqual([])
 	})
 
 	test('the app container starts the prebuilt image (no install at container start)', () => {
