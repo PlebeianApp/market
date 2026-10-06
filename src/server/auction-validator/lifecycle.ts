@@ -43,7 +43,13 @@ import {
 } from '../../lib/auction/validation'
 import type { ParsedPathReleaseEvent, ParsedSettlementEvent } from '../../lib/auction/events'
 import type { ValidatorClaim, ValidatorReason } from '../../lib/auction/constants'
-import { aggregateProofStates, MAX_REPLACEMENT_CHAIN_DEPTH, type ValidatorAuctionState, type ValidatorBidState } from './state'
+import {
+	aggregateProofStates,
+	isSameBidderLeg,
+	MAX_REPLACEMENT_CHAIN_DEPTH,
+	type ValidatorAuctionState,
+	type ValidatorBidState,
+} from './state'
 
 // ============================================================================
 // Public verdict shape
@@ -282,7 +288,18 @@ const deriveSettlementVerdict = (
 	return { claim: 'settled_promptly' }
 }
 
-const buildSettlementChain = (
+/**
+ * Walk a bid's `prev_bid` chain back to its root, keeping only legs that
+ * belong to the same bidder in the same auction (see `isSameBidderLeg`),
+ * then project each kept leg to the canonical (release, NUT-7) evidence
+ * the settlement-completeness check consumes.
+ *
+ * Exported for its unit tests: the scope rule the walk applies (a parent
+ * from another bidder or auction is not a predecessor) is not observable
+ * through `deriveVerdict` alone, because a foreign leg with its own valid
+ * release would silently widen the chain.
+ */
+export const buildSettlementChain = (
 	auctionState: ValidatorAuctionState,
 	bidState: ValidatorBidState,
 	now: number,
@@ -310,8 +327,12 @@ const buildSettlementChain = (
 		legs.unshift(current)
 		const prevBidId = current.bid.prevBidId?.trim()
 		if (!prevBidId) break
-		current = auctionState.bids.get(prevBidId)
-		if (!current) break
+		const parent = auctionState.bids.get(prevBidId)
+		// Stop at a parent that is not this bidder's own leg: naming another
+		// bidder's bid must not pull that bid's release or NUT-7 evidence into
+		// this chain (see isSameBidderLeg).
+		if (!parent || !isSameBidderLeg(current.bid, parent.bid)) break
+		current = parent
 	}
 	for (const leg of legs) {
 		const pathRelease = selectCanonicalEvidence(auctionState, leg, now).release
@@ -345,11 +366,22 @@ const buildProofStateMap = (bidState: ValidatorBidState): Map<string, ReturnType
 	return perProof
 }
 
-const deriveBidLegAmount = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): number => {
+/**
+ * The amount this leg itself locked: the signed cumulative `amount` minus its
+ * predecessor leg's amount. Exported for its unit tests — the rule it encodes
+ * (a predecessor must be this bidder's own leg, in this auction) is not
+ * observable through the verdict path, which skips the token-amount comparison.
+ */
+export const deriveBidLegAmount = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): number => {
 	const prevBidId = bidState.bid.prevBidId?.trim()
 	if (!prevBidId) return bidState.bid.amount
 	const parent = auctionState.bids.get(prevBidId)
-	if (!parent) return bidState.bid.amount
+	// A foreign parent is not a predecessor: fall back to the bid's own amount
+	// rather than credit a difference this leg never locked.
+	if (!parent || !isSameBidderLeg(bidState.bid, parent.bid)) return bidState.bid.amount
+	// A parent at or above this amount cannot be a predecessor either (the client
+	// marks such a chain invalid); never derive a non-positive leg.
+	if (parent.bid.amount >= bidState.bid.amount) return bidState.bid.amount
 	return bidState.bid.amount - parent.bid.amount
 }
 

@@ -139,6 +139,21 @@ export interface ValidatorBidState {
 // Per-auction state
 // ============================================================================
 
+/**
+ * A bid's `prev_bid` names the leg it replaces, so only a parent from the same
+ * bidder — in the same auction — can be that bid's predecessor.
+ *
+ * Resolving the parent by event id alone lets an author name *another* bidder's
+ * bid and have its amount stand in as this leg's predecessor, crediting the
+ * difference between the two amounts to a leg that never locked it. The client
+ * has required the same-bidder rule since #1280 (`verifyBidCollateralChain`,
+ * `src/lib/auction/bidValidation.ts`); the validator's walks apply it here.
+ */
+export const isSameBidderLeg = (bid: ParsedBidEvent, parent: ParsedBidEvent): boolean =>
+	parent.bidderPubkey.toLowerCase() === bid.bidderPubkey.toLowerCase() &&
+	parent.auctionRootEventId === bid.auctionRootEventId &&
+	parent.auctionCoordinate === bid.auctionCoordinate
+
 export interface ValidatorAuctionState {
 	rootAuction: ParsedAuctionEvent
 	auction: ParsedAuctionEvent
