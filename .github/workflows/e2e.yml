@@ -3,8 +3,10 @@ name: E2E Tests
 on:
   push:
     branches: [main, master, 'auctions/**']
+  # No base-branch filter: PRs whose base is not `main`/`master`/`auctions/**`
+  # (e.g. `#1324`, based on `security/1112-...`) were getting no check-suite at
+  # all, because `pull_request.branches` matches the BASE ref of the PR.
   pull_request:
-    branches: [main, master, 'auctions/**']
   workflow_dispatch:
     inputs:
       test_grep:
