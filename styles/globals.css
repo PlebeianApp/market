@@ -293,6 +293,8 @@ button {
 
 	--animate-accordion-down: accordion-down 0.2s ease-out;
 	--animate-accordion-up: accordion-up 0.2s ease-out;
+	/* Indeterminate load bar: a short dash crossing the track (see RelayLoadingBar). */
+	--animate-relay-dash: relay-dash 1.15s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 
 	@keyframes accordion-down {
 		from {
@@ -309,6 +311,15 @@ button {
 		}
 		to {
 			height: 0;
+		}
+	}
+
+	@keyframes relay-dash {
+		0% {
+			transform: translateX(-45%);
+		}
+		100% {
+			transform: translateX(145%);
 		}
 	}
 }

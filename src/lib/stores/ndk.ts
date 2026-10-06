@@ -347,23 +347,35 @@ export const ndkActions = {
 	 */
 	fetchEventsWithTimeout: async (
 		filters: NDKFilter | NDKFilter[],
-		opts?: NDKSubscriptionOptions & { timeoutMs?: number; relaySet?: NDKRelaySet },
+		opts?: NDKSubscriptionOptions & { timeoutMs?: number; relaySet?: NDKRelaySet; requireEose?: boolean },
 	): Promise<Set<NDKEvent>> => {
 		const ndk = ndkStore.state.ndk
 		if (!ndk) throw new Error('NDK not initialized')
 
-		const { timeoutMs = 8000, relaySet, ...subOpts } = opts ?? {}
+		const { timeoutMs = 8000, relaySet, requireEose = false, ...subOpts } = opts ?? {}
 
-		return await new Promise<Set<NDKEvent>>((resolve) => {
+		return await new Promise<Set<NDKEvent>>((resolve, reject) => {
 			const events = new Map<string, NDKEvent>()
 			let settled = false
+			let sawEose = false
 			let timer: ReturnType<typeof setTimeout> | undefined
 
-			const finalize = (subscription?: { stop: () => void }) => {
+			// `outcome` matters only for `requireEose`: a deadline that fires before
+			// EOSE yields whatever happened to arrive (often nothing), and publishing
+			// that as a settled result is how an unresolved relay read becomes a
+			// confident "this seller has no products".
+			const finalize = (subscription: { stop: () => void } | undefined, outcome: 'eose' | 'close' | 'timeout') => {
 				if (settled) return
 				settled = true
 				if (timer) clearTimeout(timer)
 				subscription?.stop()
+				// `outcome !== 'eose'` covers both the deadline and a subscription that
+				// closed early (relay drop): neither is an answer. Only an EOSE has
+				// settled the read, which is what the option name promises.
+				if (requireEose && outcome !== 'eose' && !sawEose) {
+					reject(new Error(`relay subscription produced no EOSE within ${timeoutMs}ms`))
+					return
+				}
 				resolve(new Set(events.values()))
 			}
 
@@ -383,13 +395,16 @@ export const ndkActions = {
 						events.set(key, event)
 					}
 				},
-				onEose: () => finalize(subscription),
-				onClose: () => finalize(subscription),
+				onEose: () => {
+					sawEose = true
+					finalize(subscription, 'eose')
+				},
+				onClose: () => finalize(subscription, 'close'),
 			}
 
 			const subscription = relaySet ? ndk.subscribe(filters, subscriptionOpts, relaySet) : ndk.subscribe(filters, subscriptionOpts)
 
-			timer = setTimeout(() => finalize(subscription), timeoutMs)
+			timer = setTimeout(() => finalize(subscription, 'timeout'), timeoutMs)
 		})
 	},
 
@@ -860,6 +875,26 @@ export const ndkActions = {
 
 	getNDK: () => {
 		return ndkStore.state.ndk
+	},
+
+	/**
+	 * Relay set covering every relay we are currently connected to.
+	 *
+	 * For a read whose author is already known ("this seller, everywhere we are
+	 * reachable"), NDK's per-filter relay selection can pick a subset that cannot
+	 * answer: measured on a seller profile, the subscription reached 2 relays while
+	 * the seller's products sat on 2 different ones, so the page concluded the
+	 * seller had no products. Callers that know they want the whole connected set
+	 * pass this instead of letting the library choose.
+	 */
+	getConnectedRelaySet: (): NDKRelaySet | null => {
+		const ndk = ndkStore.state.ndk
+		if (!ndk) return null
+
+		const relayUrls = ndk.pool.connectedRelays().map((relay) => relay.url)
+		if (relayUrls.length === 0) return null
+
+		return NDKRelaySet.fromRelayUrls(relayUrls, ndk)
 	},
 
 	getZapNdk: () => {
