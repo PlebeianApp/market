@@ -75,6 +75,52 @@ describe('NIP-17 DM relay resolution', () => {
 		expect(result.relays).toEqual(['wss://newer.example'])
 	})
 
+	test('uses the lowest present event id for equal-timestamp replacements regardless of input order', () => {
+		const lowerId = relayListEvent(RECIPIENT_PUBKEY, 200, [['relay', 'wss://lower-id.example']], '0'.repeat(64))
+		const higherId = relayListEvent(RECIPIENT_PUBKEY, 200, [['relay', 'wss://higher-id.example']], 'f'.repeat(64))
+
+		for (const events of [
+			[lowerId, higherId],
+			[higherId, lowerId],
+		]) {
+			const result = resolveNip17DmRelayListFromEvents(events, RECIPIENT_PUBKEY)
+
+			expect(result.status).toBe('ready')
+			expect(result.event).toBe(lowerId)
+			expect(result.relays).toEqual(['wss://lower-id.example'])
+		}
+	})
+
+	test('prefers a present id over a missing id when replacement timestamps tie', () => {
+		const presentId = relayListEvent(RECIPIENT_PUBKEY, 200, [['relay', 'wss://present-id.example']], '0'.repeat(64))
+		const missingId = {
+			...relayListEvent(RECIPIENT_PUBKEY, 200, [['relay', 'wss://missing-id.example']]),
+			id: undefined,
+		}
+
+		for (const events of [
+			[presentId, missingId],
+			[missingId, presentId],
+		]) {
+			const result = resolveNip17DmRelayListFromEvents(events, RECIPIENT_PUBKEY)
+
+			expect(result.status).toBe('ready')
+			expect(result.event).toBe(presentId)
+			expect(result.relays).toEqual(['wss://present-id.example'])
+		}
+	})
+
+	test('prefers a newer replacement even when its event id is higher', () => {
+		const olderLowerId = relayListEvent(RECIPIENT_PUBKEY, 100, [['relay', 'wss://older.example']], '0'.repeat(64))
+		const newerHigherId = relayListEvent(RECIPIENT_PUBKEY, 200, [['relay', 'wss://newer.example']], 'f'.repeat(64))
+
+		const result = resolveNip17DmRelayListFromEvents([olderLowerId, newerHigherId], RECIPIENT_PUBKEY)
+
+		expect(result.status).toBe('ready')
+		expect(result.event).toBe(newerHigherId)
+		expect(result.relays).toEqual(['wss://newer.example'])
+	})
+
 	test('fails closed when the user has no usable kind 10050 relay list', () => {
 		expect(resolveNip17DmRelayListFromEvents([], RECIPIENT_PUBKEY)).toEqual({
 			status: 'missing',
