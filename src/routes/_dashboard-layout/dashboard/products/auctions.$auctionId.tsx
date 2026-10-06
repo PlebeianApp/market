@@ -266,10 +266,23 @@ function DashboardAuctionDetailRoute() {
 
 	const bidsQuery = useAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
 	const bids = bidsQuery.data ?? []
+	// Parse bids once so the NUT-7 evidence reader, the DLEQ keyset acquisition
+	// and the settlement validation all consume the same parsed set.
+	const parsedBids = useMemo(
+		() =>
+			bids
+				.map((b) => parseBidEvent(toRawEvent(b)))
+				.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
+				.map((r) => r.value),
+		[bids],
+	)
 	// Client-side NUT-7 evidence (ADR-0004 §3): winner derivation needs
 	// mint-reported proof states; without them every quorum-confirmed bid
 	// stays bid_pending_review and settled settlements fail Check 3 below.
-	const nut7States = useNut7Polling(bids, trustedMints)
+	// The reader takes parsed bids: a raw relay event carries neither `mint`
+	// nor `proofYs`, so feeding it the query result yields no evidence at all
+	// and silently leaves every bid valid-but-unchecked.
+	const nut7States = useNut7Polling(parsedBids, trustedMints)
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const countdown = useAuctionCountdown(biddingCutoffAt, { showSeconds: true })
 	const now = countdown.now
@@ -282,16 +295,6 @@ function DashboardAuctionDetailRoute() {
 	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, auctionAuditorPubkeys)
 	const verdictsData = verdictsQuery.data ?? []
 
-	// Parse bids once so both the DLEQ keyset acquisition and the settlement
-	// validation use the same parsed set.
-	const parsedBids = useMemo(
-		() =>
-			bids
-				.map((b) => parseBidEvent(toRawEvent(b)))
-				.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
-				.map((r) => r.value),
-		[bids],
-	)
 	// ADR-0011 Blocker 1: gather the mint keysets needed to DLEQ-verify the
 	// bids (bounded to the auction's trusted mints). Without this, DLEQ-required
 	// bids are correctly treated as pending (non-authoritative) — but then the

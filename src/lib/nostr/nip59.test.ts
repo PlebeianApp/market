@@ -13,6 +13,7 @@ import {
 	unwrapNip59GiftWrapWithSigner,
 	type UnsignedRumor,
 } from './nip59'
+import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@/lib/piiSentinelFixture'
 
 const CREATED_AT = 1_700_000_000
 const PII_SENTINELS = [
@@ -21,7 +22,7 @@ const PII_SENTINELS = [
 	'Satoshi Nakamoto',
 	'+15551234567',
 	'Los Angeles',
-	'90210',
+	POSTCODE_PII_SENTINEL,
 	'United States',
 	'Apt Secret Notes',
 ]
@@ -83,7 +84,7 @@ function rumorFor(buyerPubkey: string): UnsignedRumor {
 			['p', 'seller'],
 			['subject', 'order-info'],
 		],
-		content: 'Satoshi Nakamoto buyer@example.com 123 Main Street Apt Secret Notes',
+		content: `Satoshi Nakamoto buyer@example.com 123 Main Street Apt Secret Notes ${POSTCODE_PII_SENTINEL}`,
 	}
 }
 
@@ -139,6 +140,12 @@ function expectNoPii(value: unknown): void {
 }
 
 describe('NIP-59 helper', () => {
+	test('PII scan permits an unrelated hex identifier but rejects the exact plaintext postcode marker', () => {
+		expect(HEX_IDENTIFIER_WITH_POSTCODE).toHaveLength(64)
+		expect(() => expectNoPii({ id: HEX_IDENTIFIER_WITH_POSTCODE })).not.toThrow()
+		expect(() => expectNoPii({ content: POSTCODE_PII_SENTINEL })).toThrow()
+	})
+
 	test('wraps an unsigned rumor as a signed kind 13 seal and signed kind 1059 gift wrap', () => {
 		const buyer = keyPair()
 		const seller = keyPair()
