@@ -75,13 +75,23 @@ profile for the proposed architecture:
 - maximum total extension: **1,800 seconds**.
 
 For this rule, `t` is the canonical committed accepted bid time in consensus
-seconds, `E` is the current effective end, and `B` is the original/base end. A
-canonically committed valid bid qualifies when `t >= E - 300` and `t < E`.
-Only for such a qualifying bid:
+seconds, `E` is the current effective end immediately before the bid, and `B`
+is the immutable original/base end. A canonically committed accepted bid
+qualifies to reset the auction end only when:
+
+1. it becomes the new leader under deterministic selection;
+2. `t >= E - 300`; and
+3. `t < E`.
+
+Only for such a qualifying leader-changing bid:
 
 `candidate_end = t + 300`
 
 `E' = min(max(E, candidate_end), B + 1800)`
+
+Equivalently:
+
+`E' = min(max(E, t + 300), B + 1800)`
 
 This restores 300 seconds after the qualifying bid; it does not add 300
 seconds to the previous effective end. At the boundaries:
@@ -91,6 +101,25 @@ seconds to the previous effective end. At the boundaries:
 - `t == E` is late under the strict end comparison;
 - the total-extension cap can leave fewer than 300 seconds after a qualifying
   bid.
+
+Reset eligibility depends on the deterministic leader outcome, not on whether
+the bidder identity changes:
+
+- an accepted non-leading bid does not reset the auction end;
+- an equal bid does not reset the auction end;
+- a replay or duplicate does not reset the auction end;
+- a rejected bid does not reset the auction end;
+- a strictly higher bid that becomes the leader may reset the auction end; and
+- a strictly higher rebid by the same bidder that becomes the leader may reset
+  the auction end.
+
+The bidder identity does not need to change.
+
+The advertised increment in ADR-0012 remains advisory. This decision does not
+introduce a mandatory minimum increment. As a result, small genuine increases
+that become the leader may still repeatedly earn resets toward the
+`B + 1800` cap. This is an explicit economic-policy limitation, not an
+implementation bug to repair here.
 
 Invalid or rejected bids cannot extend the auction. The proposed 300-second
 profile has not been verified by the frozen P0 evidence; it requires focused
