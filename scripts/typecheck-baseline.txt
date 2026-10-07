@@ -1,0 +1,105 @@
+# TypeScript diagnostic baseline — read by scripts/check-typecheck-baseline.sh
+#
+# Format: <file>|<TSxxxx>|<occurrences>. Line and column are stripped so moving or
+# reformatting code does not rewrite this file, and a diagnostic that gets fixed
+# keeps its count, so the guard ratchets downward instead of re-baselining.
+#
+# Generated from `tsc --noEmit` on a clean `bun install --frozen-lockfile` tree,
+# which is the environment CI runs. 62 first-party diagnostics in the
+# downlevel/ES5-fallback class (TS1378 top-level await, TS2802 iteration) were
+# removed by the tsconfig target change before this file was taken, so they are
+# absent here rather than tolerated.
+#
+# One entry is environment-dependent by design:
+# src/lib/__tests__/relay-applesauce-semantics.test.ts writes a hermetic shim into
+# node_modules at import time, so a clean checkout yields TS2307 for its two
+# dynamic imports while a worktree where that suite has already run yields TS2352
+# instead. Take the baseline from a clean install, not from a working tree.
+#
+# This is a debt ledger, not an allowance. Every entry is a known defect the
+# checker can see; the guard's job is to stop the set from growing while it is paid
+# down. The class it exists to catch is a raw relay event passed where a parsed one
+# is required (#1402), which is a compile error that no CI job currently runs.
+contextvm/server.ts|TS2322|4
+contextvm/server.ts|TS7031|3
+contextvm/__tests__/currency-server.test.ts|TS2322|8
+contextvm/__tests__/currency-server.test.ts|TS2345|1
+contextvm/__tests__/currency-server.test.ts|TS7031|4
+deploy-simple/scripts/app-settings/publish.ts|TS2353|2
+e2e/tests/auction-settlement.spec.ts|TS2322|1
+scripts/gen_payment_details.ts|TS2339|2
+src/components/AuctionCard.tsx|TS2322|3
+src/components/AuctionCard.tsx|TS2740|3
+src/components/AuctionDisplayComponent.tsx|TS2740|1
+src/components/AuctionTimelineChart.tsx|TS2740|1
+src/components/AuctionVerdictPanel.tsx|TS2322|2
+src/components/checkout/WalletSelector.tsx|TS2339|1
+src/components/lightning/LightningPaymentProcessor.tsx|TS2322|1
+src/components/lightning/LightningPaymentProcessor.tsx|TS2345|1
+src/components/migration/MigrationForm.tsx|TS2345|1
+src/components/sheet-contents/products/ProductFormContent.tsx|TS2322|1
+src/feature/wallet/components/Nip60Wallet.tsx|TS2322|3
+src/hooks/useNotificationMonitor.ts|TS2345|7
+src/lib/auction/validation.ts|TS2322|1
+src/lib/cart-persistence.ts|TS18047|2
+src/lib/cart-persistence.ts|TS2322|1
+src/lib/cart-persistence.ts|TS2677|1
+src/lib/orders/nip17OrderPublish.ts|TS2322|1
+src/lib/stores/ndk.ts|TS7006|1
+src/lib/stores/nip60.ts|TS2339|1
+src/lib/stores/nip60.ts|TS2551|1
+src/lib/stores/product-navigation.test.ts|TS2352|1
+src/lib/stores/product-session.test.ts|TS2353|2
+src/lib/__tests__/appSettings.test.ts|TS2769|1
+src/lib/__tests__/auctionBidValidation.test.ts|TS2353|21
+src/lib/__tests__/auctionBidValidation.test.ts|TS2741|1
+src/lib/__tests__/auctionFormStorage.test.ts|TS2353|1
+src/lib/__tests__/auctionValidatorContext.test.ts|TS2741|1
+src/lib/__tests__/auctionValidatorLifecycle.test.ts|TS2741|1
+src/lib/__tests__/auctionValidatorNut7Poller.test.ts|TS2741|1
+src/lib/__tests__/auctionValidatorPublisher.test.ts|TS2741|1
+src/lib/__tests__/auctionWon.test.ts|TS2345|3
+src/lib/__tests__/image-compression.test.ts|TS2345|1
+src/lib/__tests__/image-compression.test.ts|TS2790|2
+src/lib/__tests__/io.test.ts|TS2345|1
+src/lib/__tests__/io.test.ts|TS2352|6
+src/lib/__tests__/io.test.ts|TS2493|11
+src/lib/__tests__/io.test.ts|TS2769|2
+src/lib/__tests__/io.test.ts|TS7006|2
+src/lib/__tests__/nip17OrderTransport.test.ts|TS18047|4
+src/lib/__tests__/nip17Relays.test.ts|TS2339|2
+src/lib/__tests__/relay-applesauce-semantics.test.ts|TS2307|2
+src/lib/__tests__/reserveGuard.test.ts|TS2322|1
+src/lib/__tests__/settlementDescriptor.test.ts|TS2339|2
+src/lib/__tests__/theme-contrast.test.ts|TS2556|4
+src/lib/utils/auctionFormStorage.ts|TS2353|1
+src/lib/utils/paymentDetails.ts|TS2339|3
+src/lib/utils/productFormStorage.ts|TS2339|2
+src/lib/utils/productShippingSelections.ts|TS2339|2
+src/publish/auctions.tsx|TS2554|2
+src/publish/featured.tsx|TS2345|1
+src/publish/orders.test.ts|TS2345|2
+src/publish/payment.tsx|TS2322|1
+src/publish/payment.tsx|TS2345|1
+src/queries/external.tsx|TS2322|1
+src/queries/__tests__/external.test.ts|TS2741|1
+src/queries/__tests__/orders-seam.test.ts|TS2493|1
+src/queries/__tests__/orders-seam.test.ts|TS2769|1
+src/routes/auctions.$auctionId.tsx|TS2322|5
+src/routes/auctions.$auctionId.tsx|TS2740|5
+src/routes/auctions.index.tsx|TS2322|3
+src/routes/checkout.tsx|TS2322|1
+src/routes/_dashboard-layout/dashboard/products/auctions.$auctionId.tsx|TS2322|3
+src/routes/_dashboard-layout/dashboard/products/auctions.$auctionId.tsx|TS2345|1
+src/routes/_dashboard-layout/dashboard/products/auctions.$auctionId.tsx|TS2740|1
+src/routes/_dashboard-layout/dashboard/products/auctions.tsx|TS2322|3
+src/routes/_dashboard-layout/dashboard/products/auctions.tsx|TS2345|5
+src/routes/_dashboard-layout/dashboard/products/auctions.tsx|TS2740|1
+src/routes/_dashboard-layout/dashboard/products/bids.tsx|TS2322|1
+src/routes/_dashboard-layout/dashboard/products/bids.tsx|TS2345|2
+src/routes/_dashboard-layout/dashboard/products/bids.tsx|TS2740|3
+src/routes/posts.$postId.tsx|TS2339|1
+src/routes/posts.index.tsx|TS2339|1
+src/routes/products.$productId.tsx|TS2345|1
+src/routes/products.$productId.tsx|TS2677|1
+src/routes/search.products.tsx|TS7006|2
