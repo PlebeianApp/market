@@ -1,5 +1,6 @@
 import { VALIDATOR_CONFIRM_CLAIMS, VALIDATOR_CONDEMN_CLAIMS } from './constants'
 import type { ParsedValidatorVerdictEvent } from './events'
+import { effectiveVerdictQuorum, requiredVerdictMajority } from './verdictMajority'
 
 /**
  * Result of tallying validator verdicts for a single published bid.
@@ -19,7 +20,17 @@ export interface VerdictQuorumResult {
 	hasNegativeVerdict: boolean
 	/** A verdict exists, but neither a confirm nor a condemn quorum has formed. */
 	hasNeutralVerdict: boolean
+	/** The strict-majority floor implied by the pool size (§4.1). */
+	majorityFloor: number
+	/** The requirement actually applied: `max(declared, majorityFloor)`. */
+	requiredQuorum: number
+	/** The seller's declared `auditor_quorum` is below the majority floor. */
+	declaredBelowMajority: boolean
 }
+
+/**
+ * Strict-majority floor for a validator pool — see `verdictMajority.ts`.
+ */
 
 /**
  * Tally configured-auditor verdicts for one bid into a quorum decision.
@@ -57,7 +68,8 @@ export function computeVerdictQuorum(
 		else if (VALIDATOR_CONDEMN_CLAIMS.has(v.claim)) condemn++
 	}
 
-	const quorum = auditorQuorum && auditorQuorum > 0 ? auditorQuorum : 1
+	const quorum = effectiveVerdictQuorum(auditorQuorum, new Set(validatorPubkeys).size)
+	const majorityFloor = requiredVerdictMajority(new Set(validatorPubkeys).size)
 	const hasPositiveVerdict = confirm >= quorum
 	const hasNegativeVerdict = condemn >= quorum
 
@@ -68,5 +80,8 @@ export function computeVerdictQuorum(
 		hasPositiveVerdict,
 		hasNegativeVerdict,
 		hasNeutralVerdict: !!representative && !hasPositiveVerdict && !hasNegativeVerdict,
+		majorityFloor,
+		requiredQuorum: quorum,
+		declaredBelowMajority: !!auditorQuorum && Number.isSafeInteger(auditorQuorum) && auditorQuorum > 0 && auditorQuorum < majorityFloor,
 	}
 }

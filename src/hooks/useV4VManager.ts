@@ -1,4 +1,6 @@
 import type { V4VDTO } from '@/lib/stores/cart'
+import { clampAllocation, PERCENT_UNIT } from '@/lib/v4v/allocations'
+import type { V4VShare } from '@/lib/v4v/share'
 import {
 	addRecipientToShares,
 	equalizeAllShares,
@@ -78,6 +80,21 @@ export function useV4VManager({ userPubkey, initialShares = [], initialTotalPerc
 
 	// Computed values
 	const sellerPercentage = 100 - totalV4VPercentage
+
+	/**
+	 * The neutral rows the editor renders. Sales stores a fraction of the V4V pool
+	 * (`V4VDTO.percentage`, 0..1); the editor's unit here is per cent, so the fraction
+	 * becomes a percentage of the pool at this boundary — and back again on change.
+	 * Nothing upstream of this hook sees a `V4VShare`, and the component never sees a
+	 * fraction.
+	 */
+	const shares: V4VShare[] = localShares.map((share) => ({
+		id: share.id,
+		name: share.name,
+		pubkey: share.pubkey,
+		bps: clampAllocation(Math.round(share.percentage * 100), PERCENT_UNIT.total),
+		locked: false,
+	}))
 	const formattedSellerPercentage = sellerPercentage.toFixed(0)
 	const formattedTotalV4V = totalV4VPercentage.toFixed(0)
 	const recipientColors = getDistinctColorsForRecipients(localShares)
@@ -161,8 +178,9 @@ export function useV4VManager({ userPubkey, initialShares = [], initialTotalPerc
 		setLocalShares(removeRecipientFromShares(localShares, id))
 	}
 
-	const handleUpdatePercentage = (id: string, newPercentage: number) => {
-		setLocalShares(updateSharePercentage(localShares, id, newPercentage))
+	/** The editor speaks per cent of the pool (its unit); storage keeps the 0..1 fraction. */
+	const handleUpdateAllocation = (id: string, percentOfPool: number) => {
+		setLocalShares(updateSharePercentage(localShares, id, percentOfPool / 100))
 	}
 
 	const handleEqualizeAll = () => {
@@ -228,6 +246,11 @@ export function useV4VManager({ userPubkey, initialShares = [], initialTotalPerc
 		isCheckingZap,
 		publishMutation,
 
+		// Neutral rows + values the agnostic editor consumes
+		shares,
+		totalAllocated: totalV4VPercentage,
+		newRecipientAllocation: newRecipientShare,
+
 		// Computed values
 		sellerPercentage,
 		formattedSellerPercentage,
@@ -242,7 +265,7 @@ export function useV4VManager({ userPubkey, initialShares = [], initialTotalPerc
 		handleProfileSelect,
 		handleAddRecipient,
 		handleRemoveRecipient,
-		handleUpdatePercentage,
+		handleUpdateAllocation,
 		handleEqualizeAll,
 		saveShares,
 	}

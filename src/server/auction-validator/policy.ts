@@ -19,6 +19,7 @@ import { DEFAULT_MAX_SKEW_SECONDS, VALIDATOR_POLICY_KIND, VALIDATOR_POLICY_SCHEM
 import { buildValidatorPolicyContent, buildValidatorPolicyTags } from '../../lib/auction/tagBuilders'
 import type { ValidatorAdmissionPolicy, ValidatorPolicyDocument } from '../../lib/auction/events'
 import { resolveBidSpamPolicy, type BidSpamPolicy } from './spamPolicy'
+import { sanitizeAuctionValidatorRuleset, type AuctionValidatorRuleset } from '../../lib/auction/auctionValidatorPolicy'
 
 export interface PublishValidatorPolicyDeps {
 	signer: NostrSigner
@@ -29,6 +30,15 @@ export interface PublishValidatorPolicyDeps {
 	policy?: Partial<ValidatorPolicyDocument>
 	/** Effective relay-admission limits to publish in the policy document. */
 	spamPolicy?: Partial<BidSpamPolicy>
+	/**
+	 * The ruleset this validator applies — what it demands of the auctions it audits.
+	 *
+	 * Published in the document as `minValidators` / `minQuorumPercent` so a seller can see,
+	 * before publishing, whether this validator will accept their pool. The same ruleset is
+	 * what the service applies when it decides an auction's policy is broken
+	 * (`policyClaim.ts`), so the declaration and the enforcement cannot drift.
+	 */
+	ruleset?: Partial<AuctionValidatorRuleset>
 }
 
 export const resolvePublishedAdmissionPolicy = (
@@ -61,16 +71,30 @@ export const resolvePublishedAdmissionPolicy = (
 export const resolvePublishedValidatorPolicyDocument = (deps: {
 	policy?: Partial<ValidatorPolicyDocument>
 	spamPolicy?: Partial<BidSpamPolicy>
-}): ValidatorPolicyDocument => ({
-	...deps.policy,
-	type: VALIDATOR_POLICY_SCHEMA_TYPE,
-	maxAcceptableSkewSec: deps.policy?.maxAcceptableSkewSec ?? DEFAULT_MAX_SKEW_SECONDS,
-	admission: resolvePublishedAdmissionPolicy(deps.spamPolicy, deps.policy?.admission),
-})
+	/**
+	 * The ruleset this validator applies, declared in the document as `minValidators` /
+	 * `minQuorumPercent` so a seller can see whether this validator will accept their pool before
+	 * publishing. Resolved through the same sanitizer the auction-level claim uses, so what is
+	 * declared here and what is enforced cannot drift apart.
+	 */
+	ruleset?: Partial<AuctionValidatorRuleset>
+}): ValidatorPolicyDocument => {
+	const ruleset = sanitizeAuctionValidatorRuleset(deps.ruleset)
+	return {
+		...deps.policy,
+		type: VALIDATOR_POLICY_SCHEMA_TYPE,
+		maxAcceptableSkewSec: deps.policy?.maxAcceptableSkewSec ?? DEFAULT_MAX_SKEW_SECONDS,
+		admission: resolvePublishedAdmissionPolicy(deps.spamPolicy, deps.policy?.admission),
+		minValidators: ruleset.minimum_validators,
+		minQuorumPercent: ruleset.minimum_quorum_percent,
+	}
+}
 
 export const publishValidatorPolicy = async (deps: PublishValidatorPolicyDeps): Promise<void> => {
 	const tags = buildValidatorPolicyTags({ name: deps.name })
-	const content = buildValidatorPolicyContent(resolvePublishedValidatorPolicyDocument({ policy: deps.policy, spamPolicy: deps.spamPolicy }))
+	const content = buildValidatorPolicyContent(
+		resolvePublishedValidatorPolicyDocument({ policy: deps.policy, spamPolicy: deps.spamPolicy, ruleset: deps.ruleset }),
+	)
 
 	const template = {
 		kind: VALIDATOR_POLICY_KIND as unknown as number,

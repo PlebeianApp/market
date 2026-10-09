@@ -16,6 +16,9 @@
 
 import { z } from 'zod'
 import {
+	AUCTION_LEVEL_VALIDATOR_CLAIMS,
+	AUCTION_POLICY_VERDICT_SCHEMA_TYPE,
+	AUCTION_VERDICT_D_PREFIX,
 	BIDDER_AGGREGATE_REPUTATION_KIND,
 	BIDDER_AGGREGATE_SCHEMA_TYPE,
 	VALIDATOR_CLAIMS,
@@ -25,8 +28,11 @@ import {
 	type Nut7ProofState,
 	type ValidatorClaim,
 } from '../../auction/constants'
+import { AUCTION_VALIDATOR_RULESET_MAX_VALIDATORS } from '../../auction/auctionValidatorPolicy'
 import type {
+	AuctionPolicyVerdictDocument,
 	BidderAggregateReputationDocument,
+	ParsedAuctionPolicyVerdictEvent,
 	ParsedBidderAggregateReputationEvent,
 	ParsedValidatorPolicyEvent,
 	ParsedValidatorVerdictEvent,
@@ -102,6 +108,30 @@ export const parseValidatorVerdictEvent = (event: NostrEventLike): ParseValidato
 		}
 	}
 
+	// An auction-level claim (e.g. `auction_policy_invalid`) is a verdict about the auction
+	// ROOT, not about a bid: it has no bidder and no bid id, and counting it as a bid
+	// condemnation would invalidate every bid in the auction. Refused here rather than
+	// tolerated downstream — see `parseAuctionPolicyVerdictEvent` for the shape that owns it.
+	const rawClaim = readSingleTag(event, 'claim') ?? ''
+	if ((AUCTION_LEVEL_VALIDATOR_CLAIMS as readonly string[]).includes(rawClaim)) {
+		return {
+			ok: false,
+			error: {
+				code: 'auction_level_claim',
+				message: `claim "${rawClaim}" addresses the auction root, not a bid — parse it with parseAuctionPolicyVerdictEvent`,
+			},
+		}
+	}
+	if ((readSingleTag(event, 'd') ?? '').startsWith(AUCTION_VERDICT_D_PREFIX)) {
+		return {
+			ok: false,
+			error: {
+				code: 'auction_level_claim',
+				message: `d tag prefix "${AUCTION_VERDICT_D_PREFIX}" marks an auction-level verdict, not a per-bid one`,
+			},
+		}
+	}
+
 	const intermediate = {
 		id: event.id,
 		validatorPubkey: event.pubkey,
@@ -128,6 +158,101 @@ export const parseValidatorVerdictEvent = (event: NostrEventLike): ParseValidato
 		ok: true,
 		value: { rawEvent: event, ...parsed.data } as ParsedValidatorVerdictEvent,
 	}
+}
+
+// =========================================================================
+// kind 30440 — Auction-level verdict (claim = auction_policy_invalid)
+// =========================================================================
+
+export const AuctionPolicyVerdictDocumentSchema = z.object({
+	type: z.literal(AUCTION_POLICY_VERDICT_SCHEMA_TYPE),
+	pool_size: z.number().int().nonnegative(),
+	declared_quorum: z.number().int().nonnegative(),
+	required_quorum: z.number().int().nonnegative(),
+	issues: z
+		.array(
+			z.object({
+				code: z.string().min(1),
+				detail: z.string(),
+			}),
+		)
+		.min(1, 'an auction-level verdict must name at least one issue'),
+}) satisfies z.ZodType<AuctionPolicyVerdictDocument>
+
+export const AuctionPolicyVerdictEventSchema = z
+	.object({
+		id: nostrEventIdHex,
+		validatorPubkey: nostrPubkeyHex,
+		createdAt: unixSeconds,
+		dTag: z.string().min(1),
+		auctionRootEventId: nostrEventIdHex,
+		auctionCoordinate: addressableCoordinate,
+		claim: z.enum(AUCTION_LEVEL_VALIDATOR_CLAIMS),
+		observedAt: unixSeconds,
+		reason: z.string().optional(),
+		document: AuctionPolicyVerdictDocumentSchema,
+	})
+	.refine((value) => value.dTag === `${AUCTION_VERDICT_D_PREFIX}${value.auctionRootEventId}`, {
+		message: `d tag must equal "${AUCTION_VERDICT_D_PREFIX}<auction_root_event_id>"`,
+		path: ['dTag'],
+	})
+
+export type AuctionPolicyVerdictEventInput = z.infer<typeof AuctionPolicyVerdictEventSchema>
+
+export type ParseAuctionPolicyVerdictResult =
+	| { ok: true; value: ParsedAuctionPolicyVerdictEvent }
+	| { ok: false; error: z.ZodError | { message: string; code: string } }
+
+/**
+ * Parse an auction-level verdict (kind 30440 whose `claim` is an auction-level claim).
+ *
+ * Separate from `parseValidatorVerdictEvent` on purpose: the two shapes differ in what they
+ * address (a bid vs the auction root), and the quorum screen must never see these.
+ */
+export const parseAuctionPolicyVerdictEvent = (event: NostrEventLike): ParseAuctionPolicyVerdictResult => {
+	if (event.kind !== VALIDATOR_VERDICT_KIND) {
+		return {
+			ok: false,
+			error: { code: 'wrong_kind', message: `expected kind ${VALIDATOR_VERDICT_KIND}, got ${event.kind}` },
+		}
+	}
+
+	const claim = readSingleTag(event, 'claim') ?? ''
+	if (!(AUCTION_LEVEL_VALIDATOR_CLAIMS as readonly string[]).includes(claim)) {
+		return {
+			ok: false,
+			error: {
+				code: 'not_auction_level_claim',
+				message: `claim "${claim}" is a per-bid claim, not an auction-level one`,
+			},
+		}
+	}
+
+	let documentJson: unknown = undefined
+	try {
+		documentJson = JSON.parse(event.content || '{}')
+	} catch (err) {
+		return {
+			ok: false,
+			error: { code: 'invalid_json', message: `auction-level verdict content must be JSON: ${(err as Error).message}` },
+		}
+	}
+
+	const parsed = AuctionPolicyVerdictEventSchema.safeParse({
+		id: event.id,
+		validatorPubkey: event.pubkey,
+		createdAt: event.created_at ?? 0,
+		dTag: readSingleTag(event, 'd') ?? '',
+		auctionRootEventId: readSingleTag(event, 'e') ?? '',
+		auctionCoordinate: readSingleTag(event, 'a') ?? '',
+		claim,
+		observedAt: Number.parseInt(readSingleTag(event, 'observed_at') ?? '0', 10) || 0,
+		reason: readSingleTag(event, 'reason'),
+		document: documentJson,
+	})
+	if (!parsed.success) return { ok: false, error: parsed.error }
+
+	return { ok: true, value: { rawEvent: event, ...parsed.data } as ParsedAuctionPolicyVerdictEvent }
 }
 
 // =========================================================================
@@ -170,6 +295,14 @@ export const ValidatorPolicyDocumentSchema = z.object({
 		])
 		.optional(),
 	griefingDecayDays: z.number().int().nonnegative().optional(),
+	// The validator's ruleset — what it demands of the auctions it audits. Declared in
+	// `ValidatorPolicyDocument` since the ruleset amendment, but absent from this schema,
+	// which meant Zod silently stripped both fields and the declared ruleset was
+	// unreadable on the wire: a client could see a validator's fee and name but never the
+	// pool and quorum it requires. Bounds mirror `sanitizeAuctionValidatorRuleset`, which
+	// remains the authority at the point of use (a ruleset is untrusted data).
+	minValidators: z.number().int().positive().max(AUCTION_VALIDATOR_RULESET_MAX_VALIDATORS).optional(),
+	minQuorumPercent: z.number().int().positive().max(100).optional(),
 	notes: z.string().optional(),
 }) satisfies z.ZodType<ValidatorPolicyDocument>
 

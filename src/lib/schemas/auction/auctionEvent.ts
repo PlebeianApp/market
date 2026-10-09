@@ -24,7 +24,7 @@ import { z } from 'zod'
 import {
 	AUCTION_KEY_SCHEME,
 	AUCTION_KIND,
-	AUCTION_SETTLEMENT_POLICY,
+	AUCTION_SETTLEMENT_POLICIES,
 	AUCTION_TYPE_ENGLISH,
 	DEFAULT_AUDITOR_QUORUM,
 	DEFAULT_MAX_SKEW_SECONDS,
@@ -92,8 +92,8 @@ export const AuctionEventSchema = z
 		startingBid: nonNegativeInt,
 		bidIncrement: positiveInt,
 		minBidCurve: z.custom<MinBidCurve>(),
-		settlementPolicy: z.literal(AUCTION_SETTLEMENT_POLICY, {
-			message: `settlement_policy must equal "${AUCTION_SETTLEMENT_POLICY}"`,
+		settlementPolicy: z.enum(AUCTION_SETTLEMENT_POLICIES, {
+			message: `settlement_policy must be one of: ${AUCTION_SETTLEMENT_POLICIES.join(', ')}`,
 		}),
 		keyScheme: z.literal(AUCTION_KEY_SCHEME, { message: `key_scheme must equal "${AUCTION_KEY_SCHEME}"` }),
 		mints: z.array(z.string().url()).min(1, 'at least one mint required'),

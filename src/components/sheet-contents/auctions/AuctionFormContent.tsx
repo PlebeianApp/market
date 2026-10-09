@@ -35,6 +35,23 @@ import {
 	type AuctionSpecEntry,
 } from '@/publish/auctions'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
+import { requiredVerdictMajority } from '@/lib/auction/verdictMajority'
+import { describeValidatorPoolCaution } from '@/lib/auction/auctionValidatorPolicy'
+import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY } from '@/lib/auction/multipartySchedule'
+import { resolveAuctionWorkflow } from '@/lib/workflow/auctionWorkflowResolver'
+import { AuctionV4VTab } from '@/components/sheet-contents/auctions/AuctionV4VTab'
+import { AuctionV4VEditorDialog } from '@/components/sheet-contents/auctions/AuctionV4VEditorDialog'
+
+/** Split a textarea of pubkeys (one per line, commas/spaces tolerated) into a deduped list. */
+const parsePubkeyList = (raw: string | undefined): string[] => {
+	const listed = (raw ?? '')
+		.split('\n')
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0 && !line.startsWith('#'))
+		.map((line) => (line.split(/[\s,]+/)[0] ?? '').toLowerCase())
+		.filter((pubkey) => pubkey.length > 0)
+	return Array.from(new Set(listed))
+}
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@/lib/utils/auctionFormStorage'
 import { useNavigate } from '@tanstack/react-router'
@@ -46,7 +63,7 @@ import { Slider } from '@/components/ui/slider'
 
 type AuctionImage = { imageUrl: string; imageOrder: number }
 
-type AuctionTab = 'name' | 'auction' | 'category' | 'spec' | 'images' | 'shipping'
+type AuctionTab = 'name' | 'auction' | 'category' | 'spec' | 'images' | 'shipping' | 'v4v'
 type ValidationMessages = Partial<Record<AuctionPublishValidationField, string>>
 
 const INITIAL_FORM: AuctionFormData = {
@@ -1606,7 +1623,7 @@ function ShippingTab({
 	)
 }
 
-const TAB_ORDER: AuctionTab[] = ['name', 'auction', 'category', 'spec', 'images', 'shipping']
+const TAB_ORDER: AuctionTab[] = ['name', 'auction', 'category', 'spec', 'images', 'shipping', 'v4v']
 
 const VALIDATION_FIELD_LABELS: Record<AuctionPublishValidationField, string> = {
 	title: 'Title',
@@ -1684,6 +1701,35 @@ export function AuctionFormContent() {
 	const [startMode, setStartMode] = useState<StartMode>('immediate')
 	const [endMode, setEndMode] = useState<EndMode>('duration')
 	const [durationSeconds, setDurationSeconds] = useState<number>(24 * 60 * 60)
+
+	// The auditors this draft will actually list: the V4V step's selection, otherwise
+	// the single legacy field. There is deliberately NO app-default fallback — a
+	// validator the seller never chose must not be published on their behalf, and
+	// with none selected the resolver reports a blocking issue instead of quietly
+	// filling the gap (auctionValidatorPolicy: `no_validator`).
+	const selectedAuditors = useMemo(() => parsePubkeyList(formData.auditorPubkeys), [formData.auditorPubkeys])
+
+	const resolvedAuditors = useMemo(() => {
+		const listed = parsePubkeyList(formData.auditorPubkeys)
+		if (listed.length > 0) return listed
+		const single = formData.auditorPubkey?.trim().toLowerCase()
+		return single ? [single] : []
+	}, [formData.auditorPubkeys, formData.auditorPubkey])
+
+	// The V4V step's own state: an admissible validator set, and a schedule that
+	// compiles. Publishing is refused while anything blocking stands here.
+	const v4vResolution = useMemo(
+		() =>
+			resolveAuctionWorkflow({
+				mode: 'create',
+				auditors: resolvedAuditors,
+				auditor_quorum: requiredVerdictMajority(resolvedAuditors.length),
+				settlement_policy: (formData.payoutRecipients ?? '').trim().length > 0 ? AUCTION_MULTIPARTY_SETTLEMENT_POLICY : undefined,
+				recipientLines: formData.payoutRecipients ?? '',
+				sellerPubkey: userPubkey.toLowerCase(),
+			}),
+		[resolvedAuditors, formData.payoutRecipients, userPubkey],
+	)
 
 	const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null)
 	const draftLoadedRef = useRef(false)
@@ -1772,7 +1818,7 @@ export function AuctionFormContent() {
 	const hasValidImages = !validationMessages.imageUrls
 	const hasValidMints = !validationMessages.trustedMints
 
-	const canSubmit = validationIssues.length === 0
+	const canSubmit = validationIssues.length === 0 && v4vResolution.v4vComplete
 
 	const currentTabIndex = TAB_ORDER.indexOf(activeTab)
 	const isLastTab = currentTabIndex === TAB_ORDER.length - 1
@@ -1784,12 +1830,16 @@ export function AuctionFormContent() {
 		spec: true,
 		images: hasValidImages,
 		shipping: Object.keys(shippingExtraCostErrors).length === 0,
+		// Reachable at any time; whether it is *complete* gates publishing rather
+		// than blocking navigation into it (the seller has to get in to fix it).
+		v4v: true,
 	}
 
-	// Tab at index i is reachable only if every tab before it is valid.
+	// Tab at index i is reachable only if every tab before it is valid, so the form
+	// still walks the seller through in order.
 	const isTabReachable = (tabIndex: number): boolean => {
 		for (let i = 0; i < tabIndex; i++) {
-			if (!tabValid[TAB_ORDER[i]]) return false
+			if (!tabValid[TAB_ORDER[i] as AuctionTab]) return false
 		}
 		return true
 	}
@@ -1811,8 +1861,10 @@ export function AuctionFormContent() {
 
 	const currentTabErrors: string[] = (() => {
 		if (isLastTab) {
+			// The last tab is the V4V step, so it owns that step's blocking reasons as well as
+			// any missing auction field: the same list, in the same place, as every other tab.
 			const fieldsWithIssues = [...new Set(validationIssues.map((i) => i.field))]
-			return fieldsWithIssues.map((f) => `Missing ${VALIDATION_FIELD_LABELS[f]}`)
+			return [...fieldsWithIssues.map((f) => `Missing ${VALIDATION_FIELD_LABELS[f]}`), ...v4vResolution.blockingMessages]
 		}
 		switch (activeTab) {
 			case 'name':
@@ -1840,6 +1892,23 @@ export function AuctionFormContent() {
 		}
 	})()
 
+	const currentTabWarnings: string[] = (() => {
+		if (!isLastTab) return []
+		// The V4V step's caution is a small validator pool: admissible, but it costs either
+		// corroboration or availability. Rendered with the errors, in a softer tone.
+		const caution = describeValidatorPoolCaution(resolvedAuditors.length)
+		const resolverWarnings = v4vResolution.issues
+			.filter((entry) => entry.severity === 'warning')
+			// A small pool is already described by the caution above: the ruleset's own wording
+			// for the same condition would only repeat it in different words.
+			.filter((entry) => !(caution !== null && entry.code === 'pool_below_minimum'))
+			.map((entry) => entry.message)
+			.filter((message) => message !== caution && !currentTabErrors.includes(message))
+		return caution ? [caution, ...resolverWarnings] : resolverWarnings
+	})()
+
+	const [v4vEditorOpen, setV4vEditorOpen] = useState(false)
+
 	const handleClearDraft = () => {
 		draftGenerationRef.current++
 		draftLoadedRef.current = true
@@ -1859,6 +1928,14 @@ export function AuctionFormContent() {
 
 		const nowSeconds = Math.floor(Date.now() / 1000)
 		const nextFormData = buildPublishFormData(nowSeconds)
+
+		// Fail closed, in the UI as well as the publish path: an incomplete V4V step
+		// sends the seller back to the tab that explains why, instead of publishing a
+		// single-party auction (or an inadmissible validator set) by accident.
+		if (!v4vResolution.v4vComplete) {
+			setActiveTab('v4v')
+			return
+		}
 
 		try {
 			validateAuctionPublishInput(nextFormData, { nowSeconds, minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
@@ -1883,6 +1960,7 @@ export function AuctionFormContent() {
 		{ value: 'spec', label: 'Spec', showAsterisk: false },
 		{ value: 'images', label: 'Images', showAsterisk: !hasValidImages },
 		{ value: 'shipping', label: 'Shipping', showAsterisk: Object.keys(shippingExtraCostErrors).length > 0 },
+		{ value: 'v4v', label: 'V4V', showAsterisk: !v4vResolution.v4vComplete },
 	]
 
 	return (
@@ -1896,13 +1974,13 @@ export function AuctionFormContent() {
 					}}
 					className="w-full flex flex-col flex-1 min-h-0 overflow-hidden"
 				>
-					<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
+					<TabsList className="w-full bg-transparent h-auto p-0 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-[1px]">
 						{tabs.map((tab, index) => (
 							<TabsTrigger
 								key={tab.value}
 								value={tab.value}
 								disabled={!isTabReachable(index)}
-								className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none disabled:opacity-40 disabled:cursor-not-allowed"
+								className="px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none disabled:opacity-40 disabled:cursor-not-allowed"
 							>
 								{tab.label}
 								{tab.showAsterisk && <span className="ml-1 text-red-500">*</span>}
@@ -1944,6 +2022,15 @@ export function AuctionFormContent() {
 						<TabsContent value="images" className="mt-4">
 							<ImagesTab images={images} setImages={setImages} error={validationMessages.imageUrls} />
 						</TabsContent>
+						<TabsContent value="v4v" className="mt-4">
+							<AuctionV4VTab
+								formData={formData}
+								setFormData={setFormData}
+								auditors={selectedAuditors}
+								resolution={v4vResolution}
+								onEditRecipients={() => setV4vEditorOpen(true)}
+							/>
+						</TabsContent>
 						<TabsContent value="shipping" className="mt-4">
 							<ShippingTab
 								formData={formData}
@@ -1955,6 +2042,15 @@ export function AuctionFormContent() {
 					</div>
 				</Tabs>
 			</div>
+
+			<AuctionV4VEditorDialog
+				open={v4vEditorOpen}
+				onOpenChange={setV4vEditorOpen}
+				formData={formData}
+				setFormData={setFormData}
+				auditors={selectedAuditors}
+				platformPubkey={configStore.state.config.appPublicKey?.trim().toLowerCase()}
+			/>
 
 			<div className="shrink-0 bg-white border-t pt-4 pb-2 mt-2 flex flex-col gap-2">
 				{hasDraft && (
@@ -1978,6 +2074,16 @@ export function AuctionFormContent() {
 							<li key={i} className="text-xs text-red-600 flex items-center gap-1">
 								<span>•</span>
 								{err}
+							</li>
+						))}
+					</ul>
+				)}
+				{currentTabWarnings.length > 0 && (
+					<ul className="mb-3 space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+						{currentTabWarnings.map((warning, i) => (
+							<li key={i} className="flex items-center gap-1 text-xs text-amber-800">
+								<span>•</span>
+								{warning}
 							</li>
 						))}
 					</ul>

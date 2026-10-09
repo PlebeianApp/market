@@ -4,6 +4,7 @@ import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent } 
 import { validateBid } from './validation'
 import { verifyBidDleqWithKeysets, type DleqProof } from '../cashu/dleq'
 import type { MintKeys } from '@cashu/cashu-ts'
+import { effectiveVerdictQuorum } from './verdictMajority'
 
 export type BidClassification = 'valid' | 'pending' | 'invalid'
 
@@ -205,6 +206,11 @@ function classifyBid(
 	condemnVerdicts: ParsedValidatorVerdictEvent[],
 	nut7States?: Map<string, Nut7ProofState>,
 ): ClassifiedBid {
+	// The auction's declared quorum can only ever RAISE the requirement: the
+	// strict-majority floor applies here too, so a seller cannot declare a quorum
+	// two disjoint groups of validators could each reach. Otherwise this path would
+	// be a second, weaker quorum implementation than `computeVerdictQuorum`.
+	const quorum = effectiveVerdictQuorum(auction.auditorQuorum, new Set(auction.auditors).size)
 	// A `won_pending_settlement` verdict is a strictly stronger assertion than
 	// `valid_bid_placed` (the validator confirmed the bid is valid AND is the
 	// canonical pending-settlement winner). Both are collected as confirm
@@ -216,7 +222,7 @@ function classifyBid(
 	// same bid). Counting only `valid_bid_placed` here would make winner
 	// determination break the moment validators publish the settlement-ready
 	// state that `publishBidderPathRelease` requires.
-	if (eligibleConfirms.length >= auction.auditorQuorum) {
+	if (eligibleConfirms.length >= quorum) {
 		return {
 			bid,
 			classification: 'valid',
@@ -243,7 +249,7 @@ function classifyBid(
 	// structural invalidity is deterministic, so honest validators converge on
 	// the same condemnation and quorum forms; a lone malicious validator's
 	// condemn verdict leaves the bid `pending` instead of `invalid`.
-	if (condemnVerdicts.length >= auction.auditorQuorum) {
+	if (condemnVerdicts.length >= quorum) {
 		return {
 			bid,
 			classification: 'invalid',

@@ -141,7 +141,9 @@ describe('cross-leg verdict leak (#1235 Blocking 5)', () => {
 			.filter((r): r is { ok: true; value: ParsedValidatorVerdictEvent } => r.ok)
 			.map((r) => r.value)
 
-		const quorum = resolveProgressDialogVerdictQuorum(parsed, LEG_B_BID_EVENT_ID, VALIDATOR_PUBKEYS, 1)
+		// Single-validator pool: this test is about cross-leg binding, not about the
+		// strict-majority floor (see auctionVerdictMajority.test.ts).
+		const quorum = resolveProgressDialogVerdictQuorum(parsed, LEG_B_BID_EVENT_ID, [AUDITOR_1], 1)
 		expect(quorum.hasPositiveVerdict).toBe(true)
 	})
 })

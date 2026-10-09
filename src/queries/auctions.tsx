@@ -599,13 +599,24 @@ export const fetchAuctionVerdicts = async (
 	// Fail closed: an auction with no configured auditors has no authorized verdicts.
 	if (auditorPubkeys && auditorPubkeys.length === 0) return []
 
-	const filter: NostrFilter = {
+	// One filter per way of identifying the auction, OR-ed by the relay — never AND-ed into a
+	// single filter. The storage backend indexes a tag only while the tag VALUE is at most 100
+	// characters, and the query planner builds an `#a` query from that index with no fallback
+	// scan, so an over-long coordinate is stored, indexed nowhere, and returns nothing. Measured
+	// on the staging relay, controlled A/B: an `a` value of 100 chars is found by an `#a`
+	// filter, a value of 101 chars is not, while a `#d` query finds both. An auction coordinate
+	// is `30408:<64-hex pubkey>:<d>` = 71 characters plus the d-tag, so ANY auction whose d-tag
+	// is 30 characters or longer is invisible to `#a`-filtered reads — and ANDing `#a` with `#e`
+	// loses the event even though `#e` alone finds it.
+	const base: NostrFilter = {
 		kinds: [VALIDATOR_VERDICT_KIND as unknown as number],
 		...(limit === null ? {} : { limit }),
 	}
-	if (auditorPubkeys) filter.authors = auditorPubkeys
-	if (auctionEventId) filter['#e'] = [auctionEventId]
-	if (auctionCoordinates) filter['#a'] = [auctionCoordinates]
+	if (auditorPubkeys) base.authors = auditorPubkeys
+
+	const filter: NostrFilter[] = []
+	if (auctionEventId) filter.push({ ...base, '#e': [auctionEventId] })
+	if (auctionCoordinates) filter.push({ ...base, '#a': [auctionCoordinates] })
 
 	const events = await fetchFn(filter)
 	return (
@@ -616,6 +627,8 @@ export const fetchAuctionVerdicts = async (
 			// Client-side author check: a relay may ignore or over-serve the
 			// `authors` filter, so authorization is enforced again here.
 			.filter((event) => !auditorPubkeys || auditorPubkeys.includes(event.pubkey))
+			// Two filter branches can return the same event once each.
+			.filter((event, index, all) => all.findIndex((other) => other.id === event.id) === index)
 			.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 	)
 }

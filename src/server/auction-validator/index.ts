@@ -18,6 +18,8 @@ import { createVerdictPublisher } from './publisher'
 import { createNut7Poller } from './nut7Poller'
 import { createValidatorSubscriber } from './subscriber'
 import { publishValidatorPolicy } from './policy'
+import { createAuctionPolicyClaimPublisher } from './policyClaim'
+import type { AuctionValidatorRuleset } from '../../lib/auction/auctionValidatorPolicy'
 import { recoverObservedAt } from './observedAtRecovery'
 import type { MintProbePolicy } from './mintReachability'
 import type { ValidatorPolicyDocument } from '../../lib/auction/events'
@@ -30,6 +32,14 @@ export interface StartAuctionValidatorOptions {
 	name?: string
 	/** Optional policy overrides; defaults to fully permissive. */
 	policy?: Partial<ValidatorPolicyDocument>
+	/**
+	 * The ruleset this validator applies — what it demands of the auctions it audits
+	 * (`minimum_validators`, `minimum_quorum_percent`). Published in the kind-30441
+	 * declaration so a seller can see whether this validator will accept their pool, and
+	 * applied when deciding that an auction's policy is broken. Defaults to the protocol
+	 * default ruleset.
+	 */
+	ruleset?: Partial<AuctionValidatorRuleset>
 	/** NUT-7 poll interval in milliseconds. Default 30s. */
 	nut7PollIntervalMs?: number
 	/** Lifecycle-tick interval in milliseconds (close transitions, grief detection). Default 15s. */
@@ -77,6 +87,7 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 			name: options.name ?? 'Plebeian dev validator',
 			policy: options.policy,
 			spamPolicy: resolvedSpamPolicy,
+			ruleset: options.ruleset,
 		})
 		logger.info('[validator] policy published')
 	} catch (err) {
@@ -85,6 +96,17 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 
 	const publisher = createVerdictPublisher({ signer: options.signer, relayPool: options.relayPool })
 	const poller = createNut7Poller({ state, publisher, logger, mintProbePolicy: options.mintProbePolicy })
+
+	// The auction-level claim path: an auction whose own validator policy is broken gets a
+	// kind-30440 `auction_policy_invalid` verdict published against its root, so a bidder sees
+	// the inadmissibility without having to reproduce the assessment. Shares the daemon's
+	// signer, and the same ruleset the kind-30441 declaration above published.
+	const policyClaim = createAuctionPolicyClaimPublisher({
+		signer: options.signer,
+		relayPool: options.relayPool,
+		ruleset: options.ruleset,
+		logger,
+	})
 
 	// Recover the validator's own first-observation timestamps from its
 	// prior kind-30440 verdicts on the relay BEFORE the subscriber starts
@@ -106,6 +128,7 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 		mintProbePolicy: options.mintProbePolicy,
 		seedObservedAt,
 		spamPolicy: resolvedSpamPolicy,
+		policyClaim,
 	})
 
 	await subscriber.start()

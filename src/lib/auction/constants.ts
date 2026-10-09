@@ -14,6 +14,27 @@
 /** Value of the auction event's `settlement_policy` tag — see §4.1. */
 export const AUCTION_SETTLEMENT_POLICY = 'cashu_p2pk_bidder_path_v1'
 
+/**
+ * Value of `settlement_policy` for an auction with a multiparty payout schedule — the
+ * V4V/validator split published in the root's `payout_schedule` tag.
+ *
+ * Canonical here, with the rest of the wire vocabulary; `multipartySchedule.ts` re-exports it
+ * because that module owns the schedule semantics.
+ */
+export const AUCTION_MULTIPARTY_SETTLEMENT_POLICY = 'cashu_p2pk_bidder_path_multiparty_v1'
+
+/**
+ * Every `settlement_policy` value a reader must accept.
+ *
+ * The reader is deliberately permissive across the two: an auction published under either
+ * scheme is a real auction, and refusing to parse one is not a safety property — it just makes
+ * the auction invisible (a multiparty root read as "unparseable" renders as an empty card).
+ * Anything outside this list is still refused.
+ */
+export const AUCTION_SETTLEMENT_POLICIES = [AUCTION_SETTLEMENT_POLICY, AUCTION_MULTIPARTY_SETTLEMENT_POLICY] as const
+
+export type AuctionSettlementPolicy = (typeof AUCTION_SETTLEMENT_POLICIES)[number]
+
 /** Value of the auction event's `key_scheme` tag — single supported scheme in v1. */
 export const AUCTION_KEY_SCHEME = 'hd_p2pk'
 
@@ -167,6 +188,35 @@ export const VALIDATOR_CLAIMS = [
 ] as const
 
 export type ValidatorClaim = (typeof VALIDATOR_CLAIMS)[number]
+
+/**
+ * Validator verdict claims about the **auction**, not about a bid.
+ *
+ * Deliberately kept out of `VALIDATOR_CLAIMS`: the per-bid parser, the quorum screen and
+ * `computeValidatedBids` all key on that list, and an auction-level claim must never be
+ * counted as a bid condemnation (ADR-0003 Appendix D). One claim so far — a validator
+ * reporting that the auction's own validator policy is broken (pool below the ruleset's
+ * minimum, declared quorum below the strict majority) — which makes the auction's outcome
+ * inadmissible without condemning any individual bid.
+ */
+export const AUCTION_LEVEL_VALIDATOR_CLAIMS = ['auction_policy_invalid'] as const
+
+export type AuctionLevelValidatorClaim = (typeof AUCTION_LEVEL_VALIDATOR_CLAIMS)[number]
+
+/** The auction-level claim a validator publishes when the auction's validator policy is broken. */
+export const AUCTION_POLICY_INVALID_CLAIM: AuctionLevelValidatorClaim = 'auction_policy_invalid'
+
+/**
+ * d-tag prefix for an auction-level verdict: `<prefix><auction_root_event_id>`.
+ *
+ * A per-bid verdict's d-tag is `<bidder>:<root>:<bid>`, so the prefix keeps the two
+ * address spaces disjoint by construction — an auction-level claim can never replace, or
+ * be mistaken for, a bid's verdict.
+ */
+export const AUCTION_VERDICT_D_PREFIX = 'auction_policy:'
+
+/** Schema `type` inside an auction-level verdict's content JSON. */
+export const AUCTION_POLICY_VERDICT_SCHEMA_TYPE = 'auction_validator_policy_verdict_v1'
 
 /**
  * Verdict claims that confirm a bid as valid (per AUCTIONS.md §4.4.3).
