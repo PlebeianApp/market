@@ -20,7 +20,7 @@ export function ThemeSwatchGrid({
 	readOnly?: boolean
 }) {
 	return (
-		<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+		<div className="grid grid-cols-1 gap-2">
 			{STOREFRONT_THEME_LIST.map((theme) => (
 				<ThemeSwatchCard
 					key={theme.id}

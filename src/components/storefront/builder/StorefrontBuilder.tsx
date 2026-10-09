@@ -18,10 +18,27 @@ import {
 	type StorefrontThemeId,
 } from '@/lib/schemas/storefront'
 import { cn } from '@/lib/utils'
-import { shouldRenderStorefrontPage, useStorefrontPage, usePublishStorefrontPage } from '@/queries/storefront'
-import { Puck, type Data } from '@puckeditor/core'
-import { ExternalLink, Loader2, Palette } from 'lucide-react'
+import { useConfigQuery } from '@/queries/config'
+import { getNip05ForPubkey, useNip05Settings } from '@/queries/nip05'
+import { useStorefrontPage, usePublishStorefrontPage } from '@/queries/storefront'
+import { getVanityForPubkey, useVanitySettings } from '@/queries/vanity'
+import { Puck, type Data, usePuck } from '@puckeditor/core'
+import {
+	ExternalLink,
+	Globe2,
+	Link2,
+	Loader2,
+	Maximize2,
+	Minimize2,
+	PanelLeft,
+	PanelRight,
+	Palette,
+	Redo2,
+	Send,
+	Undo2,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { toast } from 'sonner'
 import { StorefrontProvider } from '../StorefrontContext'
 import { StorefrontSetupWizard } from './StorefrontSetupWizard'
@@ -75,17 +92,51 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 	const { data: published, isLoading } = useStorefrontPage(pubkey)
 	const publish = usePublishStorefrontPage()
 
+	// The claimed name (if any) is bought on separate dashboard pages today — see
+	// ADR-019 — but the builder is where an author actually needs to know it: it
+	// decides what "View live page" points at and whether to nudge an author who
+	// has never claimed a name at all.
+	const { data: config } = useConfigQuery()
+	const { data: vanitySettings } = useVanitySettings(config?.appPublicKey)
+	const { data: nip05Settings } = useNip05Settings(config?.appPublicKey)
+	const vanityEntry = useMemo(() => getVanityForPubkey(vanitySettings, pubkey), [vanitySettings, pubkey])
+	const nip05Entry = useMemo(() => getNip05ForPubkey(nip05Settings, pubkey), [nip05Settings, pubkey])
+	const liveHref = vanityEntry ? `/${vanityEntry.vanityName}?preview=draft` : `/profile/${pubkey}?preview=draft`
+
 	const [mode, setMode] = useState<BuilderMode>('loading')
 	const [initialData, setInitialData] = useState<Data | null>(null)
 	const [enabled, setEnabled] = useState(false)
 	const [isDirty, setIsDirty] = useState(false)
 	const [errors, setErrors] = useState<string[]>([])
 	const [confirmChangeTemplateOpen, setConfirmChangeTemplateOpen] = useState(false)
+	const [isFullscreen, setIsFullscreen] = useState(false)
 
 	// The live document. Held in a ref rather than state because Puck fires
 	// onChange on every keystroke: re-rendering this shell each time would
 	// remount the editor and steal focus mid-word.
 	const currentData = useRef<Data | null>(null)
+	const editorShellRef = useRef<HTMLDivElement | null>(null)
+
+	useEffect(() => {
+		const updateFullscreenState = () => setIsFullscreen(document.fullscreenElement === editorShellRef.current)
+		document.addEventListener('fullscreenchange', updateFullscreenState)
+		return () => document.removeEventListener('fullscreenchange', updateFullscreenState)
+	}, [])
+
+	const toggleFullscreen = useCallback(async () => {
+		const editorShell = editorShellRef.current
+		if (!editorShell) return
+
+		try {
+			if (document.fullscreenElement === editorShell) {
+				await document.exitFullscreen()
+			} else {
+				await editorShell.requestFullscreen()
+			}
+		} catch {
+			toast.error('Fullscreen mode is unavailable in this browser')
+		}
+	}, [])
 
 	// Decide the starting mode once, from the draft if there is one, else the
 	// published page. Re-deciding after the query settles would discard
@@ -221,74 +272,238 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 		setMode('wizard')
 	}, [])
 
-	const isLive = shouldRenderStorefrontPage(published)
 	const currentThemeId = (currentData.current?.root?.props as { theme?: StorefrontThemeId } | undefined)?.theme
 
-	// `renderHeaderActions` REPLACES Puck's default action area, Publish button
-	// included — so this has to supply its own. That suits us anyway: publishing
-	// here is a signing operation with a pending state and a relay-count result,
-	// none of which Puck's generic button can express.
-	const headerActions = useMemo(
+	// The header-actions override keeps storefront visibility and the explicit
+	// publish flow together. The full header override lays them out in the
+	// two-row dashboard toolbar.
+	const headerActionsOverride = useMemo(
 		() =>
-			function HeaderActions() {
+			function StorefrontHeaderActions() {
 				return (
-					<div className="flex flex-wrap items-center gap-2" data-testid="storefront-builder-actions">
-						<label className="flex items-center gap-2 text-sm font-medium whitespace-nowrap">
-							<Switch
-								checked={enabled}
-								onCheckedChange={handleToggleEnabled}
-								aria-label="Use this page as my public profile"
-								data-testid="storefront-enable-toggle"
-							/>
-							Public
-						</label>
-
-						{isLive && (
-							<a
-								href={`/profile/${pubkey}`}
-								target="_blank"
-								rel="noopener noreferrer"
-								className="inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground"
-							>
-								View live <ExternalLink className="size-3.5" />
-							</a>
-						)}
-
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={requestChangeTemplate}
-							disabled={publish.isPending}
-							data-testid="storefront-change-template"
+					<div className="flex flex-wrap items-center justify-end gap-2" data-testid="storefront-builder-actions">
+						<div
+							className="flex shrink-0 items-center gap-1 rounded-lg border bg-background p-1"
+							role="group"
+							aria-label="Storefront visibility"
 						>
-							<Palette className="mr-1.5 size-3.5" /> Change template
-						</Button>
-
-						{isDirty && (
-							<Button
-								variant="ghost"
-								size="sm"
-								onClick={handleDiscardDraft}
-								disabled={publish.isPending}
-								data-testid="storefront-discard-draft"
-							>
-								Discard
-							</Button>
-						)}
+							<label className="inline-flex h-8 items-center gap-2 rounded-md px-2 text-sm font-medium whitespace-nowrap">
+								<Globe2 className="size-4 text-muted-foreground" aria-hidden="true" />
+								<span>{enabled ? 'Public' : 'Private'}</span>
+								<Switch
+									checked={enabled}
+									onCheckedChange={handleToggleEnabled}
+									aria-label="Make this storefront public"
+									data-testid="storefront-enable-toggle"
+									size="sm"
+								/>
+							</label>
+						</div>
 
 						<Button
-							size="sm"
+							size="lg"
+							className="shrink-0"
 							onClick={() => currentData.current && handlePublish(currentData.current)}
 							disabled={publish.isPending}
 							data-testid="storefront-publish"
 						>
-							{publish.isPending && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+							{publish.isPending ? (
+								<Loader2 className="size-4 animate-spin" aria-hidden="true" />
+							) : (
+								<Send className="size-4" aria-hidden="true" />
+							)}
 							Publish
 						</Button>
 					</div>
 				)
 			},
-		[enabled, handleToggleEnabled, isLive, pubkey, isDirty, handleDiscardDraft, handlePublish, publish.isPending, requestChangeTemplate],
+		[enabled, handleToggleEnabled, handlePublish, publish.isPending],
+	)
+
+	const headerOverride = useMemo(
+		() =>
+			function StorefrontEditorHeader({ actions }: { actions: ReactNode }) {
+				const hostname = typeof window !== 'undefined' ? window.location.hostname : ''
+				const { appState, dispatch, history } = usePuck()
+				const leftSidebarVisible = appState.ui.leftSideBarVisible
+				const rightSidebarVisible = appState.ui.rightSideBarVisible
+				const leftSidebarLabel = leftSidebarVisible ? 'Hide blocks sidebar' : 'Show blocks sidebar'
+				const rightSidebarLabel = rightSidebarVisible ? 'Hide settings sidebar' : 'Show settings sidebar'
+				const fullscreenLabel = isFullscreen ? 'Exit full screen' : 'Enter full screen'
+
+				const toggleSidebar = (sidebar: 'left' | 'right') => {
+					const isWideViewport = window.matchMedia('(min-width: 638px)').matches
+					if (sidebar === 'left') {
+						const nextVisible = !leftSidebarVisible
+						dispatch({
+							type: 'setUi',
+							ui:
+								isWideViewport || !nextVisible
+									? { leftSideBarVisible: nextVisible }
+									: { leftSideBarVisible: true, rightSideBarVisible: false },
+						})
+					} else {
+						const nextVisible = !rightSidebarVisible
+						dispatch({
+							type: 'setUi',
+							ui:
+								isWideViewport || !nextVisible
+									? { rightSideBarVisible: nextVisible }
+									: { rightSideBarVisible: true, leftSideBarVisible: false },
+						})
+					}
+				}
+
+				return (
+					<header
+						data-testid="storefront-editor-header"
+						className="w-full border-b bg-background text-foreground shadow-sm"
+						style={{ gridArea: 'header' }}
+					>
+						<div
+							data-testid="storefront-header-top-row"
+							className="grid grid-cols-1 items-center gap-3 border-b px-4 py-3 sm:grid-cols-[1fr_auto_1fr]"
+						>
+							<div className="flex flex-col items-start gap-1">
+								<Button variant="outline" size="sm" asChild data-testid="storefront-view-live">
+									<a href={liveHref} target="_blank" rel="noopener noreferrer">
+										View live page <ExternalLink className="size-3.5" aria-hidden="true" />
+									</a>
+								</Button>
+								<div className="flex items-center gap-1 pl-1 text-xs text-muted-foreground" data-testid="storefront-identity">
+									<Link2 className="size-3" aria-hidden="true" />
+									{vanityEntry || nip05Entry ? (
+										<span>
+											{[vanityEntry && `${hostname}/${vanityEntry.vanityName}`, nip05Entry && `${nip05Entry.username}@${hostname}`]
+												.filter(Boolean)
+												.join(' · ')}
+										</span>
+									) : (
+										<a
+											href="/dashboard/account/vanity-url"
+											className="underline decoration-dotted hover:text-foreground"
+											data-testid="storefront-claim-identity"
+										>
+											Claim a custom URL &amp; Nostr address
+										</a>
+									)}
+								</div>
+							</div>
+							<h1 className="text-center text-base font-semibold tracking-tight sm:text-lg">Your Storefront</h1>
+							<div className="flex min-w-0 justify-center sm:justify-end">{actions}</div>
+						</div>
+
+						<div
+							data-testid="storefront-header-toolbar-row"
+							className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-4"
+						>
+							<div className="flex items-center gap-1" role="group" aria-label="Editor history and layout">
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									title={leftSidebarLabel}
+									aria-label={leftSidebarLabel}
+									aria-pressed={leftSidebarVisible}
+									data-testid="storefront-sidebar-toggle"
+									onClick={() => toggleSidebar('left')}
+								>
+									<PanelLeft className="size-4" aria-hidden="true" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									title={rightSidebarLabel}
+									aria-label={rightSidebarLabel}
+									aria-pressed={rightSidebarVisible}
+									data-testid="storefront-right-sidebar-toggle"
+									onClick={() => toggleSidebar('right')}
+								>
+									<PanelRight className="size-4" aria-hidden="true" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									title="Undo"
+									aria-label="Undo"
+									disabled={!history.hasPast}
+									data-testid="storefront-undo"
+									onClick={history.back}
+								>
+									<Undo2 className="size-4" aria-hidden="true" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									title="Redo"
+									aria-label="Redo"
+									disabled={!history.hasFuture}
+									data-testid="storefront-redo"
+									onClick={history.forward}
+								>
+									<Redo2 className="size-4" aria-hidden="true" />
+								</Button>
+							</div>
+
+							<div className="ml-auto flex flex-wrap items-center justify-end gap-1">
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									title={fullscreenLabel}
+									aria-label={fullscreenLabel}
+									aria-pressed={isFullscreen}
+									data-testid="storefront-fullscreen-toggle"
+									onClick={toggleFullscreen}
+								>
+									{isFullscreen ? <Minimize2 className="size-4" aria-hidden="true" /> : <Maximize2 className="size-4" aria-hidden="true" />}
+								</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={requestChangeTemplate}
+									disabled={publish.isPending}
+									data-testid="storefront-change-template"
+								>
+									<Palette className="size-4" aria-hidden="true" /> Change template
+								</Button>
+								{isDirty && (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={handleDiscardDraft}
+										disabled={publish.isPending}
+										data-testid="storefront-discard-draft"
+									>
+										Discard
+									</Button>
+								)}
+							</div>
+						</div>
+					</header>
+				)
+			},
+		[
+			handleDiscardDraft,
+			isDirty,
+			isFullscreen,
+			liveHref,
+			nip05Entry,
+			publish.isPending,
+			requestChangeTemplate,
+			toggleFullscreen,
+			vanityEntry,
+		],
+	)
+
+	const scrollableFieldsOverride = useMemo(
+		() =>
+			function ScrollableFields({ children }: { children: ReactNode }) {
+				return (
+					<div className="h-full min-h-0 overflow-y-auto overscroll-y-contain" data-testid="storefront-settings-scroll-area">
+						{children}
+					</div>
+				)
+			},
+		[],
 	)
 
 	if (mode === 'loading') {
@@ -323,7 +538,10 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 		// The provider wraps Puck rather than just the canvas so the sidebar's
 		// product and collection pickers resolve against the same author.
 		<StorefrontProvider value={{ pubkey, isEditing: true }}>
-			<div className="flex h-full min-h-[70vh] flex-col">
+			<div
+				ref={editorShellRef}
+				className={cn('flex h-full min-h-[70vh] flex-col', isFullscreen && 'h-screen min-h-0 w-screen overflow-auto bg-background')}
+			>
 				{errors.length > 0 && (
 					<div
 						role="alert"
@@ -345,8 +563,7 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 						data={initialData}
 						onChange={handleChange}
 						onPublish={handlePublish}
-						renderHeaderActions={headerActions}
-						headerTitle="Your storefront"
+						overrides={{ header: headerOverride, headerActions: headerActionsOverride, fields: scrollableFieldsOverride }}
 						// Rendering inline instead of in an iframe keeps the canvas
 						// inside the app's own stylesheet and React tree, so blocks
 						// look in the editor exactly as they will on the page.

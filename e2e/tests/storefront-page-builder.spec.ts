@@ -81,8 +81,40 @@ test.describe('storefront page builder', () => {
 	async function openBuilder(page: Page) {
 		await page.goto(BUILDER_PATH)
 		await expect(page.getByTestId('storefront-builder')).toBeVisible({ timeout: 20_000 })
-		await expect(page.getByTestId('storefront-publish')).toBeVisible({ timeout: 20_000 })
+		const header = page.getByTestId('storefront-editor-header')
+		const topRow = header.getByTestId('storefront-header-top-row')
+		const toolbarRow = header.getByTestId('storefront-header-toolbar-row')
+		await expect(header.getByRole('heading', { name: 'Your storefront' })).toBeVisible()
+		await expect(topRow.getByTestId('storefront-view-live')).toBeVisible()
+		await expect(topRow.getByTestId('storefront-enable-toggle')).toBeVisible()
+		await expect(topRow.getByTestId('storefront-publish')).toBeVisible({ timeout: 20_000 })
+		await expect(toolbarRow.getByTestId('storefront-sidebar-toggle')).toBeVisible()
+		await expect(toolbarRow.getByTestId('storefront-right-sidebar-toggle')).toBeVisible()
+		await expect(toolbarRow.getByTestId('storefront-undo')).toBeVisible()
+		await expect(toolbarRow.getByTestId('storefront-redo')).toBeVisible()
+		await expect(toolbarRow.getByTestId('storefront-fullscreen-toggle')).toBeVisible()
+		await expect(toolbarRow.getByTestId('storefront-change-template')).toBeVisible()
 	}
+
+	test('toggles the editor sidebars and fullscreen mode', async ({ merchantPage }) => {
+		await merchantPage.setViewportSize({ width: 1280, height: 800 })
+		await openBuilder(merchantPage)
+
+		for (const testId of ['storefront-sidebar-toggle', 'storefront-right-sidebar-toggle']) {
+			const toggle = merchantPage.getByTestId(testId)
+			const initialState = await toggle.getAttribute('aria-pressed')
+			await toggle.click()
+			await expect(toggle).not.toHaveAttribute('aria-pressed', initialState ?? 'false')
+			await toggle.click()
+			await expect(toggle).toHaveAttribute('aria-pressed', initialState ?? 'false')
+		}
+
+		const fullscreenToggle = merchantPage.getByTestId('storefront-fullscreen-toggle')
+		await fullscreenToggle.click()
+		await expect(fullscreenToggle).toHaveAttribute('aria-pressed', 'true')
+		await fullscreenToggle.click()
+		await expect(fullscreenToggle).toHaveAttribute('aria-pressed', 'false')
+	})
 
 	test('builds, publishes, and serves a custom profile page', async ({ merchantPage }) => {
 		const headline = `Handmade by TestMerchant ${Date.now()}`
@@ -100,6 +132,11 @@ test.describe('storefront page builder', () => {
 		const markdownField = merchantPage.getByRole('textbox', { name: /Text \(markdown\)/i })
 		await expect(markdownField).toBeVisible({ timeout: 10_000 })
 		await markdownField.fill(`# ${headline}\n\nEverything here is made to order.`)
+		const draftViewLiveButton = merchantPage.getByTestId('storefront-header-top-row').getByTestId('storefront-view-live')
+		const [draftPreview] = await Promise.all([merchantPage.waitForEvent('popup'), draftViewLiveButton.click()])
+		await expect(draftPreview.getByTestId('storefront-page')).toBeVisible({ timeout: 25_000 })
+		await expect(draftPreview.getByRole('heading', { name: headline })).toBeVisible({ timeout: 15_000 })
+		await draftPreview.close()
 
 		// Nothing reaches a relay until the author opts the page in and presses
 		// Publish — the editor's single network write.
@@ -109,6 +146,11 @@ test.describe('storefront page builder', () => {
 		// The toast names the relays that acknowledged, not merely "saved".
 		await expect(merchantPage.getByText(/published to \d+ relay/i)).toBeVisible({ timeout: 20_000 })
 		await expect(merchantPage.getByTestId('storefront-publish-errors')).toHaveCount(0)
+		const publishedViewLiveButton = merchantPage.getByTestId('storefront-header-top-row').getByTestId('storefront-view-live')
+		await expect(publishedViewLiveButton).toBeVisible()
+		const [livePage] = await Promise.all([merchantPage.waitForEvent('popup'), publishedViewLiveButton.click()])
+		await expect(livePage.getByTestId('storefront-page')).toBeVisible({ timeout: 25_000 })
+		await livePage.close()
 
 		// The published event is addressable at the author's coordinate.
 		const event = await fetchStorefrontEvent(MERCHANT_PK)
