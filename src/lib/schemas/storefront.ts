@@ -126,6 +126,7 @@ export const ProfileHeaderBlockSchema = z.object({
 	props: z.object({
 		...blockBase,
 		showBanner: z.boolean().default(true),
+		fullScreen: z.boolean().default(false),
 		showAbout: z.boolean().default(true),
 		showNip05: z.boolean().default(true),
 		align: alignment.default('center'),

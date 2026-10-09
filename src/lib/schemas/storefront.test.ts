@@ -171,8 +171,13 @@ describe('parseStorefrontPage — valid documents', () => {
 		const page = parseStorefrontPage(raw).page
 		expect(page?.content[0]).toEqual({
 			type: 'ProfileHeader',
-			props: { id: 'p1', showBanner: true, showAbout: true, showNip05: true, align: 'center' },
+			props: { id: 'p1', showBanner: true, fullScreen: false, showAbout: true, showNip05: true, align: 'center' },
 		})
+	})
+
+	test('preserves the full-screen profile header option', () => {
+		const raw = documentWith([block('ProfileHeader', { fullScreen: true })])
+		expect(parseStorefrontPage(raw).page?.content[0]?.props).toMatchObject({ fullScreen: true })
 	})
 
 	test('preserves the enabled flag, which decides whether the page is shown', () => {

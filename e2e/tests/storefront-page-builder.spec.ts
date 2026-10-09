@@ -43,7 +43,10 @@ test.describe('storefront page builder', () => {
 			enabled,
 			root: { props: { title: '', theme: 'default' } },
 			content: [
-				{ type: 'ProfileHeader', props: { id: 'p1', showBanner: true, showAbout: true, showNip05: true, align: 'center' } },
+				{
+					type: 'ProfileHeader',
+					props: { id: 'p1', showBanner: true, fullScreen: true, showAbout: true, showNip05: true, align: 'center' },
+				},
 				{ type: 'Text', props: { id: 't1', markdown: SEED_MARKER, align: 'center', width: 'normal' } },
 				{
 					type: 'ProductGrid',
@@ -117,6 +120,7 @@ test.describe('storefront page builder', () => {
 		const document = JSON.parse(event!.content)
 		expect(document.version).toBe(STOREFRONT_PAGE_VERSION)
 		expect(document.enabled).toBe(true)
+		expect(document.content[0].props.fullScreen).toBe(true)
 
 		// A visitor who is not signed in gets the custom page, not the profile.
 		const visitor = await merchantPage.context().browser()!.newContext()
@@ -124,6 +128,7 @@ test.describe('storefront page builder', () => {
 		try {
 			await visitorPage.goto(`/profile/${MERCHANT_PK}`)
 			await expect(visitorPage.getByTestId('storefront-page')).toBeVisible({ timeout: 25_000 })
+			await expect(visitorPage.getByTestId('storefront-profile-header')).toHaveAttribute('data-full-screen', 'true')
 			await expect(visitorPage.getByRole('heading', { name: headline })).toBeVisible({ timeout: 15_000 })
 			await expect(visitorPage.getByText('Everything here is made to order.')).toBeVisible()
 			// The product grid block resolves the author's live listings.

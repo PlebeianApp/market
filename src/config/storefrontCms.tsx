@@ -89,6 +89,14 @@ export const storefrontCmsConfig: Config = {
 						{ label: 'Hide', value: false },
 					],
 				},
+				fullScreen: {
+					type: 'radio',
+					label: 'Full-screen height',
+					options: [
+						{ label: 'On', value: true },
+						{ label: 'Off', value: false },
+					],
+				},
 				showAbout: {
 					type: 'radio',
 					label: 'About text',
@@ -107,7 +115,7 @@ export const storefrontCmsConfig: Config = {
 				},
 				align: { type: 'select', label: 'Alignment', options: alignOptions },
 			},
-			defaultProps: { showBanner: true, showAbout: true, showNip05: true, align: 'center' },
+			defaultProps: { showBanner: true, fullScreen: false, showAbout: true, showNip05: true, align: 'center' },
 			render: renderBlock('ProfileHeader'),
 		},
 
