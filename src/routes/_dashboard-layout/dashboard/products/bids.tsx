@@ -1,4 +1,4 @@
-import { AuctionCountdown } from '@/components/AuctionCountdown'
+import { AuctionCountdown } from '@/components/auctions/AuctionCountdown'
 import { AvatarUser } from '@/components/AvatarUser'
 import { ProfileName } from '@/components/ProfileName'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'

@@ -58,11 +58,12 @@ PINNED=(
 )
 
 # Glob families that MUST each match at least one file. These are the
-# auction-owned production surfaces: public routes, components, the auction
-# library directories, hooks, schemas, and the server-side validator.
+# auction-owned production surfaces: public routes, components (the
+# `src/components/auctions/` feature directory), the auction library
+# directories, hooks, schemas, and the server-side validator.
 GLOBS=(
 	"$ROOT"/src/routes/auctions.*.tsx
-	"$ROOT"/src/components/Auction*.tsx
+	"$ROOT"/src/components/auctions/*.tsx
 	"$ROOT"/src/lib/auction*.ts
 	"$ROOT"/src/lib/auction/*.ts
 	"$ROOT"/src/lib/auctions/*.ts
@@ -71,7 +72,7 @@ GLOBS=(
 	"$ROOT"/src/hooks/useAuction*.ts
 	"$ROOT"/src/lib/schemas/auction/*.ts
 	"$ROOT"/src/server/auction-validator/*.ts
-	"$ROOT"/src/components/nostr/AuctionSectionGrid.tsx
+	"$ROOT"/src/components/auctions/AuctionSectionGrid.tsx
 	"$ROOT"/src/components/sheet-contents/auctions/*.tsx
 	"$ROOT"/src/components/sheet-contents/NewAuction*.tsx
 	"$ROOT"/src/routes/_dashboard-layout/dashboard/products/auctions*.tsx
@@ -101,6 +102,16 @@ for pattern in "${GLOBS[@]}"; do
 	fi
 done
 shopt -u nullglob
+
+# Deduplicate: with the auctions component family now living in a single
+# directory (`src/components/auctions/`), the `auctions/*.tsx` family glob also
+# matches the explicitly listed `AuctionSectionGrid.tsx`. Counting a file twice
+# would inflate `scanned N` and double-report any hit, so the set is sorted
+# unique before the scan. Both guarantees are preserved: the family glob must
+# still match, and the explicit entry must still exist.
+if [ "${#FILES[@]}" -gt 1 ]; then
+	mapfile -t FILES < <(printf '%s\n' "${FILES[@]}" | sort -u)
+fi
 
 if [ "${#missing[@]}" -gt 0 ]; then
 	echo ""

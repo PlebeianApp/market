@@ -134,7 +134,7 @@ describe('auctions NDK-surface guard (scripts/check-auctions-ndk-surface.sh)', (
 	})
 
 	test('fails (exit 1) when a non-allowlisted auctions file uses ndkActions or ndkStore', async () => {
-		const actions = await stageRepo({ 'src/components/AuctionCard.tsx': NDK_ACTIONS })
+		const actions = await stageRepo({ 'src/components/auctions/AuctionCard.tsx': NDK_ACTIONS })
 		expect(runGuard(actions).exitCode).toBe(1)
 
 		const store = await stageRepo({ 'src/lib/auctionHd.ts': NDK_STORE })

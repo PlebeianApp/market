@@ -25,7 +25,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { nextPublishedBidEventIdOnSessionStart } from '@/hooks/useAuctionBidFunding'
-import { resolveProgressDialogVerdictQuorum } from '@/components/AuctionBidProgressDialog'
+import { resolveProgressDialogVerdictQuorum } from '@/components/auctions/AuctionBidProgressDialog'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
 import { computeVerdictQuorum } from '@/lib/auction/verdictQuorum'
 import type { ParsedValidatorVerdictEvent } from '@/lib/auction/events'

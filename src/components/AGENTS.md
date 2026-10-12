@@ -26,11 +26,17 @@ src/components/
   ui/              ← Shadcn primitives (generated, unmodified)
   ui-wrappers/     ← Wrappers around ui/ primitives with custom styling/behavior
   shared/          ← General-purpose reusable components (non-domain-specific)
-  nostr/           ← Nostr-domain components (users, products, auctions, profiles)
+  nostr/           ← Generalised Nostr-domain components (users, profiles, generic event rendering)
+  auctions/        ← Auctions-domain feature components (bidding, settlement, win prompt)
   layout/          ← Structural components (Header, Footer, Sidebar)
   dialogs/         ← Dialog compositions built on ui/dialog
   theme-migration/ ← ThemeMigrationWrapper + scoped theme infrastructure
 ```
+
+`nostr/` holds **generalised** Nostr-domain components. A domain that has its
+own feature directory (`auctions/`, `checkout/`, `orders/`, …) keeps that
+domain's components in its own directory rather than in `nostr/` — the feature
+directory is where that domain's container rules live.
 
 New components must be placed in the appropriate subdirectory above. Legacy
 components that currently live outside `src/components/` are tracked as
@@ -56,6 +62,7 @@ permitted (importer → importee). All other directions are prohibited:
 | `layout/`                        | `ui/`, `ui-wrappers/`, `shared/`, `nostr/`, `lib/`, `hooks/`, `queries/` (read-only) |
 | `dialogs/`                       | `ui/`, `ui-wrappers/`, `shared/`, `nostr/`, `lib/`, `hooks/`, `queries/`             |
 | `theme-migration/`               | (infrastructure only — no component imports)                                         |
+| `auctions/` (feature dir)        | Any `components/` subdirectory, `lib/`, `hooks/`, `queries/`, `publish/`, `stores/`  |
 | Feature dirs (`checkout/`, etc.) | Any `components/` subdirectory                                                       |
 
 **Dependency cycles are prohibited.** If directory A imports from B, B must
