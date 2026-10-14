@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { ParsedAuctionEvent } from './events'
 import {
 	createAuctionBidTemplate,
+	executeAuctionBidReclaimWorkflow,
 	executeAuctionPathReleaseWorkflow,
 	executeAuctionListingWorkflow,
 	executeAuctionListingTemplateWorkflow,
@@ -9,6 +10,8 @@ import {
 	executeAuctionWinnerClaimWorkflow,
 	executeFundedAuctionBidWorkflow,
 	planAuctionBid,
+	planAuctionBidRecovery,
+	planAuctionBidReclaimTiming,
 	planAuctionSettlement,
 	prepareAuctionListing,
 	prepareAuctionWinnerClaim,
@@ -167,6 +170,72 @@ describe('auction lifecycle SDK workflows', () => {
 		})
 		expect(plan.minimumAmount).toBe(20)
 		expect(plan.suggestedAmount).toBeGreaterThan(plan.amount)
+	})
+
+	test('plans safe retry, exact-event retry, and wallet-owned recovery actions explicitly', () => {
+		expect(planAuctionBidRecovery({ status: 'pre_lock_failure' })).toEqual({ action: 'retry_funding' })
+		expect(planAuctionBidRecovery({ status: 'publish_retryable', bidEventId: 'bid-event' })).toEqual({
+			action: 'retry_publish',
+			bidEventId: 'bid-event',
+		})
+		expect(planAuctionBidRecovery({ status: 'locked_unpublished', tokenId: 'pending-token' })).toEqual({
+			action: 'reclaim_from_wallet',
+			tokenId: 'pending-token',
+		})
+		expect(planAuctionBidRecovery({ status: 'lock_outcome_uncertain', pendingTokenPersisted: true }).action).toBe('inspect_wallet')
+		expect(planAuctionBidRecovery({ status: 'lock_outcome_uncertain', pendingTokenPersisted: false }).action).toBe('manual_recovery')
+		expect(planAuctionBidRecovery({ status: 'published' })).toEqual({ action: 'none' })
+		expect(planAuctionBidRecovery({ status: 'reclaimed' })).toEqual({ action: 'none' })
+	})
+
+	test('uses the wallet-derived reclaim-ready time and never guesses timelock eligibility', () => {
+		expect(planAuctionBidReclaimTiming({ tokenId: 'pending-token', readyAt: 500, now: 499 })).toEqual({
+			status: 'waiting',
+			tokenId: 'pending-token',
+			readyAt: 500,
+			waitSeconds: 1,
+		})
+		expect(planAuctionBidReclaimTiming({ tokenId: 'pending-token', readyAt: 500, now: 500 })).toEqual({
+			status: 'ready',
+			tokenId: 'pending-token',
+		})
+		expect(planAuctionBidReclaimTiming({ tokenId: 'ordinary-token', readyAt: 0, now: 500 })).toEqual({
+			status: 'ready',
+			tokenId: 'ordinary-token',
+		})
+	})
+
+	test('does not call the wallet before the authoritative reclaim-ready time', async () => {
+		let reclaimCalls = 0
+		const outcome = await executeAuctionBidReclaimWorkflow(
+			{ tokenId: 'pending-token', readyAt: 500, now: 499 },
+			{
+				reclaim: async () => {
+					reclaimCalls++
+				},
+			},
+		)
+
+		expect(outcome).toEqual({ status: 'waiting', tokenId: 'pending-token', readyAt: 500, waitSeconds: 1 })
+		expect(reclaimCalls).toBe(0)
+	})
+
+	test('reports wallet-confirmed reclaim and wallet failures distinctly', async () => {
+		const reclaimed = await executeAuctionBidReclaimWorkflow(
+			{ tokenId: 'pending-token', readyAt: 500, now: 500 },
+			{ reclaim: async () => {} },
+		)
+		expect(reclaimed).toEqual({ status: 'reclaimed', tokenId: 'pending-token' })
+
+		const failed = await executeAuctionBidReclaimWorkflow(
+			{ tokenId: 'pending-token', readyAt: 500, now: 500 },
+			{
+				reclaim: async () => {
+					throw new Error('refund key unavailable')
+				},
+			},
+		)
+		expect(failed).toMatchObject({ status: 'failed', tokenId: 'pending-token', error: 'refund key unavailable' })
 	})
 
 	test('does not acquire funding after pre-lock recovery persistence fails', async () => {

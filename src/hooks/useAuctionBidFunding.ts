@@ -1,4 +1,5 @@
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
+import { planAuctionBidRecovery } from '@sdk/commerce/auctions'
 import {
 	AuctionBidLockedButUnpublishedError,
 	AuctionBidLockOutcomeUncertainError,
@@ -804,6 +805,15 @@ export function useAuctionBidFunding({
 	 */
 	const retryBidPublish = useCallback(async () => {
 		if (!pendingBidSubmission) return
+		const recoveryPlan = planAuctionBidRecovery(
+			lockOutcomeUncertainRecoveryRecordId
+				? { status: 'lock_outcome_uncertain', pendingTokenPersisted: lockOutcomeUncertainPendingTokenPersisted === true }
+				: lockedUnpublishedTokenId
+					? { status: 'locked_unpublished', tokenId: lockedUnpublishedTokenId }
+					: publishedBidEventId
+						? { status: 'publish_retryable', bidEventId: publishedBidEventId }
+						: { status: 'pre_lock_failure' },
+		)
 		// #1235 follow-up 3 / round-3 B1 — RECLAIM-ONLY / retry-refused paths:
 		// this session's leg either failed post-lock but pre-publishable (event
 		// finalization or the STRICT recovery-record write failed — funds KNOWN
@@ -813,7 +823,11 @@ export function useAuctionBidFunding({
 		// pipeline (it would re-derive a fresh path and re-lock the delta —
 		// double-lock / double-consume) and there is no publishable event to
 		// rebroadcast either.
-		if (lockedUnpublishedTokenId || lockOutcomeUncertainRecoveryRecordId) {
+		if (
+			recoveryPlan.action === 'reclaim_from_wallet' ||
+			recoveryPlan.action === 'inspect_wallet' ||
+			recoveryPlan.action === 'manual_recovery'
+		) {
 			toast.error(
 				lockOutcomeUncertainRecoveryRecordId
 					? // #1235 round-3 fix 5 (felixfelix #11): gate the reclaim promise on
@@ -829,7 +843,7 @@ export function useAuctionBidFunding({
 			)
 			return
 		}
-		if (publishedBidEventId) {
+		if (recoveryPlan.action === 'retry_publish') {
 			if (!republishBid) {
 				toast.error('Bid publish retry is unavailable — your funds remain locked and reclaimable. No second lock was attempted.')
 				return
@@ -843,7 +857,7 @@ export function useAuctionBidFunding({
 			// force-close its deposit modal).
 			const sessionTokenAtStart = fundingSessionTokenRef.current
 			try {
-				await republishBid(publishedBidEventId)
+				await republishBid(recoveryPlan.bidEventId)
 				if (!isSessionCurrent(sessionTokenAtStart, fundingSessionTokenRef.current)) return
 				setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_published'))
 				setPendingBidSubmission(null)
@@ -867,11 +881,13 @@ export function useAuctionBidFunding({
 			}
 			return
 		}
-		// No event id captured and nothing known to be locked — the failure
-		// happened before the kind-1023 was built (pre-lock validation), so
-		// nothing was locked for this leg yet: a full re-submit is safe
-		// (no double-lock).
-		await submitPreparedBid(pendingBidSubmission)
+		if (recoveryPlan.action === 'retry_funding') {
+			// No event id captured and nothing known to be locked — the failure
+			// happened before the kind-1023 was built, so a full re-submit is safe.
+			await submitPreparedBid(pendingBidSubmission)
+			return
+		}
+		toast.error('No safe retry is available for this auction bid state.')
 	}, [
 		pendingBidSubmission,
 		publishedBidEventId,

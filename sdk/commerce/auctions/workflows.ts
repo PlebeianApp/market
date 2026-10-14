@@ -135,6 +135,78 @@ export interface AuctionBidPlan {
 	createdForEndAt: number
 }
 
+export type AuctionBidRecoveryEvidence =
+	| { status: 'pre_lock_failure' }
+	| { status: 'lock_outcome_uncertain'; pendingTokenPersisted: boolean }
+	| { status: 'locked_unpublished'; tokenId: string }
+	| { status: 'publish_retryable'; bidEventId: string }
+	| { status: 'published' }
+	| { status: 'reclaimed' }
+
+export type AuctionBidRecoveryPlan =
+	| { action: 'retry_funding' }
+	| { action: 'retry_publish'; bidEventId: string }
+	| { action: 'reclaim_from_wallet'; tokenId: string }
+	| { action: 'inspect_wallet'; reason: string }
+	| { action: 'manual_recovery'; reason: string }
+	| { action: 'none' }
+
+/** Resolve the next safe action without claiming mint or wallet state. */
+export function planAuctionBidRecovery(evidence: AuctionBidRecoveryEvidence): AuctionBidRecoveryPlan {
+	switch (evidence.status) {
+		case 'pre_lock_failure':
+			return { action: 'retry_funding' }
+		case 'lock_outcome_uncertain':
+			return evidence.pendingTokenPersisted
+				? { action: 'inspect_wallet', reason: 'Lock outcome is uncertain; inspect the wallet before retrying or reclaiming.' }
+				: { action: 'manual_recovery', reason: 'Mint proofs were not durably observed; do not retry the lock.' }
+		case 'locked_unpublished':
+			if (!evidence.tokenId.trim()) throw new Error('A locked-unpublished bid requires its wallet token id')
+			return { action: 'reclaim_from_wallet', tokenId: evidence.tokenId }
+		case 'publish_retryable':
+			if (!evidence.bidEventId.trim()) throw new Error('A retryable bid publish requires its exact event id')
+			return { action: 'retry_publish', bidEventId: evidence.bidEventId }
+		case 'published':
+		case 'reclaimed':
+			return { action: 'none' }
+	}
+}
+
+export type AuctionBidReclaimTimingPlan =
+	| { status: 'ready'; tokenId: string }
+	| { status: 'waiting'; tokenId: string; readyAt: number; waitSeconds: number }
+
+/** Use the wallet-derived refund-ready timestamp; the SDK does not inspect Cashu secrets. */
+export function planAuctionBidReclaimTiming(input: { tokenId: string; readyAt: number; now: number }): AuctionBidReclaimTimingPlan {
+	if (!input.tokenId.trim()) throw new Error('Auction reclaim token id is required')
+	if (!Number.isSafeInteger(input.readyAt) || input.readyAt < 0) throw new Error('readyAt must be a non-negative Unix timestamp in seconds')
+	assertUnixSeconds(input.now, 'now')
+	if (input.readyAt > input.now) {
+		return { status: 'waiting', tokenId: input.tokenId, readyAt: input.readyAt, waitSeconds: input.readyAt - input.now }
+	}
+	return { status: 'ready', tokenId: input.tokenId }
+}
+
+export type AuctionBidReclaimOutcome =
+	| { status: 'reclaimed'; tokenId: string }
+	| { status: 'waiting'; tokenId: string; readyAt: number; waitSeconds: number }
+	| { status: 'failed'; tokenId: string; error: string; cause: unknown }
+
+/** Coordinate a reclaim attempt using only the host's authoritative readiness and wallet adapter. */
+export async function executeAuctionBidReclaimWorkflow(
+	input: { tokenId: string; readyAt: number; now: number },
+	ports: { reclaim(tokenId: string): Promise<void> },
+): Promise<AuctionBidReclaimOutcome> {
+	const timing = planAuctionBidReclaimTiming(input)
+	if (timing.status === 'waiting') return timing
+	try {
+		await ports.reclaim(timing.tokenId)
+		return { status: 'reclaimed', tokenId: timing.tokenId }
+	} catch (cause) {
+		return { status: 'failed', tokenId: timing.tokenId, error: errorMessage(cause), cause }
+	}
+}
+
 /** Validate the auction window, current bid floor, and cumulative rebid chain before funding. */
 export function planAuctionBid(input: {
 	auction: ParsedAuctionEvent
@@ -237,8 +309,8 @@ export function createAuctionBidTemplate(
 
 export type AuctionLockOutcome<Funding> =
 	| { status: 'locked'; funding: Funding }
-	| { status: 'not_locked'; error: string }
-	| { status: 'unknown'; error: string }
+	| { status: 'not_locked'; error: string; cause?: unknown }
+	| { status: 'unknown'; error: string; cause?: unknown }
 
 export interface AuctionBidPublication<Event, Recovery> {
 	event: Event
@@ -266,10 +338,10 @@ export interface AuctionBidWorkflowPorts<Intent, Funding, Event, SignedEvent ext
 }
 
 export type AuctionBidWorkflowOutcome<SignedEvent> =
-	| { status: 'failed_before_lock'; error: string }
-	| { status: 'lock_outcome_uncertain'; error: string }
-	| { status: 'locked_recovery_only'; error: string }
-	| { status: 'publish_retryable'; event?: unknown; signedEvent?: SignedEvent; error: string }
+	| { status: 'failed_before_lock'; error: string; cause?: unknown }
+	| { status: 'lock_outcome_uncertain'; error: string; cause?: unknown }
+	| { status: 'locked_recovery_only'; error: string; cause?: unknown }
+	| { status: 'publish_retryable'; event?: unknown; signedEvent?: SignedEvent; error: string; cause?: unknown }
 	| { status: 'published'; eventId: string }
 
 /**
@@ -286,14 +358,14 @@ export async function executeFundedAuctionBidWorkflow<Intent, Funding, Event, Si
 		prepared = await ports.prepareLock(plan)
 		await ports.persistPreLockRecovery(prepared.preLockRecovery)
 	} catch (error) {
-		return { status: 'failed_before_lock', error: errorMessage(error) }
+		return { status: 'failed_before_lock', error: errorMessage(error), cause: error }
 	}
 
 	let lock: AuctionLockOutcome<Funding>
 	try {
 		lock = await ports.lockFunds(prepared.intent, plan)
 	} catch (error) {
-		return { status: 'lock_outcome_uncertain', error: errorMessage(error) }
+		return { status: 'lock_outcome_uncertain', error: errorMessage(error), cause: error }
 	}
 	if (lock.status === 'not_locked') {
 		try {
@@ -301,9 +373,11 @@ export async function executeFundedAuctionBidWorkflow<Intent, Funding, Event, Si
 		} catch {
 			// A stale recovery record is safer than losing a potentially needed key.
 		}
-		return { status: 'failed_before_lock', error: lock.error }
+		return { status: 'failed_before_lock', error: lock.error, ...(lock.cause !== undefined ? { cause: lock.cause } : {}) }
 	}
-	if (lock.status === 'unknown') return { status: 'lock_outcome_uncertain', error: lock.error }
+	if (lock.status === 'unknown') {
+		return { status: 'lock_outcome_uncertain', error: lock.error, ...(lock.cause !== undefined ? { cause: lock.cause } : {}) }
+	}
 
 	let publication: AuctionBidPublication<Event, Recovery>
 	try {
@@ -315,7 +389,7 @@ export async function executeFundedAuctionBidWorkflow<Intent, Funding, Event, Si
 			// The complete funded record is durable; retaining a stale pre-lock record is harmless.
 		}
 	} catch (error) {
-		return { status: 'locked_recovery_only', error: errorMessage(error) }
+		return { status: 'locked_recovery_only', error: errorMessage(error), cause: error }
 	}
 
 	let signed: SignedEvent
@@ -323,12 +397,12 @@ export async function executeFundedAuctionBidWorkflow<Intent, Funding, Event, Si
 		signed = await ports.sign(publication.event)
 		await ports.persistSignedEvent(signed, publication.recovery)
 	} catch (error) {
-		return { status: 'publish_retryable', event: publication.event, error: errorMessage(error) }
+		return { status: 'publish_retryable', event: publication.event, error: errorMessage(error), cause: error }
 	}
 	try {
 		await ports.publish(signed)
 	} catch (error) {
-		return { status: 'publish_retryable', event: publication.event, signedEvent: signed, error: errorMessage(error) }
+		return { status: 'publish_retryable', event: publication.event, signedEvent: signed, error: errorMessage(error), cause: error }
 	}
 	return { status: 'published', eventId: signed.id }
 }
@@ -339,12 +413,15 @@ export async function retryAuctionBidPublish<Event, SignedEvent extends SignedEv
 	sign(event: Event): Promise<SignedEvent>
 	persistSignedEvent(event: SignedEvent, recovery: Recovery): Promise<void>
 	publish(event: SignedEvent): Promise<void>
-}): Promise<{ status: 'published'; eventId: string } | { status: 'retryable'; event?: Event; signedEvent?: SignedEvent; error: string }> {
+}): Promise<
+	| { status: 'published'; eventId: string }
+	| { status: 'retryable'; event?: Event; signedEvent?: SignedEvent; error: string; cause?: unknown }
+> {
 	let saved: { event: Event; signedEvent?: SignedEvent; recovery: Recovery }
 	try {
 		saved = await ports.load()
 	} catch (error) {
-		return { status: 'retryable', error: errorMessage(error) }
+		return { status: 'retryable', error: errorMessage(error), cause: error }
 	}
 	let signed = saved.signedEvent
 	try {
@@ -355,7 +432,7 @@ export async function retryAuctionBidPublish<Event, SignedEvent extends SignedEv
 		await ports.publish(signed)
 		return { status: 'published', eventId: signed.id }
 	} catch (error) {
-		return { status: 'retryable', event: saved.event, ...(signed ? { signedEvent: signed } : {}), error: errorMessage(error) }
+		return { status: 'retryable', event: saved.event, ...(signed ? { signedEvent: signed } : {}), error: errorMessage(error), cause: error }
 	}
 }
 
