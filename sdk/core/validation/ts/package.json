@@ -1,0 +1,22 @@
+{
+	"name": "@plebeian-apps/validation",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "The validation module's first implementation (TypeScript): the contract in validation/validation.md — presets in, checks run, nothing by default — as one implementation of the composition's accept hook. It keeps no store, opens no socket, reads no host global, and depends on nostr-tools alone.",
+	"exports": {
+		".": "./index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit",
+		"evidence": "bash ../evidence/run.sh"
+	},
+	"dependencies": {
+		"nostr-tools": "~2.19"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.2.0",
+		"typescript": "^5.6.0"
+	}
+}

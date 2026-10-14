@@ -1,0 +1,2021 @@
+validation module — evidence falsification
+# command:   python3 validation/evidence/falsify.py   (the caller redirects to validation/evidence/02-invariant-falsification.txt)
+# generated: 2026-09-30T17:43:35Z
+# bun:       1.4.2
+# cases in the suite: 32 across 1 files
+# lock:      /tmp/market-retrofit-falsify.lock (held for this whole run)
+#
+# For each evidence obligation: one mutation is applied, the named case is run, the file is
+# restored byte-for-byte (sha256 verified) and the case is run again. A mutation whose case
+# does NOT fail is reported FALSIFICATION FAILED. Run serialized: for the length of one
+# mutation the tree is deliberately broken.
+
+==============================================================================
+mutation 1 — the pass-through floor · no presets, both operations refuse nothing (`#07b8c7`, `#ab04eb`)
+breaks:   an empty check set stops being accepted, so the default module refuses a candidate it was handed nothing to check
+file:     validation/ts/validator.ts
+sha256:   cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · pass-through · with no presets, both operations refuse nothing
+$ the mutation applied (old -> new):
+- 		if (preset.checks.length === 0) return { outcome: 'accepted' }
++ 		if (preset.checks.length === 0) return { outcome: 'quarantined', preset: preset.name, check: preset.name, reference: '' }
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t pass\-through\ ·\ with\ no\ presets,\ both\ operations\ refuse\ nothing
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+54 | }
+55 | 
+56 | test('pass-through · with no presets, both operations refuse nothing', async () => {
+57 | 	const validator = createValidator()
+58 | 	const candidate = signedEvent({ kind: 1, created_at: 1, content: 'anything at all', tags: [['e', 'nonsense']] })
+59 | 	expect(await validator.validate(candidate)).toEqual({ outcome: 'accepted' })
+                                                  ^
+error: expect(received).toEqual(expected)
+
+  {
+-   "outcome": "accepted",
++   "check": "pass-through",
++   "outcome": "quarantined",
++   "preset": "pass-through",
++   "reference": "",
+  }
+
+- Expected  - 1
++ Received  + 4
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:59:46)
+(fail) pass-through · with no presets, both operations refuse nothing [22.75ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [360.00ms]
+exit: 1
+
+$ sha256 after restore: cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) pass-through · with no presets, both operations refuse nothing [17.18ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [188.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 2 — a refusal names its preset and its check (`#029611`)
+breaks:   the refusal loses the preset it came from, so a caller can no longer tell whose rule fired
+file:     validation/ts/validator.ts
+sha256:   cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · a refusal · a declared preset that fails names its preset and its check
+$ the mutation applied (old -> new):
+- 		const refusal: ValidationRefusal = { preset, check, cause, message, requirement }
++ 		const refusal: ValidationRefusal = { preset: '', check, cause, message, requirement }
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t a\ refusal\ ·\ a\ declared\ preset\ that\ fails\ names\ its\ preset\ and\ its\ check
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+68 | 	const preset: ValidationPreset = { name: 'listing', kinds: [LISTING], checks: [check] }
+69 | 	const validator = createValidator({ presets: [preset] })
+70 | 	const outcome = await validator.validate(signedEvent({ kind: LISTING, created_at: 1 }))
+71 | 	expect(outcome.outcome).toBe('refused')
+72 | 	if (outcome.outcome !== 'refused') return
+73 | 	expect(outcome.refusal.preset).toBe('listing')
+                                     ^
+error: expect(received).toBe(expected)
+
+Expected: "listing"
+Received: ""
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:73:33)
+(fail) a refusal · a declared preset that fails names its preset and its check [40.93ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [234.00ms]
+exit: 1
+
+$ sha256 after restore: cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) a refusal · a declared preset that fails names its preset and its check [15.57ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [192.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 3 — an accept · a declared preset that passes is accepted (`#ab04eb`)
+breaks:   every format check fails unconditionally, so a conforming candidate is refused
+file:     validation/ts/format.ts
+sha256:   64233cee2892c692986dd30ecf805a3bd1ae189ae6e64752272ab83e2a1de5a4 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · an accept · a declared preset that passes is accepted
+$ the mutation applied (old -> new):
+- export function evaluateFormat(check: FormatCheck, event: Event): FormatFailure | undefined {
++ export function evaluateFormat(check: FormatCheck, event: Event): FormatFailure | undefined {
+	return { cause: 'differs', message: 'every format fails' }
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t an\ accept\ ·\ a\ declared\ preset\ that\ passes\ is\ accepted
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+79 | test('an accept · a declared preset that passes is accepted', async () => {
+80 | 	const check: ValidationCheck = { kind: 'format', id: 'title-required', requires: [{ tag: 'title', atLeast: 1 }] }
+81 | 	const preset: ValidationPreset = { name: 'listing', kinds: [LISTING], checks: [check] }
+82 | 	const validator = createValidator({ presets: [preset] })
+83 | 	const candidate = signedEvent({ kind: LISTING, created_at: 1, tags: [['title', 'a lamp']] })
+84 | 	expect(await validator.validate(candidate)).toEqual({ outcome: 'accepted' })
+                                                  ^
+error: expect(received).toEqual(expected)
+
+  {
+-   "outcome": "accepted",
++   "outcome": "refused",
++   "refusal": {
++     "cause": "differs",
++     "check": {
++       "id": "title-required",
++       "kind": "format",
++       "requires": [
++         {
++           "atLeast": 1,
++           "tag": "title",
++         },
++       ],
++     },
++     "message": "every format fails",
++     "preset": "listing",
++     "requirement": undefined,
++   },
+  }
+
+- Expected  - 1
++ Received  + 17
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:84:46)
+(fail) an accept · a declared preset that passes is accepted [24.28ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [162.00ms]
+exit: 1
+
+$ sha256 after restore: 64233cee2892c692986dd30ecf805a3bd1ae189ae6e64752272ab83e2a1de5a4 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) an accept · a declared preset that passes is accepted [27.30ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [186.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 4 — a format rule · the value domain, one of the three distinguishable refusals
+breaks:   the domain stops being checked, so a value outside it is accepted — the careless shape that reads a tag's presence and not its value
+file:     validation/ts/format.ts
+sha256:   64233cee2892c692986dd30ecf805a3bd1ae189ae6e64752272ab83e2a1de5a4 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · a format rule · refuses a malformed candidate and accepts a conforming one
+$ the mutation applied (old -> new):
+- 			if (!domain.values.includes(value)) {
++ 			if (false) {
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t a\ format\ rule\ ·\ refuses\ a\ malformed\ candidate\ and\ accepts\ a\ conforming\ one
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+101 | 		signedEvent({ kind: LISTING, created_at: 1, tags: [['title', 't'], ['image', 'a'], ['image', 'b'], ['currency', 'usd']] }),
+102 | 	)
+103 | 	expect(many.outcome === 'refused' && many.refusal.check.id).toBe('image-single')
+104 | 	// a value outside its domain
+105 | 	const outside = await validator.validate(signedEvent({ kind: LISTING, created_at: 1, tags: [['title', 't'], ['image', 'a'], ['currency', 'gbp']] }))
+106 | 	expect(outside.outcome === 'refused' && outside.refusal.check.id).toBe('currency-domain')
+                                                                         ^
+error: expect(received).toBe(expected)
+
+Expected: "currency-domain"
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:106:68)
+(fail) a format rule · refuses a malformed candidate and accepts a conforming one [81.03ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [255.00ms]
+exit: 1
+
+$ sha256 after restore: 64233cee2892c692986dd30ecf805a3bd1ae189ae6e64752272ab83e2a1de5a4 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) a format rule · refuses a malformed candidate and accepts a conforming one [88.49ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 7 expect() calls
+Ran 1 test across 1 file. [259.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 5 — a link rule · matched, so the candidate is accepted
+breaks:   the equality comparator can never be satisfied, so a matched reference is refused — a rule that can only reject
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · a link rule · a held event whose named fields match is accepted
+$ the mutation applied (old -> new):
+- 	if (comparison.comparator === 'eq') return left !== undefined && left === right
++ 	if (comparison.comparator === 'eq') return false
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t a\ link\ rule\ ·\ a\ held\ event\ whose\ named\ fields\ match\ is\ accepted
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+177 | 	}
+178 | 	const preset: ValidationPreset = { name: 'review', kinds: [REVIEW], checks: [check] }
+179 | 	const candidate = signedEvent({ kind: REVIEW, created_at: 6, tags: [['e', referenced.id], ['p', referenced.pubkey]] })
+180 | 	const port = recordingPort({ [referenced.id]: held(referenced) })
+181 | 	const validator = createValidator({ presets: [preset], port })
+182 | 	expect(await validator.validate(candidate)).toEqual({ outcome: 'accepted' })
+                                                   ^
+error: expect(received).toEqual(expected)
+
+  {
+-   "outcome": "accepted",
++   "outcome": "refused",
++   "refusal": {
++     "cause": "differs",
++     "check": {
++       "compare": [
++         {
++           "candidate": {
++             "index": 1,
++             "tag": "p",
++           },
++           "comparator": "eq",
++           "reference": "pubkey",
++         },
++       ],
++       "id": "listing-held",
++       "index": 1,
++       "kind": "link",
++       "strategy": "by-id",
++       "tag": "e",
++     },
++     "message": "check listing-held: the candidate's p[1] does not satisfy 'eq' against the referenced event's pubkey",
++     "preset": "review",
++     "requirement": undefined,
++   },
+  }
+
+- Expected  - 1
++ Received  + 24
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:182:46)
+(fail) a link rule · a held event whose named fields match is accepted [37.97ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [174.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) a link rule · a held event whose named fields match is accepted [59.29ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [246.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 6 — a link rule · mismatched, so the candidate is refused with cause `'differs'`
+breaks:   the equality comparator is always satisfied, so a mismatched reference is accepted — validation that validates nothing
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · a link rule · a mismatched field refuses with cause 'differs'
+$ the mutation applied (old -> new):
+- 	if (comparison.comparator === 'eq') return left !== undefined && left === right
++ 	if (comparison.comparator === 'eq') return true
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t a\ link\ rule\ ·\ a\ mismatched\ field\ refuses\ with\ cause\ 'differs'
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+196 | 	const preset: ValidationPreset = { name: 'review', kinds: [REVIEW], checks: [check] }
+197 | 	// the candidate names an author who is not the referenced event's author
+198 | 	const candidate = signedEvent({ kind: REVIEW, created_at: 6, tags: [['e', referenced.id], ['p', '0'.repeat(64)]] })
+199 | 	const validator = createValidator({ presets: [preset], port: recordingPort({ [referenced.id]: held(referenced) }) })
+200 | 	const outcome = await validator.validate(candidate)
+201 | 	expect(outcome.outcome).toBe('refused')
+                               ^
+error: expect(received).toBe(expected)
+
+Expected: "refused"
+Received: "accepted"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:201:26)
+(fail) a link rule · a mismatched field refuses with cause 'differs' [39.46ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [256.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) a link rule · a mismatched field refuses with cause 'differs' [18.11ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [93.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 7 — a link rule · deleted is a refusal with cause `'deleted'` (D-O25)
+breaks:   a held 'deleted' answer falls through to the comparison, so the distinction the port was asked to make is thrown away
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · a link rule · a deleted reference refuses with cause 'deleted'
+$ the mutation applied (old -> new):
+- 	if (bounded.state === 'deleted') {
++ 	if (false) {
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t a\ link\ rule\ ·\ a\ deleted\ reference\ refuses\ with\ cause\ 'deleted'
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+208 | 	const referenced = signedEvent({ kind: LISTING, created_at: 5 })
+209 | 	const candidate = signedEvent({ kind: REVIEW, created_at: 6, tags: [['e', referenced.id]] })
+210 | 	const preset: ValidationPreset = { name: 'review', kinds: [REVIEW], checks: [linkCheck()] }
+211 | 	const validator = createValidator({ presets: [preset], port: recordingPort({ [referenced.id]: { state: 'deleted' } }) })
+212 | 	const outcome = await validator.validate(candidate)
+213 | 	expect(outcome.outcome === 'refused' && outcome.refusal.cause).toBe('deleted')
+                                                                      ^
+error: expect(received).toBe(expected)
+
+Expected: "deleted"
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:213:65)
+(fail) a link rule · a deleted reference refuses with cause 'deleted' [36.89ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [186.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) a link rule · a deleted reference refuses with cause 'deleted' [16.68ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [227.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 8 — a link rule · expired is a refusal with cause `'expired'` (D-O25)
+breaks:   a held 'expired' answer falls through to the comparison, so expiry stops being distinguishable from a mismatch
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · a link rule · an expired reference refuses with cause 'expired'
+$ the mutation applied (old -> new):
+- 	if (bounded.state === 'expired') {
++ 	if (false) {
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t a\ link\ rule\ ·\ an\ expired\ reference\ refuses\ with\ cause\ 'expired'
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+217 | 	const referenced = signedEvent({ kind: LISTING, created_at: 5 })
+218 | 	const candidate = signedEvent({ kind: REVIEW, created_at: 6, tags: [['e', referenced.id]] })
+219 | 	const preset: ValidationPreset = { name: 'review', kinds: [REVIEW], checks: [linkCheck()] }
+220 | 	const validator = createValidator({ presets: [preset], port: recordingPort({ [referenced.id]: { state: 'expired' } }) })
+221 | 	const outcome = await validator.validate(candidate)
+222 | 	expect(outcome.outcome === 'refused' && outcome.refusal.cause).toBe('expired')
+                                                                      ^
+error: expect(received).toBe(expected)
+
+Expected: "expired"
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:222:65)
+(fail) a link rule · an expired reference refuses with cause 'expired' [20.31ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [162.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) a link rule · an expired reference refuses with cause 'expired' [38.80ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [217.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 9 — a link rule · a malformed reference is refused, never repaired (`#0df9fb`)
+breaks:   the id shape stops being read, so a malformed reference is treated as a resolvable one — no parsing, no refusal
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · a link rule · a malformed reference refuses with cause 'malformed-reference'
+$ the mutation applied (old -> new):
+- const ID = /^[0-9a-f]{64}$/
++ const ID = /^.*$/
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t a\ link\ rule\ ·\ a\ malformed\ reference\ refuses\ with\ cause\ 'malformed\-reference'
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+226 | 	const preset: ValidationPreset = { name: 'review', kinds: [REVIEW], checks: [linkCheck()] }
+227 | 	const validator = createValidator({ presets: [preset], port: recordingPort({}) })
+228 | 	// an `e` tag whose second element is not a 64-hex id …
+229 | 	const illShaped = signedEvent({ kind: REVIEW, created_at: 6, tags: [['e', 'not-an-id']] })
+230 | 	const one = await validator.validate(illShaped)
+231 | 	expect(one.outcome === 'refused' && one.refusal.cause).toBe('malformed-reference')
+                                                              ^
+error: expect(received).toBe(expected)
+
+Expected: "malformed-reference"
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:231:57)
+(fail) a link rule · a malformed reference refuses with cause 'malformed-reference' [21.90ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [189.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) a link rule · a malformed reference refuses with cause 'malformed-reference' [41.00ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [188.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 10 — a link rule · unresolved is quarantine, never a refusal (`#029611`'s amendment)
+breaks:   an unanswered reference becomes a refusal, so 'nobody could answer it' is scored as 'the candidate is wrong'
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · a link rule · an unresolved reference quarantines the event
+$ the mutation applied (old -> new):
+- 	if (bounded === undefined) {
+		deps.store.record(reference, now)
+		return { kind: 'unresolved', reference }
+	}
++ 	if (bounded === undefined) {
+		deps.store.forget(reference)
+		return { kind: 'refused', cause: 'differs', message: 'unanswered' }
+	}
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t a\ link\ rule\ ·\ an\ unresolved\ reference\ quarantines\ the\ event
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+240 | 	const candidate = signedEvent({ kind: REVIEW, created_at: 6, tags: [['e', referenced.id]] })
+241 | 	const preset: ValidationPreset = { name: 'review', kinds: [REVIEW], checks: [linkCheck()] }
+242 | 	// the host has no answer: `undefined` means nobody could answer it, which is quarantine
+243 | 	const validator = createValidator({ presets: [preset], port: recordingPort({}) })
+244 | 	const outcome = await validator.validate(candidate)
+245 | 	expect(outcome.outcome).toBe('quarantined')
+                               ^
+error: expect(received).toBe(expected)
+
+Expected: "quarantined"
+Received: "refused"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:245:26)
+(fail) a link rule · an unresolved reference quarantines the event [34.12ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [141.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) a link rule · an unresolved reference quarantines the event [38.86ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [182.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 11 — the pass-through default re-asserted over a candidate no preset covers (`#07b8c7`)
+breaks:   the selection falls back to the first preset whatever the kind, so a candidate no preset covers is judged by a rule that never named it
+file:     validation/ts/presets.ts
+sha256:   a59d62e4a464b5aaa69442b5c906bbf4ea7a4d4bc3d5ce9210f69a4feea8f75c (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · pass-through · re-asserted over a candidate no preset covers
+$ the mutation applied (old -> new):
+- 	return specific ?? presets.find((preset) => covers(preset, event)) ?? PASS_THROUGH
++ 	return presets[0] ?? PASS_THROUGH
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t pass\-through\ ·\ re\-asserted\ over\ a\ candidate\ no\ preset\ covers
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+305 | 	const validator = createValidator({ presets: [preset] })
+306 | 	// the covered kind is refused, so the preset is really in force
+307 | 	expect((await validator.validate(signedEvent({ kind: LISTING, created_at: 1 }))).outcome).toBe('refused')
+308 | 	// an uncovered kind passes, on both operations: no preset covers it, so nothing runs
+309 | 	const uncovered = signedEvent({ kind: 1, created_at: 1 })
+310 | 	expect(await validator.validate(uncovered)).toEqual({ outcome: 'accepted' })
+                                                   ^
+error: expect(received).toEqual(expected)
+
+  {
+-   "outcome": "accepted",
++   "outcome": "refused",
++   "refusal": {
++     "cause": "differs",
++     "check": {
++       "id": "title-required",
++       "kind": "format",
++       "requires": [
++         {
++           "atLeast": 1,
++           "tag": "title",
++         },
++       ],
++     },
++     "message": "check title-required requires at least 1 title tag(s); the candidate carries 0",
++     "preset": "listing",
++     "requirement": "missing-tag",
++   },
+  }
+
+- Expected  - 1
++ Received  + 17
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:310:46)
+(fail) pass-through · re-asserted over a candidate no preset covers [29.41ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [218.00ms]
+exit: 1
+
+$ sha256 after restore: a59d62e4a464b5aaa69442b5c906bbf4ea7a4d4bc3d5ce9210f69a4feea8f75c (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) pass-through · re-asserted over a candidate no preset covers [16.84ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [171.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 12 — a bound exceeded is an outcome, never a thrown exception (D-O25)
+breaks:   the fan-out ceiling throws instead of resolving, so an over-bound event escapes as an exception — the exact shape the spec forbids
+file:     validation/ts/validator.ts
+sha256:   cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · a bound exceeded · is an outcome, never a thrown exception
+$ the mutation applied (old -> new):
+- 		if (references.length > bounds.maxReferencesPerEvent) {
+			return this.quarantine(preset, first !== undefined ? first.id : preset.name, references[bounds.maxReferencesPerEvent] ?? '')
+		}
++ 		if (references.length > bounds.maxReferencesPerEvent) {
+			throw new ValidationError({ preset: preset.name, check: preset.checks[0] as ValidationCheck, cause: 'differs', message: 'the fan-out ceiling' })
+		}
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t a\ bound\ exceeded\ ·\ is\ an\ outcome,\ never\ a\ thrown\ exception
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+362 | 	try {
+363 | 		outcome = await validator.validate(candidate)
+364 | 	} catch (error) {
+365 | 		thrown = error
+366 | 	}
+367 | 	expect(thrown).toBeUndefined()
+                      ^
+error: expect(received).toBeUndefined()
+
+Received: 205 | 
+206 | 		// Bound 1 — the fan-out ceiling, over **resolutions attempted**: one reference per link
+207 | 		// check, which is the quantity the spec's gloss names ("references resolved per event").
+208 | 		// Over it, the reference past the ceiling is unresolved: an outcome.
+209 | 		if (references.length > bounds.maxReferencesPerEvent) {
+210 | 			throw new ValidationError({ preset: preset.name, check: preset.checks[0] as ValidationCheck, cause: 'differs', message: 'the fan-out ceiling' })
+               ^
+ValidationError: the fan-out ceiling
+  reason: "differs",
+ refusal: {
+  preset: "links",
+  check: [Object ...],
+  cause: "differs",
+  message: "the fan-out ceiling",
+},
+
+      at evaluate (/home/admin_maxime/projects/market-retrofit/validation/ts/validator.ts:210:10)
+      at validate (/home/admin_maxime/projects/market-retrofit/validation/ts/validator.ts:85:15)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:363:29)
+
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:367:17)
+(fail) a bound exceeded · is an outcome, never a thrown exception [18.07ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [155.00ms]
+exit: 1
+
+$ sha256 after restore: cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) a bound exceeded · is an outcome, never a thrown exception [25.12ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [195.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 13 — bound 1 · resolutions attempted per event (the fan-out ceiling)
+breaks:   the ceiling is raised by one, so one resolution past the declared bound is attempted instead of held
+file:     validation/ts/validator.ts
+sha256:   cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · bound 1 · resolutions attempted per event (the fan-out ceiling counts links, one resolution each)
+$ the mutation applied (old -> new):
+- 		if (references.length > bounds.maxReferencesPerEvent) {
++ 		if (references.length > bounds.maxReferencesPerEvent + 1) {
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t bound\ 1\ ·\ resolutions\ attempted\ per\ event\ \(the\ fan\-out\ ceiling\ counts\ links,\ one\ resolution\ each\)
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+386 | 	// both references are answerable: with the ceiling honoured this candidate is over it and
+387 | 	// quarantined; with the ceiling raised by one it would be resolved and accepted, which is what
+388 | 	// makes this case fail on the careless implementation rather than pass for another reason
+389 | 	const port = recordingPort({ [referenced.id]: held(referenced), [coordinate]: held(second) })
+390 | 	const outcome = await createValidator({ presets: [twoLinks], port }).validate(both)
+391 | 	expect(outcome.outcome).toBe('quarantined')
+                               ^
+error: expect(received).toBe(expected)
+
+Expected: "quarantined"
+Received: "accepted"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:391:26)
+(fail) bound 1 · resolutions attempted per event (the fan-out ceiling counts links, one resolution each) [73.83ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [182.00ms]
+exit: 1
+
+$ sha256 after restore: cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) bound 1 · resolutions attempted per event (the fan-out ceiling counts links, one resolution each) [26.46ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [130.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 14 — bound 2 · one hop (the referenced event's own links are not followed)
+breaks:   the chain-depth ceiling stops being applied, so a ceiling below one hop no longer forbids the direct reference
+file:     validation/ts/validator.ts
+sha256:   cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · bound 2 · one hop: the referenced event carries links the engine does not follow (and a ceiling below one forbids the direct reference)
+$ the mutation applied (old -> new):
+- 		if (references.length > 0 && bounds.maxChainDepth < 1) {
++ 		if (false) {
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t bound\ 2\ ·\ one\ hop:\ the\ referenced\ event\ carries\ links\ the\ engine\ does\ not\ follow\ \(and\ a\ ceiling\ below\ one\ forbids\ the\ direct\ reference\)
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+441 | 	// the referenced event's own link is not followed: exactly one hop, so exactly one call
+442 | 	expect(port.calls.map((call) => call.reference)).toEqual([referenced.id])
+443 | 	// a ceiling below one hop forbids even the direct reference — an outcome, not an exception
+444 | 	const zero: ValidationPreset = { name: 'links', kinds: [1], checks: [linkCheck()], bounds: { maxChainDepth: 0 } }
+445 | 	const zeroed = createValidator({ presets: [zero], port: recordingPort({ [referenced.id]: held(referenced) }) })
+446 | 	expect((await zeroed.validate(candidate)).outcome).toBe('quarantined')
+                                                          ^
+error: expect(received).toBe(expected)
+
+Expected: "quarantined"
+Received: "accepted"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:446:53)
+(fail) bound 2 · one hop: the referenced event carries links the engine does not follow (and a ceiling below one forbids the direct reference) [26.11ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [184.00ms]
+exit: 1
+
+$ sha256 after restore: cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) bound 2 · one hop: the referenced event carries links the engine does not follow (and a ceiling below one forbids the direct reference) [50.61ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [180.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 15 — bound 3 · the wall-clock budget for one reference
+breaks:   a fired per-reference deadline becomes an accept instead of an unresolved reference, so the budget stops producing an outcome
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · bound 3 · the wall-clock budget for one reference
+$ the mutation applied (old -> new):
+- 	if (bounded === DEADLINE) {
+		deps.store.record(reference, now)
+		return { kind: 'unresolved', reference }
+	}
++ 	if (bounded === DEADLINE) {
+		deps.store.forget(reference)
+		return { kind: 'accepted' }
+	}
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t bound\ 3\ ·\ the\ wall\-clock\ budget\ for\ one\ reference
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+504 | 	const referenced = signedEvent({ kind: 1, created_at: 1 })
+505 | 	const candidate = signedEvent({ kind: 1, created_at: 2, tags: [['e', referenced.id]] })
+506 | 	const preset: ValidationPreset = { name: 'links', kinds: [1], checks: [linkCheck()], bounds: { referenceTimeoutMs: 20 } }
+507 | 	const validator = createValidator({ presets: [preset], port: neverAnsweringPort() })
+508 | 	// the resolver never answers; the per-reference budget fires and the reference is unresolved
+509 | 	expect((await validator.validate(candidate)).outcome).toBe('quarantined')
+                                                             ^
+error: expect(received).toBe(expected)
+
+Expected: "quarantined"
+Received: "accepted"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:509:56)
+(fail) bound 3 · the wall-clock budget for one reference [75.06ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [257.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) bound 3 · the wall-clock budget for one reference [37.89ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [141.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 16 — bound 4 · the wall-clock budget for one event
+breaks:   the event budget is made unreachable, so a slow reference is waited out rather than cut off — the whole-event bound is inert
+file:     validation/ts/validator.ts
+sha256:   cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · bound 4 · the wall-clock budget for one event
+$ the mutation applied (old -> new):
+- 		const bounded = await withDeadline(this.runChecks(preset, event, bounds, resolve), bounds.eventTimeoutMs)
++ 		const bounded = await withDeadline(this.runChecks(preset, event, bounds, resolve), 10_000_000)
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t bound\ 4\ ·\ the\ wall\-clock\ budget\ for\ one\ event
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+519 | 		checks: [linkCheck()],
+520 | 		bounds: { eventTimeoutMs: 30, referenceTimeoutMs: 5_000 },
+521 | 	}
+522 | 	// the reference would answer at 60ms; the event budget of 30ms cuts the whole evaluation off first
+523 | 	const validator = createValidator({ presets: [preset], port: slowPort({ [referenced.id]: held(referenced) }, 60) })
+524 | 	expect((await validator.validate(candidate)).outcome).toBe('quarantined')
+                                                             ^
+error: expect(received).toBe(expected)
+
+Expected: "quarantined"
+Received: "accepted"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:524:56)
+(fail) bound 4 · the wall-clock budget for one event [88.64ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [262.00ms]
+exit: 1
+
+$ sha256 after restore: cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) bound 4 · the wall-clock budget for one event [69.59ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [306.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 17 — bound 5 · memory held for unresolved references, oldest-first eviction recorded as data loss
+breaks:   eviction stops, so the byte bound is not a bound and no eviction is recorded — the unbounded-memory shape the maintainer's intent names
+file:     validation/ts/bounds.ts
+sha256:   4f0aea48e52673237f50d34f330b65e6848b923e9d4fca23250efac4679865d5 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · bound 5 · memory held for unresolved references (oldest-first eviction, recorded and re-resolved)
+$ the mutation applied (old -> new):
+- 		while (this.bytes + bytes > this.limitBytes && this.held.size > 0) {
++ 		while (false && this.bytes + bytes > this.limitBytes) {
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t bound\ 5\ ·\ memory\ held\ for\ unresolved\ references\ \(oldest\-first\ eviction,\ recorded\ and\ re\-resolved\)
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+536 | 
+537 | 	expect((await validator.validate(candidateA)).outcome).toBe('quarantined')
+538 | 	expect(validator.unresolved.references).toEqual([a.id])
+539 | 	expect((await validator.validate(candidateB)).outcome).toBe('quarantined')
+540 | 	// the second 64-byte reference does not fit beside the first, so the oldest is evicted
+541 | 	expect(validator.unresolved.references).toEqual([b.id])
+                                               ^
+error: expect(received).toEqual(expected)
+
+  [
++   "4f4e29ef8695ec0ae9c9f08839fbf2709e91256964c00f317f1d52873649fa0e",
+    "23b1adaf9a5453b490db8e76063ef09fa3d417f29b66b8895807eddece7e8fc3",
+  ]
+
+- Expected  - 0
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:541:42)
+(fail) bound 5 · memory held for unresolved references (oldest-first eviction, recorded and re-resolved) [55.51ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [211.00ms]
+exit: 1
+
+$ sha256 after restore: 4f0aea48e52673237f50d34f330b65e6848b923e9d4fca23250efac4679865d5 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) bound 5 · memory held for unresolved references (oldest-first eviction, recorded and re-resolved) [34.41ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 8 expect() calls
+Ran 1 test across 1 file. [149.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 18 — bound 6 · revisit count and interval — a held reference is not retried inside the interval
+breaks:   the interval gate is dropped, so every evaluation retries a reference it just failed to resolve — no interval, no bound
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · bound 6 · revisit count and interval
+$ the mutation applied (old -> new):
+- 		if (!deps.store.shouldRevisit(reference, now, deps.bounds.revisitIntervalMs)) {
+			return { kind: 'unresolved', reference }
+		}
++ 		if (false) {
+			return { kind: 'unresolved', reference }
+		}
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t bound\ 6\ ·\ revisit\ count\ and\ interval
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+585 | 	const port = recordingPort({}, () => clock.now())
+586 | 	const validator = createValidator({ presets: [preset], port, clock })
+587 | 
+588 | 	expect((await validator.validate(candidate)).outcome).toBe('quarantined') // attempt 1
+589 | 	await validator.validate(candidate)
+590 | 	expect(port.calls.length).toBe(1) // inside the interval: not retried
+                                 ^
+error: expect(received).toBe(expected)
+
+Expected: 1
+Received: 2
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:590:28)
+(fail) bound 6 · revisit count and interval [80.90ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [273.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) bound 6 · revisit count and interval [31.86ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 6 expect() calls
+Ran 1 test across 1 file. [173.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 19 — quarantine · never admitted, and session-scoped (D-O25)
+breaks:   the hook's answer is inverted for quarantine, so a held event is admitted — the soft-guard shape `#bc3095` refuses
+file:     validation/ts/validator.ts
+sha256:   cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · quarantine · is never admitted, and is session-scoped
+$ the mutation applied (old -> new):
+- 		return outcome.outcome === 'accepted' ? 'accept' : 'reject'
++ 		return outcome.outcome === 'refused' ? 'reject' : 'accept'
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t quarantine\ ·\ is\ never\ admitted,\ and\ is\ session\-scoped
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+691 | 	const candidate = signedEvent({ kind: 1, created_at: 2, tags: [['e', referenced.id]] })
+692 | 	const preset: ValidationPreset = { name: 'links', kinds: [1], checks: [linkCheck()] }
+693 | 	const validator = createValidator({ presets: [preset], port: recordingPort({}) })
+694 | 	expect((await validator.validate(candidate)).outcome).toBe('quarantined')
+695 | 	// never admitted: the hook's own two-member answer makes a quarantine a rejection
+696 | 	expect(await validator.accept(candidate, compositionContext(async () => undefined))).toBe('reject')
+                                                                                            ^
+error: expect(received).toBe(expected)
+
+Expected: "reject"
+Received: "accept"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:696:87)
+(fail) quarantine · is never admitted, and is session-scoped [44.23ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [199.00ms]
+exit: 1
+
+$ sha256 after restore: cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) quarantine · is never admitted, and is session-scoped [20.99ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [294.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 20 — the accept operation · is the composition's hook (flow, tier and resolve all reach it, `#895296`, D-O24)
+breaks:   `accept` stops passing the context through, so the composition's own resolver never reaches the link half and a resolvable reference is quarantined
+file:     validation/ts/validator.ts
+sha256:   cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · the accept operation · is the composition's hook (flow, tier and resolve all reach it)
+$ the mutation applied (old -> new):
+- 		const outcome = await this.evaluate(event, context)
++ 		const outcome = await this.evaluate(event, undefined)
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t the\ accept\ operation\ ·\ is\ the\ composition's\ hook\ \(flow,\ tier\ and\ resolve\ all\ reach\ it\)
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+719 | 	const context: AcceptContext = compositionContext(
+720 | 		async (reference) => (reference === referenced.id ? referenced : undefined),
+721 | 		'publish',
+722 | 		'remote',
+723 | 	)
+724 | 	expect(await noPort.accept(candidate, context)).toBe('accept')
+                                                       ^
+error: expect(received).toBe(expected)
+
+Expected: "accept"
+Received: "reject"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:724:50)
+(fail) the accept operation · is the composition's hook (flow, tier and resolve all reach it) [84.04ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [288.00ms]
+exit: 1
+
+$ sha256 after restore: cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) the accept operation · is the composition's hook (flow, tier and resolve all reach it) [24.72ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [194.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 21 — no repair · a malformed candidate is refused, never corrected (`#0df9fb`)
+breaks:   the engine writes a tag back onto the candidate it was handed, so a refusal has a side effect on the caller's event
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · no repair · a malformed candidate is refused, never corrected
+$ the mutation applied (old -> new):
+- 	if (!wellFormed(reference, check.strategy)) {
++ 	event.tags.push([check.tag, '0'.repeat(64)])
+	if (!wellFormed(reference, check.strategy)) {
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t no\ repair\ ·\ a\ malformed\ candidate\ is\ refused,\ never\ corrected
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+738 | 	const preset: ValidationPreset = { name: 'links', kinds: [1], checks: [linkCheck()] }
+739 | 	const validator = createValidator({ presets: [preset], port: recordingPort({}) })
+740 | 	const candidate = signedEvent({ kind: 1, created_at: 1, tags: [['e', 'not-an-id']] })
+741 | 	const before = JSON.stringify(candidate)
+742 | 	expect((await validator.validate(candidate)).outcome).toBe('refused')
+743 | 	expect(JSON.stringify(candidate)).toBe(before) // the event the caller holds is byte-identical
+                                         ^
+error: expect(received).toBe(expected)
+
+Expected: "{"kind":1,"created_at":1,"tags":[["e","not-an-id"]],"content":"","pubkey":"7a191c8fcf5c23f48e0f9856554c7b2d125e529b39482849065b651ef5dd8432","id":"cd6b784359d5ef1b25ac1a43061796a81c2f2cd014d3403c9834d09e2aeb0630","sig":"18fc76b1a8901cfd7241d66a43ff43628b85f2c3975dca49619f7a1a1b827ce1039979dd72a837648d2268b3972f136091a00c24f0767dd47e452ef12b463107"}"
+Received: "{"kind":1,"created_at":1,"tags":[["e","not-an-id"],["e","0000000000000000000000000000000000000000000000000000000000000000"]],"content":"","pubkey":"7a191c8fcf5c23f48e0f9856554c7b2d125e529b39482849065b651ef5dd8432","id":"cd6b784359d5ef1b25ac1a43061796a81c2f2cd014d3403c9834d09e2aeb0630","sig":"18fc76b1a8901cfd7241d66a43ff43628b85f2c3975dca49619f7a1a1b827ce1039979dd72a837648d2268b3972f136091a00c24f0767dd47e452ef12b463107"}"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:743:36)
+(fail) no repair · a malformed candidate is refused, never corrected [44.88ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [270.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) no repair · a malformed candidate is refused, never corrected [24.52ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [141.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 22 — the closed comparator vocabulary · a comparison it does not carry is refused, naming it (D-O25)
+breaks:   the unknown-comparator guard is removed from the preset's own precheck, so a comparator the engine does not carry is satisfied by the fall-through — a silent pass
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · the comparator vocabulary · a comparison it does not carry is refused, naming the comparator
+$ the mutation applied (old -> new):
+- 		if (!VOCABULARY.includes(comparison.comparator)) {
+			throw new ValidationError({
+				preset,
+				check,
+				cause: 'malformed-reference',
+				message: `check ${check.id} names the comparator '${String(comparison.comparator)}', which the vocabulary (eq, exists, in) does not carry`,
+			})
+		}
++ 		void VOCABULARY
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t the\ comparator\ vocabulary\ ·\ a\ comparison\ it\ does\ not\ carry\ is\ refused,\ naming\ the\ comparator
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+769 | 	try {
+770 | 		await validator.validate(candidate)
+771 | 	} catch (error) {
+772 | 		thrown = error
+773 | 	}
+774 | 	expect(thrown).toBeInstanceOf(ValidationError)
+                      ^
+error: expect(received).toBeInstanceOf(expected)
+
+Expected constructor: [class ValidationError extends Error]
+Received value: undefined
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:774:17)
+(fail) the comparator vocabulary · a comparison it does not carry is refused, naming the comparator [21.60ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [215.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) the comparator vocabulary · a comparison it does not carry is refused, naming the comparator [81.34ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [331.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 23 — the declared values · the six bounds are the research §4 suggested defaults
+breaks:   one declared default moves, so the bound a test reads is no longer the suggested value
+file:     validation/ts/bounds.ts
+sha256:   4f0aea48e52673237f50d34f330b65e6848b923e9d4fca23250efac4679865d5 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · the declared values · the six bounds are the research §4 suggested defaults, readable without driving a call
+$ the mutation applied (old -> new):
+- 	maxReferencesPerEvent: 10,
++ 	maxReferencesPerEvent: 11,
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t the\ declared\ values\ ·\ the\ six\ bounds\ are\ the\ research\ §4\ suggested\ defaults,\ readable\ without\ driving\ a\ call
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+822 | 	}
+823 | 	expect(outcomes).toEqual(['quarantined', 'refused', 'accepted'])
+824 | })
+825 | 
+826 | test('the declared values · the six bounds are the research §4 suggested defaults, readable without driving a call', () => {
+827 | 	expect(createValidator().bounds).toEqual({
+                                        ^
+error: expect(received).toEqual(expected)
+
+  {
+    "eventTimeoutMs": 30000,
+    "maxChainDepth": 1,
+-   "maxReferencesPerEvent": 10,
++   "maxReferencesPerEvent": 11,
+    "referenceTimeoutMs": 5000,
+    "revisitCount": 3,
+    "revisitIntervalMs": 300000,
+    "unresolvedMemoryBytes": 1048576,
+  }
+
+- Expected  - 1
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:827:35)
+(fail) the declared values · the six bounds are the research §4 suggested defaults, readable without driving a call [3.91ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [188.00ms]
+exit: 1
+
+$ sha256 after restore: 4f0aea48e52673237f50d34f330b65e6848b923e9d4fca23250efac4679865d5 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) the declared values · the six bounds are the research §4 suggested defaults, readable without driving a call [0.39ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [206.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 24 — the spec's format shape · one check carrying several requirements, each failure naming its own requirement in the value
+breaks:   one requirement kind is reported under another's name, so two failures of the same check collapse into one value again — the falsification RT-B measured
+file:     validation/ts/format.ts
+sha256:   64233cee2892c692986dd30ecf805a3bd1ae189ae6e64752272ab83e2a1de5a4 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · a format rule · one check carrying several requirements: each failure names its own requirement in the value
+$ the mutation applied (old -> new):
+- 				requirement: 'domain',
++ 				requirement: 'cardinality',
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t a\ format\ rule\ ·\ one\ check\ carrying\ several\ requirements:\ each\ failure\ names\ its\ own\ requirement\ in\ the\ value
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+154 | 		const outcome = await validator.validate(candidate)
+155 | 		expect(outcome.outcome).toBe('refused')
+156 | 		if (outcome.outcome !== 'refused') continue
+157 | 		checks.add(outcome.refusal.check.id)
+158 | 		fired.push(outcome.refusal.requirement ?? '(no requirement)')
+159 | 		expect(outcome.refusal.requirement).toBe(requirement)
+                                            ^
+error: expect(received).toBe(expected)
+
+Expected: "domain"
+Received: "cardinality"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:159:39)
+(fail) a format rule · one check carrying several requirements: each failure names its own requirement in the value [55.60ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 8 expect() calls
+Ran 1 test across 1 file. [256.00ms]
+exit: 1
+
+$ sha256 after restore: 64233cee2892c692986dd30ecf805a3bd1ae189ae6e64752272ab83e2a1de5a4 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) a format rule · one check carrying several requirements: each failure names its own requirement in the value [111.95ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 15 expect() calls
+Ran 1 test across 1 file. [404.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 25 — a rejecting resolver is quarantine, never an escaping exception (D-O25)
+breaks:   the resolver's rejection is forwarded again, so a host's resolver fault escapes `validate` as a bare `Error` instead of a value a caller reads
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · a link rule · a resolver that rejects is quarantined, never an escaping exception
+$ the mutation applied (old -> new):
+- 	} catch {
+		deps.store.record(reference, now)
+		return { kind: 'unresolved', reference }
+	}
++ 	} catch (error) {
+		throw error
+	}
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t a\ link\ rule\ ·\ a\ resolver\ that\ rejects\ is\ quarantined,\ never\ an\ escaping\ exception
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+265 | 	try {
+266 | 		outcome = await createValidator({ presets: [preset], port: rejectingPort() }).validate(candidate)
+267 | 	} catch (error) {
+268 | 		thrown = error
+269 | 	}
+270 | 	expect(thrown).toBeUndefined()
+                      ^
+error: expect(received).toBeUndefined()
+
+Received: 118 | 		calls,
+119 | 		now: () => 0,
+120 | 		resolve: (reference: string, at?: ResolutionAt): Promise<Resolution | undefined> => {
+121 | 			calls.push({ reference, at })
+122 | 			if (when === 'synchronously') throw new Error('the reference store is down')
+123 | 			return Promise.reject(new Error('the reference store is down'))
+                                   ^
+error: the reference store is down
+      at resolve (/home/admin_maxime/projects/market-retrofit/validation/ts/harness.ts:123:30)
+      at evaluateLink (/home/admin_maxime/projects/market-retrofit/validation/ts/resolve.ts:215:37)
+      at runChecks (/home/admin_maxime/projects/market-retrofit/validation/ts/validator.ts:149:38)
+      at evaluate (/home/admin_maxime/projects/market-retrofit/validation/ts/validator.ts:223:43)
+      at validate (/home/admin_maxime/projects/market-retrofit/validation/ts/validator.ts:85:15)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:266:81)
+
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:270:17)
+(fail) a link rule · a resolver that rejects is quarantined, never an escaping exception [55.47ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [226.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) a link rule · a resolver that rejects is quarantined, never an escaping exception [38.84ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 7 expect() calls
+Ran 1 test across 1 file. [215.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 26 — the comparator vocabulary is checked at the preset, before any resolution (the order's adjustment 1)
+breaks:   the preset's own precheck is disabled, so an uninterpretable preset is no longer refused when the link check is reached and is judged per candidate state instead
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · the comparator vocabulary · an uninterpretable preset fails at the preset, the same way whatever the candidate is
+$ the mutation applied (old -> new):
+- 	assertVocabulary(check, deps.preset)
++ 	void assertVocabulary
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t the\ comparator\ vocabulary\ ·\ an\ uninterpretable\ preset\ fails\ at\ the\ preset,\ the\ same\ way\ whatever\ the\ candidate\ is
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+805 | 		try {
+806 | 			await createValidator({ presets: [bad], port }).validate(candidate)
+807 | 		} catch (error) {
+808 | 			thrown = error
+809 | 		}
+810 | 		expect(thrown, state).toBeInstanceOf(ValidationError)
+                              ^
+error: unresolved — the port answers nothing
+
+Expected constructor: [class ValidationError extends Error]
+Received value: undefined
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:810:25)
+(fail) the comparator vocabulary · an uninterpretable preset fails at the preset, the same way whatever the candidate is [35.33ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [186.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) the comparator vocabulary · an uninterpretable preset fails at the preset, the same way whatever the candidate is [25.93ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 7 expect() calls
+Ran 1 test across 1 file. [193.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 27 — bound 1 counts resolutions attempted, one per link check, from the occurrence the preset names
+breaks:   the fan-out count walks every matching tag again, so the ceiling caps a quantity the engine never resolves and quarantines a candidate for tags it would never read
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · a link rule · reads the occurrence its preset names: one link is one resolution, however many tags the event carries
+$ the mutation applied (old -> new):
+- 		const value = referenceValue(event, link.tag, link.index)
+		if (value !== undefined) out.push(value)
++ 		for (const tag of event.tags) {
+			if (tag[0] !== link.tag) continue
+			const value = tag[link.index]
+			if (value !== undefined) out.push(value)
+		}
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t a\ link\ rule\ ·\ reads\ the\ occurrence\ its\ preset\ names:\ one\ link\ is\ one\ resolution,\ however\ many\ tags\ the\ event\ carries
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+404 | 	const referenced = signedEvent({ kind: 1, created_at: 1 })
+405 | 	const tags = Array.from({ length: 11 }, (_, index) => ['e', index === 0 ? referenced.id : '0'.repeat(64)])
+406 | 	const candidate = signedEvent({ kind: 1, created_at: 2, tags })
+407 | 	const preset: ValidationPreset = { name: 'links', kinds: [1], checks: [linkCheck()] }
+408 | 	const port = recordingPort({ [referenced.id]: held(referenced) })
+409 | 	expect(await createValidator({ presets: [preset], port }).validate(candidate)).toEqual({ outcome: 'accepted' })
+                                                                                      ^
+error: expect(received).toEqual(expected)
+
+  {
+-   "outcome": "accepted",
++   "check": "link",
++   "outcome": "quarantined",
++   "preset": "links",
++   "reference": "0000000000000000000000000000000000000000000000000000000000000000",
+  }
+
+- Expected  - 1
++ Received  + 4
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:409:81)
+(fail) a link rule · reads the occurrence its preset names: one link is one resolution, however many tags the event carries [20.77ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [134.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) a link rule · reads the occurrence its preset names: one link is one resolution, however many tags the event carries [51.81ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [234.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 28 — bound 5 · the eviction record is bounded too (a count plus the last few)
+breaks:   the loss record stops being trimmed, so it grows with every eviction — a memory bound whose own book is the leak
+file:     validation/ts/bounds.ts
+sha256:   4f0aea48e52673237f50d34f330b65e6848b923e9d4fca23250efac4679865d5 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · bound 5 · the eviction record is bounded too: a count plus the last few, never an ever-growing log
+$ the mutation applied (old -> new):
+- 			if (this.history.length > EVICTION_RECORD_LIMIT) this.history.shift()
++ 			void EVICTION_RECORD_LIMIT
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t bound\ 5\ ·\ the\ eviction\ record\ is\ bounded\ too:\ a\ count\ plus\ the\ last\ few,\ never\ an\ ever\-growing\ log
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+563 | 	expect(book.references).toEqual([id(evaluations - 1)]) // one 64-byte reference fits the ceiling
+564 | 	expect(book.bytes).toBe(64) // the byte ceiling holds
+565 | 	expect(book.limitBytes).toBe(64)
+566 | 	// the count is exact, and the names are a window of the most recent — never the whole log
+567 | 	expect(book.evictionCount).toBe(evaluations - 1)
+568 | 	expect(book.evictions.length).toBe(EVICTION_RECORD_LIMIT)
+                                     ^
+error: expect(received).toBe(expected)
+
+Expected: 8
+Received: 199
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:568:32)
+(fail) bound 5 · the eviction record is bounded too: a count plus the last few, never an ever-growing log [1003.69ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 205 expect() calls
+Ran 1 test across 1 file. [1134.00ms]
+exit: 1
+
+$ sha256 after restore: 4f0aea48e52673237f50d34f330b65e6848b923e9d4fca23250efac4679865d5 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) bound 5 · the eviction record is bounded too: a count plus the last few, never an ever-growing log [995.23ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 209 expect() calls
+Ran 1 test across 1 file. [1167.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 29 — a revisit that turns unresolved into matched admits the held event (D-O25)
+breaks:   the revisit-count gate is made unconditional, so a held reference is never retried and an event the port has since answered can never be admitted
+file:     validation/ts/resolve.ts
+sha256:   df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · quarantine · a revisit that turns unresolved into matched admits the event that was held
+$ the mutation applied (old -> new):
+- 		if (!deps.store.canRevisit(reference, deps.bounds.revisitCount)) {
++ 		if (true) {
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t quarantine\ ·\ a\ revisit\ that\ turns\ unresolved\ into\ matched\ admits\ the\ event\ that\ was\ held
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+678 | 	expect((await validator.validate(candidate)).outcome).toBe('quarantined')
+679 | 	expect(calls).toHaveLength(1)
+680 | 	// the interval passes: the same reference is resolved again, and this time it matches — so the
+681 | 	// event that was held is admitted, not refused and not held again
+682 | 	clock.advance(100)
+683 | 	expect(await validator.validate(candidate)).toEqual({ outcome: 'accepted' })
+                                                   ^
+error: expect(received).toEqual(expected)
+
+  {
+-   "outcome": "accepted",
++   "check": "link",
++   "outcome": "quarantined",
++   "preset": "links",
++   "reference": "7c39620fa4bbd1c1123da5a28d6f37359b6662668dcc0e3edffa5145f7efef97",
+  }
+
+- Expected  - 1
++ Received  + 4
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:683:46)
+(fail) quarantine · a revisit that turns unresolved into matched admits the event that was held [50.67ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [199.00ms]
+exit: 1
+
+$ sha256 after restore: df7c831c2c9178fd70571dcd6ea480f2e8b8b41e6ef53679d81395d3d7dfdb19 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) quarantine · a revisit that turns unresolved into matched admits the event that was held [57.78ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 7 expect() calls
+Ran 1 test across 1 file. [213.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 30 — a specific preset wins over a wildcard (preset selection)
+breaks:   the specific-match pass is removed, so a wildcard declared first shadows every rule beneath it and a candidate is judged by a preset the host did not mean to apply
+file:     validation/ts/presets.ts
+sha256:   a59d62e4a464b5aaa69442b5c906bbf4ea7a4d4bc3d5ce9210f69a4feea8f75c (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · preset selection · a specific match wins over a wildcard, whatever the host declared first
+$ the mutation applied (old -> new):
+- 	const specific = presets.find((preset) => preset.kinds.length > 0 && preset.kinds.includes(event.kind))
++ 	const specific = presets.find(() => false)
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t preset\ selection\ ·\ a\ specific\ match\ wins\ over\ a\ wildcard,\ whatever\ the\ host\ declared\ first
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+330 | 	// the wildcard is declared FIRST: the specific preset must still run for a kind it names
+331 | 	const wildcardFirst = createValidator({ presets: [wildcard, specific] })
+332 | 	const named = await wildcardFirst.validate(signedEvent({ kind: 1, created_at: 1 }))
+333 | 	expect(named.outcome).toBe('refused')
+334 | 	if (named.outcome !== 'refused') return
+335 | 	expect(named.refusal.preset).toBe('specific')
+                                    ^
+error: expect(received).toBe(expected)
+
+Expected: "specific"
+Received: "wild"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:335:31)
+(fail) preset selection · a specific match wins over a wildcard, whatever the host declared first [14.21ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [228.00ms]
+exit: 1
+
+$ sha256 after restore: a59d62e4a464b5aaa69442b5c906bbf4ea7a4d4bc3d5ce9210f69a4feea8f75c (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) preset selection · a specific match wins over a wildcard, whatever the host declared first [41.95ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 7 expect() calls
+Ran 1 test across 1 file. [203.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 31 — a preset asking for chain following is refused at the preset (`maxChainDepth > 1`, bound 2)
+breaks:   the chain-depth refusal stops firing, so a preset declaring two or more hops is accepted and silently takes one — the declared bound with no mechanism
+file:     validation/ts/validator.ts
+sha256:   cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · bound 2 · a preset asking for chain following is refused at the preset, before any candidate is judged
+$ the mutation applied (old -> new):
+- 		if (links.length > 0 && bounds.maxChainDepth > 1) {
++ 		if (false) {
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t bound\ 2\ ·\ a\ preset\ asking\ for\ chain\ following\ is\ refused\ at\ the\ preset,\ before\ any\ candidate\ is\ judged
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+462 | 	try {
+463 | 		await createValidator({ presets: [asking], port: recordingPort({ [referenced.id]: held(referenced) }) }).validate(candidate)
+464 | 	} catch (error) {
+465 | 		thrown = error
+466 | 	}
+467 | 	expect(thrown).toBeInstanceOf(ValidationError)
+                      ^
+error: expect(received).toBeInstanceOf(expected)
+
+Expected constructor: [class ValidationError extends Error]
+Received value: undefined
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:467:17)
+(fail) bound 2 · a preset asking for chain following is refused at the preset, before any candidate is judged [50.50ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [210.00ms]
+exit: 1
+
+$ sha256 after restore: cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) bound 2 · a preset asking for chain following is refused at the preset, before any candidate is judged [34.32ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [170.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 32 — bound 6 · the default clock is real, so a reference quarantined with no port and no clock is retried once the interval has passed (A6)
+breaks:   the default clock is frozen again (`Date.now()` back to `0`), so the revisit gate `now - lastAttemptAt >= intervalMs` becomes `0 - 0 >= intervalMs` — false forever — and a reference quarantined in this configuration can never be revisited: a declared bound with no mechanism
+file:     validation/ts/validator.ts
+sha256:   cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     validation.test.ts · bound 6 · the default clock is real: with no port and no clock a quarantined reference is retried once the interval has passed
+$ the mutation applied (old -> new):
+- 		this.clock = options.clock ?? (port !== undefined ? { now: () => port.now() } : { now: () => Date.now() })
++ 		this.clock = options.clock ?? (port !== undefined ? { now: () => port.now() } : { now: () => 0 })
+
+$ /home/admin_maxime/.bun/bin/bun test validation.test.ts -t bound\ 6\ ·\ the\ default\ clock\ is\ real:\ with\ no\ port\ and\ no\ clock\ a\ quarantined\ reference\ is\ retried\ once\ the\ interval\ has\ passed
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+635 | 
+636 | 	// the answer changes, and the revisit interval passes on the real clock: the same candidate is
+637 | 	// re-evaluated, so the hook is asked a **second** time, and the outcome changes with the answer
+638 | 	await new Promise((resolve) => setTimeout(resolve, 25))
+639 | 	answerable = true
+640 | 	expect(await validator.accept(candidate, context)).toBe('accept')
+                                                          ^
+error: expect(received).toBe(expected)
+
+Expected: "accept"
+Received: "reject"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/validation/ts/validation.test.ts:640:53)
+(fail) bound 6 · the default clock is real: with no port and no clock a quarantined reference is retried once the interval has passed [45.94ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [158.00ms]
+exit: 1
+
+$ sha256 after restore: cff2ae05764a65e0468db158343fe6261b120f37752a92483083c068c49ef303 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) bound 6 · the default clock is real: with no port and no clock a quarantined reference is retried once the interval has passed [57.63ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 6 expect() calls
+Ran 1 test across 1 file. [214.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+32 mutation(s) applied, 0 falsification failure(s)
+every mutated file was restored and its sha256 verified; the module's tree is as it was before this run.
+
+32 mutation(s), 0 falsification failure(s)
