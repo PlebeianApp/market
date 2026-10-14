@@ -97,6 +97,28 @@ declared and still unexecuted, never transcribed (`design.md` §4.2b/§7.1).
 same event with `end_at` crosses, direct navigation still resolves the dropped one naming the failing
 check and requirement, and with 30408 withdrawn the same subject is ungated again.
 
+## The reason travels (V4)
+
+The gate answer is **lossy by design** — `'reject'` covers a refusal *and* a quarantine — so the reason is
+recovered structurally: the binary through `accept`, the `ValidationOutcome` through `validate`, **both on
+the same `Validator` instance** (`design.md` §4.7). The smallest type change that makes it expressible is
+one field — **`ValidationRefusal.tag`** (`design.md` §7.3), set by the format half for the three
+tag-scoped requirements (`missing-tag`, `cardinality`, `domain`) and absent for `content` and for a link
+refusal. It carries the tag the publisher **wrote**, from the engine's own reading, so no surface
+re-derives it and no badge can disagree with the feed.
+
+`ts/notice.ts` is the notice contract: `admissionNotice(outcome)` maps the outcome to a renderable value —
+a **refusal** naming the check, the requirement and the tag (the legacy per-tag `label`, built from the
+value); a **quarantine** naming the unresolved `reference` and *nothing else* ("held: a referenced event
+could not be resolved"), never a made-up failing tag; and an `interactive` flag expressing the doctrine's
+interactivity gate. `judgeAdmission(validator, event, context)` returns both readings of the one instance,
+which `ts/notice.test.ts` asserts agree for a refusal **and** for a quarantine.
+
+**No declaring line in `validation.md` was edited, and no amendment paragraph added.** The module's I4b
+amendment already states a format refusal carries the requirement *"which required tag was missing"*; the
+`tag` field is that sentence implemented, so the spec and the directory agree as they stand (and the
+module's `#`-token cross-reference verifier still resolves every code token — 26/26).
+
 ## The regression floor this rung carries
 
 The four behaviours proved at `event-access/ts/composition-root.test.ts` moved with the root

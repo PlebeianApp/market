@@ -183,6 +183,21 @@ export interface ValidationRefusal {
 	readonly cause: ValidationCause
 	/** Which requirement fired, for a format refusal; absent for a link refusal. */
 	readonly requirement?: ValidationRequirement
+	/**
+	 * **The offending tag**, for a format refusal that is scoped to one tag — the one the publisher
+	 * actually wrote. Absent for an envelope-level failure (`maxContentBytes`, which is about `content`
+	 * and no tag) and for a link refusal.
+	 *
+	 * **Why it is here, and not re-derived by the caller.** The I4b amendment above states a format refusal
+	 * carries the requirement "which required tag was missing" — and the app's doctrine requires the notice
+	 * to state **which constraint failed** rendered **per tag** (`AGENTS.md:105-109`; the legacy notice's
+	 * `AUCTION_FIELD_TAGS` map, `auctionAdmission.ts:64-97`, exists to name the tag the publisher wrote). A
+	 * refusal that named only `'missing-tag'` would force every notice to re-derive the tag from the
+	 * message, and a re-derived tag can disagree with the reason the gate dropped the item — the
+	 * badge-versus-feed divergence the doctrine forbids by name (`design.md` §7.3). This field closes that:
+	 * one predicate, one tag, read by the badge and the feed alike.
+	 */
+	readonly tag?: string
 	readonly message: string
 }
 

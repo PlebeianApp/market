@@ -112,8 +112,10 @@ class ValidatorImpl implements Validator {
 	}
 
 	/**
-	 * A refusal value. `requirement` is set for a format failure — which requirement of the
-	 * check fired — and left out for a link refusal, whose cause is the whole difference.
+	 * A refusal value. `requirement` is set for a format failure — which requirement of the check fired —
+	 * and `tag` for the format failures that are scoped to one tag, so a notice can name the tag the
+	 * publisher wrote **from this value** rather than re-deriving it (`design.md` §7.3). Both are left out
+	 * for a link refusal, whose cause is the whole difference.
 	 */
 	private refused(
 		preset: string,
@@ -121,8 +123,9 @@ class ValidatorImpl implements Validator {
 		cause: ValidationCause,
 		message: string,
 		requirement?: ValidationRequirement,
+		tag?: string,
 	): ValidationOutcome {
-		const refusal: ValidationRefusal = { preset, check, cause, message, requirement }
+		const refusal: ValidationRefusal = { preset, check, cause, message, requirement, tag }
 		return { outcome: 'refused', refusal }
 	}
 
@@ -141,7 +144,7 @@ class ValidatorImpl implements Validator {
 			if (check.kind === 'format') {
 				const failure = evaluateFormat(check, event)
 				if (failure !== undefined) {
-					return this.refused(preset.name, check, failure.cause, failure.message, failure.requirement)
+					return this.refused(preset.name, check, failure.cause, failure.message, failure.requirement, failure.tag)
 				}
 				continue
 			}

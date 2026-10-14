@@ -17,11 +17,17 @@
 import { byteLength } from './bounds'
 import type { FormatCheck, Event, ValidationCause, ValidationRequirement } from './types'
 
-/** What a failed format check reports: the closed cause, the requirement that fired, and the message. */
-/** #e4b72f — FormatFailure: a failed format check's cause, requirement and message. */
+/** What a failed format check reports: the closed cause, the requirement that fired, the tag, and the message. */
+/** #e4b72f — FormatFailure: a failed format check's cause, requirement, tag and message. */
 export interface FormatFailure {
 	readonly cause: ValidationCause
 	readonly requirement: ValidationRequirement
+	/**
+	 * The tag the failure is scoped to (`design.md` §7.3). Absent for the one requirement that is about the
+	 * envelope rather than a tag — `content`. A refusal carrying it lets a notice name the tag the publisher
+	 * wrote **from the engine's own reading**, never a re-derived one.
+	 */
+	readonly tag?: string
 	readonly message: string
 }
 
@@ -43,6 +49,7 @@ export function evaluateFormat(check: FormatCheck, event: Event): FormatFailure 
 			return {
 				cause: 'differs',
 				requirement: 'missing-tag',
+				tag: requirement.tag,
 				message: `check ${check.id} requires at least ${requirement.atLeast} ${requirement.tag} tag(s); the candidate carries ${count}`,
 			}
 		}
@@ -50,6 +57,7 @@ export function evaluateFormat(check: FormatCheck, event: Event): FormatFailure 
 			return {
 				cause: 'differs',
 				requirement: 'cardinality',
+				tag: requirement.tag,
 				message: `check ${check.id} allows at most ${requirement.atMost} ${requirement.tag} tag(s); the candidate carries ${count}`,
 			}
 		}
@@ -62,6 +70,7 @@ export function evaluateFormat(check: FormatCheck, event: Event): FormatFailure 
 				return {
 					cause: 'differs',
 					requirement: 'domain',
+					tag: domain.tag,
 					message: `check ${check.id}: the ${domain.tag} value ${value} is outside the declared domain (${domain.values.join(', ')})`,
 				}
 			}

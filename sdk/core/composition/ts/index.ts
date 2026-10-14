@@ -45,4 +45,6 @@ export type {
 } from './declaration'
 export { composeCommerce } from './compose'
 export type { ComposedCommerce, ComposeCommerceOptions } from './compose'
+export { admissionNotice, inspectAdmission, judgeAdmission, QUARANTINE_MESSAGE } from './notice'
+export type { AdmittedNotice, AdmissionNotice, QuarantineNotice, RefusalNotice } from './notice'
 export { COMPOSITION_SIBLINGS } from './siblings'
