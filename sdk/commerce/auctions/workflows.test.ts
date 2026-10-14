@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import type { ParsedAuctionEvent } from './events'
 import {
 	createAuctionBidTemplate,
+	executeAuctionPathReleaseWorkflow,
 	executeAuctionListingWorkflow,
+	executeAuctionListingTemplateWorkflow,
 	executeAuctionSettlementWorkflow,
 	executeAuctionWinnerClaimWorkflow,
 	executeFundedAuctionBidWorkflow,
@@ -83,6 +85,42 @@ describe('auction lifecycle SDK workflows', () => {
 		})
 		expect(outcome).toEqual({ status: 'published', eventId: 'listing-id' })
 		expect(order).toEqual(['mint', 'sign', 'publish'])
+	})
+
+	test('publishes a host-prepared listing template without altering its tags', async () => {
+		const template = {
+			kind: 30408,
+			created_at: 99,
+			content: 'host listing',
+			tags: [
+				['price', '100', 'SAT'],
+				['custom', 'kept'],
+			],
+		}
+		const calls: string[] = []
+		const outcome = await executeAuctionListingTemplateWorkflow(
+			async () => {
+				calls.push('prepare')
+				return template
+			},
+			['https://mint.example'],
+			{
+				assertMintsSupported: async (mints) => {
+					calls.push(`mints:${mints.join(',')}`)
+				},
+				sign: async (received) => {
+					calls.push('sign')
+					expect(received).toEqual(template)
+					return { id: 'listing-id' }
+				},
+				publish: async () => {
+					calls.push('publish')
+				},
+			},
+		)
+
+		expect(outcome).toEqual({ status: 'published', eventId: 'listing-id' })
+		expect(calls).toEqual(['mints:https://mint.example', 'prepare', 'sign', 'publish'])
 	})
 
 	test('plans cumulative rebids as delta funding and builds the canonical bid template', () => {
@@ -257,6 +295,59 @@ describe('auction lifecycle SDK workflows', () => {
 		expect(calls).toEqual(['preflight', 'inspect:bid-1', 'inspect:bid-2', 'redeem:bid-2', 'publish'])
 	})
 
+	test('preserves redeemed leg IDs when a later Cashu redemption fails', async () => {
+		const plan = planAuctionSettlement({
+			status: 'settled',
+			auction,
+			closeAt: 220,
+			createdAt: 221,
+			winningBidId: 'bid-2',
+			winnerPubkey: 'd'.repeat(64),
+			finalAmount: 20,
+			pathReleaseEventId: 'release',
+			legs: [
+				{ bidEventId: 'bid-1', amount: 10, locktime: 510, redemptionData: 'first' },
+				{ bidEventId: 'bid-2', amount: 10, locktime: 510, redemptionData: 'second' },
+			],
+		})
+		const outcome = await executeAuctionSettlementWorkflow(plan, {
+			preflightAll: async () => {},
+			inspectLeg: async () => 'unspent',
+			redeemLeg: async (leg) => {
+				if (leg.bidEventId === 'bid-2') throw new Error('mint unavailable')
+			},
+			assertReserveNotMet: async () => {},
+			publish: async () => ({ eventId: 'unused' }),
+		})
+
+		expect(outcome).toEqual({ status: 'failed', phase: 'redemption', error: 'mint unavailable', redeemedBidIds: ['bid-1'] })
+	})
+
+	test('reports uncertain settlement publication after all legs redeemed', async () => {
+		const plan = planAuctionSettlement({
+			status: 'settled',
+			auction,
+			closeAt: 220,
+			createdAt: 221,
+			winningBidId: 'bid-1',
+			winnerPubkey: 'd'.repeat(64),
+			finalAmount: 10,
+			pathReleaseEventId: 'release',
+			legs: [{ bidEventId: 'bid-1', amount: 10, locktime: 510, redemptionData: 'token' }],
+		})
+		const outcome = await executeAuctionSettlementWorkflow(plan, {
+			preflightAll: async () => {},
+			inspectLeg: async () => 'unspent',
+			redeemLeg: async () => {},
+			assertReserveNotMet: async () => {},
+			publish: async () => {
+				throw new Error('relay timeout')
+			},
+		})
+
+		expect(outcome).toMatchObject({ status: 'publish_uncertain', redeemedBidIds: ['bid-1'], error: 'relay timeout' })
+	})
+
 	test('winner claim marker has no delivery PII and preserves private-first partial progress', async () => {
 		const claim = {
 			orderId: 'order-1',
@@ -297,6 +388,128 @@ describe('auction lifecycle SDK workflows', () => {
 			status: 'partial',
 			privateDeliveryEventId: 'gift-wrap-id',
 			acceptedRelays: ['wss://private.example'],
+		})
+	})
+
+	test('publishes path-release legs in chain order and records each acknowledged leg', async () => {
+		const calls: string[] = []
+		const outcome = await executeAuctionPathReleaseWorkflow(
+			[
+				{ bidEventId: 'bid-1', amount: 10, template: 'release-1' },
+				{ bidEventId: 'bid-2', amount: 15, template: 'release-2' },
+			],
+			{
+				sign: async (template) => {
+					calls.push(`sign:${template}`)
+					return { id: `${template}-signed` }
+				},
+				publish: async (event) => {
+					calls.push(`publish:${event.id}`)
+				},
+				markReleased: async (bidEventId) => {
+					calls.push(`record:${bidEventId}`)
+				},
+			},
+		)
+
+		expect(calls).toEqual([
+			'sign:release-1',
+			'publish:release-1-signed',
+			'record:bid-1',
+			'sign:release-2',
+			'publish:release-2-signed',
+			'record:bid-2',
+		])
+		expect(outcome).toMatchObject({
+			status: 'published',
+			pathReleaseEventId: 'release-2-signed',
+			legsReleased: 2,
+			cumulativeBidAmount: 25,
+			progress: [
+				{ bidEventId: 'bid-1', status: 'published', eventId: 'release-1-signed', recoveryRecorded: true },
+				{ bidEventId: 'bid-2', status: 'published', eventId: 'release-2-signed', recoveryRecorded: true },
+			],
+		})
+	})
+
+	test('retains acknowledged release progress when a later leg fails to sign', async () => {
+		const outcome = await executeAuctionPathReleaseWorkflow(
+			[
+				{ bidEventId: 'bid-1', amount: 10, template: 'release-1' },
+				{ bidEventId: 'bid-2', amount: 15, template: 'release-2' },
+			],
+			{
+				sign: async (template) => {
+					if (template === 'release-2') throw new Error('signer unavailable')
+					return { id: 'release-1-signed' }
+				},
+				publish: async () => {},
+				markReleased: async () => {},
+			},
+		)
+
+		expect(outcome).toMatchObject({
+			status: 'partial',
+			failedBidEventId: 'bid-2',
+			failedPhase: 'sign',
+			pathReleaseEventId: 'release-1-signed',
+			legsReleased: 1,
+			cumulativeBidAmount: 10,
+			progress: [
+				{ bidEventId: 'bid-1', status: 'published', recoveryRecorded: true },
+				{ bidEventId: 'bid-2', status: 'pending', recoveryRecorded: false },
+			],
+		})
+	})
+
+	test('classifies relay exceptions as uncertain and does not mark that leg released', async () => {
+		const recorded: string[] = []
+		const outcome = await executeAuctionPathReleaseWorkflow(
+			[
+				{ bidEventId: 'bid-1', amount: 10, template: 'release-1' },
+				{ bidEventId: 'bid-2', amount: 15, template: 'release-2' },
+			],
+			{
+				sign: async (template) => ({ id: `${template}-signed` }),
+				publish: async (event) => {
+					if (event.id === 'release-2-signed') throw new Error('relay timeout')
+				},
+				markReleased: async (bidEventId) => {
+					recorded.push(bidEventId)
+				},
+			},
+		)
+
+		expect(outcome).toMatchObject({
+			status: 'publish_uncertain',
+			failedBidEventId: 'bid-2',
+			attemptedEventId: 'release-2-signed',
+			pathReleaseEventId: 'release-1-signed',
+			legsReleased: 1,
+			progress: [
+				{ bidEventId: 'bid-1', status: 'published', recoveryRecorded: true },
+				{ bidEventId: 'bid-2', status: 'publish_uncertain', recoveryRecorded: false },
+			],
+		})
+		expect(recorded).toEqual(['bid-1'])
+	})
+
+	test('reports partial progress when release publish succeeds but local record update fails', async () => {
+		const outcome = await executeAuctionPathReleaseWorkflow([{ bidEventId: 'bid-1', amount: 10, template: 'release-1' }], {
+			sign: async () => ({ id: 'release-1-signed' }),
+			publish: async () => {},
+			markReleased: async () => {
+				throw new Error('local record unavailable')
+			},
+		})
+
+		expect(outcome).toMatchObject({
+			status: 'partial',
+			failedBidEventId: 'bid-1',
+			failedPhase: 'record_release',
+			pathReleaseEventId: 'release-1-signed',
+			legsReleased: 1,
+			progress: [{ bidEventId: 'bid-1', status: 'published', eventId: 'release-1-signed', recoveryRecorded: false }],
 		})
 	})
 })

@@ -66,7 +66,7 @@ export interface AuctionListingPublishPorts<SignedEvent extends SignedEventLike>
 
 export type AuctionListingPublishOutcome =
 	| { status: 'published'; eventId: string }
-	| { status: 'failed'; phase: 'mint_preflight' | 'sign'; error: string }
+	| { status: 'failed'; phase: 'mint_preflight' | 'event_preparation' | 'sign'; error: string }
 	| { status: 'publish_uncertain'; eventId: string; error: string }
 
 /** Execute listing publication in validation → mint preflight → sign → publish order. */
@@ -74,11 +74,25 @@ export async function executeAuctionListingWorkflow<SignedEvent extends SignedEv
 	input: AuctionListingWorkflowInput,
 	ports: AuctionListingPublishPorts<SignedEvent>,
 ): Promise<AuctionListingPublishOutcome> {
-	const template = prepareAuctionListing(input)
+	return executeAuctionListingTemplateWorkflow(() => prepareAuctionListing(input), input.auction.mints, ports)
+}
+
+/** Publish a host-prepared listing without rewriting its protocol tags. */
+export async function executeAuctionListingTemplateWorkflow<SignedEvent extends SignedEventLike>(
+	prepareTemplate: () => EventTemplate | Promise<EventTemplate>,
+	mints: readonly string[],
+	ports: AuctionListingPublishPorts<SignedEvent>,
+): Promise<AuctionListingPublishOutcome> {
 	try {
-		await ports.assertMintsSupported(input.auction.mints)
+		await ports.assertMintsSupported(mints)
 	} catch (error) {
 		return { status: 'failed', phase: 'mint_preflight', error: errorMessage(error) }
+	}
+	let template: EventTemplate
+	try {
+		template = await prepareTemplate()
+	} catch (error) {
+		return { status: 'failed', phase: 'event_preparation', error: errorMessage(error) }
 	}
 	let event: SignedEvent
 	try {
@@ -342,6 +356,142 @@ export async function retryAuctionBidPublish<Event, SignedEvent extends SignedEv
 		return { status: 'published', eventId: signed.id }
 	} catch (error) {
 		return { status: 'retryable', event: saved.event, ...(signed ? { signedEvent: signed } : {}), error: errorMessage(error) }
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Bidder path release
+// ---------------------------------------------------------------------------
+
+export interface AuctionPathReleaseLeg<Template> {
+	bidEventId: string
+	amount: number
+	template: Template
+}
+
+export interface AuctionPathReleaseProgress {
+	bidEventId: string
+	status: 'pending' | 'published' | 'publish_uncertain'
+	eventId?: string
+	recoveryRecorded: boolean
+}
+
+export interface AuctionPathReleaseWorkflowPorts<Template, SignedEvent extends SignedEventLike> {
+	sign(template: Template): Promise<SignedEvent>
+	publish(event: SignedEvent): Promise<void>
+	markReleased(bidEventId: string): void | Promise<void>
+}
+
+export type AuctionPathReleaseWorkflowOutcome =
+	| {
+			status: 'published'
+			pathReleaseEventId: string
+			legsReleased: number
+			cumulativeBidAmount: number
+			progress: AuctionPathReleaseProgress[]
+	  }
+	| {
+			status: 'failed' | 'partial'
+			failedBidEventId: string
+			failedPhase: 'sign' | 'record_release'
+			error: string
+			pathReleaseEventId?: string
+			legsReleased: number
+			cumulativeBidAmount: number
+			progress: AuctionPathReleaseProgress[]
+	  }
+	| {
+			status: 'publish_uncertain'
+			failedBidEventId: string
+			attemptedEventId: string
+			error: string
+			pathReleaseEventId?: string
+			legsReleased: number
+			cumulativeBidAmount: number
+			progress: AuctionPathReleaseProgress[]
+	  }
+
+/** Publish a prevalidated bidder chain in order, retaining confirmed progress on later failure. */
+export async function executeAuctionPathReleaseWorkflow<Template, SignedEvent extends SignedEventLike>(
+	legs: readonly AuctionPathReleaseLeg<Template>[],
+	ports: AuctionPathReleaseWorkflowPorts<Template, SignedEvent>,
+): Promise<AuctionPathReleaseWorkflowOutcome> {
+	if (legs.length === 0) throw new Error('Auction path-release chain cannot be empty')
+	const seenBidIds = new Set<string>()
+	for (const leg of legs) {
+		if (!leg.bidEventId.trim() || seenBidIds.has(leg.bidEventId))
+			throw new Error('Auction path-release chain has a missing or duplicate bid id')
+		if (!Number.isSafeInteger(leg.amount) || leg.amount <= 0)
+			throw new Error('Auction path-release leg amount must be a positive safe integer')
+		seenBidIds.add(leg.bidEventId)
+	}
+
+	let progress: AuctionPathReleaseProgress[] = legs.map(({ bidEventId }) => ({
+		bidEventId,
+		status: 'pending',
+		recoveryRecorded: false,
+	}))
+	let pathReleaseEventId: string | undefined
+	let legsReleased = 0
+	let cumulativeBidAmount = 0
+
+	const failure = (bidEventId: string, failedPhase: 'sign' | 'record_release', error: unknown): AuctionPathReleaseWorkflowOutcome => ({
+		status: legsReleased > 0 ? 'partial' : 'failed',
+		failedBidEventId: bidEventId,
+		failedPhase,
+		error: errorMessage(error),
+		...(pathReleaseEventId ? { pathReleaseEventId } : {}),
+		legsReleased,
+		cumulativeBidAmount,
+		progress,
+	})
+
+	for (const leg of legs) {
+		let signed: SignedEvent
+		try {
+			signed = await ports.sign(leg.template)
+		} catch (error) {
+			return failure(leg.bidEventId, 'sign', error)
+		}
+
+		try {
+			await ports.publish(signed)
+		} catch (error) {
+			progress = progress.map((entry) =>
+				entry.bidEventId === leg.bidEventId ? { ...entry, status: 'publish_uncertain', eventId: signed.id } : entry,
+			)
+			return {
+				status: 'publish_uncertain',
+				failedBidEventId: leg.bidEventId,
+				attemptedEventId: signed.id,
+				error: errorMessage(error),
+				...(pathReleaseEventId ? { pathReleaseEventId } : {}),
+				legsReleased,
+				cumulativeBidAmount,
+				progress,
+			}
+		}
+
+		pathReleaseEventId = signed.id
+		legsReleased++
+		cumulativeBidAmount += leg.amount
+		progress = progress.map((entry) =>
+			entry.bidEventId === leg.bidEventId ? { ...entry, status: 'published', eventId: signed.id } : entry,
+		)
+		try {
+			await ports.markReleased(leg.bidEventId)
+			progress = progress.map((entry) => (entry.bidEventId === leg.bidEventId ? { ...entry, recoveryRecorded: true } : entry))
+		} catch (error) {
+			return failure(leg.bidEventId, 'record_release', error)
+		}
+	}
+
+	return {
+		status: 'published',
+		pathReleaseEventId: pathReleaseEventId!,
+		legsReleased,
+		cumulativeBidAmount,
+		progress,
 	}
 }
 

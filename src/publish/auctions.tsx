@@ -1,28 +1,29 @@
-import {
-	AUCTION_BID_KIND,
-	AUCTION_KIND,
-	AUCTION_SETTLEMENT_KIND,
-	AUCTION_SETTLEMENT_POLICY,
-	getAuctionTagValue,
-} from '@/lib/auctionSettlement'
+import { AUCTION_BID_KIND, AUCTION_KIND, AUCTION_SETTLEMENT_POLICY, getAuctionTagValue } from '@/lib/auctionSettlement'
 import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@/lib/auctionPublishValidation'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
 import { nip60Actions, type AuctionP2pkKeyScheme, AuctionBidLockMutationPossibleError } from '@/lib/stores/nip60'
 import type { ProductShippingSelectionInput } from '@sdk/commerce/products'
-import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
+import {
+	buildPathReleaseTags,
+	createAuctionBidTemplate,
+	executeAuctionListingTemplateWorkflow,
+	executeAuctionPathReleaseWorkflow,
+	executeAuctionSettlementWorkflow,
+	executeAuctionWinnerClaimWorkflow,
+	planAuctionBid,
+} from '@sdk/commerce/auctions'
+import { fetchAuction, getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
 import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
+import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { toRawEvent, type NostrEventLike } from '@/lib/nostr/eventLike'
 import { evaluateReserveNotMetGuard, resolveReserveNotMetPublish } from '@/lib/auction/reserveGuard'
 import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 import { buildDleqProofs, fetchDleqKeysetsForBidsDetailed } from '@/lib/cashu/dleq'
-import { buildBidEventTags, buildPathReleaseTags } from '@/lib/auction/tagBuilders'
-import {
-	buildAuctionClaimPublicMarkerTags,
-	createPrivateAuctionClaimMessageForActiveSigner,
-} from '@/lib/auctions/privateAuctionClaimMessage'
+import { buildBidEventTags } from '@/lib/auction/tagBuilders'
+import { createPrivateAuctionClaimMessageForActiveSigner } from '@/lib/auctions/privateAuctionClaimMessage'
 import {
 	findLatestBidderRecordForAuction,
 	updateBidderRecordStatus,
@@ -353,16 +354,13 @@ export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: 
 
 export const publishAuction = async (formData: AuctionFormData, auctionId?: string): Promise<string> => {
 	const validated = validateAuctionPublishInput(formData, { minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
-
-	// ADR-0011 Decision 6 — reject post-rollout auctions whose allowlisted
-	// mints do not advertise NUT-12 DLEQ support (Decision 4). Runs before any
-	// event is built or signed so a non-DLEQ auction is never published.
-	await assertAuctionMintsSupportDleq(validated.trustedMints)
-
-	const template = await createAuctionEvent(formData, auctionId)
-	const event = await signNostrEvent(template)
-	await publishRequired(event)
-	return event.id
+	const outcome = await executeAuctionListingTemplateWorkflow(() => createAuctionEvent(formData, auctionId), validated.trustedMints, {
+		assertMintsSupported: assertAuctionMintsSupportDleq,
+		sign: signNostrEvent,
+		publish: publishRequired,
+	})
+	if (outcome.status === 'published') return outcome.eventId
+	throw new Error(`Auction listing ${outcome.status} during ${outcome.status === 'failed' ? outcome.phase : 'publish'}: ${outcome.error}`)
 }
 
 export const usePublishAuctionMutation = () => {
@@ -499,6 +497,27 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 	const bidderUser = await getUser()
 	if (!bidderUser?.pubkey) throw new Error('No active user')
 	const bidderPubkey = bidderUser.pubkey
+	const auctionEvent = await fetchAuction(formData.auctionEventId, true)
+	if (!auctionEvent) throw new Error('Auction no longer exists')
+	const auctionResult = parseAuctionEvent(toRawEvent(auctionEvent))
+	if (!auctionResult.ok) throw new Error('Auction is malformed; refusing to lock bid funds')
+	const parsedAuction = auctionResult.value
+	if (
+		parsedAuction.rootEventId !== formData.auctionEventId ||
+		parsedAuction.coordinate !== formData.auctionCoordinates ||
+		parsedAuction.sellerPubkey !== formData.sellerPubkey ||
+		parsedAuction.p2pkXpub !== formData.p2pkXpub
+	) {
+		throw new Error('Auction identity or P2PK terms changed; refresh the auction before bidding')
+	}
+	if (
+		parsedAuction.startAt !== formData.auctionStartAt ||
+		parsedAuction.maxEndAt !== formData.auctionEffectiveEndAt ||
+		parsedAuction.maxEndAt !== formData.auctionLocktimeAt ||
+		parsedAuction.settlementGrace !== formData.settlementGraceSeconds
+	) {
+		throw new Error('Auction timing terms changed; refresh the auction before bidding')
+	}
 
 	// Step 1.5 — rebid detection. If this bidder already has a leg on
 	// this auction, the new bid is a chain rebid: we lock ONLY the
@@ -512,14 +531,24 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 	// every child privkey in the winner's chain, swaps each leg at the
 	// mint" with a uniform locktime across legs.
 	const prevLeg = findLatestBidderRecordForAuction(formData.auctionEventId)
-	const prevLegAmount = prevLeg?.amount ?? 0
-	if (prevLeg && formData.amount <= prevLeg.amount) {
-		throw new Error(`Rebid (${formData.amount} sats) must exceed your previous bid on this auction (${prevLeg.amount} sats)`)
-	}
-	const legLockAmount = formData.amount - prevLegAmount
-	if (!Number.isSafeInteger(legLockAmount) || legLockAmount < AUCTION_MIN_BID_LEG_SATS) {
-		throw new Error(`Bid raise must be an integer of at least ${AUCTION_MIN_BID_LEG_SATS} sats`)
-	}
+	const bidPlan = planAuctionBid({
+		auction: parsedAuction,
+		bidderPubkey,
+		amount: formData.amount,
+		topBid: 0,
+		now,
+		previousLeg: prevLeg
+			? {
+					id: prevLeg.bidEventId,
+					bidderPubkey,
+					auctionRootEventId: prevLeg.auctionRootEventId,
+					auctionCoordinate: prevLeg.auctionCoordinate,
+					amount: prevLeg.amount,
+					locktime: prevLeg.locktime,
+				}
+			: undefined,
+	})
+	const legLockAmount = bidPlan.legAmount
 
 	// Step 2/3 — generate path + derive child pubkey locally. Fresh per
 	// leg: each rebid gets its own path/child so refund branches don't
@@ -544,16 +573,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 	// leg in a chain shares the same locktime — `max_end_at +
 	// settlement_grace`. We compute it from the auction (not from the
 	// previous leg) because both legs reference the same auction event.
-	const locktime = formData.auctionLocktimeAt + formData.settlementGraceSeconds
-	if (prevLeg && prevLeg.locktime !== locktime) {
-		// Should be impossible (same auction → same max_end_at +
-		// settlement_grace), but if the seller mutated the auction
-		// event in between, locktimes can drift. Refuse rather than
-		// emit a chain with non-uniform locktimes.
-		throw new Error(
-			`Locktime invariant broken: previous leg locktime=${prevLeg.locktime}, new leg locktime=${locktime}. Auction's max_end_at or settlement_grace was changed since the previous bid.`,
-		)
-	}
+	const locktime = bidPlan.locktime
 	const mintCandidates = formData.mintCandidates?.length ? formData.mintCandidates : []
 
 	// #1235 round-3 B1 — pre-lock recovery record (fail-closed confirmed write).
@@ -692,31 +712,16 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 		// itself is only the delta. `prev_bid` chains the leg to the
 		// previous one when this is a rebid.
 		const bidNonce = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`).toString()
-		const bidTemplate: EventTemplate = {
-			kind: AUCTION_BID_KIND,
-			content: JSON.stringify({
-				type: 'auction_bid_v1',
-				amount: formData.amount,
-				mint: lockResult.mintUrl,
-			}),
-			tags: buildBidEventTags({
-				auctionRootEventId: formData.auctionEventId,
-				auctionCoordinate: formData.auctionCoordinates,
-				sellerPubkey: formData.sellerPubkey,
-				amount: formData.amount,
-				mint: lockResult.mintUrl,
-				locktime,
-				refundPubkey,
-				childPubkey,
-				lockSecrets,
-				proofYs,
-				dleqProofs,
-				createdForEndAt: formData.auctionEffectiveEndAt,
-				bidNonce,
-				prevBidId: prevLeg?.bidEventId,
-			}),
-			created_at: publishedAt,
-		}
+		const bidTemplate = createAuctionBidTemplate(bidPlan, {
+			mint: lockResult.mintUrl,
+			refundPubkey,
+			childPubkey,
+			lockSecrets,
+			proofYs,
+			dleqProofs,
+			createdAt: publishedAt,
+			bidNonce,
+		})
 
 		// Step 7a — finalize the event fields WITHOUT signing. The NIP-01 event
 		// id covers `pubkey`/`created_at`/`kind`/`tags`/`content` and does NOT
@@ -770,9 +775,9 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 			refundPubkey,
 			refundPrivateKey,
 			mintUrl: lockResult.mintUrl,
-			amount: formData.amount, // cumulative bid value
+			amount: bidPlan.amount, // cumulative bid value
 			legLockedAmount: lockResult.amount, // sats actually locked by this leg
-			prevBidEventId: prevLeg?.bidEventId ?? null,
+			prevBidEventId: bidPlan.previousBidId ?? null,
 			locktime,
 			proofs,
 			lockSecrets,
@@ -1407,11 +1412,7 @@ export const publishBidderPathRelease = async (input: PublishBidderPathReleaseIn
 
 	const releaseReason: PathReleaseReason = input.releaseReason ?? 'settlement'
 
-	let latestEventId = ''
-	let latestDerivationPath = ''
-	let cumulative = 0
-
-	for (const leg of chain) {
+	const releaseLegs = chain.map((leg) => {
 		// Encode this leg's locked Cashu token so the seller can decode
 		// + redeem. Proofs are P2PK-locked to derive(p2pk_xpub, path) —
 		// only the seller (who holds `seller_xpriv`) can spend, so
@@ -1428,41 +1429,53 @@ export const publishBidderPathRelease = async (input: PublishBidderPathReleaseIn
 			)
 		}
 
-		const template: EventTemplate = {
-			kind: AUCTION_PATH_RELEASE_KIND as unknown as number,
-			content: input.note ?? '',
-			tags: buildPathReleaseTags({
-				bidEventId: leg.bidEventId,
-				auctionCoordinate: leg.auctionCoordinate,
-				sellerPubkey: leg.sellerPubkey,
-				derivationPath: leg.derivationPath,
-				childPubkey: leg.childPubkey,
-				releaseReason,
-				// Only the latest leg carries auditorRefs / fallbackOfferId —
-				// those reference verdicts/offers about the chain's current
-				// state, not its history.
-				auditorRefs: leg.bidEventId === input.bidEventId ? input.auditorRefs : undefined,
-				fallbackOfferId: leg.bidEventId === input.bidEventId ? input.fallbackOfferId : undefined,
-				cashuToken,
-			}),
-			created_at: Math.floor(Date.now() / 1000),
+		return {
+			bidEventId: leg.bidEventId,
+			amount: leg.legLockedAmount,
+			template: {
+				kind: AUCTION_PATH_RELEASE_KIND as unknown as number,
+				content: input.note ?? '',
+				tags: buildPathReleaseTags({
+					bidEventId: leg.bidEventId,
+					auctionCoordinate: leg.auctionCoordinate,
+					sellerPubkey: leg.sellerPubkey,
+					derivationPath: leg.derivationPath,
+					childPubkey: leg.childPubkey,
+					releaseReason,
+					// Only the latest leg carries auditorRefs / fallbackOfferId —
+					// those reference verdicts/offers about the chain's current
+					// state, not its history.
+					auditorRefs: leg.bidEventId === input.bidEventId ? input.auditorRefs : undefined,
+					fallbackOfferId: leg.bidEventId === input.bidEventId ? input.fallbackOfferId : undefined,
+					cashuToken,
+				}),
+				created_at: Math.floor(Date.now() / 1000),
+			},
 		}
-
-		const event = await signNostrEvent(template)
-		await publishRequired(event)
-
-		updateBidderRecordStatus(leg.bidEventId, 'settled')
-
-		latestEventId = event.id
-		latestDerivationPath = leg.derivationPath
-		cumulative += leg.legLockedAmount
+	})
+	const releaseOutcome = await executeAuctionPathReleaseWorkflow(releaseLegs, {
+		sign: signNostrEvent,
+		publish: publishRequired,
+		markReleased: (bidEventId) => {
+			if (!updateBidderRecordStatus(bidEventId, 'settled')) {
+				throw new Error(`Published path release for bid ${bidEventId}, but its local bidder record was not found`)
+			}
+		},
+	})
+	if (releaseOutcome.status !== 'published') {
+		const phase = releaseOutcome.status === 'publish_uncertain' ? 'publish' : releaseOutcome.failedPhase
+		throw new Error(
+			`Path release ${releaseOutcome.status} during ${phase} for bid ${releaseOutcome.failedBidEventId}. ` +
+				`${releaseOutcome.legsReleased} chain leg(s) were acknowledged; confirmed release event: ${releaseOutcome.pathReleaseEventId ?? 'none'}. ` +
+				releaseOutcome.error,
+		)
 	}
 
 	return {
-		pathReleaseEventId: latestEventId,
-		derivationPath: latestDerivationPath,
-		legsReleased: chain.length,
-		cumulativeBidAmount: cumulative,
+		pathReleaseEventId: releaseOutcome.pathReleaseEventId,
+		derivationPath: chain[chain.length - 1].derivationPath,
+		legsReleased: releaseOutcome.legsReleased,
+		cumulativeBidAmount: releaseOutcome.cumulativeBidAmount,
 	}
 }
 
@@ -1565,7 +1578,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		import('@/lib/auction/bidValidation'),
 		import('@/lib/cashu/nut7'),
 	])
-	const { getAuctionTagValue: getTag, AUCTION_SETTLEMENT_KIND: kind1024 } = auctionSettlementMod
+	const { getAuctionTagValue: getTag } = auctionSettlementMod
 	const { parsePathReleaseEvent, parseSettlementEvent } = settlementEventsMod
 	const { AUCTION_SETTLEMENT_POLICY: policyV1 } = constantsMod
 	const { parseAuctionEvent } = auctionEventMod
@@ -1711,22 +1724,28 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			throw new Error('Cannot publish reserve_not_met: a settled settlement already exists for this auction.')
 		}
 
-		const template: EventTemplate = {
-			kind: AUCTION_SETTLEMENT_KIND,
-			content: '',
-			tags: (await import('@/lib/auction/tagBuilders')).buildSettlementTags({
-				auctionRootEventId,
-				auctionCoordinate,
+		const outcome = await executeAuctionSettlementWorkflow(
+			{
 				status: 'reserve_not_met',
+				auction: parsedAuction,
 				closeAt,
-				finalAmount: 0,
+				createdAt: Math.floor(Date.now() / 1000),
 				reason: formData.reason ?? rnmOverrideReason ?? 'reserve_not_met',
-			}),
-			created_at: Math.floor(Date.now() / 1000),
-		}
-		const event = await signNostrEvent(template)
-		await publishRequired(event)
-		return event.id
+			},
+			{
+				preflightAll: async () => {},
+				inspectLeg: async () => 'unknown',
+				redeemLeg: async () => {},
+				assertReserveNotMet: async () => {},
+				publish: async (template) => {
+					const event = await signNostrEvent(template)
+					await publishRequired(event)
+					return { eventId: event.id }
+				},
+			},
+		)
+		if (outcome.status === 'published') return outcome.eventId
+		throw new Error(`Reserve-not-met settlement ${outcome.status}: ${outcome.error}`)
 	}
 
 	// 3. Bids → winning bid. Fetch bids + verdicts, parse, and call
@@ -1994,20 +2013,6 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		}
 	}
 
-	preflightAuctionSettlementP2pkChain({
-		auctionP2pkXpub: p2pkXpub,
-		legs: resolvedLegs.map((leg) => ({
-			bidEventId: leg.bid.id,
-			mintUrl: leg.mintUrl,
-			token: leg.cashuToken,
-			derivationPath: leg.derivationPath,
-			bidChildPubkey: leg.bidChildPubkey,
-			releaseChildPubkey: leg.releaseChildPubkey,
-			expectedAmount: leg.legAmount,
-			mintKeysets: mintKeysetsByMint.get(leg.mintUrl),
-		})),
-	})
-
 	// 5b. M6 FIX: Per-leg NUT-7 state check for resumable redemption.
 	// The original code did an all-or-nothing pre-check: if ANY proof was
 	// spent, it aborted. This made settlement non-resumable — if a
@@ -2067,65 +2072,70 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		// spentCount === 0 → all unspent, will redeem below
 	}
 
-	// 6. For each leg in the chain (oldest → newest): derive the
-	// seller's child privkey from the auction xpriv + leg's path, then
-	// receive the locked Cashu token. Order doesn't matter
-	// cryptographically but processing oldest-first matches the order
-	// the bidder locked them.
-	// M6 FIX: Skip legs that were already redeemed (detected in step 5b).
-	// This makes settlement resumable — a crashed attempt can be retried
-	// and already-spent legs are automatically skipped.
-	const payouts: Array<{ bidEventId: string; amount: number; status: string }> = []
-	for (const leg of resolvedLegs) {
-		if (alreadyRedeemedLegs.has(leg.bid.id)) {
-			// Leg was already redeemed in a previous attempt — include in
-			// payouts so the settlement event records the full chain.
-			payouts.push({ bidEventId: leg.bid.id, amount: leg.legAmount, status: 'redeemed' })
-			continue
-		}
-		const childPrivkey = await nip60Actions.getAuctionHdChildPrivkey({
-			derivationPath: leg.derivationPath,
-			expectedPubkey: leg.childPubkey,
-		})
-		let redeemed = false
-		try {
-			// Pass leg.mintUrl explicitly so receiveLockedEcash skips the
-			// `getDecodedToken(token)` step that fails on v2 short keyset IDs.
-			redeemed = await nip60Actions.receiveLockedEcash(leg.cashuToken, childPrivkey, leg.mintUrl)
-		} catch (err) {
-			throw tagBidError(`settlement-receive-leg-${leg.bid.id.slice(0, 8)}`, err)
-		}
-		if (!redeemed) {
-			throw new Error(`Cashu redemption did not complete for leg ${leg.bid.id.slice(0, 8)}…`)
-		}
-		payouts.push({ bidEventId: leg.bid.id, amount: leg.legAmount, status: 'redeemed' })
-	}
-
-	// 7. Publish kind-1024. `path_release` references the LATEST leg's
-	// release (the one the bidder's "settle" button surfaced); the
-	// chain history is reconstructible from the chain of bid events
-	// via their prev_bid tags. `payouts` enumerates each leg the
-	// seller actually redeemed.
 	const latestLeg = resolvedLegs[resolvedLegs.length - 1]
-	const template: EventTemplate = {
-		kind: kind1024,
-		content: '',
-		tags: (await import('@/lib/auction/tagBuilders')).buildSettlementTags({
-			auctionRootEventId,
-			auctionCoordinate,
+	const settlementOutcome = await executeAuctionSettlementWorkflow(
+		{
 			status: 'settled',
+			auction: parsedAuction,
 			closeAt,
-			finalAmount: winningAmount,
+			createdAt: Math.floor(Date.now() / 1000),
 			winningBidId,
 			winnerPubkey,
+			finalAmount: winningAmount,
 			pathReleaseEventId: latestLeg.releaseEventId,
-			payouts,
-		}),
-		created_at: Math.floor(Date.now() / 1000),
+			legs: resolvedLegs.map((leg) => ({
+				bidEventId: leg.bid.id,
+				amount: leg.legAmount,
+				locktime: getFirstTagValue(leg.bid, 'locktime') ? Number(getFirstTagValue(leg.bid, 'locktime')) : 0,
+				redemptionData: leg,
+			})),
+		},
+		{
+			preflightAll: async (legs) => {
+				preflightAuctionSettlementP2pkChain({
+					auctionP2pkXpub: p2pkXpub,
+					legs: legs.map((entry) => ({
+						bidEventId: entry.bidEventId,
+						mintUrl: entry.redemptionData.mintUrl,
+						token: entry.redemptionData.cashuToken,
+						derivationPath: entry.redemptionData.derivationPath,
+						bidChildPubkey: entry.redemptionData.bidChildPubkey,
+						releaseChildPubkey: entry.redemptionData.releaseChildPubkey,
+						expectedAmount: entry.amount,
+						mintKeysets: mintKeysetsByMint.get(entry.redemptionData.mintUrl),
+					})),
+				})
+			},
+			inspectLeg: async (leg) => (alreadyRedeemedLegs.has(leg.bidEventId) ? 'redeemed_by_seller' : 'unspent'),
+			redeemLeg: async (leg) => {
+				const data = leg.redemptionData
+				const childPrivkey = await nip60Actions.getAuctionHdChildPrivkey({
+					derivationPath: data.derivationPath,
+					expectedPubkey: data.childPubkey,
+				})
+				try {
+					const redeemed = await nip60Actions.receiveLockedEcash(data.cashuToken, childPrivkey, data.mintUrl)
+					if (!redeemed) throw new Error(`Cashu redemption did not complete for leg ${leg.bidEventId.slice(0, 8)}…`)
+				} catch (error) {
+					throw tagBidError(`settlement-receive-leg-${leg.bidEventId.slice(0, 8)}`, error)
+				}
+			},
+			assertReserveNotMet: async () => {},
+			publish: async (template) => {
+				const event = await signNostrEvent(template)
+				await publishRequired(event)
+				return { eventId: event.id }
+			},
+		},
+	)
+	if (settlementOutcome.status !== 'published') {
+		const phase = settlementOutcome.status === 'publish_uncertain' ? 'publish' : settlementOutcome.phase
+		throw new Error(
+			`Settlement ${settlementOutcome.status} during ${phase}; redeemed chain legs: ${settlementOutcome.redeemedBidIds.join(', ') || 'none'}. ` +
+				settlementOutcome.error,
+		)
 	}
-	const event = await signNostrEvent(template)
-	await publishRequired(event)
-	return event.id
+	return settlementOutcome.eventId
 }
 
 export const usePublishAuctionSettlementMutation = () => {
@@ -2197,6 +2207,7 @@ export interface AuctionClaimFormData {
 export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): Promise<string> => {
 	const buyerPubkey = await resolveAuctionClaimBuyerPubkey()
 	const orderId = uuidv4()
+	const createdAt = Math.floor(Date.now() / 1000)
 	const claimFields = {
 		orderId,
 		auctionCoordinates: formData.auctionCoordinates,
@@ -2211,23 +2222,53 @@ export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): 
 		notes: formData.notes,
 	}
 
-	// NIP-59 private claim — #1252-gated raw-signer path (see
-	// `privateAuctionClaimMessage.ts`). The public marker + gift-wrap publish
-	// stay on the library-agnostic I/O seam.
-	const privateClaim = await createPrivateAuctionClaimMessageForActiveSigner(claimFields)
-	const privateRelayUrls = await publishRequiredPrivateGiftWrap(privateClaim.giftWrap)
-
-	const template: EventTemplate = {
-		kind: ORDER_PROCESS_KIND,
-		content: '',
-		tags: buildAuctionClaimPublicMarkerTags(claimFields),
-		created_at: Math.floor(Date.now() / 1000),
+	const outcome = await executeAuctionWinnerClaimWorkflow(
+		{
+			orderId,
+			auctionCoordinate: claimFields.auctionCoordinates,
+			auctionEventId: claimFields.auctionEventId,
+			settlementEventId: claimFields.settlementEventId,
+			buyerPubkey: claimFields.buyerPubkey,
+			sellerPubkey: claimFields.sellerPubkey,
+			finalAmount: claimFields.totalAmountSats,
+			shippingAddress: claimFields.shippingAddress,
+			email: claimFields.email,
+			phone: claimFields.phone,
+			notes: claimFields.notes,
+			createdAt,
+		},
+		{
+			createPrivateDelivery: async (payload) =>
+				createPrivateAuctionClaimMessageForActiveSigner({
+					orderId: payload.orderId,
+					auctionCoordinates: payload.auctionCoordinate,
+					auctionEventId: payload.auctionEventId,
+					settlementEventId: payload.settlementEventId,
+					buyerPubkey: payload.buyerPubkey,
+					sellerPubkey: payload.sellerPubkey,
+					totalAmountSats: payload.finalAmount,
+					shippingAddress: payload.shippingAddress,
+					email: payload.email,
+					phone: payload.phone,
+					notes: payload.notes,
+					createdAt,
+				}),
+			publishPrivateDelivery: async (privateClaim) => ({
+				eventId: privateClaim.giftWrap.id,
+				acceptedRelays: await publishRequiredPrivateGiftWrap(privateClaim.giftWrap),
+			}),
+			signMarker: signNostrEvent,
+			publishMarker: publishAuctionClaimMarkerToPrivateRelays,
+		},
+	)
+	if (outcome.status === 'published') return outcome.markerEventId
+	if (outcome.status === 'failed') {
+		throw new Error(`Auction claim failed during ${outcome.phase}: ${outcome.error}`)
 	}
-
-	const event = await signNostrEvent(template)
-	await publishAuctionClaimMarkerToPrivateRelays(event, privateRelayUrls)
-
-	return event.id
+	throw new Error(
+		`Auction claim is partial during ${outcome.phase}; encrypted delivery ${outcome.privateDeliveryEventId} was published to ` +
+			`${outcome.acceptedRelays.length} relay(s), but its public marker was not confirmed: ${outcome.error}`,
+	)
 }
 
 /**
