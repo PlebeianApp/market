@@ -18,8 +18,8 @@ import { test } from 'bun:test'
 import { expect } from 'bun:test'
 
 import { composeEventAccess } from './composition-root'
-import { DEFAULT_WRITE_BACK } from './index'
-import { modelEndpoint, recordingUpstream, signedEvent } from './harness'
+import { DEFAULT_WRITE_BACK } from '../../event-access/ts/index'
+import { modelEndpoint, recordingUpstream, signedEvent } from '../../event-access/ts/harness'
 import type { ValidationPreset } from '../../validation/ts/index'
 
 /**

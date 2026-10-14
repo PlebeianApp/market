@@ -8,12 +8,14 @@
  * preset set and calls `createValidator({ presets })`. The engine may not import outward
  * (`validation.md` `#8e6079`) and `event-access` declares its ports structurally and imports
  * neither sibling (`event-access/ts/index.ts` `#0c7fe3`), so the composition root cannot live in
- * either — it is a distinct rung. **It sits here because the increment's diff bound names only
- * `sdk/core/validation/**` and `sdk/core/event-access/**`**; the honest home is a third directory
- * (the design's `core/composition` rung), and that relocation is reported as a named need rather
- * than hidden. **This file is the one place in `event-access/ts/` that names a sibling**, and it is
- * deliberately outside `index.ts`'s contract surface: it is a rung above the module, consumed by
- * path, not a member of the module's contract.
+ * either — it is a distinct rung. **It now sits at its own rung, `sdk/core/composition`**, which is
+ * the design's `core/composition` (`design.md` §4.9): the relocation the earlier increment reported
+ * as a named need has landed, and the `../../validation/ts/index` specifier that was a **measured
+ * violation** of `event-access`'s independence criterion (`#0c7fe3`, D-O19; run.sh §4/§4b) is gone
+ * with it. Composing siblings is this rung's whole job, so its own rule is not "no sibling
+ * specifier" but **"no app import and no framework"** — the `sdk/boundary.test.ts` rule — with every
+ * sibling it composes named in the declared sibling list (`./siblings.ts`). **This file is a rung
+ * above the module, consumed by path, not a member of `event-access`'s contract surface.**
  *
  * **What it does, in one line.** It constructs the validator from the host's declared validation
  * options and passes `validator.accept` as `WriteBackPolicy.accept` on the policy handed to the
@@ -38,7 +40,7 @@
  */
 import { createValidator } from '../../validation/ts/index'
 import type { Validator, ValidatorOptions } from '../../validation/ts/index'
-import { createEventAccess, DEFAULT_WRITE_BACK } from './index'
+import { createEventAccess, DEFAULT_WRITE_BACK } from '../../event-access/ts/index'
 import type {
   AcceptContext,
   AcceptDecision,
@@ -46,7 +48,7 @@ import type {
   EventAccess,
   EventAccessOptions,
   WriteBackPolicy,
-} from './index'
+} from '../../event-access/ts/index'
 
 /**
  * The composition root's options: the two ports and the optional injected resolver and fill that
