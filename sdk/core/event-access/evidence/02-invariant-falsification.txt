@@ -1,0 +1,2473 @@
+event-access module — evidence falsification
+# command:   python3 event-access/evidence/falsify.py   (the caller redirects to event-access/evidence/02-invariant-falsification.txt)
+# generated: 2026-09-30T14:01:48Z
+# bun:       1.4.2
+# cases in the suite: 43 across 2 files
+# lock:      /tmp/market-retrofit-falsify.lock (held for this whole run)
+#
+# For each evidence obligation: one mutation is applied, the named case (or the named
+# command) is run, the file is restored byte-for-byte (sha256 verified) and the check is run
+# again. A mutation whose check does NOT go red is reported FALSIFICATION FAILED.
+# Run serialized: for the length of one mutation the tree is deliberately broken.
+
+==============================================================================
+mutation 1 — LF-1 · the local answer precedes any network participation (P1)
+breaks:   the sequence is reversed, so the fill is attempted before the local read — a fixture that recorded nothing could not have shown this
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · LF-1 · the local read is the first call, and the pool IS called — a fixture that recorded nothing cannot pass
+$ the mutation applied (old -> new):
+-     const merged = localFirst
+      ? await local().then(network)
+      : await network().then((outcome) => local().then(() => outcome))
++     const merged = await network().then((outcome) => local().then(() => outcome))
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t LF\-1\ ·\ the\ local\ read\ is\ the\ first\ call,\ and\ the\ pool\ IS\ called\ —\ a\ fixture\ that\ recorded\ nothing\ cannot\ pass
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+48 | 	const answer = await access.query({ kinds: [1] })
+49 | 
+50 | 	// the shared record, in order — the pool's call is present and it is second.
+51 | 	expect(order.slice(0, 2)).toEqual(['read', 'query'])
+52 | 	expect(order).toContain('query')
+53 | 	expect(answer.events.map((event) => event.id)).toEqual([local.id, remote.id])
+                                                     ^
+error: expect(received).toEqual(expected)
+
+  [
+-   "92931448ba4b0bca53be201947d26c1b0a3c5ed669d6c4b733742952f1912628",
+    "f00226e3007243d30c2ab72a169bcf76b3ddaae66eb08a1a04a48f923dcae3ec",
++   "92931448ba4b0bca53be201947d26c1b0a3c5ed669d6c4b733742952f1912628",
+  ]
+
+- Expected  - 1
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:53:49)
+(fail) LF-1 · the local read is the first call, and the pool IS called — a fixture that recorded nothing cannot pass [19.77ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [174.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) LF-1 · the local read is the first call, and the pool IS called — a fixture that recorded nothing cannot pass [18.97ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [175.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 2 — LF-7 · the pointer read is the sequence with one element (P5)
+breaks:   the local answer's events never enter the union, so the pointer read still walks the sequence but its answer loses the event the pointer named
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · LF-7 · the pointer read is the sequence with one element (P5)
+$ the mutation applied (old -> new):
+-       union.take(localEvents, origin)
++       union.take([], origin)
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t LF\-7\ ·\ the\ pointer\ read\ is\ the\ sequence\ with\ one\ element\ \(P5\)
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+86 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+87 | 
+88 | 	const answer = await access.query({ ids: [event.id] })
+89 | 
+90 | 	expect(order).toEqual(['read', 'query'])
+91 | 	expect(answer.events.map((candidate) => candidate.id)).toEqual([event.id])
+                                                             ^
+error: expect(received).toEqual(expected)
+
+- [
+-   "cfeeec648e29a01ed9baf77b0f666c0f1164596204725981541c8d3cecda742c",
+- ]
++ []
+
+- Expected  - 3
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:91:57)
+(fail) LF-7 · the pointer read is the sequence with one element (P5) [14.91ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [169.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) LF-7 · the pointer read is the sequence with one element (P5) [13.80ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [162.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 3 — LF-2 · the query fill's events are written back, with an expected count (D-O17)
+breaks:   the write-back is removed, so the fill answers and the endpoint never sees what it answered
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · LF-2 · the query fill is written back through the endpoint, counted (D-O17)
+$ the mutation applied (old -> new):
+-       const fresh = union.take(await this.gate(result.events, 'read', deadlineMs), 'network')
+      await applyWriteBack((batch) => this.writeEndpoint(batch), this.policy, fresh, persist)
++       const fresh = union.take(await this.gate(result.events, 'read', deadlineMs), 'network')
+      void fresh
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t LF\-2\ ·\ the\ query\ fill\ is\ written\ back\ through\ the\ endpoint,\ counted\ \(D\-O17\)
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+105 | 	const upstream = recordingUpstream({ events: [remoteA, remoteB] })
+106 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+107 | 
+108 | 	await access.query({ kinds: [1] })
+109 | 
+110 | 	expect(endpoint.writes.length).toBe(1)
+                                      ^
+error: expect(received).toBe(expected)
+
+Expected: 1
+Received: 0
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:110:33)
+(fail) LF-2 · the query fill is written back through the endpoint, counted (D-O17) [21.86ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [175.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) LF-2 · the query fill is written back through the endpoint, counted (D-O17) [22.60ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [171.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 4 — LF-2 · the subscription fill's events are written back
+breaks:   a live seam event is delivered but never offered to the store
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · LF-2 · the subscription fill is written back through the endpoint, counted (D-O17)
+$ the mutation applied (old -> new):
+-               if (!emit(event)) return
+              const outcome = await applyWriteBack((batch) => this.writeEndpoint(batch), this.policy, [event], true)
++               if (!emit(event)) return
+              const outcome = undefined
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t LF\-2\ ·\ the\ subscription\ fill\ is\ written\ back\ through\ the\ endpoint,\ counted\ \(D\-O17\)
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+123 | 	const arrived = collect(subscription.events, 1)
+124 | 	await quiet(20)
+125 | 	upstream.live.next(remote)
+126 | 
+127 | 	expect((await arrived).map((candidate) => candidate.id)).toEqual([remote.id])
+128 | 	expect(endpoint.writes.length).toBe(1)
+                                      ^
+error: expect(received).toBe(expected)
+
+Expected: 1
+Received: 0
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:128:33)
+(fail) LF-2 · the subscription fill is written back through the endpoint, counted (D-O17) [34.12ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [180.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) LF-2 · the subscription fill is written back through the endpoint, counted (D-O17) [34.92ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [195.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 5 — LF-3 · a later write reaches open subscriptions exactly once
+breaks:   the de-duplication is dropped, so the same write is delivered twice (exactly-once fails on 2, not only on 0)
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · LF-3 · a write reaches an open subscription exactly once — asserted as == 1, not <= 1
+$ the mutation applied (old -> new):
+-       if (closed || seen.has(event.id)) return false
+      seen.add(event.id)
++       if (closed) return false
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t LF\-3\ ·\ a\ write\ reaches\ an\ open\ subscription\ exactly\ once\ —\ asserted\ as\ ==\ 1,\ not\ <=\ 1
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+175 | 	await access.publish([event])
+176 | 	await quiet(60)
+177 | 	handle.unsubscribe()
+178 | 	subscription.unsubscribe()
+179 | 
+180 | 	expect(arrived.map((candidate) => candidate.id)).toEqual([event.id])
+                                                        ^
+error: expect(received).toEqual(expected)
+
+  [
+    "b7aee5bc838f49ea93125427b7b058aec9fb347a6d523ddc550844819d2d33a6",
++   "b7aee5bc838f49ea93125427b7b058aec9fb347a6d523ddc550844819d2d33a6",
+  ]
+
+- Expected  - 0
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:180:51)
+(fail) LF-3 · a write reaches an open subscription exactly once — asserted as == 1, not <= 1 [95.47ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [243.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) LF-3 · a write reaches an open subscription exactly once — asserted as == 1, not <= 1 [94.22ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [242.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 6 — LF-4 · a cold cache is an empty answer with complete:false, never an absence
+breaks:   completeness is asserted unconditionally, so an incomplete answer is rendered as the whole one
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · LF-4 · an empty local set is answered as an empty set with complete:false, not withheld
+$ the mutation applied (old -> new):
+-     const answer: QueryResult = { events: union.answer(), complete: merged.reached && !merged.failed }
++     const answer: QueryResult = { events: union.answer(), complete: true }
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t LF\-4\ ·\ an\ empty\ local\ set\ is\ answered\ as\ an\ empty\ set\ with\ complete:false,\ not\ withheld
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+192 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+193 | 
+194 | 	const answer = await access.query({ kinds: [1] }, { localFirst: true, deadlineMs: 50 })
+195 | 
+196 | 	expect(answer.events).toEqual([])
+197 | 	expect(answer.complete).toBe(false)
+                               ^
+error: expect(received).toBe(expected)
+
+Expected: false
+Received: true
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:197:26)
+(fail) LF-4 · an empty local set is answered as an empty set with complete:false, not withheld [55.85ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [203.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) LF-4 · an empty local set is answered as an empty set with complete:false, not withheld [55.50ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [212.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 7 — LF-5 · a deadline resolves with what arrived and says so
+breaks:   a fired deadline reports completeness anyway — the vacuous shape the criterion was tightened against
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · LF-5 · a deadline resolves within the budget with the local answer and complete:false
+$ the mutation applied (old -> new):
+-         if (bounded === DEADLINE) return { reached: false, failed: true }
++         if (bounded === DEADLINE) return { reached: true, failed: false }
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t LF\-5\ ·\ a\ deadline\ resolves\ within\ the\ budget\ with\ the\ local\ answer\ and\ complete:false
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+216 | 	const elapsed = Date.now() - started
+217 | 
+218 | 	// the observable: it *resolved*, within a bound, rather than hanging — and it says so.
+219 | 	expect(elapsed).toBeLessThan(2_000)
+220 | 	expect(answer.events.map((event) => event.id)).toEqual([local.id])
+221 | 	expect(answer.complete).toBe(false)
+                               ^
+error: expect(received).toBe(expected)
+
+Expected: false
+Received: true
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:221:26)
+(fail) LF-5 · a deadline resolves within the budget with the local answer and complete:false [64.16ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [210.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) LF-5 · a deadline resolves within the budget with the local answer and complete:false [63.82ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [208.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 8 — LF-6 · a relay failure reduces completeness, never the answer
+breaks:   a failed fill reports its boundary as reached, so a degraded answer claims to be complete
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · LF-6 · a failing pool over a NON-EMPTY local set yields the local answer and complete:false
+$ the mutation applied (old -> new):
+-       } catch {
+        return { reached: false, failed: true }
+      }
++       } catch {
+        return { reached: true, failed: false }
+      }
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t LF\-6\ ·\ a\ failing\ pool\ over\ a\ NON\-EMPTY\ local\ set\ yields\ the\ local\ answer\ and\ complete:false
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+236 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+237 | 
+238 | 	const answer = await access.query({ kinds: [1] })
+239 | 
+240 | 	expect(answer.events.map((event) => event.id)).toEqual([local.id])
+241 | 	expect(answer.complete).toBe(false)
+                               ^
+error: expect(received).toBe(expected)
+
+Expected: false
+Received: true
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:241:26)
+(fail) LF-6 · a failing pool over a NON-EMPTY local set yields the local answer and complete:false [16.08ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [185.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) LF-6 · a failing pool over a NON-EMPTY local set yields the local answer and complete:false [15.05ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [168.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 9 — provenance · the both-tier id is 'local' (D-O14(c))
+breaks:   the network copy overwrites the recorded origin, so the both-tier id collapses onto the vendor's sticky-bit defect (`#5015f4`)
+file:     event-access/ts/merge.ts
+sha256:   e8a74e63308d11692ed3d4fcb75cd179bbad2cd9148eb0f33c850a448fb4f807 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · provenance · an id both tiers produced is local, and an id only the fill produced is network
+$ the mutation applied (old -> new):
+-     if (this.seen.has(event.id)) {
+      if (origin === 'local') this.origins.set(event.id, 'local')
+      return false
+    }
++     if (this.seen.has(event.id)) {
+      this.origins.set(event.id, origin)
+      return false
+    }
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t provenance\ ·\ an\ id\ both\ tiers\ produced\ is\ local,\ and\ an\ id\ only\ the\ fill\ produced\ is\ network
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+271 | 
+272 | 	const answer = await access.query({ kinds: [1] })
+273 | 
+274 | 	// the union is id-unique: the duplicate the fill carried is merged away.
+275 | 	expect(answer.events.map((event) => event.id)).toEqual([shared.id, onlyRemote.id])
+276 | 	expect(access.originOf(answer, shared.id)).toBe('local')
+                                                  ^
+error: expect(received).toBe(expected)
+
+Expected: "local"
+Received: "network"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:276:45)
+(fail) provenance · an id both tiers produced is local, and an id only the fill produced is network [19.21ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [168.00ms]
+exit: 1
+
+$ sha256 after restore: e8a74e63308d11692ed3d4fcb75cd179bbad2cd9148eb0f33c850a448fb4f807 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) provenance · an id both tiers produced is local, and an id only the fill produced is network [19.53ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [175.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 10 — provenance · on P2 the precedence does not move with the call order (`#34dcaa`, W4a 0.4)
+breaks:   the upgrade is removed, so the documented tier for a both-tier id becomes whichever tier the caller opted to ask first
+file:     event-access/ts/merge.ts
+sha256:   e8a74e63308d11692ed3d4fcb75cd179bbad2cd9148eb0f33c850a448fb4f807 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · provenance · on P2 (localFirst:false) a both-tier id is STILL local: the precedence is a rule, not an arrival order
+$ the mutation applied (old -> new):
+-     if (this.seen.has(event.id)) {
+      if (origin === 'local') this.origins.set(event.id, 'local')
+      return false
+    }
++     if (this.seen.has(event.id)) {
+      return false
+    }
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t provenance\ ·\ on\ P2\ \(localFirst:false\)\ a\ both\-tier\ id\ is\ STILL\ local:\ the\ precedence\ is\ a\ rule,\ not\ an\ arrival\ order
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+665 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+666 | 
+667 | 	const answer = await access.query({ kinds: [1] }, { localFirst: false })
+668 | 
+669 | 	expect(answer.events.map((event) => event.id)).toEqual([shared.id]) // still one event (M2)
+670 | 	expect(access.originOf(answer, shared.id)).toBe('local')
+                                                  ^
+error: expect(received).toBe(expected)
+
+Expected: "local"
+Received: "network"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:670:45)
+(fail) provenance · on P2 (localFirst:false) a both-tier id is STILL local: the precedence is a rule, not an arrival order [14.75ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [168.00ms]
+exit: 1
+
+$ sha256 after restore: e8a74e63308d11692ed3d4fcb75cd179bbad2cd9148eb0f33c850a448fb4f807 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) provenance · on P2 (localFirst:false) a both-tier id is STILL local: the precedence is a rule, not an arrival order [14.54ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [163.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 11 — persist:false · this call's fill is not written back (D-O3)
+breaks:   the persistence toggle is ignored, so `persist:false` is honoured by nothing
+file:     event-access/ts/policy.ts
+sha256:   a7aa783cd147454dd29f4bcb719918d385251629aa03f46f3cb52242e2ac3286 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · persist:false suppresses the write-back for that call only, and persist:true DOES write (D-O17)
+$ the mutation applied (old -> new):
+-   if (policy.honourPersist && !persist) return undefined
++   if (false) return undefined
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t persist:false\ suppresses\ the\ write\-back\ for\ that\ call\ only,\ and\ persist:true\ DOES\ write\ \(D\-O17\)
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+292 | 	const suppressed = modelEndpoint({ events: [] })
+293 | 	const suppressedUpstream = recordingUpstream({ events: [remote] })
+294 | 	const accessA = createEventAccess({ endpoint: suppressed.endpoint, upstream: suppressedUpstream.upstream })
+295 | 	const answerA = await accessA.query({ kinds: [1] }, { persist: false })
+296 | 
+297 | 	expect(suppressed.writes.length).toBe(0)
+                                        ^
+error: expect(received).toBe(expected)
+
+Expected: 0
+Received: 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:297:35)
+(fail) persist:false suppresses the write-back for that call only, and persist:true DOES write (D-O17) [14.16ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [169.00ms]
+exit: 1
+
+$ sha256 after restore: a7aa783cd147454dd29f4bcb719918d385251629aa03f46f3cb52242e2ac3286 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) persist:false suppresses the write-back for that call only, and persist:true DOES write (D-O17) [14.87ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [169.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 12 — persist:false · its POSITIVE COMPANION: persist:true does write (D-O17)
+breaks:   the write-back never reaches the endpoint, so 'suppressed' would have been true of an implementation that writes nothing at all
+file:     event-access/ts/policy.ts
+sha256:   a7aa783cd147454dd29f4bcb719918d385251629aa03f46f3cb52242e2ac3286 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · persist:false suppresses the write-back for that call only, and persist:true DOES write (D-O17)
+$ the mutation applied (old -> new):
+-   const outcome = await write(written)
+  return { written, refused: outcome.refused }
++   return { written, refused: 0 }
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t persist:false\ suppresses\ the\ write\-back\ for\ that\ call\ only,\ and\ persist:true\ DOES\ write\ \(D\-O17\)
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+302 | 	const written = modelEndpoint({ events: [] })
+303 | 	const writtenUpstream = recordingUpstream({ events: [remote] })
+304 | 	const accessB = createEventAccess({ endpoint: written.endpoint, upstream: writtenUpstream.upstream })
+305 | 	await accessB.query({ kinds: [1] }, { persist: true })
+306 | 
+307 | 	expect(written.writes.length).toBe(1)
+                                     ^
+error: expect(received).toBe(expected)
+
+Expected: 1
+Received: 0
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:307:32)
+(fail) persist:false suppresses the write-back for that call only, and persist:true DOES write (D-O17) [14.39ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [163.00ms]
+exit: 1
+
+$ sha256 after restore: a7aa783cd147454dd29f4bcb719918d385251629aa03f46f3cb52242e2ac3286 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) persist:false suppresses the write-back for that call only, and persist:true DOES write (D-O17) [16.53ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [183.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 13 — filter boundary · a malformed identity value is rejected with the typed refusal
+breaks:   the model stops applying the first branch, so a filter the endpoint would refuse is accepted — the echoing hazard itself
+file:     event-access/ts/harness.ts
+sha256:   68bfcfb5a46c484d6e250533e2eafb51033a9c6a56437baab191ca6dae4eaf29 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     ports.test.ts · filter boundary · a malformed identity filter is rejected with the typed refusal, before either tier sees it
+$ the mutation applied (old -> new):
+-         assertIdentityFilters(list)
+        const found: Event[] = []
++         const found: Event[] = []
+
+$ /home/admin_maxime/.bun/bin/bun test ports.test.ts -t filter\ boundary\ ·\ a\ malformed\ identity\ filter\ is\ rejected\ with\ the\ typed\ refusal,\ before\ either\ tier\ sees\ it
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+42 | 	// seam, or that validates with a predicate of its own.
+43 | 	const endpoint = modelEndpoint({ events: [signedEvent({ kind: 1, created_at: 1_000 })] })
+44 | 	const upstream = recordingUpstream()
+45 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+46 | 
+47 | 	await expect(access.query({ ids: ['not-a-hex-identity'] })).rejects.toBeInstanceOf(EventAccessError)
+                                                                          ^
+error: expect(received).rejects.toBeInstanceOf(expected)
+
+Expected promise that rejects
+Received promise that resolved: Promise { <resolved> }
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/ports.test.ts:47:70)
+(fail) filter boundary · a malformed identity filter is rejected with the typed refusal, before either tier sees it [14.45ms]
+
+ 0 pass
+ 9 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [168.00ms]
+exit: 1
+
+$ sha256 after restore: 68bfcfb5a46c484d6e250533e2eafb51033a9c6a56437baab191ca6dae4eaf29 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+(pass) filter boundary · a malformed identity filter is rejected with the typed refusal, before either tier sees it [11.07ms]
+
+ 1 pass
+ 9 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [174.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 14 — filter boundary · a present-but-empty #-key list is answered as nothing
+breaks:   the match-nothing rule is inverted, so a filter that must answer nothing answers everything
+file:     event-access/ts/harness.ts
+sha256:   68bfcfb5a46c484d6e250533e2eafb51033a9c6a56437baab191ca6dae4eaf29 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     ports.test.ts · filter boundary · a present-but-empty #-key list is answered as nothing, never dropped and never broadened
+$ the mutation applied (old -> new):
+-     if (Array.isArray(value) && value.length === 0) return true
++     if (Array.isArray(value) && value.length === 0) return false
+
+$ /home/admin_maxime/.bun/bin/bun test ports.test.ts -t filter\ boundary\ ·\ a\ present\-but\-empty\ \#\-key\ list\ is\ answered\ as\ nothing,\ never\ dropped\ and\ never\ broadened
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+92 | 	const upstream = recordingUpstream()
+93 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+94 | 
+95 | 	const answer = await access.query({ '#e': [] })
+96 | 
+97 | 	expect(answer.events).toEqual([]) // not the whole set — the key was kept and matched nothing
+                            ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   {
++     "content": "",
++     "created_at": 2000,
++     "id": "813e31dd19e48078c76169926e52fb57222c582ec0633dab65265b9fb555435c",
++     "kind": 1,
++     "pubkey": "c39da3b81a334fd5c779a94b72850dc20b9eea73be49be83f4643320345f703f",
++     "sig": "789540849f30357139103e4ea007d4e1594c13421ed5d7c96531e2a0d1fe7d85e8cf03b5d1a0b486a1d9bd13eb99ac62aed75569e60b0452cc4a7ce52eccf214",
++     "tags": [],
++     [Symbol(verified)]: true,
++   },
++ ]
+
+- Expected  - 1
++ Received  + 12
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/ports.test.ts:97:24)
+(fail) filter boundary · a present-but-empty #-key list is answered as nothing, never dropped and never broadened [14.73ms]
+
+ 0 pass
+ 9 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [183.00ms]
+exit: 1
+
+$ sha256 after restore: 68bfcfb5a46c484d6e250533e2eafb51033a9c6a56437baab191ca6dae4eaf29 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+(pass) filter boundary · a present-but-empty #-key list is answered as nothing, never dropped and never broadened [14.40ms]
+
+ 1 pass
+ 9 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [168.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 15 — filter boundary · the case FAILS over the echoing fake
+breaks:   the echoing fake is made to apply the predicate, which is exactly the property the counter-case exists to deny
+file:     event-access/ts/harness.ts
+sha256:   68bfcfb5a46c484d6e250533e2eafb51033a9c6a56437baab191ca6dae4eaf29 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · the filter-boundary case FAILS over the echoing fake, which is why the model is required
+$ the mutation applied (old -> new):
+-         reads.push(toFilters(filters))
+        return [...store]
++         reads.push(toFilters(filters))
+        assertIdentityFilters(toFilters(filters))
+        return [...store]
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t the\ filter\-boundary\ case\ FAILS\ over\ the\ echoing\ fake,\ which\ is\ why\ the\ model\ is\ required
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+646 | 	// whole set comes back, so a case asserting "nothing" fails here.
+647 | 	const answered = await access.query({ '#e': [] })
+648 | 	expect(answered.events.map((candidate) => candidate.id)).toEqual([event.id])
+649 | 
+650 | 	// and the echo does not reject the malformed filter the model refuses.
+651 | 	await expect(access.query({ ids: ['not-a-hex-identity'] })).resolves.toBeDefined()
+                                                                            ^
+error: expect(received).resolves.toBeDefined()
+
+Expected promise that resolves
+Received promise that rejected: Promise { <rejected> }
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:651:71)
+(fail) the filter-boundary case FAILS over the echoing fake, which is why the model is required [14.97ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [175.00ms]
+exit: 1
+
+$ sha256 after restore: 68bfcfb5a46c484d6e250533e2eafb51033a9c6a56437baab191ca6dae4eaf29 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) the filter-boundary case FAILS over the echoing fake, which is why the model is required [13.70ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [164.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 16 — P4 · publish writes locally before any relay attempt (`#2ffa85`)
+breaks:   the local write is removed, so `stored` no longer reflects a write and the relay half is all that remains
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · P4 · publish writes locally first and reports the relays own answers, refusals included
+$ the mutation applied (old -> new):
+-     let stored = false
+    if (permitted.length > 0) {
+      const outcome = await this.writeEndpoint(permitted)
+      stored = outcome.stored > 0
+    }
++     const stored = true
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t P4\ ·\ publish\ writes\ locally\ first\ and\ reports\ the\ relays\ own\ answers,\ refusals\ included
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+326 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+327 | 
+328 | 	const outcome = await access.publish([event])
+329 | 
+330 | 	expect(outcome.stored).toBe(true)
+331 | 	expect(endpoint.calls).toEqual(['write'])
+                              ^
+error: expect(received).toEqual(expected)
+
+- [
+-   "write",
+- ]
++ []
+
+- Expected  - 3
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:331:25)
+(fail) P4 · publish writes locally first and reports the relays own answers, refusals included [10.73ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [162.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) P4 · publish writes locally first and reports the relays own answers, refusals included [11.47ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 6 expect() calls
+Ran 1 test across 1 file. [162.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 17 — P6 · count never fetches (M14, D-O4)
+breaks:   count consults the seam, turning a local, always-answerable operation into a network one with a deadline and a failure mode
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · P6 · count answers from the local index and never touches the wire
+$ the mutation applied (old -> new):
+-   async count(filters: FilterIn | FilterIn[]): Promise<CountResult> {
+    const result = await this.countEndpoint(toFilterArray(filters))
++   async count(filters: FilterIn | FilterIn[]): Promise<CountResult> {
+    await this.upstream.query(toFilterArray(filters))
+    const result = await this.countEndpoint(toFilterArray(filters))
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t P6\ ·\ count\ answers\ from\ the\ local\ index\ and\ never\ touches\ the\ wire
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+546 | /** An upstream that records every call before it throws from every method (`#e6aa61`). */
+547 | export function throwingUpstream(): { upstream: NostrIo; calls: string[] } {
+548 |   const calls: string[] = []
+549 |   const refuse = (method: string): never => {
+550 |     calls.push(method)
+551 |     throw new EventAccessError('rejected', `the fake upstream was called: ${method} — the composition must surface this`)
+                ^
+EventAccessError: the fake upstream was called: query — the composition must surface this
+ reason: "rejected",
+
+      at refuse (/home/admin_maxime/projects/market-retrofit/event-access/ts/harness.ts:551:11)
+      at query (/home/admin_maxime/projects/market-retrofit/event-access/ts/harness.ts:556:26)
+      at count (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.ts:546:25)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:366:30)
+(fail) P6 · count answers from the local index and never touches the wire [14.50ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+Ran 1 test across 1 file. [168.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) P6 · count answers from the local index and never touches the wire [14.44ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [162.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 18 — P7 · delete routes through the endpoint's removal (`#d80075`)
+breaks:   the removal is not routed at all, so the composition decides the deletion itself by doing nothing
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · P7 · delete routes through the endpoint removal, and the change reaches an open subscription
+$ the mutation applied (old -> new):
+-     return this.removeEndpoint(toRefArray(refs))
++     return { removed: 0 }
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t P7\ ·\ delete\ routes\ through\ the\ endpoint\ removal,\ and\ the\ change\ reaches\ an\ open\ subscription
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+383 | 	const arrived = collect(subscription.events, 1)
+384 | 	await quiet(20)
+385 | 
+386 | 	const outcome = await access.delete([event.id])
+387 | 
+388 | 	expect(outcome.removed).toBe(1)
+                               ^
+error: expect(received).toBe(expected)
+
+Expected: 1
+Received: 0
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:388:26)
+(fail) P7 · delete routes through the endpoint removal, and the change reaches an open subscription [33.10ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [181.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) P7 · delete routes through the endpoint removal, and the change reaches an open subscription [35.81ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [203.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 19 — D-O21 · the gate filters the ANSWER — one decision, applied at the three named sites (`#496306`, `#c90101`)
+breaks:   the fill's candidate set stops passing the gate before the union, so a rejected event is inside `events` again — the shape the suite could not see before D-O21
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · one gate, applied at the three named sites — the answer is filtered, nothing is written back, and publish shares it
+$ the mutation applied (old -> new):
+-       const fresh = union.take(await this.gate(result.events, 'read', deadlineMs), 'network')
++       const fresh = union.take(result.events, 'network')
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t one\ gate,\ applied\ at\ the\ three\ named\ sites\ —\ the\ answer\ is\ filtered,\ nothing\ is\ written\ back,\ and\ publish\ shares\ it
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+432 | 		upstream: upstream.upstream,
+433 | 		policy: { writeBack: 'network', honourPersist: true, excluded: [], onReject: 'report', accept: () => 'reject' },
+434 | 	})
+435 | 
+436 | 	const answer = await access.query({ kinds: [1] })
+437 | 	expect(answer.events.map((event) => event.id)).toEqual([]) // the gate runs BEFORE the union: the answer is filtered
+                                                      ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   "e95903c4a9db67277dc09d10f8a75a1fdc05c4b4ef3344805f5564c13ad72e8a",
++ ]
+
+- Expected  - 1
++ Received  + 3
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:437:49)
+(fail) one gate, applied at the three named sites — the answer is filtered, nothing is written back, and publish shares it [14.44ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [165.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) one gate, applied at the three named sites — the answer is filtered, nothing is written back, and publish shares it [18.92ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 6 expect() calls
+Ran 1 test across 1 file. [172.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 20 — D-O21 · the gate is applied to the candidate set on EVERY read path, before the union
+breaks:   the local answer enters the union ungated, so a rejected id reaches `events` on both named paths
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · the gate runs before the union on BOTH named paths — a dropped id is absent from events on P2 as well
+$ the mutation applied (old -> new):
+-     const localEvents: Event[] = await this.gate(await this.readEndpoint(filterArray), 'read', deadlineMs)
++     const localEvents: Event[] = await this.readEndpoint(filterArray)
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t the\ gate\ runs\ before\ the\ union\ on\ BOTH\ named\ paths\ —\ a\ dropped\ id\ is\ absent\ from\ events\ on\ P2\ as\ well
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+463 | 		},
+464 | 	})
+465 | 
+466 | 	for (const localFirst of [true, false]) {
+467 | 		const answer = await access.query({ kinds: [1] }, { localFirst })
+468 | 		expect(answer.events.map((event) => event.id)).toEqual([]) // dropped by the gate, on this path too
+                                                       ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   "175c62c50b78b860a99e557b8b15aa72eca971c73d6dec5d13d0997991a4854d",
++ ]
+
+- Expected  - 1
++ Received  + 3
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:468:50)
+(fail) the gate runs before the union on BOTH named paths — a dropped id is absent from events on P2 as well [14.73ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [165.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) the gate runs before the union on BOTH named paths — a dropped id is absent from events on P2 as well [13.63ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [161.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 21 — D-O21 · the outgoing set passes the gate before the local write and before the relay attempt (`#2ffa85`)
+breaks:   the publish path is left ungated, so an event the gate would drop is stored AND handed to the seam
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · publish writes nothing the gate dropped, and the relay attempt sees exactly the same permitted set
+$ the mutation applied (old -> new):
+-     const permitted = await this.gate(
+      events.filter((event) => !isExcluded(event, this.policy.excluded)),
+      'publish',
+      DEFAULT_DEADLINE_MS,
+    )
++     const permitted = events.filter((event) => !isExcluded(event, this.policy.excluded))
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t publish\ writes\ nothing\ the\ gate\ dropped,\ and\ the\ relay\ attempt\ sees\ exactly\ the\ same\ permitted\ set
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+490 | 			accept: (event) => (event.id === dropped.id ? 'reject' : 'accept'),
+491 | 		},
+492 | 	})
+493 | 
+494 | 	const outcome = await access.publish([dropped, kept])
+495 | 	expect(endpoint.writes.flat().map((event) => event.id)).toEqual([kept.id]) // the store saw the permitted one only
+                                                               ^
+error: expect(received).toEqual(expected)
+
+  [
++   "bc1bc80d36030642f57628e1d433a5a8c790c08f65654732ffabaf79b7b5e4ad",
+    "9cd8a7440df50694383e8414e3ec493ae59e0f08b83777cce529f860ed19df3c",
+  ]
+
+- Expected  - 0
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:495:58)
+(fail) publish writes nothing the gate dropped, and the relay attempt sees exactly the same permitted set [14.25ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [159.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) publish writes nothing the gate dropped, and the relay attempt sees exactly the same permitted set [17.81ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [163.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 22 — D-O21 · the gate is told the flow it is applied for and the tier the endpoint declares (`#bec31a`)
+breaks:   the context reports one flow for every call, so a consumer's rule cannot tell a publish from a read
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · the gate is told the flow it is applied for and the tier the endpoint declares
+$ the mutation applied (old -> new):
+-       operation,
++       operation: 'read',
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t the\ gate\ is\ told\ the\ flow\ it\ is\ applied\ for\ and\ the\ tier\ the\ endpoint\ declares
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+518 | 		},
+519 | 	})
+520 | 
+521 | 	await access.query({ kinds: [1] })
+522 | 	await access.publish([signedEvent({ kind: 1, created_at: 22_500 })])
+523 | 	expect(seen.map((context) => context.operation)).toEqual(['read', 'publish'])
+                                                        ^
+error: expect(received).toEqual(expected)
+
+  [
+    "read",
+-   "publish",
++   "read",
+  ]
+
+- Expected  - 1
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:523:51)
+(fail) the gate is told the flow it is applied for and the tier the endpoint declares [21.22ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [172.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) the gate is told the flow it is applied for and the tier the endpoint declares [21.64ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [184.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 23 — D-O21 · the link half resolves through the injected resolver, and grows no second read path (`#7f4e0a`)
+breaks:   the injected resolver is ignored, so the rule can never reach a referenced event — and the module silently reads locally instead
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · a link rule resolves through the injected resolver, and absent stays different from mismatched
+$ the mutation applied (old -> new):
+-     if (this.resolver !== undefined) return this.resolver(reference)
++     void this.resolver
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t a\ link\ rule\ resolves\ through\ the\ injected\ resolver,\ and\ absent\ stays\ different\ from\ mismatched
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+554 | 			},
+555 | 		},
+556 | 	})
+557 | 
+558 | 	const answer = await access.query({ kinds: [1] })
+559 | 	expect(asked).toEqual([reference]) // the rule reached the reference through the injected resolver
+                     ^
+error: expect(received).toEqual(expected)
+
+- [
+-   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+- ]
++ []
+
+- Expected  - 3
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:559:16)
+(fail) a link rule resolves through the injected resolver, and absent stays different from mismatched [15.21ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [174.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) a link rule resolves through the injected resolver, and absent stays different from mismatched [14.97ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [166.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 24 — D-O21 · the gate is bounded by the flow's own wall-clock budget, and an over-budget candidate is DROPPED (LF-5, `#cf8c70`)
+breaks:   an over-budget candidate is kept instead of dropped, so a hook that never answers puts its event into the answer — the gate stops being bounded in effect
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · an over-budget gate drops its candidate and the answer still resolves with what it kept
+$ the mutation applied (old -> new):
+-       if (decision === DEADLINE) continue
++       if (decision === DEADLINE) kept.push(event)
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t an\ over\-budget\ gate\ drops\ its\ candidate\ and\ the\ answer\ still\ resolves\ with\ what\ it\ kept
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+578 | 			accept: () => new Promise<never>(() => undefined), // never answers at all
+579 | 		},
+580 | 	})
+581 | 
+582 | 	const answer = await access.query({ kinds: [1] }, { deadlineMs: 30 })
+583 | 	expect(answer.events).toEqual([]) // the over-budget candidate was dropped, not withheld
+                             ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   {
++     "content": "",
++     "created_at": 24000,
++     "id": "75ca0e57c1a4538f3020b56a8e2629070415c613ac1dac01efdba2d05e8ea86d",
++     "kind": 1,
++     "pubkey": "7b4d28d7524db6d5edc01e57e2b1587feab3f5f8b9ab13584ea1d5b266b0f643",
++     "sig": "f854c7c9df1b3fbcd6f1296c2b587de8a3fc8d9b50115b6c9d863d5b3ae9b88befaf56f4bd0bcdfb6cc1645be90d834b265b5e0f27c5085ffe7045a2b328b0ba",
++     "tags": [],
++     [Symbol(verified)]: true,
++   },
++ ]
+
+- Expected  - 1
++ Received  + 12
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:583:24)
+(fail) an over-budget gate drops its candidate and the answer still resolves with what it kept [74.57ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [219.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) an over-budget gate drops its candidate and the answer still resolves with what it kept [73.77ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [220.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 25 — the exclusion list · a declared value a test reads without driving a call (`#a1e6b7`)
+breaks:   the exclusion stops being applied, so a declared (kind,label) is written back anyway
+file:     event-access/ts/policy.ts
+sha256:   a7aa783cd147454dd29f4bcb719918d385251629aa03f46f3cb52242e2ac3286 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · the excluded list is a declared value a test reads without driving a call
+$ the mutation applied (old -> new):
+-   if (excluded.length === 0) return false
+  return excluded.includes(`${event.kind}:${exclusionLabel(event)}`)
++   return false
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t the\ excluded\ list\ is\ a\ declared\ value\ a\ test\ reads\ without\ driving\ a\ call
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+594 | 	const policy = { writeBack: 'network' as const, honourPersist: true, excluded: ['1:'], onReject: 'skip' as const }
+595 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream, policy })
+596 | 
+597 | 	expect(access.policy.excluded).toEqual(['1:']) // read from the value, no call driven
+598 | 	await access.query({ kinds: [1] })
+599 | 	expect(endpoint.writes.length).toBe(0) // the excluded (kind,label) is never written here
+                                      ^
+error: expect(received).toBe(expected)
+
+Expected: 0
+Received: 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:599:33)
+(fail) the excluded list is a declared value a test reads without driving a call [13.93ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [159.00ms]
+exit: 1
+
+$ sha256 after restore: a7aa783cd147454dd29f4bcb719918d385251629aa03f46f3cb52242e2ac3286 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) the excluded list is a declared value a test reads without driving a call [13.24ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [156.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 26 — no socket A · a recording, throwing endpoint and seam: the local operations still resolve, typed
+breaks:   a local-only operation is made to need the wire, so over a seam that throws it cannot resolve at all — operations stop being local
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     ports.test.ts · M5 · the local operations still RESOLVE over a throwing seam, with the recorded counts stated
+$ the mutation applied (old -> new):
+-   async count(filters: FilterIn | FilterIn[]): Promise<CountResult> {
+    const result = await this.countEndpoint(toFilterArray(filters))
+    return { count: result.count, approximate: false }
+  }
++   async count(filters: FilterIn | FilterIn[]): Promise<CountResult> {
+    await this.upstream.query(toFilterArray(filters))
+    const result = await this.countEndpoint(toFilterArray(filters))
+    return { count: result.count, approximate: false }
+  }
+
+$ /home/admin_maxime/.bun/bin/bun test ports.test.ts -t M5\ ·\ the\ local\ operations\ still\ RESOLVE\ over\ a\ throwing\ seam,\ with\ the\ recorded\ counts\ stated
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+111 | 	const second = signedEvent({ kind: 1, created_at: 32_000 })
+112 | 	const endpoint = modelEndpoint({ events: [first, second] })
+113 | 	const upstream = throwingUpstream()
+114 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+115 | 
+116 | 	await expect(access.count({ kinds: [1] })).resolves.toEqual({ count: 2, approximate: false })
+                                                           ^
+error: expect(received).resolves.toEqual(expected)
+
+Expected promise that resolves
+Received promise that rejected: Promise { <rejected> }
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/ports.test.ts:116:54)
+(fail) M5 · the local operations still RESOLVE over a throwing seam, with the recorded counts stated [20.11ms]
+
+ 0 pass
+ 9 filtered out
+ 1 fail
+Ran 1 test across 1 file. [174.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+(pass) M5 · the local operations still RESOLVE over a throwing seam, with the recorded counts stated [18.73ms]
+
+ 1 pass
+ 9 filtered out
+ 0 fail
+ 7 expect() calls
+Ran 1 test across 1 file. [174.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 27 — no socket · a subscription is never silently dropped (M13, `#239d01`)
+breaks:   every refusal on a subscription is swallowed, so a subscription that cannot live ends with no stated reason — red after the case's own timeout, never a hang
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     ports.test.ts · M5 · a recording, throwing endpoint: every caller-facing verb refuses TYPED, never silently
+$ the mutation applied (old -> new):
+-     const fail = (error: unknown): void => {
+      if (!closed) errors.next(asEventAccessError(error))
+    }
++     const fail = (error: unknown): void => {
+      void error
+    }
+
+$ /home/admin_maxime/.bun/bin/bun test ports.test.ts -t M5\ ·\ a\ recording,\ throwing\ endpoint:\ every\ caller\-facing\ verb\ refuses\ TYPED,\ never\ silently
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+689 |   const out: T[] = []
+690 |   let subscription: RxSubscription | undefined
+691 |   let timeout: ReturnType<typeof setTimeout> | undefined
+692 |   try {
+693 |     await new Promise<void>((resolve, reject) => {
+694 |       timeout = setTimeout(() => reject(new Error(`collect: only ${out.length} of ${n} value(s) arrived within ${ms} ms`)), ms)
+                                                  ^
+error: collect: only 0 of 1 value(s) arrived within 800 ms
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/harness.ts:694:45)
+(fail) M5 · a recording, throwing endpoint: every caller-facing verb refuses TYPED, never silently [807.29ms]
+
+ 0 pass
+ 9 filtered out
+ 1 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [952.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+(pass) M5 · a recording, throwing endpoint: every caller-facing verb refuses TYPED, never silently [5.77ms]
+
+ 1 pass
+ 9 filtered out
+ 0 fail
+ 8 expect() calls
+Ran 1 test across 1 file. [180.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 28 — no socket B · the import allow-list (`#0c7fe3`, D-O19)
+breaks:   a specifier that is neither module-relative nor a declared dependency appears — the forbidden store import itself
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+command:  ! ( grep -rhoE "(from|import)[[:space:]]+[\"'][^\"']+[\"']" --include='*.ts' --exclude-dir=node_modules . | sed -E "s/^(from|import)[[:space:]]+[\"']?//; s/[\"']$//" | sort -u | grep -vE '^(\./[A-Za-z0-9._-]+|applesauce-loaders(/[A-Za-z0-9._/-]+)?|nostr-tools(/[A-Za-z0-9._/-]+)?|rxjs|bun:test)$' | grep -q . )
+$ the mutation applied (old -> new):
+- import { ReplaySubject, Subject, timer } from 'rxjs'
++ import { ReplaySubject, Subject, timer } from 'rxjs'
+import 'applesauce-core'
+
+$ bash -c ! ( grep -rhoE "(from|import)[[:space:]]+[\"'][^\"']+[\"']" --include='*.ts' --exclude-dir=node_modules . | sed -E "s/^(from|import)[[:space:]]+[\"']?//; s/[\"']$//" | sort -u | grep -vE '^(\./[A-Za-z0-9._-]+|applesauce-loaders(/[A-Za-z0-9._/-]+)?|nostr-tools(/[A-Za-z0-9._/-]+)?|rxjs|bun:test)$' | grep -q . )
+
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named command went red under the mutation
+
+$ ...and the same check on the restored file:
+
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 29 — D-O5 / W4a N-5 · the endpoint's refusal is surfaced as this module's own ON THE READ PATH
+breaks:   the read path stops surfacing, so a foreign implementer's own error object reaches the caller untranslated — the half of the boundary a mutation on `count` alone cannot reach
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     ports.test.ts · a FOREIGN endpoint refusal is surfaced as this module own class, on all four verbs (W4a 0.1)
+$ the mutation applied (old -> new):
+-   private async readEndpoint(filters: FilterIn[]): Promise<Event[]> {
+    try {
+      return await this.endpoint.read(filters)
+    } catch (error) {
+      throw asEventAccessError(error)
+    }
+  }
++   private async readEndpoint(filters: FilterIn[]): Promise<Event[]> {
+    return this.endpoint.read(filters)
+  }
+
+$ /home/admin_maxime/.bun/bin/bun test ports.test.ts -t a\ FOREIGN\ endpoint\ refusal\ is\ surfaced\ as\ this\ module\ own\ class,\ on\ all\ four\ verbs\ \(W4a\ 0\.1\)
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+164 | 		await caughtOf(access.delete(['an-id'])),
+165 | 		await caughtOf(access.publish([signedEvent({ kind: 1, created_at: 33_000 })])),
+166 | 	]
+167 | 
+168 | 	for (const refusal of caught) {
+169 | 		expect(refusal).toBeInstanceOf(EventAccessError)
+                        ^
+error: expect(received).toBeInstanceOf(expected)
+
+Expected constructor: [class EventAccessError extends Error]
+Received value: 520 |  */
+521 | export function foreignEndpoint(): { endpoint: StoreEndpoint; calls: string[] } {
+522 |   const calls: string[] = []
+523 |   const refuse = (method: string): never => {
+524 |     calls.push(method)
+525 |     throw new ForeignError(method)
+                ^
+ForeignError: a foreign endpoint refused: read
+ reason: "rejected",
+
+      at refuse (/home/admin_maxime/projects/market-retrofit/event-access/ts/harness.ts:525:11)
+      at read (/home/admin_maxime/projects/market-retrofit/event-access/ts/harness.ts:531:25)
+      at readEndpoint (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.ts:175:26)
+      at query (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.ts:329:61)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/ports.test.ts:162:25)
+
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/ports.test.ts:169:19)
+(fail) a FOREIGN endpoint refusal is surfaced as this module own class, on all four verbs (W4a 0.1) [14.05ms]
+
+ 0 pass
+ 9 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [169.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+(pass) a FOREIGN endpoint refusal is surfaced as this module own class, on all four verbs (W4a 0.1) [11.75ms]
+
+ 1 pass
+ 9 filtered out
+ 0 fail
+ 10 expect() calls
+Ran 1 test across 1 file. [162.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 30 — port conformance · the suite runs over a SECOND, independently written fake
+breaks:   the independently written upstream stops reporting its boundary, so the suite is proved to exercise it rather than assume it
+file:     event-access/ts/harness.ts
+sha256:   68bfcfb5a46c484d6e250533e2eafb51033a9c6a56437baab191ca6dae4eaf29 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · the conformance suite passes over TWO independently written endpoint fakes and TWO upstream fakes
+$ the mutation applied (old -> new):
+-         return { events: answer, eose: true, failures: [] }
++         return { events: answer, eose: false, failures: [] }
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t the\ conformance\ suite\ passes\ over\ TWO\ independently\ written\ endpoint\ fakes\ and\ TWO\ upstream\ fakes
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+623 | 			// the local count is read BEFORE the fill, so the fill's write-back does not move it.
+624 | 			expect((await access.count({ kinds: [1] })).count).toBe(1)
+625 | 
+626 | 			const answer = await access.query({ kinds: [1] })
+627 | 			expect(answer.events.map((event) => event.id)).toEqual([local.id, remote.id])
+628 | 			expect(answer.complete).toBe(true)
+                                 ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:628:28)
+(fail) the conformance suite passes over TWO independently written endpoint fakes and TWO upstream fakes [20.27ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 10 expect() calls
+Ran 1 test across 1 file. [168.00ms]
+exit: 1
+
+$ sha256 after restore: 68bfcfb5a46c484d6e250533e2eafb51033a9c6a56437baab191ca6dae4eaf29 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) the conformance suite passes over TWO independently written endpoint fakes and TWO upstream fakes [22.31ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 28 expect() calls
+Ran 1 test across 1 file. [170.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 31 — provenance · the P2 merge order cannot move the documented tier — the call-site half (W4a 0.4)
+breaks:   the local answer is merged under the network's name, so the tier the answer *reports* for a both-tier id depends on which path was asked rather than on which tier produced it
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · provenance · on P2 (localFirst:false) a both-tier id is STILL local: the precedence is a rule, not an arrival order
+$ the mutation applied (old -> new):
+-       union.take(localEvents, origin)
++       union.take(localEvents, 'network')
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t provenance\ ·\ on\ P2\ \(localFirst:false\)\ a\ both\-tier\ id\ is\ STILL\ local:\ the\ precedence\ is\ a\ rule,\ not\ an\ arrival\ order
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+665 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+666 | 
+667 | 	const answer = await access.query({ kinds: [1] }, { localFirst: false })
+668 | 
+669 | 	expect(answer.events.map((event) => event.id)).toEqual([shared.id]) // still one event (M2)
+670 | 	expect(access.originOf(answer, shared.id)).toBe('local')
+                                                  ^
+error: expect(received).toBe(expected)
+
+Expected: "local"
+Received: "network"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:670:45)
+(fail) provenance · on P2 (localFirst:false) a both-tier id is STILL local: the precedence is a rule, not an arrival order [14.48ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [167.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) provenance · on P2 (localFirst:false) a both-tier id is STILL local: the precedence is a rule, not an arrival order [14.76ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [158.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 32 — the endpoint's refusal is surfaced as this module's own on the COUNT path (E5, D-O5; W4a 0.1)
+breaks:   the count guard is dropped, so a foreign implementer's own error object reaches the caller untranslated on that verb — a different line from the read path's row, and the only other one the four-verb case reaches
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     ports.test.ts · a FOREIGN endpoint refusal is surfaced as this module own class, on all four verbs (W4a 0.1)
+$ the mutation applied (old -> new):
+-   private async countEndpoint(filters: FilterIn[]): Promise<CountResult> {
+    try {
+      return await this.endpoint.count(filters)
+    } catch (error) {
+      throw asEventAccessError(error)
+    }
+  }
++   private async countEndpoint(filters: FilterIn[]): Promise<CountResult> {
+    return this.endpoint.count(filters)
+  }
+
+$ /home/admin_maxime/.bun/bin/bun test ports.test.ts -t a\ FOREIGN\ endpoint\ refusal\ is\ surfaced\ as\ this\ module\ own\ class,\ on\ all\ four\ verbs\ \(W4a\ 0\.1\)
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+164 | 		await caughtOf(access.delete(['an-id'])),
+165 | 		await caughtOf(access.publish([signedEvent({ kind: 1, created_at: 33_000 })])),
+166 | 	]
+167 | 
+168 | 	for (const refusal of caught) {
+169 | 		expect(refusal).toBeInstanceOf(EventAccessError)
+                        ^
+error: expect(received).toBeInstanceOf(expected)
+
+Expected constructor: [class EventAccessError extends Error]
+Received value: 520 |  */
+521 | export function foreignEndpoint(): { endpoint: StoreEndpoint; calls: string[] } {
+522 |   const calls: string[] = []
+523 |   const refuse = (method: string): never => {
+524 |     calls.push(method)
+525 |     throw new ForeignError(method)
+                ^
+ForeignError: a foreign endpoint refused: count
+ reason: "rejected",
+
+      at refuse (/home/admin_maxime/projects/market-retrofit/event-access/ts/harness.ts:525:11)
+      at count (/home/admin_maxime/projects/market-retrofit/event-access/ts/harness.ts:533:26)
+      at countEndpoint (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.ts:241:26)
+      at count (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.ts:542:31)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/ports.test.ts:163:25)
+
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/ports.test.ts:169:19)
+(fail) a FOREIGN endpoint refusal is surfaced as this module own class, on all four verbs (W4a 0.1) [12.43ms]
+
+ 0 pass
+ 9 filtered out
+ 1 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [154.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+(pass) a FOREIGN endpoint refusal is surfaced as this module own class, on all four verbs (W4a 0.1) [11.60ms]
+
+ 1 pass
+ 9 filtered out
+ 0 fail
+ 10 expect() calls
+Ran 1 test across 1 file. [156.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 33 — the subscription's own filters constrain the change fan-out (found by measurement once the store shrink landed)
+breaks:   the fan-out passes the endpoint's unfiltered change notification straight through, so a `{kinds:[1]}` subscription is handed a local kind-7 write — the store's own live path used to apply the filter, and the endpoint's `changes` cannot
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · the change fan-out honours the subscription own filters — an unrelated local write is not delivered
+$ the mutation applied (old -> new):
+-         if (!matchFilters(filterArray, event)) return
++         if (false) return
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t the\ change\ fan\-out\ honours\ the\ subscription\ own\ filters\ —\ an\ unrelated\ local\ write\ is\ not\ delivered
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+153 | 	endpoint.changes.push(signedEvent({ kind: 7, created_at: 30_000 })) // names a kind this subscription did not ask for
+154 | 	endpoint.changes.push(signedEvent({ kind: 1, created_at: 30_500 })) // and one it did
+155 | 	await quiet(80)
+156 | 	subscription.unsubscribe()
+157 | 
+158 | 	expect(arrived.map((event) => event.kind)).toEqual([1]) // the matching write only, and exactly once
+                                                  ^
+error: expect(received).toEqual(expected)
+
+  [
++   7,
+    1,
+  ]
+
+- Expected  - 0
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:158:45)
+(fail) the change fan-out honours the subscription own filters — an unrelated local write is not delivered [129.91ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [277.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) the change fan-out honours the subscription own filters — an unrelated local write is not delivered [127.79ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [277.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 34 — the fail-closed boundary precedes BOTH tiers on P2 (`#f775fb`; the re-verification wave's falsification)
+breaks:   the endpoint's read stops being the first call, so `localFirst:false` asks the seam before the predicate has answered — the raw filter reaches the wire and the fill is written back, i.e. a refusal with side effects behind it
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     ports.test.ts · the boundary precedes BOTH tiers on P2 — the wire never sees the filter, and nothing is written back
+$ the mutation applied (old -> new):
+-     const localEvents: Event[] = await this.gate(await this.readEndpoint(filterArray), 'read', deadlineMs)
++     const localEvents: Event[] = []
+
+$ /home/admin_maxime/.bun/bin/bun test ports.test.ts -t the\ boundary\ precedes\ BOTH\ tiers\ on\ P2\ —\ the\ wire\ never\ sees\ the\ filter,\ and\ nothing\ is\ written\ back
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+62 | 	const endpoint = modelEndpoint({ events: [], calls: order })
+63 | 	const fillEvent = signedEvent({ kind: 1, created_at: 40_000 })
+64 | 	const upstream = recordingUpstream({ events: [fillEvent] }, order)
+65 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+66 | 
+67 | 	await expect(access.query({ ids: ['not-a-hex-identity'] }, { localFirst: false })).rejects.toMatchObject({
+                                                                                                 ^
+error: expect(received).rejects.toMatchObject(expected)
+
+Expected promise that rejects
+Received promise that resolved: Promise { <resolved> }
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/ports.test.ts:67:93)
+(fail) the boundary precedes BOTH tiers on P2 — the wire never sees the filter, and nothing is written back [14.77ms]
+
+ 0 pass
+ 9 filtered out
+ 1 fail
+Ran 1 test across 1 file. [166.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+(pass) the boundary precedes BOTH tiers on P2 — the wire never sees the filter, and nothing is written back [10.68ms]
+
+ 1 pass
+ 9 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [165.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 35 — LF-1 · the local read precedes the seam subscription (the subscription replay path)
+breaks:   the replay's local read is emptied, so the seam is subscribed without the endpoint having been asked at all — the path stops being local-first and its answer loses the local event
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · LF-1 · on the subscription path the local read precedes the seam subscription
+$ the mutation applied (old -> new):
+-       let local: Event[]
+      try {
+        local = await this.readEndpoint(filterArray)
+      } catch (error) {
+        fail(error)
+        return
+      }
++       const local: Event[] = []
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t LF\-1\ ·\ on\ the\ subscription\ path\ the\ local\ read\ precedes\ the\ seam\ subscription
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+63 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+64 | 
+65 | 	const subscription = access.subscribe({ kinds: [1] })
+66 | 	await quiet(20)
+67 | 
+68 | 	expect(order).toEqual(['read', 'subscribe'])
+                    ^
+error: expect(received).toEqual(expected)
+
+  [
+-   "read",
+    "subscribe",
+  ]
+
+- Expected  - 1
++ Received  + 0
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:68:16)
+(fail) LF-1 · on the subscription path the local read precedes the seam subscription [23.19ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [177.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) LF-1 · on the subscription path the local read precedes the seam subscription [22.75ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [172.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 36 — a signal already aborted opens nothing (W4a 0.3)
+breaks:   the early return is disabled, so an already-cancelled signal still performs a local read and opens a seam subscription it can never cancel
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     ports.test.ts · a signal already aborted opens NOTHING: no local read, no seam subscription, and a stated reason
+$ the mutation applied (old -> new):
+-     if (options.signal?.aborted) {
+      errors.next(new EventAccessError('rejected', 'the subscription was aborted before it opened'))
++     if (options.signal?.aborted && false) {
+      errors.next(new EventAccessError('rejected', 'the subscription was aborted before it opened'))
+
+$ /home/admin_maxime/.bun/bin/bun test ports.test.ts -t a\ signal\ already\ aborted\ opens\ NOTHING:\ no\ local\ read,\ no\ seam\ subscription,\ and\ a\ stated\ reason
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+689 |   const out: T[] = []
+690 |   let subscription: RxSubscription | undefined
+691 |   let timeout: ReturnType<typeof setTimeout> | undefined
+692 |   try {
+693 |     await new Promise<void>((resolve, reject) => {
+694 |       timeout = setTimeout(() => reject(new Error(`collect: only ${out.length} of ${n} value(s) arrived within ${ms} ms`)), ms)
+                                                  ^
+error: collect: only 0 of 1 value(s) arrived within 800 ms
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/harness.ts:694:45)
+(fail) a signal already aborted opens NOTHING: no local read, no seam subscription, and a stated reason [806.60ms]
+
+ 0 pass
+ 9 filtered out
+ 1 fail
+Ran 1 test across 1 file. [958.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+ports.test.ts:
+(pass) a signal already aborted opens NOTHING: no local read, no seam subscription, and a stated reason [3.69ms]
+
+ 1 pass
+ 9 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [152.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 37 — an endpoint declares its own tier and the merge marks by it (`#bec31a`, W4a 0.5)
+breaks:   the mark is hard-coded to 'local', so an endpoint that declares itself remote has its events mislabelled
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · the endpoint declares its own tier, and the merge marks by THAT — never by a call site (`#bec31a`)
+$ the mutation applied (old -> new):
+-     return this.endpoint.tier === 'local' ? 'local' : 'network'
++     return 'local'
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t the\ endpoint\ declares\ its\ own\ tier,\ and\ the\ merge\ marks\ by\ THAT\ —\ never\ by\ a\ call\ site\ \(`\#bec31a`\)
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+678 | 	const upstream = recordingUpstream({ events: [] })
+679 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+680 | 
+681 | 	const answer = await access.query({ kinds: [1] })
+682 | 
+683 | 	expect(access.originOf(answer, event.id)).toBe('network') // the endpoint said 'remote'
+                                                 ^
+error: expect(received).toBe(expected)
+
+Expected: "network"
+Received: "local"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:683:44)
+(fail) the endpoint declares its own tier, and the merge marks by THAT — never by a call site (`#bec31a`) [14.47ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [164.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) the endpoint declares its own tier, and the merge marks by THAT — never by a call site (`#bec31a`) [13.90ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [169.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 38 — onReject · 'report' has a channel where the answer cannot carry it (`#9b7257`, W4a 0.6)
+breaks:   the report is disabled, so the policy member a test reads is inert and 'report' behaves exactly like 'skip'
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · onReject · "report" reaches the subscription error channel where the answer cannot carry it
+$ the mutation applied (old -> new):
+-               if (outcome && outcome.refused > 0 && this.policy.onReject === 'report') {
++               if (false) {
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t onReject\ ·\ "report"\ reaches\ the\ subscription\ error\ channel\ where\ the\ answer\ cannot\ carry\ it
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+736 | 		await arrived
+737 | 		return collect(subscription.errors, 1, 120).catch(() => [])
+738 | 	}
+739 | 
+740 | 	const reported = await drive({ onReject: 'report' })
+741 | 	expect(reported[0]).toBeInstanceOf(EventAccessError)
+                           ^
+error: expect(received).toBeInstanceOf(expected)
+
+Expected constructor: [class EventAccessError extends Error]
+Received value: undefined
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:741:22)
+(fail) onReject · "report" reaches the subscription error channel where the answer cannot carry it [156.71ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [314.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) onReject · "report" reaches the subscription error channel where the answer cannot carry it [185.05ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [336.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 39 — LF-3 · the fan-out reaches EVERY open subscription (W4b S3)
+breaks:   delivery is limited to the first subscriber, so a second open subscription is starved with no reason on its error channel (M13)
+file:     event-access/ts/composition.ts
+sha256:   58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · LF-3 · a later write reaches EVERY open subscription exactly once, over either change-feed semantics
+$ the mutation applied (old -> new):
+-           for (const subscriber of [...this.subscribers]) subscriber.deliver(next.value)
++           for (const subscriber of [...this.subscribers].slice(0, 1)) subscriber.deliver(next.value)
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t LF\-3\ ·\ a\ later\ write\ reaches\ EVERY\ open\ subscription\ exactly\ once,\ over\ either\ change\-feed\ semantics
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+710 | 		first.unsubscribe()
+711 | 		second.unsubscribe()
+712 | 
+713 | 		// exactly once each — `== 1`, never `<= 1`, and never 0 for the second subscriber
+714 | 		expect(arrivedFirst).toEqual([event.id])
+715 | 		expect(arrivedSecond).toEqual([event.id])
+                              ^
+error: expect(received).toEqual(expected)
+
+- [
+-   "fc067fd461b07945b4b001dabefeb44939b39b42f9aa5d644d0a37c7a4ae4456",
+- ]
++ []
+
+- Expected  - 3
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:715:25)
+(fail) LF-3 · a later write reaches EVERY open subscription exactly once, over either change-feed semantics [95.57ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [246.00ms]
+exit: 1
+
+$ sha256 after restore: 58d144f78c495296940fecbf162a27a597732d880f1ac2f1faa8fd9433b8074d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) LF-3 · a later write reaches EVERY open subscription exactly once, over either change-feed semantics [180.80ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 6 expect() calls
+Ran 1 test across 1 file. [330.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 40 — the filters reach both tiers unchanged and in the caller's order (`#e391d0`, W4a N-4)
+breaks:   the normaliser reorders the caller's filters, so neither tier sees what the caller wrote — the echo hazard from the composition's side
+file:     event-access/ts/filters.ts
+sha256:   d86b289f8fc59c0affa1b63f074d867e1cf26aa7127782c8d69c296b8799bf13 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     composition.test.ts · the filters reach both tiers unchanged and in the caller own order (`#e391d0`, W4a N-4)
+$ the mutation applied (old -> new):
+-   return Array.isArray(filters) ? [...filters] : [filters]
++   return Array.isArray(filters) ? [...filters].reverse() : [filters]
+
+$ /home/admin_maxime/.bun/bin/bun test composition.test.ts -t the\ filters\ reach\ both\ tiers\ unchanged\ and\ in\ the\ caller\ own\ order\ \(`\#e391d0`,\ W4a\ N\-4\)
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+753 | 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })
+754 | 	const filters = [{ kinds: [1] }, { kinds: [7], authors: ['a'.repeat(64)] }]
+755 | 
+756 | 	await access.query(filters)
+757 | 
+758 | 	expect(endpoint.reads).toEqual([filters])
+                              ^
+error: expect(received).toEqual(expected)
+
+  [
+    [
+      {
+-       "kinds": [
+-         1,
+-       ],
+-     },
+-     {
+        "authors": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ],
+        "kinds": [
+          7,
++       ],
++     },
++     {
++       "kinds": [
++         1,
+        ],
+      },
+    ],
+  ]
+
+- Expected  - 5
++ Received  + 5
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-access/ts/composition.test.ts:758:25)
+(fail) the filters reach both tiers unchanged and in the caller own order (`#e391d0`, W4a N-4) [5.96ms]
+
+ 0 pass
+ 32 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [156.00ms]
+exit: 1
+
+$ sha256 after restore: d86b289f8fc59c0affa1b63f074d867e1cf26aa7127782c8d69c296b8799bf13 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+composition.test.ts:
+(pass) the filters reach both tiers unchanged and in the caller own order (`#e391d0`, W4a N-4) [5.20ms]
+
+ 1 pass
+ 32 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [157.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+40 mutation(s) applied, 0 falsification failure(s)
+every mutated file was restored and its sha256 verified; the module's tree is as it was before this run.
+
+40 mutation(s), 0 falsification failure(s)
