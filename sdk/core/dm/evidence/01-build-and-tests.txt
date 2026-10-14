@@ -1,7 +1,7 @@
 
 ===== dm — build, test and isolation evidence =====
 # command:   bash sdk/core/dm/evidence/run.sh   (the caller redirects to 01-build-and-tests.txt)
-# generated: 2026-10-14T16:47:10Z   host: Linux 6.12.94+deb13-amd64 x86_64
+# generated: 2026-10-14T16:48:26Z   host: Linux 6.12.94+deb13-amd64 x86_64
 # bun:       1.4.2
 # module:    sdk/core/dm
 # note: every line below is a command's own output, not a summary of it.
@@ -26,15 +26,15 @@ $ (cd sdk/core/dm/ts && /home/admin_maxime/.bun/bin/bun test)
 bun test v1.4.2 (744846f84)
 
 dm.test.ts:
-(pass) dm — the write and read paths over the library, the targets from relay-config > 1 · wrapDm produces two kind-1059 wraps with distinct ephemeral authors [80.47ms]
-(pass) dm — the write and read paths over the library, the targets from relay-config > 2 · both wraps carry one rumor, and unwrapDm round-trips it [30.54ms]
-(pass) dm — the write and read paths over the library, the targets from relay-config > 3 · resolveDmRelayTargets reads dmRelays for both sides [23.34ms]
-(pass) dm — the write and read paths over the library, the targets from relay-config > 4 · a missing 10050 is undefined — no 10002 fallback [13.04ms]
+(pass) dm — the write and read paths over the library, the targets from relay-config > 1 · wrapDm produces two kind-1059 wraps with distinct ephemeral authors [77.70ms]
+(pass) dm — the write and read paths over the library, the targets from relay-config > 2 · both wraps carry one rumor, and unwrapDm round-trips it [31.68ms]
+(pass) dm — the write and read paths over the library, the targets from relay-config > 3 · resolveDmRelayTargets reads dmRelays for both sides [24.20ms]
+(pass) dm — the write and read paths over the library, the targets from relay-config > 4 · a missing 10050 is undefined — no 10002 fallback [13.75ms]
 
  4 pass
  0 fail
  17 expect() calls
-Ran 4 tests across 1 file. [443.00ms]
+Ran 4 tests across 1 file. [426.00ms]
 exit: 0
 # ^ expected: 4 cases in 1 file, 4 pass, 0 fail.
 
@@ -71,11 +71,12 @@ specifier count: 14
 ===== 5 · the contract: index.ts against dm.md's front-matter =====
 $ grep -nE ^export /home/admin_maxime/work/rp-dm/sdk/core/dm/ts/index.ts
 31:export { wrapDm, unwrapDm, dmRelaySourceFromEvents, resolveDmRelayTargets }
-32:export type { DmReadResult, DmRelayListEvent, DmRelaySource, DmRelayTargets, DmRumor, DmSignableEvent, DmSigner, DmWriteResult } from './types'
+32:export { DM_GIFT_WRAP_KIND, DM_RELAYS_KIND, DM_SEAL_KIND } from './types'
+33:export type { DmPublishPort, DmReadResult, DmRelayListEvent, DmRelaySource, DmRelayTargets, DmRumor, DmSignableEvent, DmSigner, DmWriteResult } from './types'
 exit: 0
 $ python3 - /home/admin_maxime/work/rp-dm/sdk/core/dm/dm.md /home/admin_maxime/work/rp-dm/sdk/core/dm/ts/index.ts
-contract.exports: 4 declared, 4 delivered
-contract.types: 8 declared, 8 delivered
+contract.exports: 7 declared, 7 delivered
+contract.types: 9 declared, 9 delivered
 the two lists are equal: yes
 exit: 0
 exit: 0

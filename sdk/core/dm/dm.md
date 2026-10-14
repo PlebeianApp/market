@@ -15,8 +15,8 @@ levels:
 contract:
   entry: ts/index.ts
   operations: [wrapDm, unwrapDm, dmRelaySourceFromEvents, resolveDmRelayTargets]
-  exports: [wrapDm, unwrapDm, dmRelaySourceFromEvents, resolveDmRelayTargets]
-  types: [DmReadResult, DmRelayListEvent, DmRelaySource, DmRelayTargets, DmRumor, DmSignableEvent, DmSigner, DmWriteResult]
+  exports: [DM_GIFT_WRAP_KIND, DM_RELAYS_KIND, DM_SEAL_KIND, dmRelaySourceFromEvents, resolveDmRelayTargets, unwrapDm, wrapDm]
+  types: [DmPublishPort, DmReadResult, DmRelayListEvent, DmRelaySource, DmRelayTargets, DmRumor, DmSignableEvent, DmSigner, DmWriteResult]
 implementations:
   - id: ts
     lang: typescript
@@ -87,6 +87,10 @@ that regenerate what this document claims.
 - **The signer is injected, never a key.** The component takes a `DmSigner` (our host port's shape: `getPublicKey`,
   a bare-signature `signEvent`, and NIP-44 `encrypt`/`decrypt`). `adapter.ts` is the **one** seam that assembles
   the library's full signed-event shape around that bare signature; it is a port adapter, not NIP-59 logic.
+- **The publish target is injected, and it is explicit.** `DmPublishPort` (declared here) is the shape the caller
+  hands the wraps to; it carries the resolved relay set as an argument, so a DM write can never silently widen
+  egress. The kinds `1059`, `13` and `10050` are exported as `DM_GIFT_WRAP_KIND` / `DM_SEAL_KIND` / `DM_RELAYS_KIND`
+  so a consumer names them from here instead of a retired core file.
 - **The dependencies are declared structurally where they can be.** `DmSigner` and `DmRelaySource` are declared in
   `ts/types.ts`; the component imports **no sibling module's types**. It imports relay-config's factory
   (`createRelayConfig`) — a value, the documented consumer edge — and nothing else from a sibling.

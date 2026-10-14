@@ -102,3 +102,19 @@ export type DmReadResult = {
 	seal: Event
 	rumor: DmRumor
 }
+
+/**
+ * The structural publish surface the DM write path hands its gift wraps to. Declared here (the SDK's
+ * `NostrRelayPort` is not imported) so the component names no sibling/port type; a host relay port satisfies
+ * it structurally. Targets are explicit — the caller passes the resolved relay set, never "everything".
+ */
+export interface DmPublishPort {
+	publish(event: Event, relays: readonly string[]): Promise<{ acceptedRelays: readonly string[] }>
+}
+
+/** The gift-wrap kind (NIP-59). */
+export const DM_GIFT_WRAP_KIND = 1059
+/** The seal kind (NIP-59). */
+export const DM_SEAL_KIND = 13
+/** The DM relay list kind (NIP-17's `10050`) — where a recipient reads DMs. */
+export const DM_RELAYS_KIND = 10050
