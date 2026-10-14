@@ -146,6 +146,17 @@ write relay does not lead `instance('app')`.
 - tests 1–7 pass.
 - `git diff --stat 7ad658d4..HEAD` → **`sdk/core/relay-config/**` and nothing else**.
 
+**One measured caveat, named rather than smoothed over.** `bun test sdk/boundary.test.ts` (the SDK wall)
+walks **every** `.ts` file under `sdk/` and does not exclude `node_modules`, so it flags
+`node_modules/bun-types/*.d.ts` — whose *doc comments* contain `import … from "react-dom/server"` — for **any**
+module with an installed dependency store. Measured three ways on this increment: with
+`sdk/core/relay-config/ts/node_modules` present it reports the four `bun-types` lines for this module; with a
+**sibling's** store alone (`sdk/core/nostr-io/ts/node_modules`) it reports the same four lines for `nostr-io`;
+with no install under `sdk/` it passes (`1 pass, 0 fail`). This increment's own sources contribute **no**
+violation (the import allow-list is diffed in `evidence/01-build-and-tests.txt`, section 4). The fix is a
+`node_modules` exclusion in `sdk/boundary.test.ts:15-26` — a file outside this increment's touch points, so it
+is reported, not edited.
+
 ## Where the design documents and this spec differ
 
 The packet's Contract is the binding version and it wins where the two disagree. Two places, named rather than
