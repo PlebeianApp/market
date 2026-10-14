@@ -57,6 +57,32 @@ error of the rung's own. Every other strict flag is kept.
 | `../../errors` | the SDK's shared error module — `ValidationError` for the absorbed `validateWithSchema` |
 | `../../result` | the SDK's `Result` — the shape `validateWithSchema` (and, from V2, the guard) returns |
 
+## The contribution path (V2)
+
+`ts/declaration.ts` is the **declaration layer's spelling** — `CommerceValidationDeclaration`, `KindOwnership`,
+`Contribution`, `ContributionGrant` — none of which enters the `validation` module (`design.md` §7.5, zero
+engine change). `ts/registry.ts` is the **registry, its guard and the report**:
+
+- **one structural owner per kind**; a second module with a genuine demand **contributes** it by name
+  (`Contribution.via`) and the owner **admits** it by name (`ContributionGrant.from`) — **both halves must
+  exist**, and the merged declaration stays the owner's;
+- an **undeclared overlap** is refused, naming the closed **`(kind, claimed-by-two)`** pair;
+- an **uninterpretable check** — a comparator outside `eq · exists · in`, a `maxChainDepth` above one hop,
+  or a reference count past the engine's own declared `maxReferencesPerEvent` — is refused **at
+  registration, before any candidate is judged**;
+- `snapshot()` is the engine's preset set; `report()` is a value a test reads (owned kinds,
+  owned-with-no-rules, contributions, grants, and the **unplaced** kinds the host declares it renders).
+
+`ts/compose.ts` is the **collection path**: `composeCommerce` builds the registry and passes `validation`
+to `composeEventAccess` **only when the snapshot is non-empty** — the one branch that preserves **R1**
+(zero declarations ⇒ the socket stays absent ⇒ `access.policy` **is** `DEFAULT_WRITE_BACK`). A bad
+declaration throws `DeclarationError` there, at boot.
+
+The tree's own declarations are collected by `sdk/commerce/validationDeclarations.ts`: one
+`validationDeclaration` value per `sdk/commerce/<module>`, with `orders`' demand for kinds 16 · 17 routed
+to `messaging` (which owns them, and admits it). The corpus criterion — one module ↔ one declaration ↔
+one `KindOwnership` per owned kind — is held by `sdk/commerce/declarations.test.ts`.
+
 ## The regression floor this rung carries
 
 The four behaviours proved at `event-access/ts/composition-root.test.ts` moved with the root
