@@ -1,0 +1,19 @@
+{
+	"name": "@plebeian-apps/pay-aggregator",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "The payment aggregator: it owns the purchase set, the conservation rule, the acceptance gate and the refund guard, and it cites only the funds contract.",
+	"exports": {
+		".": "./index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit",
+		"evidence": "bash ../evidence/run.sh"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.2.0",
+		"typescript": "^5.6.0"
+	}
+}

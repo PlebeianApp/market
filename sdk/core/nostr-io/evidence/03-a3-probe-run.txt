@@ -1,0 +1,53 @@
+# A3's probe, run UNMODIFIED against the D1/D12-repaired candidate
+# date: 2026-09-30T07:20:56Z   host: Linux 6.12.94+deb13-amd64 x86_64
+# bun:  1.4.2   tsc: Version 5.9.3
+# probe sha256: 4051e99d3a1c9f54e6f35ed5c1ff49c1b7b3e4907e54f5061bc2661998eed546
+# probe source: /home/admin_maxime/work/nostr-io-a3-probe/probe.ts — OUTSIDE the assembly, never edited by this repair.
+# entry sha256: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (the D1/D12-repaired nostr-io/ts/index.ts)
+# its saved earlier transcripts are run.log (pre-repair) and evidence/03 (the red-team repair); this is the same probe, same command, after D1/D12.
+# The probe asserts nothing — it PRINTS. Where its reading stops being an earlier reading is the repair working
+# (runs/2026-09-29-reframing/adjudication-nostr-io.md §4.4).
+
+$ /home/admin_maxime/.bun/bin/bun x tsc --noEmit
+（no output）
+tsc exit: 0
+
+$ /home/admin_maxime/.bun/bin/bun probe.ts
+=== A3 probe · nostr-io · refusal-as-a-value (#5ecac1, #15aa73) ===
+  entry: nostr-io/ts/index.ts · relay fixtures: wss://probe.alpha.invalid, wss://probe.beta.invalid · no socket is opened
+
+ARM 1 · construction + a pool that throws from every method: is every refusal typed?
+  construction pool calls = 0 (the structural half of #d700bc claims 0)
+  connect() — threw RelaySeamError(reason=rejected)
+  query() — threw RelaySeamError(reason=rejected)
+  publish() — threw RelaySeamError(reason=rejected)
+  count() — threw RelaySeamError(reason=rejected)
+  pool calls so far = [status, request, publish, count]; policy reads = [connect, query, publish, count]
+  subscribe() → errors channel = [RelaySeamError(reason=rejected)]
+  close() — threw RelaySeamError(reason=rejected)
+  pool calls after everything = [status, request, publish, count, subscribe, close]
+
+ARM 2 · query/publish: a pool that ERRORS or REJECTS — is the error mapped?
+  query() [request() errors after one event] — RESOLVED: object{events,eose,failures}
+  query() [request() errors asynchronously] — RESOLVED: object{events,eose,failures}
+  query() [pool.request throws synchronously] — threw RelaySeamError(reason=rejected)
+  publish() [pool.publish rejects] — threw RelaySeamError(reason=rejected)
+  count() [pool.count rejects] — threw RelaySeamError(reason=rejected)
+
+ARM 3 · subscribe: a failure on the pool's own channels — where does it land?
+  [pool events errors] events channel: completed
+  [pool events errors] events emitted: [aaaaaaaa]
+  [pool events errors] errors channel: [RelaySeamError(reason=rejected)]
+  [closeOnEose + eose errors] events channel: completed; errors channel: [RelaySeamError(reason=rejected)]
+  [pool failures errors] events channel: still open; errors channel: [RelaySeamError(reason=rejected)]
+  [pool.subscribe throws] events channel: completed; errors channel: [RelaySeamError(reason=rejected)]
+  [abort then unsubscribe] pool teardowns = 1 (claimed: 1)
+  [signal already aborted] pool teardowns = 2 (claimed: 2 in total)
+
+ARM 4 · query + deadlineMs: does the deadline bound the wait when the wire drips?
+  permanently dripping wire (never an EOSE), deadlineMs = 25 → resolved after 27 ms with 2 events, eose = false
+  (the read only ended because the probe finally stopped the wire: resolved after 27 ms with 2 events, eose = false)
+  silent wire: resolved after 26 ms with 0 events, eose = false
+
+=== end of trace ===
+run exit: 0

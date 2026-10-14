@@ -1,0 +1,83 @@
+nostr-io — the spec <-> implementation cross-reference
+# command: python3 nostr-io/evidence/hash-refs.py > nostr-io/evidence/06-hash-refs.txt
+# (a) declared set: 36 statement identity/identities begin a line in the module's two specs
+#     plus 41 in the module's ancestors (a code token may cite itself, an ancestor, or core)
+# (b) code set: 26 distinct token(s) across nostr-io/ts/**/*.ts (node_modules excluded)
+#     test-support exemption (R3): ['ts/harness.ts', 'ts/*.test.ts']
+
+(c) resolution — every code token against the declared set
+     [fulfilment] a plain citation; [provenance] carries the `(provenance)` marker (R2);
+     [mixed] some occurrences marked and some not — a token's class must be consistent.
+  resolved    #010fc8  [provenance]  <- (module: nostr-io/nostr-io.md)  **No store is injected here and none is kept** (M5, the seam half): the module works with zero endpoints that are not relays, and a fetch that stores nothing is a legitimate composition of it.
+  resolved    #06200d  [fulfilment]  <- (module: nostr-io/nostr-io.md)  Relay policy is **injected, never owned**: the relay set arrives as the host's answer to "which relays" on every call, and the module may not add, prefer, reorder or blacklist a relay beyond the wire's own reconnect behaviour.
+  resolved    #10b5ac  [fulfilment]  <- (module: nostr-io/nostr-io.md)  query` resolves with what arrived and whether the wire's boundary was reached, and it never invents completeness: telling a cold answer from a complete one is the composition's fact, so the wire reports EOSE and stops there.
+  resolved    #15aa73  [fulfilment]  <- (module: nostr-io/nostr-io.md)  subscribe` owns the subscription's lifetime and its cancellation is idempotent: `unsubscribe()` twice closes once and throws nothing, and a relay failure inside a live subscription is reported on the error channel rather than ending the caller's stream silently.
+  resolved    #3820a9  [fulfilment]  <- (module: nostr-io/nostr-io.md)  The module holds no global state and no singleton pool: two composers may run two seams in one process without sharing a socket, a subscription or a relay set.
+  resolved    #3a5789  [provenance]  <- (module: nostr-io/nostr-io.md)  **Local-first is not this module's rule**: the seam's reads are wire reads, and the ordering a caller observes is the composition's normative sequence, named here so that no capability of one path is ever stated as "supported" for the seam.
+  resolved    #499675  [fulfilment]  <- (module: nostr-io/nostr-io.md)  The pool files a relay under its own normalised URL and the seam compares relay identities under **exactly one** normalising predicate `[1:1]`: health, the publish-ack match and a read's per-relay boundary count all use it, and it is never applied to the spelling the host gave.
+  resolved    #5ecac1  [fulfilment]  <- (module: nostr-io/nostr-io.md)  The reasons and outcomes a caller can observe are named (N4): a refusal is a value from a stated reason vocabulary, never a bare string and never a silent absence.
+  resolved    #6a5bcb  [provenance]  <- (module: nostr-io/nostr-io.md)  **The reason vocabulary's exact members** are this run's proposal and the maintainer's to rename in one word: they are the wire's conditions (`auth-required`, `rate-limited`, `timeout`, `not-found`, `closed`, `rejected`) and the composition surfaces them through its own operations by importing this contract, not by citing this document.
+  resolved    #751387  [fulfilment]  <- (module: nostr-io/nostr-io.md)  A single read retains at most a **stated ceiling** of 10 000 events, declared as an inspectable value rather than a number buried in a branch: at the ceiling the seam stops reading and reports `eose: false`, because the wire's boundary was not reached.
+  resolved    #752c02  [fulfilment]  <- (module: nostr-io/nostr-io.md)  The wire count reports whether the relay's own index was approximate, because NIP-45 permits approximation and the contract requires the flag rather than the accuracy.
+  resolved    #7a5f39  [fulfilment]  <- (module: nostr-io/nostr-io.md)  A relay's own refusal text becomes the contract's reason in **exactly one** pure place `[1:1]`, mapping a NIP-01 prefixed `CLOSED` to the vocabulary without a socket.
+  resolved    #7bf6f6  [fulfilment]  <- (module: nostr-io/nostr-io.md)  The evidence obligations are stated as criteria: the store-free case, the second-backend case (the same conformance suite over another pool adapter), and one case per path this spec covers, asserted by call order on a recording pool rather than by timing.
+  resolved    #8899c6  [fulfilment]  <- (module: nostr-io/nostr-io.md)  The declared exceptions are N1 rxjs' `Observable` as the adopted stream shape, N2 raw `nostr-tools` events as the event view, N3 the reason vocabulary as a string union rather than one error class per condition, and N4 relay URLs as plain strings rather than a library's relay handle.
+  resolved    #ae22a4  [fulfilment]  <- (module: nostr-io/nostr-io.md)  publish` reports **one ack per targeted relay**, each carrying that relay's own answer, and performs no local write: an event no relay accepted is not stored by this module, because what gets stored is the composition's policy and not the seam's.
+  resolved    #b14090  [fulfilment]  <- (module: nostr-io/nostr-io.md)  nostr-io` owns the wire's **policy** and the contract around it — the relay set read from the host on every call, the read's ceiling and the caller's wall-clock deadline, and the outcomes a caller observes — while the wire's **mechanism** (retries, reconnection, connection health, the transport timeouts) is the injected transport's, so `connect` reports the pool's observed state and dials nothing.
+  resolved    #ba52de  [fulfilment]  <- (module: nostr-io/nostr-io.md)  The remaining library type is a **named exception** (N1): the first implementation's stream type is rxjs' `Observable`, which is the vendor contract's own shape, and a second implementation types its stream as its own equivalent and adapts at its boundary.
+  resolved    #bbfa5c  [fulfilment]  <- (module: nostr-io/nostr-io.md)  What is genuinely ours is named in one line, because a module whose library already owns the seam would be a wrapper: the specified contract, the store-free guarantee, the reason and outcome mapping, the injected relay policy, and the multi-backend proof — the vendor supplies sockets, not the contract.
+  resolved    #c6ae9c  [fulfilment]  <- (module: nostr-io/nostr-io.md)  The adopted shape is what makes the seam library-free as well as store-free: the vendor documents that same contract as satisfied by its own `RelayPool`, by `nostr-tools`' `SimplePool`, by NDK and by nostrify's `NPool` (`research/05-applesauce-precedent.md`:473-479), so a TypeScript host is wired the standard way and a Go relay host is not excluded.
+  resolved    #d433f1  [fulfilment]  <- (module: nostr-io/nostr-io.md)  The **verb-set asymmetry** is named rather than papered over: the transport side has NIP-45 `COUNT` and the store side has no count at all, so a wire count and a local count are two different operations, and this module carries the wire one while the composition's own `count` is the local one.
+  resolved    #d700bc  [fulfilment]  <- (module: nostr-io/nostr-io.md)  The store-free guarantee is a **structural** claim proved by construction, not by a grep: a hand-written pool records every call and throws from every method, and the case requires the wire operations to resolve against a second, non-throwing pool **and** requires the recording pool's call count to be zero when the seam is asked for nothing.
+  resolved    #d7b4db  [fulfilment]  <- (module: nostr-io/nostr-io.md)  NIP-01's filters are one-or-many and the pool always takes many: a single filter becomes a one-element array, an array a shallow copy in the host's order, and anything that is not an object is a typed refusal rather than a silent coercion.
+  resolved    #e5dbdb  [fulfilment]  <- (module: nostr-io/nostr-io.md)  deadlineMs` is a **wall-clock budget on the whole read** rather than an inactivity gap: a wire that keeps emitting without ever reaching EOSE is stopped by it just the same, and a read it stops reports `eose: false` like any other read that did not reach the boundary.
+  resolved    #fa487d  [fulfilment]  <- (module: nostr-io/nostr-io.md)  The pool request shape is adopted rather than invented: `NostrRequest = (relays, filters) => events` and `UpstreamPool = NostrRequest | { request: NostrRequest }`, read from the vendor's published contract at `applesauce-loaders` 6.2.0 `dist/types.d.ts:4-11` and surveyed at `runs/2026-09-29-event-store/research/05-applesauce-precedent.md`:126-128.
+  resolved    #fbfce3  [fulfilment]  <- (module: nostr-io/nostr-io.md)  The contract's nouns are NIP-01's — relay, filter, event, ack and reason — and its operations are connect, query, subscribe, publish, count and close, each returning a promise or a stream rather than an implementation's own handle.
+  resolved    #fdc27c  [fulfilment]  <- (module: nostr-io/nostr-io.md)  The wire count over a target set is the **sum** of the targeted relays' own indices, reported `approximate` whenever any relay answered approximately, and a relay that refuses or times out its own `COUNT` refuses the whole operation rather than being silently omitted from the sum.
+
+(d) uncovered declarations — a top-level export carrying no token
+  exempt      nostr-io/ts/harness.ts  KEY  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  PUBKEY  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  EventFields  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  signedEvent  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  PoolCall  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  FakePool  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  fakePool  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  WorkingPoolSpec  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  WorkingPool  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  workingPool  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  RecordingPolicy  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  recordingPolicy  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  refusingPolicy  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  LiveSubscription  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  liveSubscription  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  collect  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  tick  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  quiet  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  thenEose  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  Settled  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  within  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  rejection  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  isRefusal  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  RELAY_A  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  RELAY_B  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  WireScript  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  wireScript  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  WireBackend  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  scriptedSubscription  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  perRelayCount  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  countRecord  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  handBackend  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  vendorBackend  (R3 test-support)
+  exempt      nostr-io/ts/harness.ts  vendorPoolHolding  (R3 test-support)
+  31 of 65 declaration(s) carry a token (34 exempt by R3)
+
+(e) uncovered files — under nostr-io/, named by neither spec
+  0 file(s) named by no statement
+
+(f) summary
+  code tokens: 26   resolved: 26   unresolved: 0
+  citations: 23 fulfilment, 3 provenance, 0 mixed (R2)
+  declarations: 65   uncovered: 0   exempt: 34
+  files: 0 uncovered
+  RESULT: every code token resolves to a declared statement.

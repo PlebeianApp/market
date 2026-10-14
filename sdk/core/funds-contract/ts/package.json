@@ -1,0 +1,19 @@
+{
+	"name": "@plebeian-apps/funds-contract",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "The payment contract's port types: the vocabulary the rail wrappers share. Types only; the module performs nothing.",
+	"exports": {
+		".": "./index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit",
+		"evidence": "bash ../evidence/run.sh"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.2.0",
+		"typescript": "^5.6.0"
+	}
+}

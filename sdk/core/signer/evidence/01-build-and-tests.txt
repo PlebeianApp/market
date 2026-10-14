@@ -1,0 +1,658 @@
+
+===== signer module — build, test and isolation evidence =====
+# command:   bash signer/evidence/run.sh
+# generated: 2026-09-29T08:44:34Z   host: Linux 6.12.94+deb13-amd64 x86_64
+# bun:       1.4.2
+# module:    /home/admin_maxime/projects/market-retrofit/signer
+# note: every line below is a command's own output, not a summary of it.
+
+===== 0 · the mounted specimen is untouched =====
+$ git -C market rev-parse HEAD
+56258b55e2805895c941eb879f7a3ea1308bc0c5
+exit: 0
+$ git -C market status --short
+exit: 0   (empty output above = the mount is untouched)
+
+===== 1 · the module's own dependency store =====
+$ cd signer/ts && bun install
+bun install v1.4.2 (744846f84)
+
+Checked 37 installs across 36 packages (no changes) [211.00ms]
+exit: 0
+
+$ ls -l signer/ts/{package.json,tsconfig.json,bun.lock}
+-rw-r--r-- 1 admin_maxime admin_maxime 8176 Sep 28 21:59 /home/admin_maxime/projects/market-retrofit/signer/ts/bun.lock
+-rw-rw-r-- 1 admin_maxime admin_maxime  604 Sep 28 21:59 /home/admin_maxime/projects/market-retrofit/signer/ts/package.json
+-rw-rw-r-- 1 admin_maxime admin_maxime  465 Sep 28 21:59 /home/admin_maxime/projects/market-retrofit/signer/ts/tsconfig.json
+exit: 0
+
+# the versions this module actually resolved (applesauce-signers is pinned exactly, per the ADR):
+/home/admin_maxime/projects/market-retrofit/signer/ts node_modules (37 installed)
+├── @types/bun@1.4.2
+├── applesauce-signers@6.2.2
+├── nostr-tools@2.25.2
+├── rxjs@7.8.2
+└── typescript@5.9.3
+exit: 0
+
+===== 2 · bun test — the module's own runner over its own roots =====
+$ cd signer/ts && bun test
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) I1 — an unknown remote signer is never bound without the expected secret > a bare "ack" never binds an unknown remote signer [72.47ms]
+(pass) I1 — an unknown remote signer is never bound without the expected secret > a wrong connect secret never binds the remote signer [24.83ms]
+(pass) I1 — an unknown remote signer is never bound without the expected secret > a validated connect-secret echo binds the remote signer [19.79ms]
+(pass) I1 — an unknown remote signer is never bound without the expected secret > the bunker flow binds only a remote that accepts the connect secret [83.85ms]
+(pass) I2 — the remote-signer pubkey stays separate from the authenticated identity > identity resolution is via getPublicKey() only — never clientPubkey (structural oracle) [1.19ms]
+(pass) I2 — the remote-signer pubkey stays separate from the authenticated identity > behaviourally: a bound session resolves the user, not the client key nor the remote [55.59ms]
+(pass) I3 — a returned event must verify and belong to the resolved identity > signEvent fails closed when the returned event pubkey differs from the authenticated identity [6.34ms]
+(pass) I3 — a returned event must verify and belong to the resolved identity > signEvent fails closed when the signature does not verify, even if the pubkey matches [3.34ms]
+(pass) I3 — a returned event must verify and belong to the resolved identity > signEvent returns the event when identity and signature agree [4.17ms]
+(pass) I3 — a returned event must verify and belong to the resolved identity > the NIP-46 lane arrives at the same assertion: a remote signing as another key fails closed [73.17ms]
+(pass) I3 — a returned event must verify and belong to the resolved identity > the session-less construct-on-key entry is identity-bound too [4.94ms]
+(pass) I4 — the encryption capability is optional and fails closed > leaves nip04 and nip44 absent when the extension lacks them (fail closed) [1.06ms]
+(pass) I4 — the encryption capability is optional and fails closed > an extension that exposes only half of nip44 offers no nip44 at all (fail closed) [0.30ms]
+(pass) I4 — the encryption capability is optional and fails closed > present ⇔ the signer provides it, and the composer allow-list may only narrow [2.73ms]
+(pass) I4 — the encryption capability is optional and fails closed > the capability handed out through currentSigner() obeys the same allow-list (I4) [3.48ms]
+(pass) I4 — the encryption capability is optional and fails closed > a locked NIP-49 signer rejects fast instead of hanging on a never-resolved unlock [1224.31ms]
+(pass) I5 — the persisted record is encrypted, migrated, or intentionally re-logged-in > a legacy plaintext record is discarded by default — never silently retained [1.70ms]
+(pass) I5 — the persisted record is encrypted, migrated, or intentionally re-logged-in > a legacy plaintext record migrates when configured, deleting the plaintext [370.38ms]
+(pass) I5 — the persisted record is encrypted, migrated, or intentionally re-logged-in > a session with no vault record and no attach point has no identity to read [0.41ms]
+(pass) I5 — the persisted record is encrypted, migrated, or intentionally re-logged-in > the token a session persists is the encrypted session token, never the key [42.09ms]
+
+nip46.test.ts:
+(pass) the injected environment > a NIP-46 lane without an injected transport refuses instead of reaching for a host default [1.06ms]
+(pass) the injected environment > a NIP-46 lane without an injected clock refuses instead of reaching for a global timer [0.52ms]
+(pass) the injected environment > rehydrate resolves the user identity through the real connect RPC, not the client key [53.68ms]
+(pass) the deadline wrapper > a silent remote rejects with a lane-specific error instead of hanging forever [0.68ms]
+(pass) the deadline wrapper > resolves the operation result when it settles before the deadline [0.19ms]
+(pass) the deadline wrapper > does not swallow an underlying rejection [0.16ms]
+(pass) the session over the lanes > an unapproved client-initiated lane ends in a deadline refusal, and the session fails closed [7.31ms]
+(pass) the session over the lanes > a failed lane releases what it opened — no REQ subscription survives the failure [6.22ms]
+(pass) the session over the lanes > login-logout-login closes the REQ subscription so it does not stack [144.06ms]
+(pass) the session over the lanes > signEvent reuses the resolved identity — one get_public_key RPC in total [108.87ms]
+
+nostr-connect-uri.test.ts:
+(pass) buildNostrConnectUri > emits the secret via the spec "secret" query param (not legacy "token") [0.14ms]
+(pass) buildNostrConnectUri > round-trips through the library parser: same client, relay, and secret [0.12ms]
+(pass) buildNostrConnectUri > fails closed (throws) when the secret is missing — a legacy token-only URI is rejected [0.24ms]
+(pass) buildNostrConnectUri > includes metadata when supplied [0.10ms]
+(pass) isMatchingConnectSecret > accepts a connect request whose params echo the expected "secret" [0.08ms]
+(pass) isMatchingConnectSecret > rejects a legacy "token"-only connect request (no secret param) [0.04ms]
+(pass) isMatchingConnectSecret > rejects a wrong secret and missing params [0.04ms]
+
+session.test.ts:
+(pass) the session state machine > a fresh session is idle: no identity, no capabilities, no record [0.22ms]
+(pass) the session state machine > the nsec lane reaches active and exposes the resolved identity [0.59ms]
+(pass) the session state machine > endSession returns to idle and clears the identity [0.64ms]
+(pass) the session state machine > a failing lane lands in failed with a typed reason, never half-attached [0.39ms]
+(pass) the session state machine > a second session is refused while one is attached, and the first is untouched [0.65ms]
+(pass) the session state machine > a session never becomes active without a resolved identity [0.42ms]
+(pass) the session state machine > attach and detach signal the composer, and detach runs the teardown once [0.55ms]
+(pass) the session state machine > observeSession stops emitting after unsubscribe [0.47ms]
+(pass) the session state machine > ending a session while a lane is in flight keeps it ended [40.37ms]
+(pass) the reads a surface decides with > availableLanes reports exactly what the host injected [0.33ms]
+(pass) the reads a surface decides with > a lane the host cannot offer refuses instead of degrading [0.22ms]
+(pass) the reads a surface decides with > signerKind pins the lane: another lane is refused, not quietly started [0.66ms]
+(pass) the reads a surface decides with > the client-initiated lane refuses without a sink for the connect URI [0.28ms]
+(pass) the reads a surface decides with > currentSigner is the attached capability, and refuses when there is none [0.26ms]
+(pass) the reads a surface decides with > the client-initiated lane refuses before the URI reaches the sink when the clock is missing [0.34ms]
+(pass) the reads a surface decides with > a port that fails is a typed refusal on both of its paths — never the host’s own error [58.20ms]
+(pass) the reads a surface decides with > the composer allow-list gates the capability set — absent means refuse, never synthesise [7.79ms]
+(pass) the lanes > the extension lane is enabled by an injected extension, and nip04/nip44 follow it [4.05ms]
+(pass) the lanes > the nostrconnect lane: connecting → awaiting_user (the URI reaches the sink) → active [36.25ms]
+(pass) the lanes > the bunker lane reaches active against a remote signer that answers [38.44ms]
+(pass) the persisted record (I5, through the session) > a bunker session is written encrypted, and endSession clears it [56.97ms]
+(pass) the persisted record (I5, through the session) > without a passphrase source nothing is persisted — there is no plaintext fallback [34.58ms]
+(pass) the persisted record (I5, through the session) > a vaulted record parks in locked without a passphrase, and the machine refuses a new lane there [2.51ms]
+(pass) the persisted record (I5, through the session) > a locked session unlocks with the passphrase and is active against the real remote [33.58ms]
+(pass) the persisted record (I5, through the session) > restoring with nothing stored fails closed [0.45ms]
+(pass) the persisted record (I5, through the session) > restoring without storage or crypto refuses rather than guessing [0.20ms]
+(pass) the persisted record (I5, through the session) > a lane that fails while resolving its identity writes no persisted record [28.05ms]
+(pass) the persisted record (I5, through the session) > endSession clears the persisted record from `locked`, and from `failed` [4.26ms]
+(pass) the persisted record (I5, through the session) > a locked session is not moved by detachSigner — endSession is the way out [1.17ms]
+(pass) the persisted record (I5, through the session) > the two vault failures a login surface must distinguish arrive as different codes [2.34ms]
+(pass) createSignerFromKey — the session-less entry > builds a usable, identity-bound signer with no session, storage or UI [4.08ms]
+(pass) createSignerFromKey — the session-less entry > also accepts an nsec1… key [2.00ms]
+
+vault.test.ts:
+(pass) session vault wrap/unwrap > round-trip: a wrapped session token decrypts to the identical string [1.85ms]
+(pass) session vault wrap/unwrap > wrong passphrase fails closed with SessionVaultError [1.74ms]
+(pass) session vault wrap/unwrap > tampered ciphertext fails closed (AES-GCM auth tag) [1.68ms]
+(pass) session vault wrap/unwrap > default PBKDF2 iterations meet the >= 600k floor [0.05ms]
+(pass) session vault wrap/unwrap > iteration-downgrade tamper: lowered iterations are rejected even with the CORRECT passphrase [109.45ms]
+(pass) session vault wrap/unwrap > iterations below the default floor are rejected without an explicit seam [1.18ms]
+(pass) session vault wrap/unwrap > non-integer iterations are rejected as a tampered envelope [0.97ms]
+(pass) session vault wrap/unwrap > each fail-closed rule carries its own code — a caller never matches on text [110.48ms]
+(pass) session vault wrap/unwrap > the minIterations seam lets a low-cost envelope unlock when the floor is lowered explicitly [1.74ms]
+(pass) session vault wrap/unwrap > each wrap uses a fresh random salt, iv and ciphertext [1.58ms]
+(pass) session vault wrap/unwrap > the envelope travels through the storage port as JSON, not as plaintext [1.89ms]
+(pass) vaulted session storage lifecycle > hasVaultedSession reflects save and clear [0.96ms]
+(pass) vaulted session storage lifecycle > unlockVault reads the stored envelope when none is passed [1.75ms]
+(pass) vaulted session storage lifecycle > a corrupt stored envelope fails closed [0.18ms]
+(pass) vaulted session storage lifecycle > an unsupported envelope shape fails closed [0.20ms]
+(pass) vaulted session storage lifecycle > a mutation-time ownership guard can cancel a completed wrap before vault storage [0.92ms]
+(pass) legacy plaintext migration (read ONCE policy) > happy path: the legacy session migrates to the encrypted vault and the plaintext keys are deleted [2.04ms]
+(pass) legacy plaintext migration (read ONCE policy) > refusal path: discardLegacySession deletes the plaintext and writes NO vault [0.22ms]
+(pass) legacy plaintext migration (read ONCE policy) > migration without a legacy session fails closed [0.15ms]
+(pass) legacy plaintext migration (read ONCE policy) > an unparseable legacy bunker URL fails closed and migrates nothing [0.21ms]
+(pass) legacy plaintext migration (read ONCE policy) > a mutation-time ownership guard cancels migration before the vault write or the plaintext deletion [1.06ms]
+
+ 90 pass
+ 0 fail
+ 268 expect() calls
+Ran 90 tests across 5 files. [3.22s]
+exit: 0
+
+===== 3 · tsc --noEmit — the module's own compiler configuration =====
+$ cd signer/ts && bun run typecheck   # tsc --noEmit -p tsconfig.json
+$ tsc --noEmit
+exit: 0
+
+===== 4 · the isolation checks — facts about the module's own source =====
+# scope A = every TypeScript file in signer/ts (implementation, harness, tests).
+# scope B = the implementation only: capability.ts errors.ts index.ts lanes.ts nip46.ts session.ts types.ts uri.ts vault.ts
+# the two scope lists are themselves checked, so neither can silently drift:
+
+$ ls signer/ts/*.ts   (implementation ∪ tests ∪ harness = this listing)
+/home/admin_maxime/projects/market-retrofit/signer/ts/capability.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/errors.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/harness.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/index.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/invariants.test.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/lanes.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/nip46.test.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/nip46.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/nostr-connect-uri.test.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/session.test.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/session.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/types.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/uri.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/vault.test.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/vault.ts
+
+$ the implementation list, echoed:
+/home/admin_maxime/projects/market-retrofit/signer/ts/capability.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/errors.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/index.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/lanes.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/nip46.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/session.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/types.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/uri.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/vault.ts
+
+$ comm -13 <(impl | xargs -n1 basename | sort) <(ls signer/ts/*.ts | xargs -n1 basename | sort)
+harness.ts
+invariants.test.ts
+nip46.test.ts
+nostr-connect-uri.test.ts
+session.test.ts
+vault.test.ts
+# ^ what is left at the top level once the implementation is named: the tests and the
+#   harness (the host-side implementation of the ports). Expected: harness.ts and the *.test.ts files.
+
+--- scope A: no host storage, no browser global, no framework, no host alias
+$ grep -rnE "localStorage" <all signer/ts/*.ts>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "sessionStorage" <all signer/ts/*.ts>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "indexedDB" <all signer/ts/*.ts>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "window\." <all signer/ts/*.ts>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "document\." <all signer/ts/*.ts>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "navigator\." <all signer/ts/*.ts>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "\bReact\b" <all signer/ts/*.ts>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "@nostr-dev-kit" <all signer/ts/*.ts>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "@/" <all signer/ts/*.ts>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+--- scope B: the implementation reads no host global of any kind
+$ grep -rnE "globalThis" <the implementation (capability.ts errors.ts index.ts lanes.ts nip46.ts session.ts types.ts uri.ts vault.ts)>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "(^|[^.[:alnum:]_])crypto\.(subtle|getRandomValues|randomUUID)" <the implementation (capability.ts errors.ts index.ts lanes.ts nip46.ts session.ts types.ts uri.ts vault.ts)>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "(^|[^.[:alnum:]_])fetch\(" <the implementation (capability.ts errors.ts index.ts lanes.ts nip46.ts session.ts types.ts uri.ts vault.ts)>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "(^|[^.[:alnum:]_])WebSocket\b" <the implementation (capability.ts errors.ts index.ts lanes.ts nip46.ts session.ts types.ts uri.ts vault.ts)>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "(^|[^.[:alnum:]_])process\." <the implementation (capability.ts errors.ts index.ts lanes.ts nip46.ts session.ts types.ts uri.ts vault.ts)>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "@/" <the implementation (capability.ts errors.ts index.ts lanes.ts nip46.ts session.ts types.ts uri.ts vault.ts)>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "\.\./" <the implementation (capability.ts errors.ts index.ts lanes.ts nip46.ts session.ts types.ts uri.ts vault.ts)>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "bun:" <the implementation (capability.ts errors.ts index.ts lanes.ts nip46.ts session.ts types.ts uri.ts vault.ts)>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "Date\.now" <the implementation (capability.ts errors.ts index.ts lanes.ts nip46.ts session.ts types.ts uri.ts vault.ts)>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+$ grep -rnE "Math\.random" <the implementation (capability.ts errors.ts index.ts lanes.ts nip46.ts session.ts types.ts uri.ts vault.ts)>
+（no lines）
+hits: 0   (expected: 0 lines)
+
+--- scope B: the deadlines come from the injected clock, and from nowhere else
+$ grep -rnE "(^|[^.[:alnum:]_])(set|clear)Timeout\(" <the implementation (capability.ts errors.ts index.ts lanes.ts nip46.ts session.ts types.ts uri.ts vault.ts)>
+/home/admin_maxime/projects/market-retrofit/signer/ts/types.ts:153:	setTimeout(handler: () => void, ms: number): unknown
+/home/admin_maxime/projects/market-retrofit/signer/ts/types.ts:154:	clearTimeout(handle: unknown): void
+hits: 2   (expected: 2 lines, both the ClockPort members in types.ts)
+
+$ grep -rn "clock\.\(set\|clear\)Timeout" <implementation>
+/home/admin_maxime/projects/market-retrofit/signer/ts/nip46.ts:100:		const handle = clock.setTimeout(() => reject(new Nip46RpcTimeoutError(lane, timeoutMs)), timeoutMs)
+/home/admin_maxime/projects/market-retrofit/signer/ts/nip46.ts:107:				clock.clearTimeout(handle)
+/home/admin_maxime/projects/market-retrofit/signer/ts/session.ts:300:					return clock.setTimeout(handler, ms)
+/home/admin_maxime/projects/market-retrofit/signer/ts/session.ts:307:					clock.clearTimeout(handle)
+# ^ the only timer call sites in the module, both on the injected ClockPort.
+
+--- the one runner-bound import, and where it lives
+$ grep -rn "bun:test" <tests>
+/home/admin_maxime/projects/market-retrofit/signer/ts/invariants.test.ts:14:import { describe, expect, test } from 'bun:test'
+/home/admin_maxime/projects/market-retrofit/signer/ts/nip46.test.ts:11:import { describe, expect, test } from 'bun:test'
+/home/admin_maxime/projects/market-retrofit/signer/ts/nostr-connect-uri.test.ts:7:import { describe, expect, test } from 'bun:test'
+/home/admin_maxime/projects/market-retrofit/signer/ts/session.test.ts:9:import { describe, expect, test } from 'bun:test'
+/home/admin_maxime/projects/market-retrofit/signer/ts/vault.test.ts:11:import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+hits: 5   (expected: one per test file — 5)
+#   bun test collects nothing else, so the runner API is the single host-bound name in the
+#   module and it appears in test files only. A Rust or Flutter implementation uses its own runner.
+
+--- every import specifier in the module, sorted and unique
+'./capability'
+'./errors'
+'./harness'
+'./index'
+'./lanes'
+'./nip46'
+'./session'
+'./types'
+'./uri'
+'./vault'
+'applesauce-signers'
+'applesauce-signers/helpers'
+'bun:test'
+'nostr-tools'
+'nostr-tools/pure'
+'nostr-tools/utils'
+'rxjs'
+# ^ the allow-list is exactly: ./<module file>, applesauce-signers[/*], nostr-tools[/…], rxjs,
+#   bun:test. Anything else would be a host import, and host imports are what this module does not have.
+
+$ grep -rnE "require\(|mock\.module\(" <all signer/ts/*.ts>
+# ^ expected: no lines. There is no CommonJS require and no module mock anywhere in the module.
+
+===== 5 · the contract: index.ts against the module MD's front-matter =====
+$ grep -nE "^export" signer/ts/index.ts
+16:export { createSignerFromKey, createSignerSession } from './session'
+17:export type { SignerSession } from './session'
+20:export { hasNip04, hasNip44, isSignerCapability } from './capability'
+23:export {
+42:export type { SessionVaultCode } from './errors'
+46:export {
+55:export type {
+
+# the names index.ts exports, parsed out of its export blocks, split value / type,
+# plus the members of the SignerSession interface in session.ts:
+$ <the entry point value exports>
+AuthSinkRequiredError
+CapabilityUnavailableError
+ClockRequiredError
+IdentityMismatchError
+IdentityUnresolvedError
+InvalidTransitionError
+LEGACY_CONNECT_URL_KEY
+LEGACY_LOCAL_SIGNER_KEY
+LaneUnavailableError
+MIN_PBKDF2_ITERATIONS
+Nip46RpcTimeoutError
+NoActiveSessionError
+PBKDF2_ITERATIONS
+PasswordSignerLockedError
+PortError
+SessionAttachedError
+SessionVaultError
+SignerError
+TransportRequiredError
+VAULT_STORAGE_KEY
+createSignerFromKey
+createSignerSession
+hasNip04
+hasNip44
+isSignerCapability
+$ <the entry point type exports>
+ClockPort
+CryptoPort
+EncryptionScheme
+EventTemplate
+ExtensionTransportPort
+LaneAvailability
+LaneKind
+NipEncryptionCapability
+NostrEvent
+PassphraseSource
+RestoreInput
+RpcTimeoutSettings
+SessionAtRestSettings
+SessionObserver
+SessionRecordKind
+SessionSnapshot
+SessionStartInput
+SessionState
+SessionVaultCode
+SignedEvent
+SignerCapabilities
+SignerCapability
+SignerDeps
+SignerPorts
+SignerSession
+SignerSettings
+StoragePort
+TransportPort
+$ <the SignerSession interface members>
+attachSigner
+availableLanes
+capabilities
+currentSigner
+decrypt
+detachSigner
+encrypt
+endSession
+getPublicKey
+observeSession
+restoreSession
+signEvent
+startSession
+
+# and at runtime — the same module, loaded, with its types erased:
+AuthSinkRequiredError
+CapabilityUnavailableError
+ClockRequiredError
+IdentityMismatchError
+IdentityUnresolvedError
+InvalidTransitionError
+LEGACY_CONNECT_URL_KEY
+LEGACY_LOCAL_SIGNER_KEY
+LaneUnavailableError
+MIN_PBKDF2_ITERATIONS
+Nip46RpcTimeoutError
+NoActiveSessionError
+PBKDF2_ITERATIONS
+PasswordSignerLockedError
+PortError
+SessionAttachedError
+SessionVaultError
+SignerError
+TransportRequiredError
+VAULT_STORAGE_KEY
+createSignerFromKey
+createSignerSession
+hasNip04
+hasNip44
+isSignerCapability
+# ^ values only: a type has no runtime form, which is why the parsed list (above) is the one diffed.
+
+$ the front-matter lists, extracted the same way:
+AuthSinkRequiredError
+CapabilityUnavailableError
+ClockRequiredError
+IdentityMismatchError
+IdentityUnresolvedError
+InvalidTransitionError
+LEGACY_CONNECT_URL_KEY
+LEGACY_LOCAL_SIGNER_KEY
+LaneUnavailableError
+MIN_PBKDF2_ITERATIONS
+Nip46RpcTimeoutError
+NoActiveSessionError
+PBKDF2_ITERATIONS
+PasswordSignerLockedError
+PortError
+SessionAttachedError
+SessionVaultError
+SignerError
+TransportRequiredError
+VAULT_STORAGE_KEY
+createSignerFromKey
+createSignerSession
+hasNip04
+hasNip44
+isSignerCapability
+
+$ diff <contract.exports in the MD> <the entry point value exports>
+exit: 0   (0 = the declared exports and the delivered ones are the same list)
+
+$ diff <contract.types in the MD> <the entry point type exports>
+exit: 0   (0 = the same list)
+
+$ diff <contract.operations in the MD> <the members of the SignerSession interface>
+exit: 0   (0 = the contract names exactly the operations the interface carries)
+
+# nothing in the check routine reads these three keys (the string "contract" does not occur in
+# it), so these three diffs ARE the check. They are facts about the tree: a delivered export that
+# the spec does not declare, or a declared operation that does not exist, breaks one of them.
+
+===== 5b · the state machine's transition table: one list, in three places =====
+# The spec states the allowed transitions in #489ae8, §7 draws them, and session.ts
+# enforces ALLOWED. Two of the three had drifted apart; this extracts all three and
+# diffs them, so a table that contains neither what the code does nor what the code
+# must do cannot come back.
+$ python3 signer/evidence/transitions.py
+signer.md · #489ae8 (the list) 23 edge(s)
+    active         → closing
+    active         → failed
+    awaiting_user  → active
+    awaiting_user  → closing
+    awaiting_user  → failed
+    closing        → idle
+    connecting     → active
+    connecting     → awaiting_user
+    connecting     → closing
+    connecting     → failed
+    failed         → closing
+    failed         → idle
+    idle           → active
+    idle           → closing
+    idle           → connecting
+    idle           → locked
+    idle           → restoring
+    locked         → closing
+    locked         → failed
+    locked         → restoring
+    restoring      → active
+    restoring      → closing
+    restoring      → failed
+
+signer.md · §7 (the diagram) 23 edge(s)
+    active         → closing
+    active         → failed
+    awaiting_user  → active
+    awaiting_user  → closing
+    awaiting_user  → failed
+    closing        → idle
+    connecting     → active
+    connecting     → awaiting_user
+    connecting     → closing
+    connecting     → failed
+    failed         → closing
+    failed         → idle
+    idle           → active
+    idle           → closing
+    idle           → connecting
+    idle           → locked
+    idle           → restoring
+    locked         → closing
+    locked         → failed
+    locked         → restoring
+    restoring      → active
+    restoring      → closing
+    restoring      → failed
+
+session.ts · ALLOWED (enforced) 23 edge(s)
+    active         → closing
+    active         → failed
+    awaiting_user  → active
+    awaiting_user  → closing
+    awaiting_user  → failed
+    closing        → idle
+    connecting     → active
+    connecting     → awaiting_user
+    connecting     → closing
+    connecting     → failed
+    failed         → closing
+    failed         → idle
+    idle           → active
+    idle           → closing
+    idle           → connecting
+    idle           → locked
+    idle           → restoring
+    locked         → closing
+    locked         → failed
+    locked         → restoring
+    restoring      → active
+    restoring      → closing
+    restoring      → failed
+
+diff  <signer.md · §7 (the diagram)> vs <signer.md · #489ae8 (the list)>
+    exit: 0   (0 = the same set of edges)
+
+diff  <session.ts · ALLOWED (enforced)> vs <signer.md · #489ae8 (the list)>
+    exit: 0   (0 = the same set of edges)
+
+transitions: 23 edge(s), 0 disagreement(s)
+exit: 0   (0 = the three lists carry the same edges)
+
+===== 6 · the file inventory and the test-case count =====
+$ the inventory in signer/ts/ts.md, extracted mechanically, against the directory itself:
+$ diff <listed in ts.md> <found in signer/ts>
+exit: 0   (0 = the inventory and the directory hold the same names)
+
+$ find signer -type f ! -path "*/node_modules/*" | sort
+/home/admin_maxime/projects/market-retrofit/signer/evidence/01-build-and-tests.txt
+/home/admin_maxime/projects/market-retrofit/signer/evidence/02-invariant-falsification.txt
+/home/admin_maxime/projects/market-retrofit/signer/evidence/03-a2-probe-after.txt
+/home/admin_maxime/projects/market-retrofit/signer/evidence/__pycache__/falsify.cpython-313.pyc
+/home/admin_maxime/projects/market-retrofit/signer/evidence/falsify.py
+/home/admin_maxime/projects/market-retrofit/signer/evidence/probe.sh
+/home/admin_maxime/projects/market-retrofit/signer/evidence/record.md
+/home/admin_maxime/projects/market-retrofit/signer/evidence/run.sh
+/home/admin_maxime/projects/market-retrofit/signer/evidence/transitions.py
+/home/admin_maxime/projects/market-retrofit/signer/signer.md
+/home/admin_maxime/projects/market-retrofit/signer/ts/bun.lock
+/home/admin_maxime/projects/market-retrofit/signer/ts/capability.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/errors.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/harness.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/index.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/invariants.test.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/lanes.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/nip46.test.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/nip46.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/nostr-connect-uri.test.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/package.json
+/home/admin_maxime/projects/market-retrofit/signer/ts/session.test.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/session.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/ts.md
+/home/admin_maxime/projects/market-retrofit/signer/ts/tsconfig.json
+/home/admin_maxime/projects/market-retrofit/signer/ts/types.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/uri.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/vault.test.ts
+/home/admin_maxime/projects/market-retrofit/signer/ts/vault.ts
+/home/admin_maxime/projects/market-retrofit/signer/visuals/architecture/README.md
+/home/admin_maxime/projects/market-retrofit/signer/visuals/architecture/signer-architecture.html
+/home/admin_maxime/projects/market-retrofit/signer/visuals/architecture/signer-architecture.svg
+/home/admin_maxime/projects/market-retrofit/signer/visuals/bpmn/.gitignore
+/home/admin_maxime/projects/market-retrofit/signer/visuals/bpmn/README.md
+/home/admin_maxime/projects/market-retrofit/signer/visuals/bpmn/build.py
+/home/admin_maxime/projects/market-retrofit/signer/visuals/bpmn/vendor/bpmn-codes.css
+/home/admin_maxime/projects/market-retrofit/signer/visuals/bpmn/vendor/bpmn-js.css
+/home/admin_maxime/projects/market-retrofit/signer/visuals/bpmn/vendor/bpmn-navigated-viewer.production.min.js
+/home/admin_maxime/projects/market-retrofit/signer/visuals/bpmn/vendor/bpmn.woff2
+/home/admin_maxime/projects/market-retrofit/signer/visuals/bpmn/vendor/diagram-js.css
+/home/admin_maxime/projects/market-retrofit/signer/visuals/bpmn/verify.cjs
+/home/admin_maxime/projects/market-retrofit/signer/visuals/webui/README.md
+/home/admin_maxime/projects/market-retrofit/signer/visuals/webui/index.html
+/home/admin_maxime/projects/market-retrofit/signer/visuals/webui/vendor/ScrollTrigger.min.js
+/home/admin_maxime/projects/market-retrofit/signer/visuals/webui/vendor/gsap.min.js
+
+$ wc -l <every module file>
+   168 /home/admin_maxime/projects/market-retrofit/signer/ts/capability.ts
+   180 /home/admin_maxime/projects/market-retrofit/signer/ts/errors.ts
+   241 /home/admin_maxime/projects/market-retrofit/signer/ts/harness.ts
+    82 /home/admin_maxime/projects/market-retrofit/signer/ts/index.ts
+   428 /home/admin_maxime/projects/market-retrofit/signer/ts/invariants.test.ts
+   138 /home/admin_maxime/projects/market-retrofit/signer/ts/lanes.ts
+   209 /home/admin_maxime/projects/market-retrofit/signer/ts/nip46.test.ts
+   381 /home/admin_maxime/projects/market-retrofit/signer/ts/nip46.ts
+    66 /home/admin_maxime/projects/market-retrofit/signer/ts/nostr-connect-uri.test.ts
+   661 /home/admin_maxime/projects/market-retrofit/signer/ts/session.test.ts
+   693 /home/admin_maxime/projects/market-retrofit/signer/ts/session.ts
+   303 /home/admin_maxime/projects/market-retrofit/signer/ts/types.ts
+    63 /home/admin_maxime/projects/market-retrofit/signer/ts/uri.ts
+   303 /home/admin_maxime/projects/market-retrofit/signer/ts/vault.test.ts
+   296 /home/admin_maxime/projects/market-retrofit/signer/ts/vault.ts
+   551 /home/admin_maxime/projects/market-retrofit/signer/signer.md
+    69 /home/admin_maxime/projects/market-retrofit/signer/ts/ts.md
+   238 /home/admin_maxime/projects/market-retrofit/signer/evidence/record.md
+  5070 total
+
+$ grep -cE "^[[:space:]]*(test|it)\(" signer/ts/*.test.ts   (file:count)
+/home/admin_maxime/projects/market-retrofit/signer/ts/invariants.test.ts:20
+/home/admin_maxime/projects/market-retrofit/signer/ts/nip46.test.ts:10
+/home/admin_maxime/projects/market-retrofit/signer/ts/nostr-connect-uri.test.ts:7
+/home/admin_maxime/projects/market-retrofit/signer/ts/session.test.ts:32
+/home/admin_maxime/projects/market-retrofit/signer/ts/vault.test.ts:21
+
+$ ... summed:
+90 test cases in total
+
+$ the test-case count bun reports, for the same measure:
+ 90 pass
+ 0 fail
+
+===== 7 · the check routine (from the assembly root) =====
+$ cd <assembly> && python3 core/checks/check.py --root .
+modules 6 · statements 191 · distinct identities 191
+0 hard finding(s), 0 note(s)
+exit: 0
+
+===== 8 · the count that must conserve: the specimen's suite is unchanged =====
+$ find market/contextvm market/src/queries/__tests__ market/src/lib/__tests__ -type f -name "*.test.ts" ! -name "*.integration.test.ts" | wc -l
+92
+# 92 at the pin, and the module changed nothing there.
