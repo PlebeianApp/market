@@ -7,7 +7,7 @@ import type {
 	ParsedValidatorVerdictEvent,
 } from './events'
 import type { AuctionSettlementStatus, Nut7ProofState } from './constants'
-import type { NostrEventLike } from '../../core/nostr/eventLike'
+import type { Event } from '../../core/nostr-io/ts'
 import type { MintKeys, MintKeyset } from '@cashu/cashu-ts'
 import { validatePathRelease, validateSettlementCompleteness, fetchMintKeysets } from './validation'
 import { computeValidatedBids, type TrustedCollateralLeg } from './bidValidation'
@@ -66,7 +66,7 @@ export interface GetSettlementDescriptorInput {
 	verdicts: ParsedValidatorVerdictEvent[]
 	settlements: ParsedSettlementEvent[]
 	pathReleases: ParsedPathReleaseEvent[]
-	claimOrders: NostrEventLike[]
+	claimOrders: Event[]
 	currentUserPubkey: string | undefined
 	myTopBidEvent: ParsedBidEvent | null
 	hasBidderRecord: boolean
@@ -271,7 +271,7 @@ function readAuctionEventTag(tags: string[][]): string | undefined {
  * 8. Claim order pubkey is a valid 64-char hex (inherent in Nostr)
  */
 function validateClaimOrder(
-	order: NostrEventLike,
+	order: Event,
 	auction: ParsedAuctionEvent,
 	validatedSettlements: ParsedSettlementEvent[],
 	auctionRootEventId: string,

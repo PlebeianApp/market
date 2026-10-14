@@ -1,6 +1,7 @@
 import type { EventTemplate } from 'nostr-tools/pure'
 import { isAddressableKind } from 'nostr-tools/kinds'
-import { getEventAddress, type NostrEventLike } from '../../core/nostr/eventLike'
+import type { Event } from '../../core/nostr-io/ts'
+import { createReplaceableAddress, getReplaceableIdentifier } from '../../core/event-store/ts'
 
 /** NIP-22 comment kind. */
 export const COMMENT_KIND = 1111
@@ -12,7 +13,7 @@ export interface CommentParentInput {
 
 export interface CreateCommentTemplateInput {
 	content: string
-	targetEvent: NostrEventLike
+	targetEvent: Event
 	parentComment?: CommentParentInput
 	createdAt: number
 }
@@ -28,7 +29,7 @@ export function createCommentTemplate(input: CreateCommentTemplateInput): EventT
 
 	// === ROOT SCOPE (uppercase) ===
 	if (isAddressableKind(targetEvent.kind)) {
-		tags.push(['A', getEventAddress(targetEvent)])
+		tags.push(['A', createReplaceableAddress(targetEvent.kind, targetEvent.pubkey, getReplaceableIdentifier(targetEvent))])
 	} else {
 		tags.push(['E', targetEvent.id])
 	}
@@ -42,7 +43,7 @@ export function createCommentTemplate(input: CreateCommentTemplateInput): EventT
 		tags.push(['k', String(COMMENT_KIND)])
 		tags.push(['p', parentComment.authorPubkey])
 	} else if (isAddressableKind(targetEvent.kind)) {
-		tags.push(['a', getEventAddress(targetEvent)])
+		tags.push(['a', createReplaceableAddress(targetEvent.kind, targetEvent.pubkey, getReplaceableIdentifier(targetEvent))])
 		tags.push(['k', targetEvent.kind.toString()])
 		tags.push(['p', targetEvent.pubkey])
 	} else {
