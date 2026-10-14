@@ -107,6 +107,13 @@ describe('multi-seller order planning', () => {
 		})
 
 		expect(outcome).toMatchObject({ status: 'partial', orderIds: ['order-a'], failedOrderId: 'order-b' })
+		expect(outcome).toMatchObject({
+			failure: {
+				code: 'workflow_failed',
+				workflow: 'seller_order_publish',
+				phase: 'private_delivery',
+			},
+		})
 		if (outcome.status === 'partial') expect(outcome.progress[0]?.publishedEventIds).toEqual(['event-a'])
 	})
 

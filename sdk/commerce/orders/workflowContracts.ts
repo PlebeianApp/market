@@ -1,5 +1,6 @@
 import type { OrderWorkflowStatus, ShippingWorkflowStatus } from './orderEvents'
 import type { CheckoutDeliveryRequirements } from '../checkout/deliveryRequirements'
+import { createWorkflowError, type WorkflowError } from '../../core/errors'
 
 export interface SellerOrderPlanInput {
 	sellerPubkey: string
@@ -103,6 +104,7 @@ export type SellerOrderPublishOutcome =
 			failedOrderId?: string
 			failedPhase: SellerOrderPublishPhase
 			error: string
+			failure: WorkflowError
 			paymentRequestFailures: number
 			unresolvedShippingRefs?: string[]
 	  }
@@ -114,6 +116,7 @@ export type SellerOrderPublishOutcome =
 			failedOrderId?: string
 			failedPhase: SellerOrderPublishPhase
 			error: string
+			failure: WorkflowError
 			paymentRequestFailures: number
 			unresolvedShippingRefs?: string[]
 	  }
@@ -144,6 +147,7 @@ export function createSellerOrderPublishFailure(input: {
 	failedOrderId?: string
 	failedPhase: SellerOrderPublishPhase
 	error: string
+	cause?: unknown
 	paymentRequestFailures: number
 	unresolvedShippingRefs?: string[]
 }): SellerOrderPublishOutcome {
@@ -157,6 +161,12 @@ export function createSellerOrderPublishFailure(input: {
 		failedOrderId: input.failedOrderId,
 		failedPhase: input.failedPhase,
 		error: input.error,
+		failure: createWorkflowError({
+			workflow: 'seller_order_publish',
+			phase: input.failedPhase,
+			status: 'failed',
+			error: input.cause ?? input.error,
+		}),
 		paymentRequestFailures: input.paymentRequestFailures,
 		...('unresolvedShippingRefs' in input ? { unresolvedShippingRefs: input.unresolvedShippingRefs } : {}),
 	}
@@ -193,6 +203,7 @@ export async function executeSellerOrderPublishWorkflow<PrivateDelivery, OrderMa
 			failedOrderId: active?.orderId,
 			failedPhase: phase,
 			error: error instanceof Error ? error.message : 'Order workflow failed',
+			cause: error,
 			paymentRequestFailures,
 		})
 

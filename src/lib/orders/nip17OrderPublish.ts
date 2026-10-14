@@ -7,7 +7,9 @@ import {
 	type PublishNip17GiftWrapResult,
 } from '@sdk/commerce/messaging'
 import type { Nip17DmRelayListEvent, Nip17RelayTargetsResult } from '@sdk/core'
+import type { NostrRelayPort } from '@sdk/core'
 import { toEncryptingSigner } from '../nostr/ndkEncryptingSigner'
+import { createNostrRelayPort } from '../sdkAdapters'
 
 export type { Nip17OrderPublishTarget, PublishNip17GiftWrapParams, PublishNip17GiftWrapResult } from '@sdk/commerce/messaging'
 
@@ -17,7 +19,8 @@ export type PublishNip17OrderMessageParams = {
 	recipientPubkey: string
 	recipientRelayEvents: Nip17DmRelayListEvent[]
 	senderRelayEvents: Nip17DmRelayListEvent[]
-	publishGiftWrap: (params: PublishNip17GiftWrapParams) => Promise<PublishNip17GiftWrapResult>
+	publishGiftWrap?: (params: PublishNip17GiftWrapParams) => Promise<PublishNip17GiftWrapResult>
+	relayPort?: NostrRelayPort<import('nostr-tools').Event>
 }
 
 export type PublishNip17OrderMessageResult = {
@@ -28,8 +31,13 @@ export type PublishNip17OrderMessageResult = {
 }
 
 export async function publishNip17OrderMessage(params: PublishNip17OrderMessageParams): Promise<PublishNip17OrderMessageResult> {
-	return sdkPublishNip17OrderMessage({
-		...params,
+	const common = {
+		rumor: params.rumor,
 		signer: toEncryptingSigner(params.signer),
-	})
+		recipientPubkey: params.recipientPubkey,
+		recipientRelayEvents: params.recipientRelayEvents,
+		senderRelayEvents: params.senderRelayEvents,
+	}
+	if (params.publishGiftWrap) return sdkPublishNip17OrderMessage({ ...common, publishGiftWrap: params.publishGiftWrap })
+	return sdkPublishNip17OrderMessage({ ...common, relay: params.relayPort ?? createNostrRelayPort() })
 }

@@ -869,6 +869,7 @@ export async function publishOrderWorkflowWithDependencies(params: PublishOrderD
 				failedOrderId: planning.failedOrderId,
 				failedPhase: phase,
 				error: 'Delivery requirements could not be verified for one or more selected shipping options',
+				cause: new Error('Delivery requirements could not be verified for one or more selected shipping options'),
 				paymentRequestFailures,
 				unresolvedShippingRefs: planning.unresolvedShippingRefs,
 			})
@@ -1066,6 +1067,7 @@ export async function publishOrderWorkflowWithDependencies(params: PublishOrderD
 			failedOrderId: activeOrderId,
 			failedPhase: phase,
 			error: error instanceof Error ? error.message : 'Order workflow failed',
+			cause: error,
 			paymentRequestFailures,
 		})
 	}

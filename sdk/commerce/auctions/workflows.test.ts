@@ -16,6 +16,7 @@ import {
 	prepareAuctionListing,
 	prepareAuctionWinnerClaim,
 	retryAuctionBidPublish,
+	retryAuctionBidPublishFromStorage,
 	type AuctionBidPlan,
 	type AuctionSettlementPlan,
 } from './workflows'
@@ -326,6 +327,41 @@ describe('auction lifecycle SDK workflows', () => {
 		expect(calls.at(-1)).toBe('retry:bid-id')
 	})
 
+	test('retries a cached bid through Core storage and persists the same signed event', async () => {
+		type StoredRetry = { event: string; signedEvent?: { id: string }; recovery: string }
+		const values = new Map<string, string>([['bid-retry', JSON.stringify({ event: 'exact-event', recovery: 'refund-record' })]])
+		const published: string[] = []
+		let signCalls = 0
+		const outcome = await retryAuctionBidPublishFromStorage({
+			storage: {
+				get: async (key) => values.get(key) ?? null,
+				set: async (key, value) => {
+					values.set(key, value)
+				},
+				remove: async (key) => {
+					values.delete(key)
+				},
+			},
+			key: 'bid-retry',
+			decode: (serialized) => JSON.parse(serialized) as StoredRetry,
+			encode: (stored) => JSON.stringify(stored),
+			selectRetryRecord: (stored) => ({ event: stored.event, signedEvent: stored.signedEvent, recovery: stored.recovery }),
+			updateSignedEvent: (stored, signedEvent, recovery) => ({ ...stored, signedEvent, recovery }),
+			sign: async () => {
+				signCalls++
+				return { id: 'same-event-id' }
+			},
+			publish: async (event) => {
+				published.push(event.id)
+			},
+		})
+
+		expect(outcome).toEqual({ status: 'published', eventId: 'same-event-id' })
+		expect(signCalls).toBe(1)
+		expect(published).toEqual(['same-event-id'])
+		expect(JSON.parse(values.get('bid-retry') ?? '{}')).toMatchObject({ signedEvent: { id: 'same-event-id' } })
+	})
+
 	test('settlement preflights the full chain, resumes confirmed redeemed legs, then publishes', async () => {
 		const plan: AuctionSettlementPlan<string> = planAuctionSettlement({
 			status: 'settled',
@@ -389,7 +425,7 @@ describe('auction lifecycle SDK workflows', () => {
 			publish: async () => ({ eventId: 'unused' }),
 		})
 
-		expect(outcome).toEqual({ status: 'failed', phase: 'redemption', error: 'mint unavailable', redeemedBidIds: ['bid-1'] })
+		expect(outcome).toMatchObject({ status: 'failed', phase: 'redemption', error: 'mint unavailable', redeemedBidIds: ['bid-1'] })
 	})
 
 	test('reports uncertain settlement publication after all legs redeemed', async () => {

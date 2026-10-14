@@ -1,5 +1,8 @@
 import type { EventTemplate } from 'nostr-tools/pure'
 import type { Signer, SignedEventLike } from '../../core/ports/signer'
+import type { WalletRecoveryPort } from '../../core/ports/wallet'
+import type { KeyValueStoragePort } from '../../core/ports/storage'
+import { createWorkflowError, type WorkflowError } from '../../core/errors'
 import { AUCTION_BID_KIND, AUCTION_KIND, AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS, AUCTION_SETTLEMENT_KIND } from './constants'
 import type { ParsedAuctionEvent } from './events'
 import {
@@ -66,8 +69,8 @@ export interface AuctionListingPublishPorts<SignedEvent extends SignedEventLike>
 
 export type AuctionListingPublishOutcome =
 	| { status: 'published'; eventId: string }
-	| { status: 'failed'; phase: 'mint_preflight' | 'event_preparation' | 'sign'; error: string }
-	| { status: 'publish_uncertain'; eventId: string; error: string }
+	| { status: 'failed'; phase: 'mint_preflight' | 'event_preparation' | 'sign'; error: string; failure: WorkflowError }
+	| { status: 'publish_uncertain'; eventId: string; error: string; failure: WorkflowError }
 
 /** Execute listing publication in validation → mint preflight → sign → publish order. */
 export async function executeAuctionListingWorkflow<SignedEvent extends SignedEventLike>(
@@ -86,24 +89,44 @@ export async function executeAuctionListingTemplateWorkflow<SignedEvent extends 
 	try {
 		await ports.assertMintsSupported(mints)
 	} catch (error) {
-		return { status: 'failed', phase: 'mint_preflight', error: errorMessage(error) }
+		return {
+			status: 'failed',
+			phase: 'mint_preflight',
+			error: errorMessage(error),
+			failure: createWorkflowError({ workflow: 'auction_listing', phase: 'mint_preflight', error }),
+		}
 	}
 	let template: EventTemplate
 	try {
 		template = await prepareTemplate()
 	} catch (error) {
-		return { status: 'failed', phase: 'event_preparation', error: errorMessage(error) }
+		return {
+			status: 'failed',
+			phase: 'event_preparation',
+			error: errorMessage(error),
+			failure: createWorkflowError({ workflow: 'auction_listing', phase: 'event_preparation', error }),
+		}
 	}
 	let event: SignedEvent
 	try {
 		event = await ports.sign(template)
 	} catch (error) {
-		return { status: 'failed', phase: 'sign', error: errorMessage(error) }
+		return {
+			status: 'failed',
+			phase: 'sign',
+			error: errorMessage(error),
+			failure: createWorkflowError({ workflow: 'auction_listing', phase: 'sign', error }),
+		}
 	}
 	try {
 		await ports.publish(event)
 	} catch (error) {
-		return { status: 'publish_uncertain', eventId: event.id, error: errorMessage(error) }
+		return {
+			status: 'publish_uncertain',
+			eventId: event.id,
+			error: errorMessage(error),
+			failure: createWorkflowError({ workflow: 'auction_listing', phase: 'publish', status: 'uncertain', error }),
+		}
 	}
 	return { status: 'published', eventId: event.id }
 }
@@ -190,20 +213,26 @@ export function planAuctionBidReclaimTiming(input: { tokenId: string; readyAt: n
 export type AuctionBidReclaimOutcome =
 	| { status: 'reclaimed'; tokenId: string }
 	| { status: 'waiting'; tokenId: string; readyAt: number; waitSeconds: number }
-	| { status: 'failed'; tokenId: string; error: string; cause: unknown }
+	| { status: 'failed'; tokenId: string; error: string; cause: unknown; failure: WorkflowError }
 
 /** Coordinate a reclaim attempt using only the host's authoritative readiness and wallet adapter. */
 export async function executeAuctionBidReclaimWorkflow(
 	input: { tokenId: string; readyAt: number; now: number },
-	ports: { reclaim(tokenId: string): Promise<void> },
+	ports: WalletRecoveryPort<{ tokenId: string }>,
 ): Promise<AuctionBidReclaimOutcome> {
 	const timing = planAuctionBidReclaimTiming(input)
 	if (timing.status === 'waiting') return timing
 	try {
-		await ports.reclaim(timing.tokenId)
+		await ports.reclaim({ tokenId: timing.tokenId })
 		return { status: 'reclaimed', tokenId: timing.tokenId }
 	} catch (cause) {
-		return { status: 'failed', tokenId: timing.tokenId, error: errorMessage(cause), cause }
+		return {
+			status: 'failed',
+			tokenId: timing.tokenId,
+			error: errorMessage(cause),
+			cause,
+			failure: createWorkflowError({ workflow: 'auction_bid_reclaim', phase: 'wallet_reclaim', error: cause }),
+		}
 	}
 }
 
@@ -338,10 +367,10 @@ export interface AuctionBidWorkflowPorts<Intent, Funding, Event, SignedEvent ext
 }
 
 export type AuctionBidWorkflowOutcome<SignedEvent> =
-	| { status: 'failed_before_lock'; error: string; cause?: unknown }
-	| { status: 'lock_outcome_uncertain'; error: string; cause?: unknown }
-	| { status: 'locked_recovery_only'; error: string; cause?: unknown }
-	| { status: 'publish_retryable'; event?: unknown; signedEvent?: SignedEvent; error: string; cause?: unknown }
+	| { status: 'failed_before_lock'; error: string; cause?: unknown; failure: WorkflowError }
+	| { status: 'lock_outcome_uncertain'; error: string; cause?: unknown; failure: WorkflowError }
+	| { status: 'locked_recovery_only'; error: string; cause?: unknown; failure: WorkflowError }
+	| { status: 'publish_retryable'; event?: unknown; signedEvent?: SignedEvent; error: string; cause?: unknown; failure: WorkflowError }
 	| { status: 'published'; eventId: string }
 
 /**
@@ -358,14 +387,24 @@ export async function executeFundedAuctionBidWorkflow<Intent, Funding, Event, Si
 		prepared = await ports.prepareLock(plan)
 		await ports.persistPreLockRecovery(prepared.preLockRecovery)
 	} catch (error) {
-		return { status: 'failed_before_lock', error: errorMessage(error), cause: error }
+		return {
+			status: 'failed_before_lock',
+			error: errorMessage(error),
+			cause: error,
+			failure: createWorkflowError({ workflow: 'auction_funded_bid', phase: 'pre_lock_recovery', error }),
+		}
 	}
 
 	let lock: AuctionLockOutcome<Funding>
 	try {
 		lock = await ports.lockFunds(prepared.intent, plan)
 	} catch (error) {
-		return { status: 'lock_outcome_uncertain', error: errorMessage(error), cause: error }
+		return {
+			status: 'lock_outcome_uncertain',
+			error: errorMessage(error),
+			cause: error,
+			failure: createWorkflowError({ workflow: 'auction_funded_bid', phase: 'lock', status: 'uncertain', error }),
+		}
 	}
 	if (lock.status === 'not_locked') {
 		try {
@@ -373,10 +412,22 @@ export async function executeFundedAuctionBidWorkflow<Intent, Funding, Event, Si
 		} catch {
 			// A stale recovery record is safer than losing a potentially needed key.
 		}
-		return { status: 'failed_before_lock', error: lock.error, ...(lock.cause !== undefined ? { cause: lock.cause } : {}) }
+		const cause = lock.cause ?? new Error(lock.error)
+		return {
+			status: 'failed_before_lock',
+			error: lock.error,
+			cause,
+			failure: createWorkflowError({ workflow: 'auction_funded_bid', phase: 'lock', error: cause }),
+		}
 	}
 	if (lock.status === 'unknown') {
-		return { status: 'lock_outcome_uncertain', error: lock.error, ...(lock.cause !== undefined ? { cause: lock.cause } : {}) }
+		const cause = lock.cause ?? new Error(lock.error)
+		return {
+			status: 'lock_outcome_uncertain',
+			error: lock.error,
+			cause,
+			failure: createWorkflowError({ workflow: 'auction_funded_bid', phase: 'lock', status: 'uncertain', error: cause }),
+		}
 	}
 
 	let publication: AuctionBidPublication<Event, Recovery>
@@ -389,7 +440,12 @@ export async function executeFundedAuctionBidWorkflow<Intent, Funding, Event, Si
 			// The complete funded record is durable; retaining a stale pre-lock record is harmless.
 		}
 	} catch (error) {
-		return { status: 'locked_recovery_only', error: errorMessage(error), cause: error }
+		return {
+			status: 'locked_recovery_only',
+			error: errorMessage(error),
+			cause: error,
+			failure: createWorkflowError({ workflow: 'auction_funded_bid', phase: 'persist_funded_publication', error }),
+		}
 	}
 
 	let signed: SignedEvent
@@ -397,12 +453,25 @@ export async function executeFundedAuctionBidWorkflow<Intent, Funding, Event, Si
 		signed = await ports.sign(publication.event)
 		await ports.persistSignedEvent(signed, publication.recovery)
 	} catch (error) {
-		return { status: 'publish_retryable', event: publication.event, error: errorMessage(error), cause: error }
+		return {
+			status: 'publish_retryable',
+			event: publication.event,
+			error: errorMessage(error),
+			cause: error,
+			failure: createWorkflowError({ workflow: 'auction_funded_bid', phase: 'sign_or_persist_signed', error }),
+		}
 	}
 	try {
 		await ports.publish(signed)
 	} catch (error) {
-		return { status: 'publish_retryable', event: publication.event, signedEvent: signed, error: errorMessage(error), cause: error }
+		return {
+			status: 'publish_retryable',
+			event: publication.event,
+			signedEvent: signed,
+			error: errorMessage(error),
+			cause: error,
+			failure: createWorkflowError({ workflow: 'auction_funded_bid', phase: 'publish', status: 'uncertain', error }),
+		}
 	}
 	return { status: 'published', eventId: signed.id }
 }
@@ -415,13 +484,18 @@ export async function retryAuctionBidPublish<Event, SignedEvent extends SignedEv
 	publish(event: SignedEvent): Promise<void>
 }): Promise<
 	| { status: 'published'; eventId: string }
-	| { status: 'retryable'; event?: Event; signedEvent?: SignedEvent; error: string; cause?: unknown }
+	| { status: 'retryable'; event?: Event; signedEvent?: SignedEvent; error: string; cause?: unknown; failure: WorkflowError }
 > {
 	let saved: { event: Event; signedEvent?: SignedEvent; recovery: Recovery }
 	try {
 		saved = await ports.load()
 	} catch (error) {
-		return { status: 'retryable', error: errorMessage(error), cause: error }
+		return {
+			status: 'retryable',
+			error: errorMessage(error),
+			cause: error,
+			failure: createWorkflowError({ workflow: 'auction_bid_retry', phase: 'load', error }),
+		}
 	}
 	let signed = saved.signedEvent
 	try {
@@ -429,11 +503,67 @@ export async function retryAuctionBidPublish<Event, SignedEvent extends SignedEv
 			signed = await ports.sign(saved.event)
 			await ports.persistSignedEvent(signed, saved.recovery)
 		}
-		await ports.publish(signed)
-		return { status: 'published', eventId: signed.id }
 	} catch (error) {
-		return { status: 'retryable', event: saved.event, ...(signed ? { signedEvent: signed } : {}), error: errorMessage(error), cause: error }
+		return {
+			status: 'retryable',
+			event: saved.event,
+			...(signed ? { signedEvent: signed } : {}),
+			error: errorMessage(error),
+			cause: error,
+			failure: createWorkflowError({ workflow: 'auction_bid_retry', phase: 'sign_or_persist', error }),
+		}
 	}
+	try {
+		await ports.publish(signed!)
+		return { status: 'published', eventId: signed!.id }
+	} catch (error) {
+		return {
+			status: 'retryable',
+			event: saved.event,
+			signedEvent: signed,
+			error: errorMessage(error),
+			cause: error,
+			failure: createWorkflowError({ workflow: 'auction_bid_retry', phase: 'publish', status: 'uncertain', error }),
+		}
+	}
+}
+
+/** Retry a cached bid through the Core storage port without introducing a lock-capable operation. */
+export async function retryAuctionBidPublishFromStorage<Stored, Event, SignedEvent extends SignedEventLike, Recovery>(params: {
+	storage: KeyValueStoragePort
+	key: string
+	decode(serialized: string): Stored
+	encode(value: Stored): string
+	selectRetryRecord(value: Stored): { event: Event; signedEvent?: SignedEvent; recovery: Recovery } | undefined
+	updateSignedEvent(value: Stored, event: SignedEvent, recovery: Recovery): Stored
+	sign(event: Event): Promise<SignedEvent>
+	publish(event: SignedEvent): Promise<void>
+}): Promise<
+	| { status: 'published'; eventId: string }
+	| { status: 'retryable'; event?: Event; signedEvent?: SignedEvent; error: string; cause?: unknown; failure: WorkflowError }
+> {
+	let stored: Stored | undefined
+	const readStored = async (): Promise<Stored> => {
+		const serialized = await params.storage.get(params.key)
+		if (serialized === null) throw new Error(`No stored auction bid retry data for ${params.key}`)
+		return params.decode(serialized)
+	}
+
+	return retryAuctionBidPublish({
+		load: async () => {
+			stored = await readStored()
+			const record = params.selectRetryRecord(stored)
+			if (!record) throw new Error(`No retryable auction bid in stored data for ${params.key}`)
+			return record
+		},
+		sign: params.sign,
+		persistSignedEvent: async (event, recovery) => {
+			stored ??= await readStored()
+			stored = params.updateSignedEvent(stored, event, recovery)
+			await params.storage.set(params.key, params.encode(stored))
+		},
+		publish: params.publish,
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -472,6 +602,7 @@ export type AuctionPathReleaseWorkflowOutcome =
 			failedBidEventId: string
 			failedPhase: 'sign' | 'record_release'
 			error: string
+			failure: WorkflowError
 			pathReleaseEventId?: string
 			legsReleased: number
 			cumulativeBidAmount: number
@@ -482,6 +613,7 @@ export type AuctionPathReleaseWorkflowOutcome =
 			failedBidEventId: string
 			attemptedEventId: string
 			error: string
+			failure: WorkflowError
 			pathReleaseEventId?: string
 			legsReleased: number
 			cumulativeBidAmount: number
@@ -517,6 +649,7 @@ export async function executeAuctionPathReleaseWorkflow<Template, SignedEvent ex
 		failedBidEventId: bidEventId,
 		failedPhase,
 		error: errorMessage(error),
+		failure: createWorkflowError({ workflow: 'auction_path_release', phase: failedPhase, error }),
 		...(pathReleaseEventId ? { pathReleaseEventId } : {}),
 		legsReleased,
 		cumulativeBidAmount,
@@ -542,6 +675,12 @@ export async function executeAuctionPathReleaseWorkflow<Template, SignedEvent ex
 				failedBidEventId: leg.bidEventId,
 				attemptedEventId: signed.id,
 				error: errorMessage(error),
+				failure: createWorkflowError({
+					workflow: 'auction_path_release',
+					phase: 'publish',
+					status: 'uncertain',
+					error,
+				}),
 				...(pathReleaseEventId ? { pathReleaseEventId } : {}),
 				legsReleased,
 				cumulativeBidAmount,
@@ -652,8 +791,14 @@ export interface AuctionSettlementWorkflowPorts<RedemptionData> {
 
 export type AuctionSettlementWorkflowOutcome =
 	| { status: 'published'; eventId: string; redeemedBidIds: string[] }
-	| { status: 'failed'; phase: 'preflight' | 'leg_inspection' | 'redemption' | 'reserve_guard'; error: string; redeemedBidIds: string[] }
-	| { status: 'publish_uncertain'; template: EventTemplate; redeemedBidIds: string[]; error: string }
+	| {
+			status: 'failed'
+			phase: 'preflight' | 'leg_inspection' | 'redemption' | 'reserve_guard'
+			error: string
+			failure: WorkflowError
+			redeemedBidIds: string[]
+	  }
+	| { status: 'publish_uncertain'; template: EventTemplate; redeemedBidIds: string[]; error: string; failure: WorkflowError }
 
 /** Validate all legs first, resume already-redeemed legs, then publish the terminal settlement event. */
 export async function executeAuctionSettlementWorkflow<RedemptionData>(
@@ -665,7 +810,13 @@ export async function executeAuctionSettlementWorkflow<RedemptionData>(
 		try {
 			await ports.assertReserveNotMet(plan.auction, plan.reason)
 		} catch (error) {
-			return { status: 'failed', phase: 'reserve_guard', error: errorMessage(error), redeemedBidIds: [] }
+			return {
+				status: 'failed',
+				phase: 'reserve_guard',
+				error: errorMessage(error),
+				failure: createWorkflowError({ workflow: 'auction_settlement', phase: 'reserve_guard', error }),
+				redeemedBidIds: [],
+			}
 		}
 		const template: EventTemplate = {
 			kind: AUCTION_SETTLEMENT_KIND,
@@ -686,7 +837,13 @@ export async function executeAuctionSettlementWorkflow<RedemptionData>(
 	try {
 		await ports.preflightAll(plan.legs)
 	} catch (error) {
-		return { status: 'failed', phase: 'preflight', error: errorMessage(error), redeemedBidIds: [] }
+		return {
+			status: 'failed',
+			phase: 'preflight',
+			error: errorMessage(error),
+			failure: createWorkflowError({ workflow: 'auction_settlement', phase: 'preflight', error }),
+			redeemedBidIds: [],
+		}
 	}
 
 	const redeemedBidIds: string[] = []
@@ -695,7 +852,13 @@ export async function executeAuctionSettlementWorkflow<RedemptionData>(
 		try {
 			state = await ports.inspectLeg(leg)
 		} catch (error) {
-			return { status: 'failed', phase: 'leg_inspection', error: errorMessage(error), redeemedBidIds }
+			return {
+				status: 'failed',
+				phase: 'leg_inspection',
+				error: errorMessage(error),
+				failure: createWorkflowError({ workflow: 'auction_settlement', phase: 'leg_inspection', error }),
+				redeemedBidIds,
+			}
 		}
 		if (state === 'redeemed_by_seller') {
 			redeemedBidIds.push(leg.bidEventId)
@@ -709,6 +872,11 @@ export async function executeAuctionSettlementWorkflow<RedemptionData>(
 					state === 'partial'
 						? `Settlement leg ${leg.bidEventId} is partially spent`
 						: `Settlement leg ${leg.bidEventId} state is unconfirmed`,
+				failure: createWorkflowError({
+					workflow: 'auction_settlement',
+					phase: 'leg_inspection',
+					error: state === 'partial' ? 'Settlement leg is partially spent' : 'Settlement leg state is unconfirmed',
+				}),
 				redeemedBidIds,
 			}
 		}
@@ -716,7 +884,13 @@ export async function executeAuctionSettlementWorkflow<RedemptionData>(
 			await ports.redeemLeg(leg)
 			redeemedBidIds.push(leg.bidEventId)
 		} catch (error) {
-			return { status: 'failed', phase: 'redemption', error: errorMessage(error), redeemedBidIds }
+			return {
+				status: 'failed',
+				phase: 'redemption',
+				error: errorMessage(error),
+				failure: createWorkflowError({ workflow: 'auction_settlement', phase: 'redemption', error }),
+				redeemedBidIds,
+			}
 		}
 	}
 
@@ -748,7 +922,13 @@ async function publishSettlementTemplate<RedemptionData>(
 		const result = await ports.publish(template)
 		return { status: 'published', eventId: result.eventId, redeemedBidIds }
 	} catch (error) {
-		return { status: 'publish_uncertain', template, redeemedBidIds, error: errorMessage(error) }
+		return {
+			status: 'publish_uncertain',
+			template,
+			redeemedBidIds,
+			error: errorMessage(error),
+			failure: createWorkflowError({ workflow: 'auction_settlement', phase: 'publish', status: 'uncertain', error }),
+		}
 	}
 }
 
@@ -844,13 +1024,19 @@ export interface AuctionWinnerClaimPorts<PrivateDelivery, SignedMarker extends S
 
 export type AuctionWinnerClaimOutcome =
 	| { status: 'published'; markerEventId: string; privateDeliveryEventId: string }
-	| { status: 'failed'; phase: 'private_delivery_prepare' | 'private_delivery_publish'; error: string }
+	| {
+			status: 'failed'
+			phase: 'private_delivery_prepare' | 'private_delivery_publish'
+			error: string
+			failure: WorkflowError
+	  }
 	| {
 			status: 'partial'
 			phase: 'marker_sign' | 'marker_publish'
 			privateDeliveryEventId: string
 			acceptedRelays: string[]
 			error: string
+			failure: WorkflowError
 	  }
 
 /** Publish encrypted delivery details first, then the public marker only to relays that accepted the private wrap. */
@@ -863,14 +1049,24 @@ export async function executeAuctionWinnerClaimWorkflow<PrivateDelivery, SignedM
 	try {
 		delivery = await ports.createPrivateDelivery(prepared.payload)
 	} catch (error) {
-		return { status: 'failed', phase: 'private_delivery_prepare', error: errorMessage(error) }
+		return {
+			status: 'failed',
+			phase: 'private_delivery_prepare',
+			error: errorMessage(error),
+			failure: createWorkflowError({ workflow: 'auction_winner_claim', phase: 'private_delivery_prepare', error }),
+		}
 	}
 	let privateResult: { eventId: string; acceptedRelays: string[] }
 	try {
 		privateResult = await ports.publishPrivateDelivery(delivery)
 		if (privateResult.acceptedRelays.length === 0) throw new Error('No private relay accepted the encrypted claim')
 	} catch (error) {
-		return { status: 'failed', phase: 'private_delivery_publish', error: errorMessage(error) }
+		return {
+			status: 'failed',
+			phase: 'private_delivery_publish',
+			error: errorMessage(error),
+			failure: createWorkflowError({ workflow: 'auction_winner_claim', phase: 'private_delivery_publish', error }),
+		}
 	}
 	let marker: SignedMarker
 	try {
@@ -882,6 +1078,7 @@ export async function executeAuctionWinnerClaimWorkflow<PrivateDelivery, SignedM
 			privateDeliveryEventId: privateResult.eventId,
 			acceptedRelays: [...privateResult.acceptedRelays],
 			error: errorMessage(error),
+			failure: createWorkflowError({ workflow: 'auction_winner_claim', phase: 'marker_sign', error }),
 		}
 	}
 	try {
@@ -893,6 +1090,7 @@ export async function executeAuctionWinnerClaimWorkflow<PrivateDelivery, SignedM
 			privateDeliveryEventId: privateResult.eventId,
 			acceptedRelays: [...privateResult.acceptedRelays],
 			error: errorMessage(error),
+			failure: createWorkflowError({ workflow: 'auction_winner_claim', phase: 'marker_publish', status: 'uncertain', error }),
 		}
 	}
 	return { status: 'published', markerEventId: marker.id, privateDeliveryEventId: privateResult.eventId }

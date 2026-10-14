@@ -1,4 +1,5 @@
 import type { Event } from 'nostr-tools'
+import { createWorkflowError, type WorkflowError } from '../../core/errors'
 import { createNip17GiftWrapsWithSigner } from '../../core/nostr/nip17'
 import { NIP59_GIFT_WRAP_KIND } from '../../core/nostr/nip59'
 import {
@@ -49,6 +50,7 @@ export type Nip17OrderTransportError = {
 		| 'relay_targets_not_ready'
 		| 'gift_wrap_creation_failed'
 		| 'gift_wrap_publish_failed'
+	failure: WorkflowError
 }
 
 export type Nip17OrderTransportGiftWrapAttempt = {
@@ -126,19 +128,19 @@ export async function publishNip17OrderTransportMessage(
 	try {
 		assertOrderMessageRumor(params.rumor)
 		recipientPubkey = getOrderRumorRecipientPubkey(params.rumor)
-	} catch {
-		return validationFailed('invalid_order_message')
+	} catch (cause) {
+		return validationFailed('invalid_order_message', cause)
 	}
 
 	let signerPubkey: string
 	try {
 		signerPubkey = await getSignerPubkey(params.signer)
-	} catch {
-		return validationFailed('signer_pubkey_unavailable')
+	} catch (cause) {
+		return validationFailed('signer_pubkey_unavailable', cause)
 	}
 
 	if (signerPubkey !== params.rumor.pubkey) {
-		return validationFailed('signer_pubkey_mismatch')
+		return validationFailed('signer_pubkey_mismatch', new Error('Signer pubkey does not match order rumor author'))
 	}
 
 	const senderFilter = buildNip17DmRelayListFilter(signerPubkey)
@@ -157,11 +159,11 @@ export async function publishNip17OrderTransportMessage(
 			pubkey: recipientPubkey,
 			filter: recipientFilter,
 		})
-	} catch {
+	} catch (cause) {
 		return {
 			status: 'relay_targets_failed',
 			rumorId: params.rumor.id,
-			error: { code: 'relay_list_fetch_failed' },
+			error: transportError('relay_list_fetch_failed', 'fetch_relay_lists', cause),
 			senderFilter,
 			recipientFilter,
 			relayTargets: null,
@@ -179,7 +181,7 @@ export async function publishNip17OrderTransportMessage(
 		return {
 			status: 'relay_targets_failed',
 			rumorId: params.rumor.id,
-			error: { code: 'relay_targets_not_ready' },
+			error: transportError('relay_targets_not_ready', 'resolve_relay_targets', new Error('NIP-17 relay targets are not ready')),
 			senderFilter,
 			recipientFilter,
 			relayTargets,
@@ -194,11 +196,11 @@ export async function publishNip17OrderTransportMessage(
 			recipientPubkey,
 			createdAt: params.createdAt,
 		})
-	} catch {
+	} catch (cause) {
 		return {
 			status: 'wrap_failed',
 			rumorId: params.rumor.id,
-			error: { code: 'gift_wrap_creation_failed' },
+			error: transportError('gift_wrap_creation_failed', 'create_gift_wraps', cause),
 			relayTargets,
 		}
 	}
@@ -207,7 +209,7 @@ export async function publishNip17OrderTransportMessage(
 		return {
 			status: 'wrap_failed',
 			rumorId: params.rumor.id,
-			error: { code: 'gift_wrap_creation_failed' },
+			error: transportError('gift_wrap_creation_failed', 'validate_gift_wraps', new Error('Unexpected gift-wrap kind')),
 			relayTargets,
 		}
 	}
@@ -233,7 +235,12 @@ export async function publishNip17OrderTransportMessage(
 		return {
 			status: 'sender_publish_failed',
 			rumorId: wraps.rumor.id ?? params.rumor.id,
-			error: { code: 'gift_wrap_publish_failed' },
+			error: transportError(
+				'gift_wrap_publish_failed',
+				'publish_sender_wrap',
+				new Error('Sender gift-wrap publication was not acknowledged'),
+				'uncertain',
+			),
 			relayTargets,
 			sender,
 		}
@@ -249,7 +256,12 @@ export async function publishNip17OrderTransportMessage(
 		return {
 			status: 'recipient_publish_failed',
 			rumorId: wraps.rumor.id ?? params.rumor.id,
-			error: { code: 'gift_wrap_publish_failed' },
+			error: transportError(
+				'gift_wrap_publish_failed',
+				'publish_recipient_wrap',
+				new Error('Recipient gift-wrap publication was not acknowledged'),
+				'uncertain',
+			),
 			relayTargets,
 			sender,
 			recipient,
@@ -281,11 +293,20 @@ export async function readNip17OrderTransportMessages(
 	}
 }
 
-function validationFailed(code: Nip17OrderTransportError['code']): PublishNip17OrderTransportResult {
+function validationFailed(code: Nip17OrderTransportError['code'], cause: unknown = new Error(code)): PublishNip17OrderTransportResult {
 	return {
 		status: 'validation_failed',
-		error: { code },
+		error: transportError(code, 'validation', cause),
 	}
+}
+
+function transportError(
+	code: Nip17OrderTransportError['code'],
+	phase: string,
+	cause: unknown,
+	status: 'failed' | 'uncertain' = 'failed',
+): Nip17OrderTransportError {
+	return { code, failure: createWorkflowError({ workflow: 'nip17_order_transport', phase, status, error: cause }) }
 }
 
 async function getSignerPubkey(signer: Nip17OrderTransportSigner): Promise<string> {

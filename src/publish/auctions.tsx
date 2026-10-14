@@ -4,12 +4,13 @@ import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
 import { nip60Actions, type AuctionP2pkKeyScheme, AuctionBidLockMutationPossibleError } from '@/lib/stores/nip60'
 import type { ProductShippingSelectionInput } from '@sdk/commerce/products'
+import type { KeyValueStoragePort } from '@sdk/core'
 import {
 	buildPathReleaseTags,
 	createAuctionBidTemplate,
 	executeFundedAuctionBidWorkflow,
 	planAuctionBid,
-	retryAuctionBidPublish,
+	retryAuctionBidPublishFromStorage,
 } from '@sdk/commerce/auctions'
 import {
 	runAuctionListingAppAdapter,
@@ -28,6 +29,7 @@ import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 import { buildDleqProofs, fetchDleqKeysetsForBidsDetailed } from '@/lib/cashu/dleq'
 import { buildBidEventTags } from '@/lib/auction/tagBuilders'
 import { createPrivateAuctionClaimMessageForActiveSigner } from '@/lib/auctions/privateAuctionClaimMessage'
+import { createUserScopedKeyValueStoragePort } from '@/lib/sdkAdapters'
 import {
 	findLatestBidderRecordForAuction,
 	updateBidderRecordStatus,
@@ -701,7 +703,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 			if (!updatedPendingToken) {
 				console.warn('[auctions] Locked auction bid but could not attach bid event id to the local pending lock record before publishing')
 			}
-			cacheAuctionBidEventForRepublish(event)
+			await cacheAuctionBidEventForRepublish(event)
 		},
 		sign: async (event) => {
 			const signedEvent = await signNostrEvent(event)
@@ -717,7 +719,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 	})
 
 	if (outcome.status === 'published') {
-		discardAuctionBidEventRepublishCacheEntry(outcome.eventId)
+		await discardAuctionBidEventRepublishCacheEntry(outcome.eventId)
 		return outcome.eventId
 	}
 	if (outcome.status === 'failed_before_lock') {
@@ -929,6 +931,8 @@ export class AuctionBidLockOutcomeUncertainError extends Error {
 
 const AUCTION_BID_REPUBLISH_CACHE_KEY = 'auction_bid_republish_events_v1'
 const AUCTION_BID_REPUBLISH_CACHE_MAX_ENTRIES = 25
+const AUCTION_BID_REPUBLISH_STORAGE_KEY_PREFIX = 'auction-bid-republish-v1:'
+const userScopedSdkStorage = createUserScopedKeyValueStoragePort()
 
 /** Serialized kind-1023 payload persisted for idempotent retry. */
 type SerializedAuctionBidEventPayload = NostrEvent
@@ -946,6 +950,42 @@ type AuctionBidRepublishCache = Record<string, CachedAuctionBidEvent>
 // (e.g. not signed in / storage disabled): an in-session retry must still
 // be able to rebroadcast without re-locking.
 const auctionBidRepublishMemoryCache: AuctionBidRepublishCache = {}
+
+const auctionBidRetryStoragePort: KeyValueStoragePort = {
+	get: async (key) => {
+		const stored = await userScopedSdkStorage.get(key)
+		if (stored !== null) return stored
+		const bidEventId = key.slice(AUCTION_BID_REPUBLISH_STORAGE_KEY_PREFIX.length)
+		const legacyEntry = loadAuctionBidRepublishCache()[bidEventId]
+		return legacyEntry ? JSON.stringify(legacyEntry) : null
+	},
+	set: async (key, value) => {
+		const bidEventId = key.slice(AUCTION_BID_REPUBLISH_STORAGE_KEY_PREFIX.length)
+		let entry: CachedAuctionBidEvent
+		try {
+			entry = JSON.parse(value) as CachedAuctionBidEvent
+		} catch {
+			throw new Error('Auction bid retry cache record is malformed')
+		}
+		if (entry.bidEventId !== bidEventId || !entry.payload) throw new Error('Auction bid retry cache identity mismatch')
+		const cache = loadAuctionBidRepublishCache()
+		cache[bidEventId] = entry
+		persistAuctionBidRepublishCache(cache)
+		try {
+			await userScopedSdkStorage.set(key, value)
+		} catch {
+			// The legacy user-scoped cache and in-session map remain available for retry.
+		}
+	},
+	remove: async (key) => {
+		const bidEventId = key.slice(AUCTION_BID_REPUBLISH_STORAGE_KEY_PREFIX.length)
+		delete auctionBidRepublishMemoryCache[bidEventId]
+		const cache = loadAuctionBidRepublishCache()
+		delete cache[bidEventId]
+		persistAuctionBidRepublishCache(cache)
+		await userScopedSdkStorage.remove(key)
+	},
+}
 
 const loadAuctionBidRepublishCache = (): AuctionBidRepublishCache => {
 	const persisted = loadUserData<AuctionBidRepublishCache>(AUCTION_BID_REPUBLISH_CACHE_KEY, {})
@@ -976,18 +1016,14 @@ const persistAuctionBidRepublishCache = (cache: AuctionBidRepublishCache): void 
 	saveUserData(AUCTION_BID_REPUBLISH_CACHE_KEY, cache)
 }
 
-const cacheAuctionBidEventForRepublish = (bidEvent: NostrEvent): void => {
+const cacheAuctionBidEventForRepublish = async (bidEvent: NostrEvent): Promise<void> => {
 	if (!bidEvent.id) return
-	const cache = loadAuctionBidRepublishCache()
-	cache[bidEvent.id] = { bidEventId: bidEvent.id, payload: bidEvent, savedAt: Date.now() }
-	persistAuctionBidRepublishCache(cache)
+	const entry = { bidEventId: bidEvent.id, payload: bidEvent, savedAt: Date.now() }
+	await auctionBidRetryStoragePort.set(`${AUCTION_BID_REPUBLISH_STORAGE_KEY_PREFIX}${bidEvent.id}`, JSON.stringify(entry))
 }
 
-const discardAuctionBidEventRepublishCacheEntry = (bidEventId: string): void => {
-	const cache = loadAuctionBidRepublishCache()
-	if (!cache[bidEventId]) return
-	delete cache[bidEventId]
-	persistAuctionBidRepublishCache(cache)
+const discardAuctionBidEventRepublishCacheEntry = async (bidEventId: string): Promise<void> => {
+	await auctionBidRetryStoragePort.remove(`${AUCTION_BID_REPUBLISH_STORAGE_KEY_PREFIX}${bidEventId}`)
 }
 
 /**
@@ -1030,12 +1066,20 @@ export const republishAuctionBid = async (bidEventId: string): Promise<string> =
 		throw new Error(`Refusing to rebroadcast ${bidEventId}: cached payload does not hash to the requested event id`)
 	}
 
-	const outcome = await retryAuctionBidPublish({
-		load: async () => ({
-			event: bidEvent,
-			...(bidEvent.sig ? { signedEvent: bidEvent } : {}),
-			recovery: { bidEventId },
-		}),
+	const outcome = await retryAuctionBidPublishFromStorage({
+		storage: auctionBidRetryStoragePort,
+		key: `${AUCTION_BID_REPUBLISH_STORAGE_KEY_PREFIX}${bidEventId}`,
+		decode: (serialized) => JSON.parse(serialized) as CachedAuctionBidEvent,
+		encode: (entry) => JSON.stringify(entry),
+		selectRetryRecord: (entry) =>
+			entry.bidEventId === bidEventId
+				? {
+						event: entry.payload,
+						...(entry.payload.sig ? { signedEvent: entry.payload } : {}),
+						recovery: { bidEventId },
+					}
+				: undefined,
+		updateSignedEvent: (entry, event) => ({ ...entry, payload: event, savedAt: Date.now() }),
 		sign: async (event) => {
 			// A cached unsigned bid is bound to its original author. Refuse before
 			// signing when the active identity differs, then re-check the hash to
@@ -1056,14 +1100,13 @@ export const republishAuctionBid = async (bidEventId: string): Promise<string> =
 			}
 			return signed
 		},
-		persistSignedEvent: async (event) => cacheAuctionBidEventForRepublish(event),
 		publish: publishRequired,
 	})
 	if (outcome.status === 'retryable') {
 		throw new AuctionBidPublishFailedError(bidEventId, outcome.cause ?? new Error(outcome.error))
 	}
 	// Published — the rebroadcast cache entry is no longer needed.
-	discardAuctionBidEventRepublishCacheEntry(bidEventId)
+	await discardAuctionBidEventRepublishCacheEntry(bidEventId)
 	return outcome.eventId
 }
 

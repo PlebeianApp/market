@@ -2,9 +2,24 @@ import { describe, expect, test } from 'bun:test'
 import { finalizeEvent } from 'nostr-tools'
 import { parseMarketConfig } from './marketConfig'
 import { parseNostrEventShape, verifyNostrEvent } from './nostr/eventValidation'
-import { validateEventWithSchema, validateWithSchema } from './validation'
+import { EventSchemaRegistry, validateEventWithSchema, validateWithSchema } from './validation'
+import { createWorkflowError } from './errors'
 
 describe('SDK Core validation and config', () => {
+	test('normalizes workflow failure and uncertainty metadata without discarding causes', () => {
+		const cause = new Error('relay timeout')
+		const error = createWorkflowError({ workflow: 'auction_bid', phase: 'publish', status: 'uncertain', error: cause })
+		expect(error).toMatchObject({
+			name: 'WorkflowError',
+			code: 'outcome_uncertain',
+			workflow: 'auction_bid',
+			phase: 'publish',
+			status: 'uncertain',
+			message: 'relay timeout',
+			cause,
+		})
+	})
+
 	test('wraps schema success and failure in a Result', () => {
 		const schema = { parse: (input: unknown) => ({ value: String(input) }) }
 		expect(validateWithSchema(42, schema)).toEqual({ ok: true, value: { value: '42' } })
@@ -34,6 +49,13 @@ describe('SDK Core validation and config', () => {
 		expect(parses).toBe(0)
 	})
 
+	test('routes event validation through a kind registry and rejects missing/duplicate registrations', () => {
+		const registry = new EventSchemaRegistry().register({ kind: 30408, parse: (input) => ({ source: input }) })
+		expect(registry.validate({ kind: 30408, title: 'Lot' })).toEqual({ ok: true, value: { source: { kind: 30408, title: 'Lot' } } })
+		expect(registry.validate({ kind: 30402 })).toMatchObject({ ok: false, error: { path: ['kind'] } })
+		expect(() => registry.register({ kind: 30408, parse: (input) => input })).toThrow('already registered')
+	})
+
 	test('validates event shape separately from id/signature verification', () => {
 		const event = finalizeEvent({ kind: 1, created_at: 10, content: 'test', tags: [] }, new Uint8Array(32).fill(1))
 		expect(parseNostrEventShape(event).ok).toBe(true)
@@ -59,5 +81,30 @@ describe('SDK Core validation and config', () => {
 		expect(
 			parseMarketConfig({ schemaVersion: 'market-config-v1', marketId: 'market', relayUrls: ['https://relay.example'] }),
 		).toMatchObject({ ok: false, error: { code: 'validation_failed', path: ['relayUrls', 0] } })
+		expect(
+			parseMarketConfig({
+				schemaVersion: 'market-config-v1',
+				marketId: 'market',
+				name: 'Market',
+				displayName: 'Market Display',
+				siteUrl: 'https://market.example',
+				appRelay: 'wss://app-relay.example',
+				relayUrls: ['wss://relay.example'],
+				trustedMints: ['https://mint.example'],
+				defaultCurrency: 'USD',
+			}),
+		).toMatchObject({
+			ok: true,
+			value: {
+				marketId: 'market',
+				name: 'Market',
+				displayName: 'Market Display',
+				siteUrl: 'https://market.example/',
+				appRelay: 'wss://app-relay.example',
+				relayUrls: ['wss://relay.example'],
+				trustedMints: ['https://mint.example/'],
+				defaultCurrency: 'USD',
+			},
+		})
 	})
 })

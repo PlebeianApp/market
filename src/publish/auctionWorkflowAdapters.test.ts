@@ -115,7 +115,13 @@ describe('auction app workflow adapters', () => {
 			},
 		})
 
-		expect(outcome).toEqual({ status: 'failed', phase: 'redemption', error: 'mint unavailable', redeemedBidIds: ['bid-1'] })
+		expect(outcome).toMatchObject({
+			status: 'failed',
+			phase: 'redemption',
+			error: 'mint unavailable',
+			redeemedBidIds: ['bid-1'],
+			failure: { workflow: 'auction_settlement', phase: 'redemption', code: 'workflow_failed' },
+		})
 	})
 
 	test('claim adapter publishes private delivery before the marker and retains partial evidence', async () => {
