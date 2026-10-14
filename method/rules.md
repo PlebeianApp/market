@@ -310,8 +310,9 @@ mid-run and never lowered; lowering it is the one move this rule refuses.
 
 ### `#3c9212` — The levels that survive here, and the ones deferred
 
-Core declares eight levels. This repository imports **two**: **`modularization`** (the rules in this file, and
-the procedure for applying them) and **`checks`** (the routine and its tools). The other six — `schemas`,
+Core declares eight levels. This repository carries **two**: **`modularization`** — whose rules *are* this
+file, and whose tool is `checks/audit.py`; **its own procedure document has not been imported yet** — and
+**`checks`** (the routine and its tools). The other six — `schemas`,
 `schema`, `ux`, `ui`, `packages`, `platform-web` — are **not imported here**, and that is a trimming decision
 rather than an omission: **a level survives only if some module demonstrates it and the tooling can check
 it.** Those six were declared at the start and never demonstrated, so carrying them would be carrying names
@@ -337,8 +338,14 @@ anyone to pass is noise, and an instruction that nothing can check is a preferen
 
 Four tools, one question each. The prompts in `prompts/` say when to reach for which.
 
-- **`checks/check.py` — does the tree obey the rules?** Ids, accounting, dangling references, second
-  definitions, declared opt-outs. This is the routine (`#0a41a2`) and it exits non-zero on a finding.
+- **`checks/check.py` — does the tree obey the rules?** Module discovery and accounting, the `inherits` and
+  `implements` citations, dangling references, and the build/coverage wells and vendored-tree hygiene. This is
+  the routine (`#0a41a2`) and it exits non-zero on a finding.
+  - **What it does *not* do, stated plainly because a list of what a tool answers is a promise.** It does not
+    detect a **second definition** of a thing, and it does not read `opt-out:`. Both are rules of this file
+    (`#b22838`, `#11d72f`) that currently have **no tool**, as most of the statements here do. That is a gap in
+    the toolkit and not a licence to skip them: until a check exists, **the reviewer is the check**. A gap
+    named here is a queue; a gap discovered later is a surprise.
 - **`checks/evidence.py` — is the evidence real?** A claim written in a module's MD must be backed by an
   artifact that exists and says what the claim says it says.
 - **`checks/audit.py` — what does the tree measure?** Size, fan-in, fan-out, consumers per symbol. This one
