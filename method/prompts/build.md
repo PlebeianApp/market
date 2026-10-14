@@ -4,8 +4,8 @@
 overlay** — this file is the **A1 Builder** overlay — plus one frozen task packet. Where this file and the
 Constitution disagree, **the Constitution wins** and the disagreement is a finding you report.
 
-The rules themselves are in `../rules.md`; this file does not restate them, it tells you **what to do in what
-order** and **which tool answers which question**. Read `../rules.md` first — particularly `#9854c6` (the two
+The rules themselves are in `../method.md`; this file does not restate them, it tells you **what to do in what
+order** and **which tool answers which question**. Read `../method.md` first — particularly `#9854c6` (the two
 doctrines) and `#722d26` (what each tool answers).
 
 ## Before you write anything
