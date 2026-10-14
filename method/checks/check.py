@@ -16,6 +16,12 @@ import os, re, sys, hashlib, collections
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if "--root" in sys.argv:
     ROOT = os.path.abspath(sys.argv[sys.argv.index("--root") + 1])
+
+# The module that roots the graph. `core` is the method's own name for itself; a project that carries
+# the method under another directory names it here rather than renaming its own files to suit a tool.
+ROOT_MODULE = "core"
+if "--method-module" in sys.argv:
+    ROOT_MODULE = sys.argv[sys.argv.index("--method-module") + 1]
 DECL = re.compile(r"^(\s*(?:#{2,4}\s+|-\s+|\*\s+)?)(`?#[0-9a-f]{6}`?|`?#@`?)(\s*)(?:[—–]\s*)?(.*)$")
 IDREF = re.compile(r"#[0-9a-f]{6}\b")
 SKIP_TRANSCRIPTS = re.compile(r"sessions/2026-09-23-session-\d+\.md$")
@@ -89,20 +95,26 @@ def front_matter(path):
 def modules():
     """module name -> dict(path, inherits, implements) for every module MD at the repo root."""
     mods = {}
-    for name in sorted(os.listdir(ROOT)):
-        d = os.path.join(ROOT, name)
-        md = os.path.join(d, name + ".md")
-        if os.path.isdir(d) and os.path.isfile(md):
-            fm, _ = front_matter(os.path.join(name, name + ".md"))
-            if not fm:
-                continue
-            inh = [x.strip() for x in fm.get("inherits", "[]").strip("[]").split(",") if x.strip()]
-            imp = [x.strip().strip('"') for x in fm.get("implements", "[]").strip("[]").split(",") if x.strip()]
-            mods[name] = {"path": os.path.join(name, name + ".md"), "inherits": inh, "implements": imp,
-                          "submodule": os.path.isfile(os.path.join(d, ".git"))}
-    # a repository's own core.md is the root of its graph; a project discovers core as a mounted module
-    if os.path.isfile(os.path.join(ROOT, "core.md")):
-        mods["core"] = {"path": "core.md", "inherits": [], "implements": [], "submodule": False}
+    for dp, dn, _ in os.walk(ROOT):
+        # a mount is a specimen rather than this project's module, and a tooling directory is not a module
+        dn[:] = [x for x in dn if x not in SKIP_DIRS and x != ".git"
+                 and not os.path.isfile(os.path.join(dp, x, ".git"))]
+        name = os.path.basename(dp)
+        if not name or os.path.abspath(dp) == os.path.abspath(ROOT):
+            continue
+        if not os.path.isfile(os.path.join(dp, name + ".md")):
+            continue
+        rel = os.path.relpath(dp, ROOT)
+        fm, _ = front_matter(os.path.join(rel, name + ".md"))
+        if not fm:
+            continue
+        inh = [x.strip() for x in fm.get("inherits", "[]").strip("[]").split(",") if x.strip()]
+        imp = [x.strip().strip('"') for x in fm.get("implements", "[]").strip("[]").split(",") if x.strip()]
+        mods[name] = {"path": os.path.join(rel, name + ".md"), "inherits": inh, "implements": imp,
+                      "submodule": os.path.isfile(os.path.join(dp, ".git"))}
+    # the method's own MD at the tree root is the graph's root, whatever it is called
+    if os.path.isfile(os.path.join(ROOT, ROOT_MODULE + ".md")):
+        mods[ROOT_MODULE] = {"path": ROOT_MODULE + ".md", "inherits": [], "implements": [], "submodule": False}
     return mods
 
 
@@ -119,7 +131,7 @@ def declarations():
     for path in md_files():
         if SKIP_TRANSCRIPTS.search(path):
             continue
-        mod = path.split(os.sep)[0] if os.sep in path else "core"
+        mod = path.split(os.sep)[0] if os.sep in path else ROOT_MODULE
         lines = open(os.path.join(ROOT, path)).read().split("\n")
         for i, line in enumerate(lines, 1):
             m = DECL.match(line)
@@ -173,7 +185,7 @@ def ancestors(mod, mods):
             continue
         seen.add(x)
         stack.extend(mods.get(x, {}).get("inherits", []))
-    return seen | {"core"}
+    return seen | {ROOT_MODULE}
 
 
 def main():
@@ -203,9 +215,9 @@ def main():
 
     # 3. accounting
     for name, info in mods.items():
-        if name == "core":
+        if name == ROOT_MODULE:
             continue
-        d = os.path.join(ROOT, name)
+        d = os.path.join(ROOT, os.path.dirname(info["path"]))
         text = open(os.path.join(ROOT, info["path"])).read()
         for entry in sorted(os.listdir(d)):
             if entry in (".git",) or entry == name + ".md":
@@ -228,8 +240,8 @@ def main():
             if parent not in mods:
                 hard.append(f"graph  {name} inherits {parent}, which is not a module")
     roots = [n for n, i in mods.items() if not i["inherits"]]
-    if roots != ["core"]:
-        hard.append(f"graph  expected exactly one root (core), found {sorted(roots)}")
+    if roots != [ROOT_MODULE]:
+        hard.append(f"graph  expected exactly one root ({ROOT_MODULE}), found {sorted(roots)}")
     for name in mods:
         seen, stack = set(), [name]
         while stack:
@@ -244,7 +256,7 @@ def main():
 
     # 5. a statement may cite only itself, an ancestor, or core
     for path, i, ident, content in order:
-        mod = path.split(os.sep)[0] if os.sep in path else "core"
+        mod = path.split(os.sep)[0] if os.sep in path else ROOT_MODULE
         if mod not in mods:
             continue
         allowed = ancestors(mod, mods) | {mod}

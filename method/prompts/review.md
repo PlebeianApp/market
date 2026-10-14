@@ -5,7 +5,7 @@ overlay** — this file is the **A2 Red Team A / A3 Red Team B / A4 Blind Final 
 frozen task packet. Where this file and the Constitution disagree, **the Constitution wins** and the
 disagreement is a finding you report.
 
-The rules are in `../rules.md`; the doctrines are `#9854c6`; what each tool answers is `#722d26`.
+The rules are in `../method.md`; the doctrines are `#9854c6`; what each tool answers is `#722d26`.
 
 ## The first thing you do: find out whether a review is owed at all
 

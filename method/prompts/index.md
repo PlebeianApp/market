@@ -33,7 +33,7 @@ builder, adversarial reviewer and production operator at once.
 - **The task packet** is the frozen work order: goal, in-scope, out-of-scope, the doctrine, the pin, the stop
   condition.
 - **The doctrine** — light or hardened — comes from the task packet and is decided by the human maintainer
-  before the work starts. It is defined in `../rules.md` (`#9854c6`) and applied by the two overlays above.
+  before the work starts. It is defined in `../method.md` (`#9854c6`) and applied by the two overlays above.
 
 ---
 
