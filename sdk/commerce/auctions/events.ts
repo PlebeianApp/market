@@ -11,7 +11,7 @@
  */
 
 import type { AuctionSettlementStatus, Nut7ProofState, PathReleaseReason, ValidatorClaim, ValidatorReason } from './constants'
-import type { NostrEventLike } from '../../core/nostr/eventLike'
+import type { Event } from '../../core/nostr-io/ts'
 import type { DleqProof } from '../payments/cashu/dleq'
 
 // =========================================================================
@@ -29,7 +29,7 @@ export interface MinBidCurve {
 }
 
 export interface ParsedAuctionEvent {
-	rawEvent: NostrEventLike
+	rawEvent: Event
 
 	// Identity
 	/** `d` tag — seller-chosen auction identifier. */
@@ -94,7 +94,7 @@ export interface ParsedAuctionEvent {
 // =========================================================================
 
 export interface ParsedBidEvent {
-	rawEvent: NostrEventLike
+	rawEvent: Event
 
 	// Identity
 	/** Bid event id. */
@@ -172,7 +172,7 @@ export interface ParsedBidEvent {
 // =========================================================================
 
 export interface ParsedPathReleaseEvent {
-	rawEvent: NostrEventLike
+	rawEvent: Event
 
 	/** Path release event id. */
 	id: string
@@ -228,7 +228,7 @@ export interface SettlementPayoutEntry {
 }
 
 export interface ParsedSettlementEvent {
-	rawEvent: NostrEventLike
+	rawEvent: Event
 
 	id: string
 	sellerPubkey: string
@@ -275,7 +275,7 @@ export const isStructurallyValidSettledSettlement = (
 // =========================================================================
 
 export interface ParsedFallbackOfferEvent {
-	rawEvent: NostrEventLike
+	rawEvent: Event
 
 	id: string
 	sellerPubkey: string
@@ -296,7 +296,7 @@ export interface ParsedFallbackOfferEvent {
 // =========================================================================
 
 export interface ParsedValidatorVerdictEvent {
-	rawEvent: NostrEventLike
+	rawEvent: Event
 
 	id: string
 	validatorPubkey: string
@@ -368,7 +368,7 @@ export interface ValidatorPolicyDocument {
 }
 
 export interface ParsedValidatorPolicyEvent {
-	rawEvent: NostrEventLike
+	rawEvent: Event
 
 	id: string
 	validatorPubkey: string
@@ -396,7 +396,7 @@ export interface BidderAggregateReputationDocument {
 }
 
 export interface ParsedBidderAggregateReputationEvent {
-	rawEvent: NostrEventLike
+	rawEvent: Event
 
 	id: string
 	validatorPubkey: string
