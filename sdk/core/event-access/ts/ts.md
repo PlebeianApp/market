@@ -22,6 +22,17 @@ endpoint declares, and given the link half through an injected resolver rather t
 D-O19). The fail-closed filter boundary is here and the **predicate is not** — it is reached by calling the
 endpoint's `read` (D-O5), never copied.
 
+**Increment 3 — fetch → the library, live → us.** The **bounded fill** (the `network()` step of `query`, and
+only it) is no longer a read this module builds itself: it is an **injected loader-backed function**
+(`FillRequest`), composed over the one pool by `createLoaderBackedFill`, whose engine is the loader family's own
+`createEventLoader(pool, { cacheRequest, extraRelays })` — **cache → relay hints → extra relays**, the sequence
+the spec's LF-7 already names. The pool is this module's declared shape, which the seam's `PoolPort` satisfies
+structurally: no adapter, no cast, and no vendor type in any signature this module presents. The **live** fill
+stays the seam's own subscription, `publish` stays the seam's, and everything the composition owns stays here —
+the merge order (LF-1), the write-back policy (LF-2), the one gate, the wall-clock deadline (which bounds the
+fill from outside, so the loader carries no budget of its own) and the failure channel (a loader that cannot
+answer returns its refusal as a value, so the local answer is never unseated and completeness stays honest).
+
 **The vendor's write-back operators, settled by this module's own install.** E6 labels them `UNVERIFIED` and the
 spec adopts them as *implementations* of the policy. The install inside this directory (`applesauce-loaders`
 **6.2.0** exactly) is what settles the label, and it settles it **against** the spec's attribution: the package
@@ -45,8 +56,12 @@ module's own, and a lockfile is a source artifact rather than a build output.
   ports declared by the consumer** — `StoreEndpoint` with its `tier`, `read`, `write`, `count`, `remove` and
   `changes` members and its own `EndpointReadOptions` (D-O12), and the members of the seam's `NostrIo` this
   module consumes (`query`, `subscribe`, `publish`), which the seam satisfies **structurally** (D-O13, D-O19) —
-  and the gate's four shapes as the spec prints them (`AcceptDecision`, `AcceptContext` carrying the endpoint's declared tier and
-  `resolve`, the widened `AcceptHook`, and the injected `ReferenceResolver`).
+  the gate's four shapes as the spec prints them (`AcceptDecision`, `AcceptContext` carrying the endpoint's declared tier and
+  `resolve`, the widened `AcceptHook`, and the injected `ReferenceResolver`) — and, from increment 3, the
+  bounded fill's own three shapes declared structurally rather than imported: `NostrRequest`/`UpstreamPool`
+  (the pool the loader family drives, as the seam declares it), `CacheRequest` (the loader's first step, which
+  is what the store endpoint's `read` already is), `FillRequest` (the fill, supplied as a function) and their
+  `LoaderFillOptions`.
 - `errors.ts` — the typed, reason-carrying refusal (`EventAccessError`). Every refusal path raises it, and the
   fail-closed filter boundary surfaces it unchanged — one implementation of the predicate, reached by a call.
 - `filters.ts` — one-or-many normalisation, and **nothing else**. Deliberately the smallest file beside the
@@ -63,7 +78,10 @@ module's own, and a lockfile is a source artifact rather than a build output.
 - `composition.ts` — the composition itself: the five verbs, the local-first sequence with its wall-clock
   deadline, the merge, **the one gate** (D-O21) with its bound and the link half's resolver, the write-back
   application, the live subscription and the provenance companion read `originOf`. Split from `merge.ts`,
-  `policy.ts` and `filters.ts` so each file names one job.
+  `policy.ts` and `filters.ts` so each file names one job. It is also, from increment 3, **the one place the
+  fetch is the library's**: `createLoaderBackedFill` composes the loader family's own engine over the injected
+  pool (cache → relay hints → extra relays) and the fill site takes that function, while the live fill and the
+  publish path stay the seam's.
 - `harness.ts` — **the host side** of both ports, test support only, never exported by `index.ts` and never
   imported by the implementation: a **model** of the store's two predicate branches (a malformed identity value
   rejected with the typed refusal; a present-but-empty `#`-key list answered as nothing, traced to
@@ -75,7 +93,9 @@ module's own, and a lockfile is a source artifact rather than a build output.
   a recording, throwing endpoint and a recording, throwing seam that throw from every method; a scripted
   seam, a bare one, a never-answering one and a failing one; **two change feeds** (a deliberately
   single-consumer queue and a broadcast one) so the composition's fan-out is proved not to depend on the
-  port's consumer semantics; and a bounded collector whose timeout fails a case rather than hanging it.
+  port's consumer semantics; a **pool** fake — a hand-written `UpstreamPool` that records every request and the
+  relay set it was dialled with, so the loader-backed fill can be proved to go through the loader and the live
+  path to leave it silent (increment 3); and a bounded collector whose timeout fails a case rather than hanging it.
   Keys are generated at run time.
 - `composition.test.ts` — the named paths P1…P7 and the invariants LF-1…LF-7, plus provenance on P1 **and on
   P2**, `persist:false` with its positive companion, the envelope, the declared policy and **the gate's six
@@ -83,7 +103,9 @@ module's own, and a lockfile is a source artifact rather than a build output.
   relay attempt sees the same set; the gate is told the tier; a link rule resolves through the
   injected resolver; an over-budget gate drops and the answer still resolves), the tier-driven marking,
   `onReject`'s report channel, the two-subscription fan-out over both change feeds, and the filters as each
-  tier receives them.
+  tier receives them — and increment 3's three: the fill goes through the loader with LF-1/LF-2 intact, the
+  live subscription is not routed through a loader, and the loader takes our pool by construction with no
+  adapter and no cast.
 - `ports.test.ts` — the fail-closed filter boundary in both branches (and the echoing fake's counter-case), the
   two structural no-socket shapes with their recorded call counts stated, the **foreign** refusal surfaced on
   all four verbs, and a signal already aborted opening nothing.

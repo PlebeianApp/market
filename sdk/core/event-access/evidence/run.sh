@@ -165,8 +165,10 @@ PY
 
 	banner "2 · bun test — the module S own runner over its own roots"
 	run_in "$TS" "$BUN" test
-	echo '# ^ expected: 43 cases in 2 files, all passing, 0 failing — one case per evidence obligation,'
-	echo '#   each naming the careless implementation it fails on.'
+	echo '# ^ expected: 48 cases in 2 files, all passing, 0 failing — 45 baseline plus increment 3 S three'
+	echo '#   (the fill goes through the loader with LF-1/LF-2 intact; the live fill is not routed through'
+	echo '#   a loader; the loader takes our pool by construction). One case per evidence obligation, each'
+	echo '#   naming the careless implementation it fails on.'
 
 	banner "3 · the module S own compiler configuration"
 	run_in "$TS" bash -c "NODE_OPTIONS=--max-old-space-size=4096 \"$BUN\" run typecheck" 
@@ -329,11 +331,15 @@ PY
 	echo '# ^ expected: no lines. The module S own package name is @plebeian-apps/event-access (package.json);'
 	echo '#   it is not a dependency and no file imports a sibling.'
 	echo '$ ...and the declared dependency lists carry no sibling either (asserted in section 1).'
-	echo '$ grep -rn "applesauce-loaders" event-access/ts --include="*.ts"   (doc mentions, never an import)'
+	echo '$ grep -rn "applesauce-loaders" event-access/ts --include="*.ts"   (the doc mentions AND the imports)'
 	grep -rn 'applesauce-loaders' --include='*.ts' --exclude-dir=node_modules "$TS" || true
-	echo '# ^ expected: 5 matched lines, ALL doc comments — 4 in policy.ts carrying the E6 settlement and 1 in'
-	echo '#   index.ts naming the allow-list — and no import specifier (section 4b lists every specifier, and'
-	echo '#   applesauce-loaders is not among them: the dependency is installed to settle E6 S label).'
+	echo '# ^ expected: 8 matched lines — 5 doc comments (4 in policy.ts carrying the E6 settlement, 1 in'
+	echo '#   index.ts naming the allow-list) and 3 import specifiers: `applesauce-loaders/loaders` and'
+	echo '#   `applesauce-loaders/helpers` in composition.ts, and `applesauce-loaders/loaders` in'
+	echo '#   composition.test.ts. That is increment 3 landing: the bounded fill is the loader family S,'
+	echo '#   driven over the one pool, so the dependency installed to settle E6 S label is now also the'
+	echo '#   fill S engine. The two specifiers are allowed by section 4b, and `applesauce-core` is still'
+	echo '#   neither declared nor imported anywhere in ts/ (sections 1 and 4b).'
 
 	banner "11 · conservation: the specimens are at their pins, with their own numbers"
 	echo '$ git -C market rev-parse HEAD   /   git -C core rev-parse HEAD'
