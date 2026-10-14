@@ -9,7 +9,7 @@ opt-out: []
 levels: { objective: present, technical-spec: present, implementation: present — TypeScript in ts/ (the local half only), tests: present }
 contract:
   entry: ts/index.ts
-  operations: [read, write, count, remove, the local change notification, the event view, the persistence seam]
+  operations: [read, write, count, remove, the local change notification, the model store accessor, the event view, the persistence seam]
   exports: [createEventStore, FILTER_SUPPORT, StoreError, assertIdentityFilters, matchesNothing, compareVersions, collapseToHeads, createReplaceableAddress, getEventUID, getMatchingTags, getReplaceableIdentifier, isAddressable, isFromCache, isReplaceable, tagValue]
   types: [Event, FilterIn, Reason, ClockPort, FilterSupport, EndpointTier, EndpointReadOptions, EndpointWriteOutcome, StoreEndpoint, CountResult, DeleteRef, DeleteOutcome, EvictionPolicy, EventDatabase, AsyncEventDatabase, EventStoreOptions, EventStore, EventPersistence]
 implementations:
@@ -230,6 +230,17 @@ document's own statement leaves it typed nowhere) and the endpoint's own `keep*`
 document's endpoint surface is prose** — exactly the members named in the paragraph above — and at **I3 this
 endpoint adopts the shape `event-access` declares**, so I3 is a conformance job rather than a reconciliation.
 **No declaring line of this document changes**, and the new statement `#2e71c3` stays as written.
+
+**Amended 2026-10-14 — the store accessor, `modelStore()`.** The endpoint gains one member and **nothing
+else**: `modelStore(): IEventStore` (`applesauce-core/event-store`) returns the **live library store the module
+already constructs** — the store of record itself, not a snapshot and not a second store — so a vendor `Model`
+can subscribe to it and a loader can write into it, and `read` answers exactly what that store holds. It is a
+*visibility* change only: the store was already inside the module and its construction, its options and its
+`eviction` are untouched. **No relay member is added** — the relay set and the network phase are not this
+module's (`#9f5778`), and the handle's own enumerable members remain the endpoint's plus the declared eviction
+policy plus this one accessor, with `NOT_A_RELAY_EDGE` still absent from `Object.keys(store)`. `read` is a
+structural `CacheRequest` (`Observable | Promise | Event | Event[]`) unchanged, so no adapter is needed at the
+seam. The three cases live in `ts/store.test.ts`.
 
 ## The local-first ordering, and where N1's boundary is drawn
 

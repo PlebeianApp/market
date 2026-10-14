@@ -214,6 +214,14 @@ export function createEventStore(options: EventStoreOptions = {}): EventStore {
 		eviction: options.eviction ?? DEFAULT_EVICTION,
 
 		/**
+		 * The **live library store** the module already builds, handed out unchanged (`#e472d3`): the store of
+		 * record itself, so a vendor `Model` subscribes to the same events `read` answers and a loader writes
+		 * into what `read` then answers. Nothing is constructed here and nothing is copied — the arrow returns
+		 * the one `sa` above. No relay member is added: this changes only the store's *visibility*.
+		 */
+		modelStore: () => sa,
+
+		/**
 		 * The local read (`#e472d3`). Answers with a set of raw events and makes **no** completeness
 		 * claim (`#4f4cc6` as amended). The three read options override the store-level defaults for this
 		 * read only, which is what makes a per-read `keepDeleted: true` expressible.

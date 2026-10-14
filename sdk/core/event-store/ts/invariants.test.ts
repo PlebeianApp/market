@@ -269,9 +269,10 @@ describe('M11–M14', () => {
 		expect(counted.count).toBe(result.length)
 
 		// M5, structurally: the handle's own enumerable members are exactly the endpoint's
-		// members plus the declared eviction policy, so no second surface and no relay edge
-		// can appear silently. The names `NOT_A_RELAY_EDGE` forbids must all be absent.
-		expect(Object.keys(store).sort()).toEqual(['changes', 'count', 'eviction', 'read', 'remove', 'tier', 'write'])
+		// members, the declared eviction policy, and the one deliberate store accessor
+		// `modelStore` — so no second surface and no relay edge can appear silently. The
+		// names `NOT_A_RELAY_EDGE` forbids must all be absent.
+		expect(Object.keys(store).sort()).toEqual(['changes', 'count', 'eviction', 'modelStore', 'read', 'remove', 'tier', 'write'])
 		for (const name of NOT_A_RELAY_EDGE) expect(Object.keys(store)).not.toContain(name)
 
 		// And the declared shape is satisfied **structurally**, with no adapter: this assignment is a

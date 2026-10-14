@@ -19,7 +19,7 @@
  * vocabulary with them: `query`, `subscribe`, `publish`, `delete`, the envelope, the relay port and the
  * relay acknowledgements are **not** names of this module any more (`#9f5778`).
  */
-import type { IAsyncEventDatabase, IEventDatabase } from 'applesauce-core/event-store'
+import type { IAsyncEventDatabase, IEventDatabase, IEventStore as LibraryEventStore } from 'applesauce-core/event-store'
 import type { Filter as NostrFilter, NostrEvent } from 'nostr-tools'
 
 /** #a6d035 — Event: the raw nostr-tools event (E2). */
@@ -151,4 +151,12 @@ export interface EventStoreOptions { database?: EventDatabase; persistence?: Eve
  */
 export interface EventStore extends StoreEndpoint {
   readonly eviction: EvictionPolicy
+  /**
+   * The **live library store** the module already builds, handed out so a vendor `Model` can subscribe to it and
+   * a loader can write into it. It is the store of record itself, not a snapshot and not a second store: a model
+   * that subscribes here sees the same events `read` answers, and a loader that writes here is what `read` then
+   * answers. No relay member is added anywhere — the relay set and the network phase are not this module's
+   * (`#9f5778`), and this accessor changes only the *visibility* of a store the module already holds.
+   */
+  modelStore(): LibraryEventStore
 }

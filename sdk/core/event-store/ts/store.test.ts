@@ -7,6 +7,9 @@
  * than this suite.
  */
 import { describe, expect, test } from 'bun:test'
+import { mapEventsToStore } from 'applesauce-core/observable'
+import type { Filter } from 'nostr-tools'
+import { firstValueFrom, from, toArray, timeout, type Observable } from 'rxjs'
 
 import { StoreError, createEventStore } from './index'
 import type { CountResult, EndpointWriteOutcome, Event } from './index'
@@ -171,5 +174,53 @@ describe('changes', () => {
 		await store.write([late])
 		const arrived = await collecting
 		expect(arrived.map((candidate) => candidate.id)).toEqual([late.id])
+	})
+})
+
+/**
+ * The vendor's `CacheRequest`, spelled here because that loader package is not this module's dependency. It is
+ * the type the vendor loaders expect (`applesauce-loaders` `dist/types.d.ts:5`): an `Observable`, a `Promise`, a
+ * single event, or an array — verbatim, with no adapter and no widening. The assignment below is the check.
+ */
+type CacheRequest = (filters: Filter[]) => Observable<Event> | Promise<Event | Event[]> | Event | Event[]
+
+describe('modelStore', () => {
+	test('modelStore · a vendor timeline subscription sees the event the module already stored', async () => {
+		const store = createEventStore()
+		// Seed through the module's own write path, then read through the accessor: if `modelStore()` handed
+		// out a second, freshly-constructed store the seeded event would not be in it.
+		const gift = signedEvent({ kind: 1059, content: 'sealed', created_at: 1000, tags: [['p', PUBKEY]] })
+		await store.write([gift])
+
+		// `timeout` turns "the accessor is a different store" into a failing case rather than a hanging one.
+		const timeline = await firstValueFrom(
+			store.modelStore().timeline({ kinds: [1059], '#p': [PUBKEY] }).pipe(timeout(500)),
+		)
+		expect(timeline.map((candidate) => candidate.id)).toEqual([gift.id])
+	})
+
+	test('modelStore · a loader writes into the store, and read answers what it wrote', async () => {
+		const store = createEventStore()
+		const first = signedEvent({ kind: 1, content: 'first', created_at: 1000 })
+		const second = signedEvent({ kind: 1, content: 'second', created_at: 2000 })
+
+		// The write direction the loaders need, through the accessor and no adapter.
+		await firstValueFrom(from([first, second]).pipe(mapEventsToStore(store.modelStore()), toArray()))
+
+		const read: Event[] = await store.read({ kinds: [1] })
+		expect(read.map((candidate) => candidate.id).sort()).toEqual([first.id, second.id].sort())
+	})
+
+	test('modelStore · read satisfies the vendor CacheRequest with no adapter', async () => {
+		const store = createEventStore()
+		const event = signedEvent({ kind: 1, content: 'cached', created_at: 1000 })
+		await store.write([event])
+
+		// The assignment is the structural match: a shape drift fails the typecheck, not a review.
+		const cache: CacheRequest = store.read
+		const answer = await cache([{ kinds: [1] }])
+
+		expect(Array.isArray(answer)).toBe(true)
+		expect((answer as Event[]).map((candidate) => candidate.id)).toEqual([event.id])
 	})
 })
