@@ -11,7 +11,7 @@
  * or a store of our own beyond the one relay-config requires to answer `dmRelays`.
  */
 import type { Event } from 'nostr-tools'
-import { unwrapGift, wrapRumor } from './adapter'
+import { giftWrapSeal, unwrapGift, wrapRumor } from './adapter'
 import { dmRelaySourceFromEvents, resolveDmRelayTargets } from './relay-source'
 import type { DmReadResult, DmRumor, DmSigner, DmWriteResult } from './types'
 
@@ -28,6 +28,6 @@ async function unwrapDm(params: { giftWrap: Event; signer: DmSigner }): Promise<
 	return unwrapGift(params.giftWrap, params.signer)
 }
 
-export { wrapDm, unwrapDm, dmRelaySourceFromEvents, resolveDmRelayTargets }
+export { wrapDm, unwrapDm, dmRelaySourceFromEvents, resolveDmRelayTargets, giftWrapSeal }
 export { DM_GIFT_WRAP_KIND, DM_RELAYS_KIND, DM_SEAL_KIND } from './types'
 export type { DmPublishPort, DmReadResult, DmRelayListEvent, DmRelaySource, DmRelayTargets, DmRumor, DmSignableEvent, DmSigner, DmWriteResult } from './types'

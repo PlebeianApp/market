@@ -79,3 +79,8 @@ export async function unwrapGift(giftWrap: Event, signer: DmSigner): Promise<DmR
 	if (!seal) throw new Error('DM gift wrap has no seal')
 	return { seal: seal as Event, rumor: rumor as DmRumor }
 }
+
+/** The seal under a gift wrap, when the wrap carries one (a freshly wrapped or already-unwrapped wrap does). */
+export function giftWrapSeal(giftWrap: Event): Event | undefined {
+	return getGiftWrapSeal(giftWrap) as Event | undefined
+}

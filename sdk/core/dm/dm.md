@@ -14,8 +14,8 @@ levels:
   tests: present — 4 cases in 1 file, run by `bun test`, with this document's evidence obligations stated as criteria
 contract:
   entry: ts/index.ts
-  operations: [wrapDm, unwrapDm, dmRelaySourceFromEvents, resolveDmRelayTargets]
-  exports: [DM_GIFT_WRAP_KIND, DM_RELAYS_KIND, DM_SEAL_KIND, dmRelaySourceFromEvents, resolveDmRelayTargets, unwrapDm, wrapDm]
+  operations: [wrapDm, unwrapDm, dmRelaySourceFromEvents, resolveDmRelayTargets, giftWrapSeal]
+  exports: [DM_GIFT_WRAP_KIND, DM_RELAYS_KIND, DM_SEAL_KIND, dmRelaySourceFromEvents, giftWrapSeal, resolveDmRelayTargets, unwrapDm, wrapDm]
   types: [DmPublishPort, DmReadResult, DmRelayListEvent, DmRelaySource, DmRelayTargets, DmRumor, DmSignableEvent, DmSigner, DmWriteResult]
 implementations:
   - id: ts
