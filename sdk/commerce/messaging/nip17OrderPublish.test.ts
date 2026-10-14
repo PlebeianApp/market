@@ -1,10 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, generateSecretKey, getPublicKey, nip44 } from 'nostr-tools'
 import type { Event, UnsignedEvent } from 'nostr-tools'
+import { DM_GIFT_WRAP_KIND, DM_RELAYS_KIND } from '../../core/dm/ts/index.ts'
+import type { DmPublishPort } from '../../core/dm/ts/index.ts'
 import type { EncryptingSigner, SignableRumorLike } from '../../core/ports/encryptingSigner'
-import type { NostrRelayPort } from '../../core/ports/nostrRelay'
-import { NIP59_GIFT_WRAP_KIND } from '../../core/nostr/nip59'
-import { NIP17_DM_RELAY_LIST_KIND } from '../../core/nostr/nip17Relays'
 import { createOrderCreationRumor } from './orderMessageRumor'
 import { publishNip17OrderMessage } from './nip17OrderPublish'
 
@@ -34,19 +33,17 @@ function signerFor(privateKey: Uint8Array): EncryptingSigner {
 	}
 }
 
-const relayList = (pubkey: string, relay: string) => ({
-	kind: NIP17_DM_RELAY_LIST_KIND,
-	pubkey,
-	created_at: 10,
-	tags: [['relay', relay]],
-})
+// A *signed* `10050` relay-list event, so relay-config's store subscription answers it.
+const relayList = (privateKey: Uint8Array, relay: string): Event =>
+	finalizeEvent({ kind: DM_RELAYS_KIND, created_at: 10, tags: [['relay', relay]], content: '' }, privateKey)
 
-describe('NIP-17 order publishing through Core relay port', () => {
+describe('NIP-17 order publishing through the dm component', () => {
 	test('publishes both gift wraps to explicit sender/recipient relay targets', async () => {
 		const privateKey = generateSecretKey()
 		const signer = signerFor(privateKey)
 		const senderPubkey = await signer.getPublicKey()
-		const recipientPubkey = getPublicKey(generateSecretKey())
+		const recipientPrivateKey = generateSecretKey()
+		const recipientPubkey = getPublicKey(recipientPrivateKey)
 		const rumor = createOrderCreationRumor({
 			buyerPubkey: senderPubkey,
 			merchantPubkey: recipientPubkey,
@@ -56,9 +53,7 @@ describe('NIP-17 order publishing through Core relay port', () => {
 			createdAt: 20,
 		})
 		const published: Array<{ event: Event; relays: readonly string[] }> = []
-		const relay: NostrRelayPort<Event> = {
-			fetchEvents: async () => [],
-			subscribe: () => () => {},
+		const relay: DmPublishPort = {
 			publish: async (event, relayUrls) => {
 				published.push({ event, relays: relayUrls })
 				return { acceptedRelays: relayUrls }
@@ -69,14 +64,16 @@ describe('NIP-17 order publishing through Core relay port', () => {
 			rumor,
 			signer,
 			recipientPubkey,
-			recipientRelayEvents: [relayList(recipientPubkey, 'wss://recipient.example')],
-			senderRelayEvents: [relayList(senderPubkey, 'wss://sender.example')],
+			recipientRelayEvents: [relayList(recipientPrivateKey, 'wss://recipient.example')],
+			senderRelayEvents: [relayList(privateKey, 'wss://sender.example')],
 			relay,
 		})
 
 		expect(result.relayTargets.ready).toBe(true)
 		expect(published).toHaveLength(2)
-		expect(published.map(({ relays }) => relays)).toEqual([['wss://sender.example'], ['wss://recipient.example']])
-		expect(published.every(({ event }) => event.kind === NIP59_GIFT_WRAP_KIND)).toBe(true)
+		// The library's parser canonicalises a bare host to a trailing slash (`wss://x.example` → `wss://x.example/`),
+		// which is relay-config's own answer and not re-spelled here.
+		expect(published.map(({ relays }) => relays)).toEqual([['wss://sender.example/'], ['wss://recipient.example/']])
+		expect(published.every(({ event }) => event.kind === DM_GIFT_WRAP_KIND)).toBe(true)
 	})
 })

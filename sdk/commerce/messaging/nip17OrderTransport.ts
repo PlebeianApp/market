@@ -1,20 +1,21 @@
 import type { Event } from 'nostr-tools'
+import { DM_GIFT_WRAP_KIND, DM_RELAYS_KIND, dmRelaySourceFromEvents, resolveDmRelayTargets, wrapDm } from '../../core/dm/ts/index.ts'
+import type { DmRelayListEvent, DmRelayTargets } from '../../core/dm/ts/index.ts'
 import { createWorkflowError, type WorkflowError } from '../../core/errors'
-import { createNip17GiftWrapsWithSigner } from '../../core/nostr/nip17'
-import { NIP59_GIFT_WRAP_KIND } from '../../core/nostr/nip59'
-import {
-	buildNip17DmRelayListFilter,
-	resolveNip17RelayTargetsFromEvents,
-	type Nip17DmRelayListEvent,
-	type Nip17DmRelayListFilter,
-	type Nip17RelayTargetsResult,
-} from '../../core/nostr/nip17Relays'
+import type { EncryptingSigner } from '../../core/ports/encryptingSigner'
 import { unwrapNip17OrderMessages, type UnwrappedNip17OrderMessage } from './nip17OrderRead'
 import { assertOrderMessageRumor, type OrderMessageRumor } from './orderMessageRumor'
 
-export type Nip17OrderTransportSigner = Parameters<typeof createNip17GiftWrapsWithSigner>[0]['signer']
+export type Nip17OrderTransportSigner = EncryptingSigner
 
 export type Nip17OrderTransportTarget = 'sender' | 'recipient'
+
+/** The `10050` fetch filter — a request shape, not a parse; the parse belongs to relay-config. */
+export type Nip17DmRelayListFilter = {
+	kinds: [typeof DM_RELAYS_KIND]
+	authors: [string]
+	limit: 1
+}
 
 export type FetchNip17RelayListEventsParams = {
 	target: Nip17OrderTransportTarget
@@ -29,14 +30,14 @@ export type PublishNip17OrderTransportGiftWrapParams = {
 }
 
 export type Nip17OrderGiftWrapFilter = {
-	kinds: [typeof NIP59_GIFT_WRAP_KIND]
+	kinds: [typeof DM_GIFT_WRAP_KIND]
 	'#p': [string]
 }
 
 export type PublishNip17OrderTransportMessageParams = {
 	rumor: OrderMessageRumor
 	signer: Nip17OrderTransportSigner
-	fetchRelayListEvents: (params: FetchNip17RelayListEventsParams) => Promise<Nip17DmRelayListEvent[]>
+	fetchRelayListEvents: (params: FetchNip17RelayListEventsParams) => Promise<DmRelayListEvent[]>
 	publishGiftWrap: (params: PublishNip17OrderTransportGiftWrapParams) => Promise<unknown>
 	createdAt?: number
 }
@@ -57,7 +58,7 @@ export type Nip17OrderTransportGiftWrapAttempt = {
 	target: Nip17OrderTransportTarget
 	relays: string[]
 	giftWrapId: string
-	giftWrapKind: typeof NIP59_GIFT_WRAP_KIND
+	giftWrapKind: typeof DM_GIFT_WRAP_KIND
 	wrapRecipientPubkey: string
 }
 
@@ -72,33 +73,33 @@ export type PublishNip17OrderTransportResult =
 			error: Nip17OrderTransportError
 			senderFilter: Nip17DmRelayListFilter
 			recipientFilter: Nip17DmRelayListFilter
-			relayTargets: Nip17RelayTargetsResult | null
+			relayTargets: DmRelayTargets | null
 	  }
 	| {
 			status: 'wrap_failed'
 			rumorId: string
 			error: Nip17OrderTransportError
-			relayTargets: Nip17RelayTargetsResult
+			relayTargets: DmRelayTargets
 	  }
 	| {
 			status: 'sender_publish_failed'
 			rumorId: string
 			error: Nip17OrderTransportError
-			relayTargets: Nip17RelayTargetsResult
+			relayTargets: DmRelayTargets
 			sender: Nip17OrderTransportGiftWrapAttempt
 	  }
 	| {
 			status: 'recipient_publish_failed'
 			rumorId: string
 			error: Nip17OrderTransportError
-			relayTargets: Nip17RelayTargetsResult
+			relayTargets: DmRelayTargets
 			sender: Nip17OrderTransportGiftWrapAttempt
 			recipient: Nip17OrderTransportGiftWrapAttempt
 	  }
 	| {
 			status: 'published'
 			rumorId: string
-			relayTargets: Nip17RelayTargetsResult
+			relayTargets: DmRelayTargets
 			sender: Nip17OrderTransportGiftWrapAttempt
 			recipient: Nip17OrderTransportGiftWrapAttempt
 	  }
@@ -116,8 +117,16 @@ export type ReadNip17OrderTransportMessagesResult = {
 
 export function buildNip17OrderGiftWrapFilter(activeUserPubkey: string): Nip17OrderGiftWrapFilter {
 	return {
-		kinds: [NIP59_GIFT_WRAP_KIND],
+		kinds: [DM_GIFT_WRAP_KIND],
 		'#p': [activeUserPubkey],
+	}
+}
+
+export function buildNip17DmRelayListFilter(pubkey: string): Nip17DmRelayListFilter {
+	return {
+		kinds: [DM_RELAYS_KIND],
+		authors: [pubkey],
+		limit: 1,
 	}
 }
 
@@ -146,8 +155,8 @@ export async function publishNip17OrderTransportMessage(
 	const senderFilter = buildNip17DmRelayListFilter(signerPubkey)
 	const recipientFilter = buildNip17DmRelayListFilter(recipientPubkey)
 
-	let senderEvents: Nip17DmRelayListEvent[]
-	let recipientEvents: Nip17DmRelayListEvent[]
+	let senderEvents: DmRelayListEvent[]
+	let recipientEvents: DmRelayListEvent[]
 	try {
 		senderEvents = await params.fetchRelayListEvents({
 			target: 'sender',
@@ -170,14 +179,14 @@ export async function publishNip17OrderTransportMessage(
 		}
 	}
 
-	const relayTargets = resolveNip17RelayTargetsFromEvents({
-		recipientPubkey,
+	// The relay targets are the dm component's — relay-config's `dmRelays` (kind 10050) for each side.
+	const relayTargets = await resolveDmRelayTargets({
+		relaySource: dmRelaySourceFromEvents([...senderEvents, ...recipientEvents]),
 		senderPubkey: signerPubkey,
-		recipientEvents,
-		senderEvents,
+		recipientPubkey,
 	})
 
-	if (!relayTargets.ready || relayTargets.recipient.status !== 'ready' || relayTargets.sender.status !== 'ready') {
+	if (!relayTargets.ready || !relayTargets.sender || !relayTargets.recipient) {
 		return {
 			status: 'relay_targets_failed',
 			rumorId: params.rumor.id,
@@ -188,13 +197,16 @@ export async function publishNip17OrderTransportMessage(
 		}
 	}
 
-	let wraps: Awaited<ReturnType<typeof createNip17GiftWrapsWithSigner>>
+	const senderRelays = relayTargets.sender
+	const recipientRelays = relayTargets.recipient
+
+	// The two gift wraps are the dm component's — the library's `sealRumor` + `wrapSeal`.
+	let wraps: Awaited<ReturnType<typeof wrapDm>>
 	try {
-		wraps = await createNip17GiftWrapsWithSigner({
+		wraps = await wrapDm({
 			rumor: params.rumor,
 			signer: params.signer,
 			recipientPubkey,
-			createdAt: params.createdAt,
 		})
 	} catch (cause) {
 		return {
@@ -205,7 +217,7 @@ export async function publishNip17OrderTransportMessage(
 		}
 	}
 
-	if (wraps.sender.giftWrap.kind !== NIP59_GIFT_WRAP_KIND || wraps.recipient.giftWrap.kind !== NIP59_GIFT_WRAP_KIND) {
+	if (wraps.sender.kind !== DM_GIFT_WRAP_KIND || wraps.recipient.kind !== DM_GIFT_WRAP_KIND) {
 		return {
 			status: 'wrap_failed',
 			rumorId: params.rumor.id,
@@ -216,19 +228,19 @@ export async function publishNip17OrderTransportMessage(
 
 	const sender = giftWrapRecord({
 		target: 'sender',
-		relays: relayTargets.sender.relays,
-		giftWrap: wraps.sender.giftWrap,
+		relays: senderRelays,
+		giftWrap: wraps.sender,
 	})
 	const recipient = giftWrapRecord({
 		target: 'recipient',
-		relays: relayTargets.recipient.relays,
-		giftWrap: wraps.recipient.giftWrap,
+		relays: recipientRelays,
+		giftWrap: wraps.recipient,
 	})
 
 	const senderPublished = await publishGiftWrap(params.publishGiftWrap, {
 		target: 'sender',
-		relays: relayTargets.sender.relays,
-		giftWrap: wraps.sender.giftWrap,
+		relays: senderRelays,
+		giftWrap: wraps.sender,
 	})
 
 	if (!senderPublished) {
@@ -248,8 +260,8 @@ export async function publishNip17OrderTransportMessage(
 
 	const recipientPublished = await publishGiftWrap(params.publishGiftWrap, {
 		target: 'recipient',
-		relays: relayTargets.recipient.relays,
-		giftWrap: wraps.recipient.giftWrap,
+		relays: recipientRelays,
+		giftWrap: wraps.recipient,
 	})
 
 	if (!recipientPublished) {
@@ -330,7 +342,7 @@ function giftWrapRecord(params: PublishNip17OrderTransportGiftWrapParams): Nip17
 		target: params.target,
 		relays: [...params.relays],
 		giftWrapId: params.giftWrap.id,
-		giftWrapKind: NIP59_GIFT_WRAP_KIND,
+		giftWrapKind: DM_GIFT_WRAP_KIND,
 		wrapRecipientPubkey: getGiftWrapRecipientPubkey(params.giftWrap),
 	}
 }
