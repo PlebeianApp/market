@@ -1,0 +1,160 @@
+
+===== relay-config — build, test and isolation evidence =====
+# command:   bash sdk/core/relay-config/evidence/run.sh   (the caller redirects to 01-build-and-tests.txt)
+# generated: 2026-10-14T16:15:11Z   host: Linux 6.12.94+deb13-amd64 x86_64
+# bun:       1.4.2
+# module:    sdk/core/relay-config
+# note: every line below is a command's own output, not a summary of it.
+
+===== 1 · the module's own dependency store, and the declared lists (asserted, not summarised) =====
+$ (cd sdk/core/relay-config/ts && /home/admin_maxime/.bun/bin/bun pm ls)
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts node_modules (31 installed)
+├── @types/bun@1.4.3
+├── applesauce-common@6.2.0
+├── applesauce-core@6.2.0
+├── nostr-tools@2.19.4
+├── rxjs@7.8.2
+└── typescript@5.9.3
+exit: 0
+# ^ expected: applesauce-common 6.2.0, applesauce-core 6.2.0, rxjs 7.8.2, nostr-tools 2.19.x.
+dependencies: {"applesauce-common": "6.2.0", "applesauce-core": "6.2.0", "nostr-tools": "~2.19", "rxjs": "7.8.2"}
+# ^ expected: both applesauce packages EXACT (no ^, no ~), the architecture's section 8 condition.
+exit: 0
+
+===== 2 · bun test — the module's own runner =====
+$ (cd sdk/core/relay-config/ts && /home/admin_maxime/.bun/bin/bun test)
+bun test v1.4.2 (744846f84)
+
+relay-config.test.ts:
+(pass) relay-config — the port answers by role, over the library > 1 · dmRelays reads a seeded 10050, and is undefined when there is none [183.97ms]
+(pass) relay-config — the port answers by role, over the library > 2 · role("search") reads a seeded 10007 through the library model [44.71ms]
+(pass) relay-config — the port answers by role, over the library > 3 · instance("zap") keeps the injected zap relays when an instance zap set is configured [0.43ms]
+(pass) relay-config — the port answers by role, over the library > 4 · a model read touches no pool: every vendor model is a store subscription [7.10ms]
+(pass) relay-config — the port answers by role, over the library > 5 · userRead/userWrite are the 10002 mailboxes, renamed read/write [42.50ms]
+(pass) relay-config — the port answers by role, over the library > 6 · role(...) is capped per role at MAX_READ_POOL [12.95ms]
+(pass) relay-config — the port answers by role, over the library > 7 · setWriteRelay is a configuration write; the switches answer the injected data [0.86ms]
+
+ 7 pass
+ 0 fail
+ 25 expect() calls
+Ran 7 tests across 1 file. [655.00ms]
+exit: 0
+# ^ expected: 7 cases in 1 file, 7 pass, 0 fail.
+
+===== 3 · the module's own compiler configuration =====
+$ (cd sdk/core/relay-config/ts && /home/admin_maxime/.bun/bin/bun run typecheck)
+$ tsc --noEmit
+exit: 0
+# ^ expected: exit 0 and no output (tsc --noEmit, the pinned typescript).
+
+===== 4 · the import allow-list (the positive list, then the negative diff) =====
+$ find ts -maxdepth 1 -name '*.ts' | wc -l
+5
+# ^ the non-vacuity arm, asserted before the list is read: expected 5 (3 implementation files, harness.ts, 1 test file).
+$ grep -rhoE ... | sed ... | sort -u
+./adapter
+./harness
+./index
+./types
+applesauce-common/helpers/lists
+applesauce-common/helpers/relay-list
+applesauce-common/models
+applesauce-core/event-store
+applesauce-core/helpers/event
+applesauce-core/models
+bun:test
+nostr-tools
+rxjs
+specifier count: 13
+# ^ no disallowed specifier: the allow-list is ./<module file>, applesauce-core[/…],
+#   applesauce-common[/…], nostr-tools[/…], rxjs, bun:test. In particular no @/ @ui/ @platform/
+
+===== 5 · the contract: index.ts against the module MD's front-matter =====
+$ grep -nE ^export /home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/index.ts
+82:export { createRelayConfig, MAX_READ_POOL }
+83:export { DM_RELAYS_KIND, LOOKUP_RELAYS_KIND } from './adapter'
+84:export type { Mailboxes } from './adapter'
+85:export type { DmFallback, InstanceRole, RelayConfigPort, RelayDefaults, RelayRole, RelayStoreHandle } from './types'
+exit: 0
+$ python3 - /home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/relay-config.md /home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/index.ts
+contract.exports: 4 declared, 4 delivered
+contract.types: 7 declared, 7 delivered
+the two lists are equal: yes
+exit: 0
+exit: 0
+
+===== 6 · ts.md's inventory against the directory itself =====
+adapter.ts
+bun.lock
+harness.ts
+index.ts
+package.json
+relay-config.test.ts
+ts.md
+tsconfig.json
+types.ts
+files found: 9
+$ diff /dev/fd/63 /dev/fd/62
+（no output）
+exit: 0
+# ^ expected: exit 0, an empty diff. ts.md names bun.lock iff it exists.
+
+===== 7 · the increment's acceptance greps =====
+$ grep -E '"applesauce-common": "6\.2\.0"' sdk/core/relay-config/ts/package.json
+		"applesauce-common": "6.2.0",
+# ^ expected: exactly 1 match (the pin is exact, not a range).
+$ git grep -ln "applesauce-common" HEAD -- 'sdk/**' ':!*node_modules*'
+HEAD:sdk/core/relay-config/ts/adapter.ts
+HEAD:sdk/core/relay-config/ts/bun.lock
+HEAD:sdk/core/relay-config/ts/package.json
+HEAD:sdk/core/relay-config/ts/types.ts
+# ^ expected: every hit is INSIDE sdk/core/relay-config (adapter.ts names the vendor surface,
+#   types.ts names it in prose, package.json pins it, bun.lock records it). No other SDK module hits.
+$ grep -n "applesauce" sdk/core/nostr-io/ts/types.ts   (the packet's literal check)
+214: * the first implementation wires the vendor adapter over its own `applesauce-relay`
+# ^ MEASURED, and reported rather than smoothed over: 1 line, not 0. It is a PROSE mention of
+#   applesauce-relay that is already present at the base 7ad658d4 (git diff --quiet 7ad658d4..HEAD --
+#   sdk/core/nostr-io/ts/types.ts  =>  IDENTICAL). The increment adds nothing to the file and the
+#   increment is forbidden to touch it, so the packet's literal '0' cannot hold on this base.
+$ grep -n "applesauce-common" sdk/core/nostr-io/ts/types.ts   (the invariant the check is FOR)
+# ^ expected: 0 matched lines (exit 1) — nostr-io names neither the package nor any of its symbols.
+$ git diff --quiet 7ad658d4..HEAD -- sdk/core/nostr-io/ts/types.ts && echo IDENTICAL
+IDENTICAL
+
+===== 8 · the socket primitives, and the count that must be zero =====
+$ grep -rnE wss?:// --include=*.ts --exclude-dir=node_modules /home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/harness.ts:47:			app: ['wss://app.test/'],
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/harness.ts:48:			bug: ['wss://bugs.plebeian.market/'],
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/harness.ts:50:			zap: ['wss://relay.coinos.io', 'wss://nwc.primal.net'],
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:30:		store.add(relayList(KINDS.dm, recipient, ['wss://dm-one.test/', 'wss://dm-two.test/']))
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:33:		expect(await read(port.dmRelays(recipient.pubkey))).toEqual(['wss://dm-one.test/', 'wss://dm-two.test/'])
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:37:		store.add(sign(KINDS.relayList, noDm, [['r', 'wss://inbox.test/', 'read']]))
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:50:		store.add(relayList(KINDS.search, who, ['wss://search.test/']))
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:53:		expect(await read(port.role('search', who.pubkey))).toEqual(['wss://search.test/'])
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:58:		store.add(relayList(KINDS.blocked, who, ['wss://blocked.test/']))
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:59:		store.add(relayList(KINDS.favorite, who, ['wss://favorite.test/']))
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:60:		store.add(relayList(KINDS.lookup, who, ['wss://lookup.test/']))
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:61:		expect(await read(port.role('blocked', who.pubkey))).toEqual(['wss://blocked.test/'])
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:62:		expect(await read(port.role('favorite', who.pubkey))).toEqual(['wss://favorite.test/'])
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:63:		expect(await read(port.role('lookup', who.pubkey))).toEqual(['wss://lookup.test/'])
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:73:		const floor = ['wss://relay.coinos.io/', 'wss://nwc.primal.net/', 'wss://relay.primal.net/']
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:77:				instance: { app: ['wss://app.test/'], bug: [], cvm: [], zap: floor },
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:78:				instanceZap: ['wss://instance-zap.test/'],
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:84:		expect(zap).toContain('wss://instance-zap.test/')
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:97:		store.add(relayList(KINDS.search, who, ['wss://search.test/']))
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:103:		expect(await read(port.role('search', who.pubkey))).toEqual(['wss://search.test/'])
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:114:				['r', 'wss://read.test/', 'read'],
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:115:				['r', 'wss://write.test/', 'write'],
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:120:		expect(await read(port.userRead(who.pubkey))).toEqual(['wss://read.test/'])
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:121:		expect(await read(port.userWrite(who.pubkey))).toEqual(['wss://write.test/'])
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:130:		const twenty = Array.from({ length: 20 }, (_, i) => `wss://search-${i}.test/`)
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:143:		expect(port.instance('app')).toEqual(['wss://app.test/'])
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:146:		port.setWriteRelay('wss://write.test/')
+/home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts/relay-config.test.ts:147:		expect(port.instance('app')).toEqual(['wss://write.test/'])
+exit: 0
+# ^ expected: the relay literals are fixtures in harness.ts and relay-config.test.ts only (the
+#   seeded events and the injected defaults), never a connect target. node_modules excluded.
+$ grep -rnE new WebSocket|WebSocket\(|fetch\(|https?://|createServer|EventSource --include=*.ts --exclude-dir=node_modules /home/admin_maxime/work/inc2-relay-config/sdk/core/relay-config/ts
+（no output）
+exit: 1
+# ^ expected: 0 socket constructors, 0 fetches, 0 servers. The port cannot dial.

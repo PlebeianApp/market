@@ -1,0 +1,25 @@
+{
+	"name": "@plebeian-apps/relay-config",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "The relay-config module's first implementation (TypeScript): the one relay configuration port in relay-config/relay-config.md, answered by role, over applesauce-common's relay-list models and validators and applesauce-core's MailboxesModel, with the app's instance config injected as the default layer (data, never an import from src/).",
+	"exports": {
+		".": "./index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit",
+		"evidence": "bash ../evidence/run.sh"
+	},
+	"dependencies": {
+		"applesauce-common": "6.2.0",
+		"applesauce-core": "6.2.0",
+		"nostr-tools": "~2.19",
+		"rxjs": "7.8.2"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.2.0",
+		"typescript": "^5.6.0"
+	}
+}
