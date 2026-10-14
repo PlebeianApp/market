@@ -1,9 +1,8 @@
 import type { Event } from 'nostr-tools'
+import { dmRelaySourceFromEvents, resolveDmRelayTargets, wrapDm } from '../../core/dm/ts/index.ts'
+import type { DmPublishPort, DmRelayListEvent, DmRelayTargets } from '../../core/dm/ts/index.ts'
 import { createWorkflowError, WorkflowError } from '../../core/errors'
 import type { EncryptingSigner } from '../../core/ports/encryptingSigner'
-import type { NostrRelayPort } from '../../core/ports/nostrRelay'
-import { createNip17GiftWrapsWithSigner } from '../../core/nostr/nip17'
-import { resolveNip17RelayTargetsFromEvents, type Nip17DmRelayListEvent, type Nip17RelayTargetsResult } from '../../core/nostr/nip17Relays'
 import { assertOrderMessageRumor, type OrderMessageRumor } from './orderMessageRumor'
 
 export type Nip17OrderPublishTarget = 'recipient' | 'sender'
@@ -20,13 +19,13 @@ type PublishNip17OrderMessageBaseParams = {
 	rumor: OrderMessageRumor
 	signer: EncryptingSigner
 	recipientPubkey: string
-	recipientRelayEvents: Nip17DmRelayListEvent[]
-	senderRelayEvents: Nip17DmRelayListEvent[]
+	recipientRelayEvents: DmRelayListEvent[]
+	senderRelayEvents: DmRelayListEvent[]
 }
 
 export type PublishNip17OrderMessageParams = PublishNip17OrderMessageBaseParams &
 	(
-		| { relay: NostrRelayPort<Event>; publishGiftWrap?: never }
+		| { relay: DmPublishPort; publishGiftWrap?: never }
 		| { relay?: never; publishGiftWrap: (params: PublishNip17GiftWrapParams) => Promise<PublishNip17GiftWrapResult> }
 	)
 
@@ -34,7 +33,7 @@ export type PublishNip17OrderMessageResult = {
 	rumorId: string
 	recipientGiftWrapId: string
 	senderGiftWrapId: string
-	relayTargets: Nip17RelayTargetsResult
+	relayTargets: DmRelayTargets
 }
 
 export async function publishNip17OrderMessage(params: PublishNip17OrderMessageParams): Promise<PublishNip17OrderMessageResult> {
@@ -60,20 +59,24 @@ export async function publishNip17OrderMessage(params: PublishNip17OrderMessageP
 			throw new Error('NIP-17 order rumor pubkey does not match signer pubkey')
 		}
 
+		// The relay targets are the dm component's — relay-config's `dmRelays` (kind 10050) for each side,
+		// read over the library's validator and parser. No `10050` is parsed here and no `10002` is substituted.
 		phase = 'resolve_relay_targets'
-		const relayTargets = resolveNip17RelayTargetsFromEvents({
-			recipientPubkey: params.recipientPubkey,
+		const relayTargets = await resolveDmRelayTargets({
+			relaySource: dmRelaySourceFromEvents([...params.recipientRelayEvents, ...params.senderRelayEvents]),
 			senderPubkey: signerPubkey,
-			recipientEvents: params.recipientRelayEvents,
-			senderEvents: params.senderRelayEvents,
+			recipientPubkey: params.recipientPubkey,
 		})
 
-		if (!relayTargets.ready || relayTargets.recipient.status !== 'ready' || relayTargets.sender.status !== 'ready') {
+		const senderRelays = relayTargets.sender
+		const recipientRelays = relayTargets.recipient
+		if (!senderRelays || !recipientRelays) {
 			throw new Error('NIP-17 relay targets are not ready')
 		}
 
+		// The two gift wraps are the dm component's — the library's `sealRumor` + `wrapSeal` (fresh ephemeral author per wrap).
 		phase = 'create_gift_wraps'
-		const wraps = await createNip17GiftWrapsWithSigner({
+		const wraps = await wrapDm({
 			rumor: params.rumor,
 			signer: params.signer,
 			recipientPubkey: params.recipientPubkey,
@@ -82,23 +85,23 @@ export async function publishNip17OrderMessage(params: PublishNip17OrderMessageP
 		phase = 'publish_sender_wrap'
 		await publishReadyGiftWrap({
 			target: 'sender',
-			relays: relayTargets.sender.relays,
-			giftWrap: wraps.sender.giftWrap,
+			relays: senderRelays,
+			giftWrap: wraps.sender,
 			publishGiftWrap,
 		})
 
 		phase = 'publish_recipient_wrap'
 		await publishReadyGiftWrap({
 			target: 'recipient',
-			relays: relayTargets.recipient.relays,
-			giftWrap: wraps.recipient.giftWrap,
+			relays: recipientRelays,
+			giftWrap: wraps.recipient,
 			publishGiftWrap,
 		})
 
 		return {
 			rumorId: wraps.rumor.id,
-			recipientGiftWrapId: wraps.recipient.giftWrap.id,
-			senderGiftWrapId: wraps.sender.giftWrap.id,
+			recipientGiftWrapId: wraps.recipient.id,
+			senderGiftWrapId: wraps.sender.id,
 			relayTargets,
 		}
 	} catch (cause) {
