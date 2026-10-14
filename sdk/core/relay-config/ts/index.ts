@@ -25,7 +25,7 @@ import type { DmFallback, InstanceRole, RelayConfigPort, RelayDefaults, RelaySto
  * MAX_READ_POOL — the largest read pool one role may carry, `market-app/ts/relays.ts:44` @ `7ad658d4`,
  * unchanged in value and now **per role**. `role(...)` returns at most this many relays for any role.
  */
-export const MAX_READ_POOL = 12
+const MAX_READ_POOL = 12
 
 /** Insertion-ordered dedupe of relay URLs, so an additive union keeps each relay exactly once. */
 function unique(relays: readonly string[]): string[] {
@@ -33,12 +33,12 @@ function unique(relays: readonly string[]): string[] {
 }
 
 /**
- * `#createRelayConfig` — the contract's factory. It wires the port to the injected store handle and the
+ * createRelayConfig — the contract's factory. It wires the port to the injected store handle and the
  * injected default layer and holds **no** pool. `setWriteRelay(url)` records the one relay this app writes
  * to; a subsequent `instance('app')` leads with it (the app's own rule: it writes that address and leads
  * the read with it), otherwise the injected instance slots answer unchanged.
  */
-export function createRelayConfig(store: RelayStoreHandle, defaults: RelayDefaults): RelayConfigPort {
+function createRelayConfig(store: RelayStoreHandle, defaults: RelayDefaults): RelayConfigPort {
 	// The one piece of mutable state: the app's write relay, set by the one configuration write. It is not a
 	// directed call and it dials nothing.
 	let writeRelay: string | undefined
@@ -79,6 +79,7 @@ export function createRelayConfig(store: RelayStoreHandle, defaults: RelayDefaul
 	}
 }
 
+export { createRelayConfig, MAX_READ_POOL }
 export { DM_RELAYS_KIND, LOOKUP_RELAYS_KIND } from './adapter'
 export type { Mailboxes } from './adapter'
 export type { DmFallback, InstanceRole, RelayConfigPort, RelayDefaults, RelayRole, RelayStoreHandle } from './types'
