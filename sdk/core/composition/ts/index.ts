@@ -15,4 +15,6 @@
  */
 export { composeEventAccess } from './composition-root'
 export type { ComposedEventAccess, ComposedEventAccessOptions } from './composition-root'
+export { validateWithSchema } from './schema'
+export type { RuntimeSchema } from './schema'
 export { COMPOSITION_SIBLINGS } from './siblings'

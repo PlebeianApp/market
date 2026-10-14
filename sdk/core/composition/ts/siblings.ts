@@ -17,9 +17,15 @@
  * `../../event-access/ts/harness` is on the list because the moved regression suite (R1–R4, moved with
  * the root by V0) drives the **real** gate through the sibling's own host-side fakes — one harness, not
  * a second copy grown for the rung.
+ *
+ * `../../errors` and `../../result` are on the list because V1 absorbed the seed's kept half
+ * (`validateWithSchema` / `RuntimeSchema`, `./schema.ts`), which returns `Result<Value, ValidationError>`
+ * — the SDK's own shared error and result modules, siblings at the core level, moved unchanged.
  */
 export const COMPOSITION_SIBLINGS: readonly string[] = Object.freeze([
   '../../validation/ts/index',
   '../../event-access/ts/index',
   '../../event-access/ts/harness',
+  '../../errors',
+  '../../result',
 ])

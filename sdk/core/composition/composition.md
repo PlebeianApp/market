@@ -23,7 +23,11 @@ needs a rung of its own. That rung is this one.
    that builds the validator from the host's declared demands and wires `validator.accept` into
    `event-access`'s **one** accept hook. Absent validation ⇒ the socket stays absent and `access.policy`
    **is** `DEFAULT_WRITE_BACK`.
-2. From **V2**, the declaration registry and its guard (ownership · contribution · interpretability) —
+2. From **V1**, the absorbed kept half of the retired `sdk/core/validation.ts` seed —
+   `validateWithSchema` / `RuntimeSchema` (`ts/schema.ts`), the guard's own shape-check for a
+   declaration and a parser. (`EventSchemaRegistry.validate` and `validateEventWithSchema` retired: the
+   engine's `validate` is the one predicate, and a second kind check has no separate rule.)
+3. From **V2**, the declaration registry and its guard (ownership · contribution · interpretability) —
    the contribution path by which a `sdk/commerce` module declares the validation its kinds demand.
 
 ## Its independence rule, and why it is not "no sibling specifier"
@@ -35,6 +39,14 @@ equality as a checkable fact. Verified in the same increment: `bash
 sdk/core/event-access/evidence/run.sh` §4 prints `0 matched lines, exit 1`, §4b's disallowed set is
 empty, and the subject count is `10` again.
 
+**One compiler-flag exception, recorded rather than hidden.** `ts/tsconfig.json` omits
+`noImplicitOverride`, which every self-contained module sets. This rung's program necessarily includes
+SDK-root siblings (`../../errors`, `../../result`), and `sdk/core/errors.ts:5` declares
+`readonly cause?: unknown`, overriding `Error.cause` — under `noImplicitOverride` that is TS4114, on a
+file outside V0–V4's change scope (only `sdk/core/{composition,validation,event-access,commerce}/**`).
+The rung's own files override nothing, so the flag protects nothing here and its removal surfaces no
+error of the rung's own. Every other strict flag is kept.
+
 ## Declared sibling list
 
 | specifier | what it is |
@@ -42,6 +54,8 @@ empty, and the subject count is `10` again.
 | `../../validation/ts/index` | the engine (`createValidator`, and the types the root wires) |
 | `../../event-access/ts/index` | the one accept boundary (`createEventAccess`, `DEFAULT_WRITE_BACK`) |
 | `../../event-access/ts/harness` | the sibling's own host-side fakes, used by the moved R1–R4 suite |
+| `../../errors` | the SDK's shared error module — `ValidationError` for the absorbed `validateWithSchema` |
+| `../../result` | the SDK's `Result` — the shape `validateWithSchema` (and, from V2, the guard) returns |
 
 ## The regression floor this rung carries
 
