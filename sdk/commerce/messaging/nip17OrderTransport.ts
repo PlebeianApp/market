@@ -11,7 +11,7 @@ export type Nip17OrderTransportSigner = EncryptingSigner
 export type Nip17OrderTransportTarget = 'sender' | 'recipient'
 
 /** The `10050` fetch filter — a request shape, not a parse; the parse belongs to relay-config. */
-export type Nip17DmRelayListFilter = {
+type Nip17DmRelayListFilter = {
 	kinds: [typeof DM_RELAYS_KIND]
 	authors: [string]
 	limit: 1
@@ -122,7 +122,7 @@ export function buildNip17OrderGiftWrapFilter(activeUserPubkey: string): Nip17Or
 	}
 }
 
-export function buildNip17DmRelayListFilter(pubkey: string): Nip17DmRelayListFilter {
+function buildNip17DmRelayListFilter(pubkey: string): Nip17DmRelayListFilter {
 	return {
 		kinds: [DM_RELAYS_KIND],
 		authors: [pubkey],

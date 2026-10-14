@@ -12,7 +12,7 @@ const SHIPPING_REF_KIND = '30406'
 const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
 
 /** The unsigned NIP-59 rumor shape this module builds and reads (its `id` is canonical). */
-export type UnsignedRumor = {
+type UnsignedRumor = {
 	kind: number
 	pubkey: string
 	created_at: number
