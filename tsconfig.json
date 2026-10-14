@@ -6,6 +6,7 @@
 		"strictNullChecks": true,
 		"moduleResolution": "bundler",
 		"module": "preserve",
+		"target": "ESNext",
 		"allowImportingTsExtensions": true,
 		"verbatimModuleSyntax": true,
 		"noEmit": true,

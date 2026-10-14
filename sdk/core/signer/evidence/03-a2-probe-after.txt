@@ -1,0 +1,202 @@
+signer module — the red team's probes, re-run against the repaired module
+# command:   bash signer/evidence/probe.sh
+# generated: 2026-09-28T23:06:22Z   bun: 1.4.2
+# probe dir: /home/admin_maxime/work/signer-a2-probe
+# note: the probe files are A2's, are NOT part of this module, and are run unmodified.
+#       Their own files were not edited by this pass: where a probe still asserts the
+#       pre-repair behaviour it now stops on the repair (see attacks.ts below).
+
+======================================================================
+$ cd /home/admin_maxime/work/signer-a2-probe && bun run consumer.ts
+
+
+=== A. construct the composer from the entry, with no ports at all ===
+  ok   a fresh session is idle and observable
+  ok   every read refuses in a typed way without a session
+
+=== B. drive a real session on the nsec lane: sign, capabilities, encrypt ===
+  ok   startSession(nsec) reaches active with a resolved identity
+  ok   signEvent returns a real event bound to the identity
+  ok   capabilities() reflects the composer allow-list, and encrypt round-trips
+  ok   a scheme outside the allow-list refuses instead of synthesising
+  ok   endSession returns to idle and the identity is gone
+
+=== C. attach / detach an already-built signer through the entry ===
+  ok   attachSigner resolves the identity, and the session signs for it
+  ok   detachSigner tears down without touching a persisted record
+
+=== D. the persisted record, end to end, all ports the consumer wrote ===
+  ok   startSession(bunker) reaches active against the consumer’s own remote
+  ok   the persisted record is an opaque JSON envelope under the declared key
+  ok   signEvent through the restored remote uses the cached identity (one extra RPC only)
+  ok   a second session over the same storage parks locked, then unlocks with the passphrase
+
+=== E. the NIP-07 lane with an injected extension (no browser global anywhere) ===
+  ok   the injected extension lane reaches active and offers exactly what it exposes
+
+=== F. the entry guards are usable without re-deriving the predicate ===
+  ok   isSignerCapability / hasNip44 / hasNip04 work on a consumer-built capability
+  ok   an extension that exposes only half of nip44 offers no nip44 (I4)
+
+=== G. the NIP-49 lane (ncryptsec), driven from the entry ===
+  ok   startSession(ncryptsec) unlocks and signs, and endSession locks it
+  ok   a wrong ncryptsec password fails closed and leaves no signer
+
+--- consumer probe: 18 passed, 0 failed ---
+exit: 0
+
+======================================================================
+$ cd /home/admin_maxime/work/signer-a2-probe && bun run leak-qr.ts
+
+{
+  "startSession": "rejected: Nip46RpcTimeoutError",
+  "is the refusal typed?": true,
+  "observed states": [
+    "idle",
+    "connecting",
+    "awaiting_user",
+    "failed",
+    "closing",
+    "idle"
+  ],
+  "URI emitted to the sink": 1,
+  "subscriptions open after the timeout": 0,
+  "subscriptions open after endSession()": 0,
+  "verdict": "no leak"
+}
+exit: 0
+
+======================================================================
+$ cd /home/admin_maxime/work/signer-a2-probe && bun run envelope-cross.ts
+
+cross-implementation envelope check
+  iterations              : 100000
+  reference floor         : 100000   module floor: 100000
+  nbunksec                : nbunksec1qqs242424242424242424…
+
+--- direction 1: market writes, module reads
+  reference envelope keys : ct,iterations,iv,kdf,salt,v
+  reference envelope      : {"v":1,"kdf":"PBKDF2-SHA256","iterations":100000,"salt":"x1Hi8rLTg7+uSwyMeh00aw==","iv":"IBA958kEP4SDD87s","ct":"OAGJiTd…
+  module unlockVault      : IDENTICAL — the module reads the market envelope
+
+--- direction 2: module writes, market reads
+  module envelope keys    : ct,iterations,iv,kdf,salt,v
+  module envelope         : {"v":1,"kdf":"PBKDF2-SHA256","iterations":100000,"salt":"SiPUgxH+wJ8zLM9d4S2cIg==","iv":"UgJ3RhDlQwQmK6b4","ct":"JpD0sPP…
+  reference unlockVault   : IDENTICAL — the market reads the module envelope
+
+--- the base64 codec
+  btoa(random 11 bytes)   : U6+ITATpZ1Rpss4=
+  Node Buffer base64      : U6+ITATpZ1Rpss4=
+  identical               : true
+
+--- does the envelope leak the token?
+  module envelope contains the nbunksec? false
+  module envelope contains 'bunkersecret' (bech32-encoded inside)? false
+exit: 0
+
+======================================================================
+$ cd /home/admin_maxime/work/signer-a2-probe && bun run attacks.ts
+
+
+### A1 · I4 allow-list bypass
+{
+  "session.capabilities()": {},
+  "session.encrypt(...,nip44)": "refused: CapabilityUnavailableError",
+  "session.currentSigner().nip44 present": "no nip44 on the handed-out object",
+  "verdict": "not reproduced"
+}
+
+### A2 · failed lane leaves its teardown unrun
+{
+  "startSession outcome": "rejected: IdentityUnresolvedError: The bunker lane did not resolve an identity: user rejected",
+  "subscriptions open after the failure": 0,
+  "subscriptions open after endSession()": 0,
+  "verdict": "no leak observed"
+}
+
+### A3 · endSession from `locked`
+{
+  "envelope written by the first session": true,
+  "restoreSession() state": "locked",
+  "endSession() from locked": "settled",
+  "state after the observed subscription (last)": "idle",
+  "record still in storage after endSession": false,
+  "detachSigner() from locked": "settled",
+  "record still in storage after detachSigner": false
+}
+
+### A4 · a lane that fails after persisting
+{
+  "startSession outcome": "rejected: IdentityUnresolvedError: The bunker lane did not resolve an identity: user rejected",
+  "vaulted record written despite the failure": false,
+  "endSession() outcome": "settled",
+  "record still there after endSession()": false,
+  "verdict": "clean"
+}
+
+### A5 · a connect URI emitted for a lane that cannot complete
+{
+  "startSession": "rejected: ClockRequiredError: NIP-46 requires an injected clock: pass it in the settings",
+  "URIs handed to the sink": [],
+  "verdict": "refused first"
+}
+
+### A6 · a storage port that throws
+{
+  "restoreSession()": "rejected: PortError: The host storage port failed during hasVaultedSession: QuotaExceededError: the host store is unavailable",
+  "state observed while restoring": [
+    "idle",
+    "closing",
+    "idle"
+  ],
+  "endSession()": "settled",
+  "startSession() over a throwing store": "rejected: PortError: The host storage port failed during saveVaultedSession: QuotaExceededError: the host store is unavailable",
+  "observed states": [
+    "idle",
+    "connecting",
+    "active",
+    "failed:The host storage port failed during saveVaultedSession: QuotaExceededError: the host store is unavailable"
+  ],
+  "is either rejection a SignerError?": false,
+  "verdict": "restoreSession rejects with the host error, untyped; startSession ends `failed` with the host message as its reason"
+}
+
+### A7 · the host clock misbehaves
+{
+  "a completed RPC under a clock whose clearTimeout throws": "settled",
+  "a whole bunker lane under that clock (remote answers instantly)": "settled",
+  "a completed RPC under a clock that never fires": "settled",
+  "verdict": "contained"
+}
+
+### A8 · a corrupt stored envelope
+{
+  "restoreSession() state": "locked",
+  "unlock attempt": "rejected: SessionVaultError: Vault envelope is corrupt",
+  "record field": "vaulted"
+}
+
+### A9 · invariants.test.ts:381-383 ("never the key")
+{
+  "nbunksec_prefix": "nbunksec1qqsyvmtletjk8ew…",
+  "contains CLIENT_SK literal?": false,
+  "contains \"bunkersecret\" literal?": false,
+  "verdict": "the two assertions pass on the plaintext token itself — they cannot fail if the vault is bypassed"
+}
+412 | 		if (this.capability) throw new SessionAttachedError()
+413 | 		// A declared lane pin is a rule, not a hint: a composer that pinned
+414 | 		// `signerKind` refuses a session on any other lane instead of ignoring its
+415 | 		// own setting.
+416 | 		if (this.settings.signerKind && this.settings.signerKind !== input.lane) {
+417 | 			throw new LaneUnavailableError(
+               ^
+LaneUnavailableError: This composer pins sessions to the nsec lane; a bunker session is refused
+ code: "lane_unavailable"
+
+      at startSession (/home/admin_maxime/projects/market-retrofit/signer/ts/session.ts:417:10)
+      at attackDeadSettings (/home/admin_maxime/work/signer-a2-probe/attacks.ts:447:26)
+      at main (/home/admin_maxime/work/signer-a2-probe/attacks.ts:492:8)
+
+Bun v1.4.2 (Linux x64)
+exit: 1
+

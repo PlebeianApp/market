@@ -1,0 +1,59 @@
+signer — the spec <-> implementation cross-reference
+# command: python3 -B signer/evidence/hash-refs.py > signer/evidence/04-hash-refs.txt
+# (a) declared set: 25 statement identity/identities begin a line in the module's two specs
+#     plus 41 in the module's ancestors (a code token may cite itself, an ancestor, or core)
+# (b) code set: 15 distinct token(s) across signer/ts/**/*.ts (node_modules excluded)
+#     test-support (R3, exempt): ts/harness.ts, ts/*.test.ts
+
+(c) resolution — every code token against the declared set, by citation class (R2)
+  resolved    #07df21  [provenance×7]  <- (module: signer/signer.md)  No framework, no host storage, no browser global, no library type in the contract, no relay policy, no wallet, no UI copy, no marketplace kind, no raw private key
+  resolved    #179fde  [fulfilment×19]  <- (module: signer/signer.md)  The settings are contract, and each one is a decision a host may make differently without changing the semantics
+  resolved    #2902ce  [fulfilment×11]  <- (module: signer/signer.md)  The five invariants, as obligations on any implementation
+  resolved    #489ae8  [fulfilment×5]  <- (module: signer/signer.md)  The allowed transitions name their cause, and the machine refuses the rest: no active state without a resolved identity, and none while a session is already attached
+  resolved    #50e8e5  [fulfilment×5]  <- (module: signer/signer.md)  The first implementation's local choices: base64, the lane-session objects, the error type names, the helper split
+  resolved    #597459  [fulfilment×2]  <- (module: signer/signer.md)  The one deliberate difference from the harvest, stated where the spec is: the NIP-07 lane's extension is an argument, not a global
+  resolved    #5f6a1c  [fulfilment×12]  <- (module: signer/signer.md)  The carrier map: the spec's names and the implementation's names for the same operation
+  resolved    #61f309  [fulfilment×3]  <- (module: signer/signer.md)  A session is a state machine, never a boolean: idle, connecting, awaiting_user, active, locked, restoring, closing, failed
+  resolved    #6f4c1c  [fulfilment×2]  <- (module: signer/signer.md)  The identity binding is the module's single implementation of I3 `[1:1]`, applied to every lane at the one place a capability becomes the session's
+  resolved    #8a5718  [fulfilment×11]  <- (module: signer/signer.md)  The contract is thirteen session operations, one session-less entry, the spec's types and typed refusals
+  resolved    #92bb8c  [fulfilment×5]  <- (module: signer/signer.md)  A `nostrconnect://` URI carries its connection secret in the `secret` param and a legacy `token=`-only request is refused, so the emit and the inbound match are one rule in `uri.ts`
+  resolved    #acd841  [fulfilment×7]  <- (module: signer/signer.md)  nip04 and nip44 are optional by construction: present if and only if the signer provides them, never synthesised locally (I4)
+  resolved    #cb66c4  [fulfilment×12]  <- (module: signer/signer.md)  The NIP-46 lanes are entered by explicit builders — a client, a `bunker://` connect, a client-initiated await and a rehydrate — each requiring the injected transport and clock and returning the capability with the session token
+  resolved    #e4949e  [fulfilment×2]  <- (module: signer/signer.md)  attachSigner(capability, { lane })` is the amended surface: the settings this module defines are the composer's, set once at `createSignerSession(deps)`, so the second parameter carries only the lane label a snapshot reports
+  resolved    #fa0578  [fulfilment×6]  <- (module: signer/signer.md)  Nothing is implicitly signable: an operation that needs a session refuses in a typed way without one
+
+(d) uncovered declarations — a top-level export carrying no token
+  EXEMPT(R3)  signer/ts/harness.ts  CLIENT_SK
+  EXEMPT(R3)  signer/ts/harness.ts  REMOTE_SK
+  EXEMPT(R3)  signer/ts/harness.ts  USER_SK
+  EXEMPT(R3)  signer/ts/harness.ts  WRONG_SK
+  EXEMPT(R3)  signer/ts/harness.ts  CLIENT_PK
+  EXEMPT(R3)  signer/ts/harness.ts  REMOTE_PK
+  EXEMPT(R3)  signer/ts/harness.ts  USER_PK
+  EXEMPT(R3)  signer/ts/harness.ts  WRONG_PK
+  EXEMPT(R3)  signer/ts/harness.ts  CONNECT_SECRET
+  EXEMPT(R3)  signer/ts/harness.ts  BUNKER_SECRET
+  EXEMPT(R3)  signer/ts/harness.ts  RELAY
+  EXEMPT(R3)  signer/ts/harness.ts  CREATED_AT
+  EXEMPT(R3)  signer/ts/harness.ts  userTemplate
+  EXEMPT(R3)  signer/ts/harness.ts  memoryStorage
+  EXEMPT(R3)  signer/ts/harness.ts  manualClock
+  EXEMPT(R3)  signer/ts/harness.ts  webCryptoPort
+  EXEMPT(R3)  signer/ts/harness.ts  inboundEvent
+  EXEMPT(R3)  signer/ts/harness.ts  fakeTransport
+  EXEMPT(R3)  signer/ts/harness.ts  BunkerEmulatorOptions
+  EXEMPT(R3)  signer/ts/harness.ts  bunkerTransport
+  EXEMPT(R3)  signer/ts/harness.ts  bunkerUrl
+  EXEMPT(R3)  signer/ts/harness.ts  makeNbunksec
+  EXEMPT(R3)  signer/ts/harness.ts  settle
+  101 of 101 declaration(s) carry a token; 23 are test-support exempt (R3); 0 uncovered
+
+(e) uncovered files — under signer/, named by neither spec
+  0 file(s) named by no statement
+
+(f) summary
+  code tokens: 15   resolved: 15   unresolved: 0
+  citations: 102 fulfilment, 7 provenance (R2 — a negative/meta statement is never fulfilment)
+  declarations: 124   covered: 101   test-support exempt: 23   uncovered: 0
+  files: 0 uncovered
+  RESULT: every code token resolves to a declared statement.
