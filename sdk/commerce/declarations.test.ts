@@ -17,6 +17,7 @@ import { describe, expect, test } from 'bun:test'
 import { readdir } from 'node:fs/promises'
 
 import { createPresetRegistry } from '../core/composition/ts/index'
+import { NOT_YET_GATED_30408 } from './auctions/validationDeclaration'
 import { commerceValidationDeclarations } from './validationDeclarations'
 
 const HERE = import.meta.dir
@@ -68,5 +69,22 @@ describe('the sdk/commerce declarations', () => {
 			['commerce.messaging', 'commerce.orders', 17],
 		])
 		expect(report.owned.some((record) => record.owner === 'commerce.orders')).toBe(false)
+	})
+
+	test('the 30408 rules the landed engine cannot express are NAMED as not-yet-gated, never transcribed', () => {
+		// design.md §4.2b/§7.1: the retrofit's posture is "declared and still unexecuted" — a named gap,
+		// not a second definition of valid. Mutation: delete the cross-field refine from the list (or
+		// express it as a check) → red.
+		expect(NOT_YET_GATED_30408.length).toBeGreaterThan(0)
+		const named = NOT_YET_GATED_30408.map((entry) => `${entry.rule} (${entry.source})`).join(' ')
+		expect(named).toContain('5.18') // end_at ≥ start_at — a cross-field refine
+		expect(named).toContain('5.19') // max_end_at ≥ end_at
+		expect(named).toContain('more than one event') // settlement completeness — the multi-event rule
+
+		// and what IS declared for 30408 stays inside the engine's closed two-member union.
+		const listing = commerceValidationDeclarations
+			.find((declaration) => declaration.owner === 'commerce.auctions')
+			?.kinds.find((owned) => owned.kind === 30408)
+		expect(listing?.checks.map((check) => check.kind)).toEqual(['format', 'format'])
 	})
 })

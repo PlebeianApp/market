@@ -83,6 +83,20 @@ The tree's own declarations are collected by `sdk/commerce/validationDeclaration
 to `messaging` (which owns them, and admits it). The corpus criterion — one module ↔ one declaration ↔
 one `KindOwnership` per owned kind — is held by `sdk/commerce/declarations.test.ts`.
 
+## The first real demand (V3)
+
+`sdk/commerce/auctions` declares **kind 30408** with real checks, read off the cited inventory
+(`inventory.md` §5) in the engine's own closed rule language — required tags (`d`, `title`, `start_at`,
+`end_at`, `starting_bid`, `p2pk_xpub`, `mint`, `auditors`) and the four locked literals of `AUCTIONS.md`
+§4.1 as closed domains. `NOT_YET_GATED_30408` names the cited rules the landed data-only union **cannot**
+express (numeric ranges, the cross-field refines `end_at ≥ start_at` / `max_end_at ≥ end_at` /
+`auditor_quorum ≤ |auditors|`, hex/coordinate shapes, and the multi-event settlement completeness) —
+declared and still unexecuted, never transcribed (`design.md` §4.2b/§7.1).
+
+`ts/gate.test.ts` proves the path end to end: an absent `end_at` is dropped by the gated read path, the
+same event with `end_at` crosses, direct navigation still resolves the dropped one naming the failing
+check and requirement, and with 30408 withdrawn the same subject is ungated again.
+
 ## The regression floor this rung carries
 
 The four behaviours proved at `event-access/ts/composition-root.test.ts` moved with the root
