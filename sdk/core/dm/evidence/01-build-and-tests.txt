@@ -1,0 +1,105 @@
+
+===== dm — build, test and isolation evidence =====
+# command:   bash sdk/core/dm/evidence/run.sh   (the caller redirects to 01-build-and-tests.txt)
+# generated: 2026-10-14T16:47:10Z   host: Linux 6.12.94+deb13-amd64 x86_64
+# bun:       1.4.2
+# module:    sdk/core/dm
+# note: every line below is a command's own output, not a summary of it.
+
+===== 1 · the module's own dependency store, and the declared pins (asserted, not summarised) =====
+$ (cd sdk/core/dm/ts && /home/admin_maxime/.bun/bin/bun pm ls)
+/home/admin_maxime/work/rp-dm/sdk/core/dm/ts node_modules (30 installed)
+├── @types/bun@1.4.3
+├── applesauce-common@6.2.0
+├── applesauce-core@6.2.0
+├── nostr-tools@2.19.4
+├── rxjs@7.8.2
+└── typescript@5.9.3
+exit: 0
+# ^ expected: applesauce-common 6.2.0, applesauce-core 6.2.0, rxjs 7.8.2, nostr-tools 2.19.x.
+dependencies: {"applesauce-common": "6.2.0", "applesauce-core": "6.2.0", "nostr-tools": "~2.19", "rxjs": "7.8.2"}
+# ^ expected: both applesauce packages EXACT (no ^, no ~).
+exit: 0
+
+===== 2 · bun test — the module's own runner =====
+$ (cd sdk/core/dm/ts && /home/admin_maxime/.bun/bin/bun test)
+bun test v1.4.2 (744846f84)
+
+dm.test.ts:
+(pass) dm — the write and read paths over the library, the targets from relay-config > 1 · wrapDm produces two kind-1059 wraps with distinct ephemeral authors [80.47ms]
+(pass) dm — the write and read paths over the library, the targets from relay-config > 2 · both wraps carry one rumor, and unwrapDm round-trips it [30.54ms]
+(pass) dm — the write and read paths over the library, the targets from relay-config > 3 · resolveDmRelayTargets reads dmRelays for both sides [23.34ms]
+(pass) dm — the write and read paths over the library, the targets from relay-config > 4 · a missing 10050 is undefined — no 10002 fallback [13.04ms]
+
+ 4 pass
+ 0 fail
+ 17 expect() calls
+Ran 4 tests across 1 file. [443.00ms]
+exit: 0
+# ^ expected: 4 cases in 1 file, 4 pass, 0 fail.
+
+===== 3 · the module's own compiler configuration =====
+$ (cd sdk/core/dm/ts && /home/admin_maxime/.bun/bin/bun run typecheck)
+$ tsc --noEmit
+exit: 0
+# ^ expected: exit 0 and no output (tsc --noEmit, the pinned typescript).
+
+===== 4 · the import allow-list (the positive list, then the negative diff) =====
+$ find ts -maxdepth 1 -name '*.ts' | wc -l
+6
+# ^ the non-vacuity arm, asserted before the list is read: expected 5 (adapter.ts, relay-source.ts,
+#   types.ts, index.ts, harness.ts + dm.test.ts => 6).
+$ grep -rhoE ... | sed ... | sort -u
+../../relay-config/ts/index.ts
+./adapter
+./harness
+./index
+./relay-source
+./types
+applesauce-common/helpers/gift-wrap
+applesauce-common/operations/gift-wrap
+applesauce-core/event-store
+applesauce-core/factories
+applesauce-core/helpers/pipeline
+bun:test
+nostr-tools
+rxjs
+specifier count: 14
+# ^ no disallowed specifier: ./<module file>, ../../relay-config/ts/index.ts, applesauce-core[/…],
+#   applesauce-common[/…], nostr-tools[/…], rxjs, bun:test.
+
+===== 5 · the contract: index.ts against dm.md's front-matter =====
+$ grep -nE ^export /home/admin_maxime/work/rp-dm/sdk/core/dm/ts/index.ts
+31:export { wrapDm, unwrapDm, dmRelaySourceFromEvents, resolveDmRelayTargets }
+32:export type { DmReadResult, DmRelayListEvent, DmRelaySource, DmRelayTargets, DmRumor, DmSignableEvent, DmSigner, DmWriteResult } from './types'
+exit: 0
+$ python3 - /home/admin_maxime/work/rp-dm/sdk/core/dm/dm.md /home/admin_maxime/work/rp-dm/sdk/core/dm/ts/index.ts
+contract.exports: 4 declared, 4 delivered
+contract.types: 8 declared, 8 delivered
+the two lists are equal: yes
+exit: 0
+exit: 0
+
+===== 6 · the socket primitives, and the count that must be zero =====
+$ grep -rnE wss?:// --include=*.ts --exclude-dir=node_modules /home/admin_maxime/work/rp-dm/sdk/core/dm/ts
+/home/admin_maxime/work/rp-dm/sdk/core/dm/ts/dm.test.ts:74:			asRelayEvent(relayList(DM_RELAYS_KIND, sender, ['wss://sender-dm.test/'])),
+/home/admin_maxime/work/rp-dm/sdk/core/dm/ts/dm.test.ts:75:			asRelayEvent(relayList(DM_RELAYS_KIND, recipient, ['wss://recipient-dm.test/'])),
+/home/admin_maxime/work/rp-dm/sdk/core/dm/ts/dm.test.ts:80:		expect(targets.recipient).toEqual(['wss://recipient-dm.test/'])
+/home/admin_maxime/work/rp-dm/sdk/core/dm/ts/dm.test.ts:81:		expect(targets.sender).toEqual(['wss://sender-dm.test/'])
+/home/admin_maxime/work/rp-dm/sdk/core/dm/ts/dm.test.ts:95:			asRelayEvent(relayList(DM_RELAYS_KIND, sender, ['wss://sender-dm.test/'])),
+/home/admin_maxime/work/rp-dm/sdk/core/dm/ts/dm.test.ts:97:			asRelayEvent(relayList(NIP65_RELAY_LIST_KIND, recipient, ['wss://inbox.test/'])),
+exit: 0
+# ^ expected: the relay literals are fixtures in harness.ts and dm.test.ts only (seeded events),
+#   never a connect target.
+$ grep -rnE new WebSocket|WebSocket\(|fetch\(|https?://|createServer|EventSource --include=*.ts --exclude-dir=node_modules /home/admin_maxime/work/rp-dm/sdk/core/dm/ts
+（no output）
+exit: 1
+# ^ expected: 0 socket constructors, 0 fetches, 0 servers. The component cannot dial.
+
+===== 7 · the acceptance greps =====
+$ grep -E applesauce-common: 6\.2\.0 sdk/core/dm/ts/package.json
+		"applesauce-common": "6.2.0",
+# ^ expected: exactly 1 match (the pin is exact, not a range).
+$ grep -E applesauce-core: 6\.2\.0 sdk/core/dm/ts/package.json
+		"applesauce-core": "6.2.0",
+# ^ expected: exactly 1 match.
