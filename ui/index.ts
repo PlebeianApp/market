@@ -19,4 +19,5 @@ export { DashboardProductTrigger, DashboardProductDetails } from './components/D
 export { DashboardCollectionTrigger, DashboardCollectionDetails } from './components/DashboardCollectionListItem'
 export { DashboardOverviewStats } from './components/DashboardOverviewStats'
 export type { DashboardOverviewOrder, DashboardOverviewStatsProps } from './components/DashboardOverviewStats'
+export { OrderAmountText, OrderDateText, OrderReferenceBadge } from './components/OrderListCells'
 export { cn } from './utils/cn'

@@ -1,8 +1,9 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { formatSats, getBuyerPubkey, getEventDate, getOrderAmount, getOrderId, getSellerPubkey } from '@/queries/orders'
+import { getOrderRecipientPubkey, getOrderReference } from '@sdk/commerce/orders'
 import { Link } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
+import { OrderAmountText, OrderDateText, OrderReferenceBadge } from '@ui/components/OrderListCells'
 import { OrderActions } from './OrderActions'
 import { UserCard } from '../UserCard'
 
@@ -11,32 +12,26 @@ export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	{
 		accessorKey: 'orderId',
 		header: 'Order ID',
-		cell: ({ row }) => {
-			const orderId = getOrderId(row.original.order)
-			return (
-				<div className="border border-gray-300 rounded px-3 py-1 inline-block">
-					<Link to="/dashboard/orders/$orderId" params={{ orderId: orderId || 'unknown' }} className="font-mono text-xs hover:underline">
-						{orderId ? `${orderId.substring(0, 8)}...` : 'Unknown'}
+		cell: ({ row }) => (
+			<OrderReferenceBadge
+				order={row.original.order}
+				renderLink={(orderId, children) => (
+					<Link to="/dashboard/orders/$orderId" params={{ orderId }} className="font-mono text-xs hover:underline">
+						{children}
 					</Link>
-				</div>
-			)
-		},
+				)}
+			/>
+		),
 	},
 	{
 		accessorKey: 'date',
 		header: 'Time & Date',
-		cell: ({ row }) => {
-			const date = getEventDate(row.original.order)
-			return <span className="text-xs text-muted-foreground">{date}</span>
-		},
+		cell: ({ row }) => <OrderDateText order={row.original.order} />,
 	},
 	{
 		accessorKey: 'amount',
 		header: () => <div className="text-right">Amount</div>,
-		cell: ({ row }) => {
-			const amount = getOrderAmount(row.original.order)
-			return <div className="text-right font-medium">{formatSats(amount)}</div>
-		},
+		cell: ({ row }) => <OrderAmountText order={row.original.order} />,
 	},
 ]
 
@@ -76,17 +71,22 @@ const salesActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
 	},
 }
 
+const sellerColumn: ColumnDef<OrderWithRelatedEvents> = {
+	accessorKey: 'seller',
+	header: 'Seller',
+	cell: ({ row }) => <UserCard pubkey={getOrderRecipientPubkey(row.original.order) || ''} size="xs" onPress="none" />,
+}
+
+const buyerColumn: ColumnDef<OrderWithRelatedEvents> = {
+	accessorKey: 'buyer',
+	header: 'Buyer',
+	cell: ({ row }) => <UserCard pubkey={row.original.order.pubkey || ''} size="xs" onPress="none" />,
+}
+
 // Columns for purchases (buyer's perspective)
 export const purchaseColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	baseOrderColumns[0], // Order ID
-	{
-		accessorKey: 'seller',
-		header: 'Seller',
-		cell: ({ row }) => {
-			const sellerPubkey = getSellerPubkey(row.original.order)
-			return <UserCard pubkey={sellerPubkey || ''} size="xs" onPress="none" />
-		},
-	},
+	sellerColumn,
 	baseOrderColumns[1], // Date
 	baseOrderColumns[2], // Amount
 	purchaseActionsColumn, // Actions
@@ -96,16 +96,11 @@ export const purchaseColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	{
 		...baseOrderColumns[0], // Order ID
-		accessorFn: (row) => getOrderId(row.order),
+		accessorFn: (row) => getOrderReference(row.order) ?? undefined,
 	},
 	{
-		accessorKey: 'buyer',
-		header: 'Buyer',
-		cell: ({ row }) => {
-			const buyerPubkey = getBuyerPubkey(row.original.order)
-			return <UserCard pubkey={buyerPubkey || ''} size="xs" onPress="none" />
-		},
-		accessorFn: (row) => getBuyerPubkey(row.order),
+		...buyerColumn,
+		accessorFn: (row) => row.order.pubkey,
 	},
 	baseOrderColumns[1], // Date
 	baseOrderColumns[2], // Amount
@@ -115,22 +110,8 @@ export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 // Full columns (showing both buyer and seller)
 export const fullOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	baseOrderColumns[0], // Order ID
-	{
-		accessorKey: 'seller',
-		header: 'Seller',
-		cell: ({ row }) => {
-			const sellerPubkey = getSellerPubkey(row.original.order)
-			return <UserCard pubkey={sellerPubkey || ''} size="xs" onPress="none" />
-		},
-	},
-	{
-		accessorKey: 'buyer',
-		header: 'Buyer',
-		cell: ({ row }) => {
-			const buyerPubkey = getBuyerPubkey(row.original.order)
-			return <UserCard pubkey={buyerPubkey || ''} size="xs" onPress="none" />
-		},
-	},
+	sellerColumn,
+	buyerColumn,
 	baseOrderColumns[1], // Date
 	baseOrderColumns[2], // Amount
 	{
