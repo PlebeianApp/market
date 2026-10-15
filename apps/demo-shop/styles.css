@@ -1,0 +1,218 @@
+/*
+ * apps/demo-shop/styles.css — this instance's own stylesheet.
+ *
+ * Detail 1/2: no Tailwind build. The app is a *consumer* of `ui/`, and `ui/`'s
+ * components already publish their variant and state as attributes
+ * (`data-slot="badge"`, `data-variant="…"`, `data-selected`). Theming them from
+ * those attributes keeps the app's stylesheet and `ui/`'s class names decoupled,
+ * which is the direction ADR-0021 wants ("UI … does not depend on application
+ * routes and global stores"; conversely an app should not have to fork `ui/`'s
+ * utility classes to colour a badge).
+ *
+ * Detail 2/2: this file defines no commerce rule. Everything shown is text the
+ * read model produced.
+ */
+
+:root {
+	--ds-bg: #0b0b0d;
+	--ds-fg: #f4f4f6;
+	--ds-muted: #9a9aa6;
+	--ds-border: #26262d;
+	--ds-card: #141418;
+	--ds-accent: #d84a8a;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	background: var(--ds-bg);
+	color: var(--ds-fg);
+	font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 15px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+
+.ds-page {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+	max-width: 62rem;
+	margin: 0 auto;
+	padding: 2.25rem 1.5rem 3rem;
+}
+
+.ds-header {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	padding-bottom: 1.25rem;
+	border-bottom: 1px solid var(--ds-border);
+}
+
+.ds-instance-name {
+	margin: 0;
+	font-size: 1.75rem;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+}
+
+.ds-main {
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+}
+
+.ds-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.ds-list-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.ds-section-title {
+	margin: 0;
+	font-size: 1.125rem;
+	font-weight: 600;
+}
+
+.ds-muted {
+	margin: 0;
+	color: var(--ds-muted);
+	font-size: 0.8125rem;
+}
+
+.ds-rows {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+	gap: 0.9rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ds-row {
+	display: flex;
+	flex-direction: column;
+	gap: 0.7rem;
+	padding: 1rem;
+	border: 1px solid var(--ds-border);
+	border-radius: 0.6rem;
+	background: var(--ds-card);
+}
+
+.ds-row-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.ds-row-title {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 600;
+}
+
+.ds-price {
+	flex-shrink: 0;
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: var(--ds-accent);
+}
+
+.ds-summary {
+	margin: 0;
+	font-size: 0.8125rem;
+	color: var(--ds-muted);
+}
+
+.ds-badges {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.ds-meta {
+	margin: 0;
+	font-size: 0.6875rem;
+	color: var(--ds-muted);
+	word-break: break-all;
+}
+
+.ds-empty {
+	margin: 0;
+	padding: 1.5rem;
+	border: 1px dashed var(--ds-border);
+	border-radius: 0.6rem;
+	color: var(--ds-muted);
+	font-size: 0.875rem;
+}
+
+.ds-footer {
+	padding-top: 1.25rem;
+	border-top: 1px solid var(--ds-border);
+	color: var(--ds-muted);
+	font-size: 0.75rem;
+}
+
+/* ── ui/ components, themed through the attributes they publish ───────────── */
+
+[data-slot='badge'] {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 0.15rem 0.55rem;
+	border: 1px solid var(--ds-border);
+	border-radius: 999px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+[data-slot='badge'][data-variant='default'] {
+	background: var(--ds-fg);
+	color: var(--ds-bg);
+	border-color: var(--ds-fg);
+}
+
+[data-slot='badge'][data-variant='secondary'] {
+	background: #16321f;
+	color: #7ee2a8;
+	border-color: #245038;
+}
+
+[data-slot='badge'][data-variant='destructive'] {
+	background: #35141c;
+	color: #ff9bb0;
+	border-color: #582233;
+}
+
+[data-slot='badge'][data-variant='outline'] {
+	background: transparent;
+	color: var(--ds-muted);
+}
+
+[data-slot='badge'][data-selected='true'] {
+	background: var(--ds-accent);
+	color: #14141a;
+	border-color: var(--ds-accent);
+}
+
+[data-slot='badge'][data-selected='false'] {
+	background: #1b1b21;
+	color: #c9c9d3;
+	border-color: var(--ds-border);
+}

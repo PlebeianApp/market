@@ -1,0 +1,2 @@
+# Capture artefacts for this instance's acceptance harness. Regenerable, not source.
+.capture/
