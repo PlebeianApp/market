@@ -134,6 +134,31 @@ and would then read as a promise of compatibility this port does not make. The r
 **outside** the three-operation closure (`#de8ec0`); this type carries the money seam and adds no verb to it. It
 is a type and adds **no value export**, so the module still performs nothing.
 
+## `#d6061c` — The reclaim is not a `FundsStep`: it splits across two layers, and the losing bidder's exit is the lock redemption
+
+The reclaim verb stays **outside** the port's three-operation closure and is never a `FundsStep`: the three
+operations (`#de8ec0`) are the **leg** vocabulary, and the refund is a **second direction above the leg** — a
+seller-side second payment, initiated on the other side of settlement — which `#445a29` already records as a
+human-reached transition: *"the seller opening a refund set — the refund direction's initiation, a seller-side
+second payment"*. Because the refund is above the leg rather than a leg step, it adds no verb to the closed set
+(`#777238`) and no wrapper is made to declare a step it can never perform.
+
+The reclaim is **two layers**, each with a **named owner** (`#445a29`):
+
+- the **leg/engine layer**, owned by whichever party holds the engine, carries **two** operations: the
+  **rollback** — an operation-keyed undo, refused while the operation is still pending — and the **lock
+  redemption** `redeemP2pk`, a token-keyed spend of the lock at the mint by the holder of the refund key; and
+- the **set layer**, owned by the aggregator, carries `openRefund` — opening a second, seller-side payment set,
+  keyed on the purchase set itself.
+
+The two layers are **not interchangeable**, and naming which operation is the exit is the whole point: the
+**losing bidder's exit is the lock redemption**, not the rollback. A losing bidder holds a lock at the mint and
+a refund key that can spend it, while the engine **refuses to roll back** a send that is still pending or
+unpublished — so routing the losing-bid exit to the rollback names a transition that cannot fire. The set
+refund is not the exit either: a bid that is locked but unpublished may **have no purchase set** to key it on.
+Which rail binds which layer, and how a token-keyed recovery request resolves to the lock redemption, is the
+rail's own binding, stated per rail and never here.
+
 ## `#6f9f08` — One rung vocabulary, and only a cryptographic witness settles a leg
 
 Progress markers, in order: `intent -> attempted -> submitted`. Proof rungs, per leg: **`attested`** — a
