@@ -16,7 +16,7 @@ contract:
   entry: ts/index.ts   # the types-only implementation's entry; the document remains the technical spec
   operations: [obtain, submit, reconcile]
   exports: []   # no value exports: the whole surface is types, and this module performs nothing
-  types: [FundsStep, FundsOperations, FundsAuthorityKind, FundsProgress, FundsRung, FundsWitnessKind, FundsIntent, FundsQuote, FundsRefusal, FundsWitness, FundsState, FundsHandle, WrapperRegistration]
+  types: [FundsStep, FundsOperations, FundsPort, FundsAuthorityKind, FundsProgress, FundsRung, FundsWitnessKind, FundsIntent, FundsQuote, FundsRefusal, FundsWitness, FundsState, FundsHandle, WrapperRegistration]
 implementations:
   - id: ts
     lang: typescript
@@ -122,6 +122,17 @@ broadcast — an invoice exposed for the buyer to scan, with nothing in the app 
 `obtain` and `reconcile` and **omits `submit`**, so its absent `submit` is a **declared fact** rather than a
 missing method. A rail that does declare `submit` (a leg that moves money) must also declare `reconcile`,
 because a money-mover with no reconcile step is a paid but unlearnable leg.
+
+## `#777238` — The port gains a type of its own: `FundsPort<Command>`, beside the three operations
+
+The port's three operations (`#de8ec0`) are this layer's vocabulary; alongside them this contract now ships the
+**type** a rail's adapter satisfies, `FundsPort<Command>`, declared **beside** that statement and never editing
+it: `obtain(command)`, `submit(quote, reference)` and `reconcile(reference)` — exactly the same three operations
+and no fourth. The `Command` parameter is the **rail's own** command shape, and it is **unconstrained and has no
+default**: every caller passes its own command type, so a default would apply only where no argument is passed
+and would then read as a promise of compatibility this port does not make. The refund and reclaim verbs stay
+**outside** the three-operation closure (`#de8ec0`); this type carries the money seam and adds no verb to it. It
+is a type and adds **no value export**, so the module still performs nothing.
 
 ## `#6f9f08` — One rung vocabulary, and only a cryptographic witness settles a leg
 

@@ -21,6 +21,17 @@ export type FundsStep = 'obtain' | 'submit' | 'reconcile'
 export type FundsOperations = readonly [FundsStep, ...FundsStep[]]
 
 /**
+ * `#777238` FundsPort — the money seam: the type a rail's adapter satisfies over its own command shape.
+ * The three operations are `#de8ec0`'s, and the refund/reclaim verb stays outside that closure; `Command`
+ * is the rail's own, unconstrained and carrying no default. A type only: the module still performs nothing.
+ */
+export interface FundsPort<Command> {
+	obtain(command: Command): Promise<FundsQuote | FundsRefusal>
+	submit(quote: FundsQuote, reference: string): Promise<FundsHandle>
+	reconcile(reference: string): Promise<FundsHandle>
+}
+
+/**
  * `#a8e2cf` FundsAuthorityKind — derived from a leg's method, never asserted beside it. `local` is a
  * proof repository the app itself holds; `remote-and-observable` is one it can only address through a
  * rail, so the leg's binding carries a verification expectation instead of a reconciliation handle.

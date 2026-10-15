@@ -7,6 +7,7 @@
 export type {
 	FundsStep,
 	FundsOperations,
+	FundsPort,
 	FundsAuthorityKind,
 	FundsProgress,
 	FundsRung,
