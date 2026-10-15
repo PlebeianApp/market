@@ -4,7 +4,7 @@
 # documented at https://ui.shadcn.com/docs/components where you can add
 # more to the list.
 
-# The script automatically pulls the components into src/components/ui.
+# The script automatically pulls the components into ui/primitives (see components.json).
 
 # ==============================================================================
 # CONFIGURATION: Edit this list to change which components are updated

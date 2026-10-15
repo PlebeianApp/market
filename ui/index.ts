@@ -1,4 +1,4 @@
-export { Badge, badgeVariants } from './components/Badge'
+export { Badge, badgeVariants } from './primitives/badge'
 export type { SelectableBadgeProps } from './components/SelectableBadge'
 export { SelectableBadge } from './components/SelectableBadge'
 export { ProductSearchResults } from './components/ProductSearchResults'

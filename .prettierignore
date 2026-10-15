@@ -1,4 +1,5 @@
 node_modules
 dist
 src/components/ui
+ui/primitives
 build

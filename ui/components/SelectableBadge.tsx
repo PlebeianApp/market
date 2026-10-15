@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Badge } from './Badge'
+import { Badge } from '../primitives/badge'
 import { cn } from '../utils/cn'
 
 type BadgeProps = React.ComponentProps<typeof Badge>
