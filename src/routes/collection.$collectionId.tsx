@@ -1,5 +1,5 @@
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
-import { ItemGrid } from '@/components/ItemGrid'
+import { ItemGrid } from '@ui/components/ItemGrid'
 import { Nip05Badge } from '@/components/Nip05Badge.tsx'
 import { ProductCard } from '@/components/ProductCard'
 import { Button } from '@/components/ui/button'

@@ -1,7 +1,7 @@
 import { PickupLocationDialog } from '@/components/dialogs/PickupLocationDialog'
 import { ShareProfileDialog } from '@/components/dialogs/ShareProfileDialog'
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
-import { ItemGrid } from '@/components/ItemGrid'
+import { ItemGrid } from '@ui/components/ItemGrid'
 import { Nip05Badge } from '@/components/Nip05Badge'
 import { ProductCard } from '@/components/ProductCard'
 import { ProfileName } from '@/components/ProfileName'

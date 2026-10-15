@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQueries, useQuery } from '@tanstack/react-query'
-import { ItemGrid } from '@/components/ItemGrid'
+import { ItemGrid } from '@ui/components/ItemGrid'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { uiActions } from '@/lib/stores/ui'

@@ -18,7 +18,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Media } from '@/components/Media'
 import { UserCard } from '@/components/UserCard'
-import { ConfettiBurst } from '@/components/ConfettiBurst'
+import { ConfettiBurst } from '@ui/components/ConfettiBurst'
 import { auctionWonActions, auctionWonStore } from '@/lib/stores/auctionWon'
 import { authStore } from '@/lib/stores/auth'
 import { nip60Actions } from '@/lib/stores/nip60'

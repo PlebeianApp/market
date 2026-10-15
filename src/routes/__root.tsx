@@ -1,6 +1,6 @@
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
-import { Pattern } from '@/components/pattern'
+import { Pattern } from '@ui/components/Pattern'
 import { SheetRegistry } from '@/components/SheetRegistry'
 import { DialogRegistry } from '@/components/DialogRegistry'
 import { configStore } from '@/lib/stores/config'

@@ -1,7 +1,7 @@
 import { useSimpleInfiniteScroll } from '@/hooks/useSimpleInfiniteScroll'
 import { useScrollRestoration } from '@/hooks/useScrollRestoration'
 import { ProductCard } from '@/components/ProductCard'
-import { ItemGrid } from '@/components/ItemGrid'
+import { ItemGrid } from '@ui/components/ItemGrid'
 import { Button } from '@/components/ui/button'
 import { uiStore } from '@/lib/stores/ui'
 import { filterNSFWProducts } from '@/queries/products'
