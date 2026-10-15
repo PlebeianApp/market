@@ -23,7 +23,7 @@ import {
 } from '../queries/products'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedProducts } from '@/queries/featured'
-import { SelectableBadge } from '@/components/shared/SelectableBadge'
+import { SelectableBadge } from '@ui/components/SelectableBadge'
 import { ShowTestListingsToggle } from '@/components/ShowTestListingsToggle'
 
 // Hook to inject dynamic CSS for background image

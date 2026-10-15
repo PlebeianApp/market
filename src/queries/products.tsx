@@ -1141,15 +1141,15 @@ export const fetchProductsBySearchWithSellers = async (
 	return nonTestLabeledResults.slice(0, limit)
 }
 
-/** React Query options for searching products by text (includes seller name search) */
+/** React Query options for searching products by text. */
 export const productsSearchQueryOptions = (query: string, limit: number = 20) =>
 	queryOptions({
 		queryKey: [...productKeys.all, 'search', query, limit],
-		queryFn: () => fetchProductsBySearchWithSellers(query, limit),
+		queryFn: () => fetchProductsBySearch(query, limit),
 		enabled: !!query?.trim(),
 	})
 
-/** Hook to search products by text (includes seller name search) */
+/** Hook to search products by matching product text. */
 export const useProductSearch = (query: string, options?: { enabled?: boolean; limit?: number }) => {
 	return useQuery({
 		...productsSearchQueryOptions(query, options?.limit ?? 20),

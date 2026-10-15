@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/react-query'
 import { productsQueryOptions } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
-import { SelectableBadge } from '@/components/shared/SelectableBadge'
+import { SelectableBadge } from '@ui/components/SelectableBadge'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {

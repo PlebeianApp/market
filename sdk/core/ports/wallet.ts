@@ -1,4 +1,4 @@
-/**
+    /**
  * Host-supplied wallet capabilities. PaymentOutcome should remain a
  * discriminated lifecycle type; the SDK does not interpret acknowledgement
  * as settlement or a successful receive as a published marketplace receipt.

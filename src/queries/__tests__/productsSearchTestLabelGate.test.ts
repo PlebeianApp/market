@@ -4,7 +4,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { testLabelActions } from '@/lib/stores/testLabels'
 import type { NDKEvent, NDKFilter } from '@/lib/nostr/ndk-events'
 import { invalidateTestLabelCache, setCachedTestLabel } from '../testLabels'
-import { fetchProductsBySearchWithSellers } from '../products'
+import { fetchProductsBySearch, fetchProductsBySearchWithSellers, productsSearchQueryOptions } from '../products'
 
 /**
  * ADR-0009 regression: the seller-name half of product search is a browsing
@@ -211,6 +211,27 @@ describe('fetchProductsBySearchWithSellers — the seller-name half is gated (AD
 		const results = await fetchProductsBySearchWithSellers('   ', 20)
 
 		expect(results).toEqual([])
+		expect(byAuthorFilters).toHaveLength(0)
+	})
+})
+
+describe('product text search results', () => {
+	test('does not expand a matching seller name into the seller catalogue', async () => {
+		seedLabels()
+
+		const searchQuery = productsSearchQueryOptions(SEARCH_QUERY, 20)
+		const results = await searchQuery.queryFn!({} as never)
+
+		expect(ids(results)).toEqual([DIRECT_HIT.id])
+		expect(byAuthorFilters).toHaveLength(0)
+	})
+
+	test('direct product search returns only the relay text matches', async () => {
+		seedLabels()
+
+		const results = await fetchProductsBySearch(SEARCH_QUERY, 20)
+
+		expect(ids(results)).toEqual([DIRECT_HIT.id])
 		expect(byAuthorFilters).toHaveLength(0)
 	})
 })

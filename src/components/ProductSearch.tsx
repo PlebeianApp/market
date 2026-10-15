@@ -1,17 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { Media } from '@/components/Media'
 import { Input } from '@/components/ui/input'
-import { Link, useNavigate } from '@tanstack/react-router'
-import {
-	useProductSearch,
-	getProductTitle,
-	getProductId,
-	getProductImages,
-	getProductPubkey,
-	productQueryOptions,
-} from '@/queries/products'
+import { useNavigate } from '@tanstack/react-router'
+import { useProductSearch, productQueryOptions } from '@/queries/products'
 import { useQueryClient } from '@tanstack/react-query'
 import { UserCard } from './UserCard'
+import { ProductSearchResults } from '@ui/components/ProductSearchResults'
+import { Media } from '@/components/Media'
 
 const DEBOUNCE_MS = 500
 
@@ -91,57 +85,21 @@ export function ProductSearch() {
 			</div>
 
 			{showResults && (
-				<div className="p-2 flex flex-col gap-2 absolute top-full mt-2 bg-[#1c1c1c] rounded-lg shadow-lg w-full lg:w-[480px] lg:left-auto lg:right-0 z-40">
-					{results.length === 0 ? (
-						<div className="p-4 text-center text-white">{isFetching ? 'Searching...' : 'No products found'}</div>
-					) : (
-						<div className="max-h-[320px] overflow-y-auto divide-y divide-white/10">
-							{results.map((ev) => {
-								const title = getProductTitle(ev)
-								const id = getProductId(ev)
-								const images = getProductImages(ev)
-								const sellerPubkey = getProductPubkey(ev)
-								const mainImage = images?.[0]?.[1] // First image URL
-
-								return (
-									<Link
-										to="/products/$productId"
-										params={{ productId: ev.id }}
-										key={ev.id}
-										className="flex items-center gap-3 p-2 rounded hover:bg-white/5"
-										onClick={() => {
-											queryClient.setQueryData(productQueryOptions(ev.id).queryKey, ev)
-											setShowResults(false)
-										}}
-									>
-										{/* Product Image */}
-										{mainImage && <Media src={mainImage} alt={title || 'Product'} className="w-8 h-8 rounded object-cover shrink-0" />}
-
-										{/* Content Section */}
-										<div className="flex-1 min-w-0 flex items-center gap-2">
-											<span className="text-sm text-white truncate">{title || id || ev.id}</span>
-											{sellerPubkey && (
-												<>
-													<span className="text-xs text-gray-400">by</span>
-													<UserCard pubkey={sellerPubkey} size="xs" onPress="none" />
-												</>
-											)}
-										</div>
-
-										<span className="i-external-link w-4 h-4 text-secondary shrink-0" />
-									</Link>
-								)
-							})}
-						</div>
-					)}
-					<div className="pt-1">
-						<button
-							onClick={onShowResultsPage}
-							className="w-full text-center text-xs font-medium text-secondary hover:text-white transition-colors py-2"
-						>
-							Show search results in page
-						</button>
-					</div>
+				<div className="absolute top-full right-0 z-40 mt-2 w-full lg:w-[480px]">
+					<ProductSearchResults
+						products={results}
+						isLoading={isFetching}
+						onSelect={(product) => {
+							queryClient.setQueryData(productQueryOptions(product.id).queryKey, product)
+							navigate({ to: '/products/$productId', params: { productId: product.id } })
+							setShowResults(false)
+						}}
+						onShowAll={onShowResultsPage}
+						renderImage={(imageUrl, title) => (
+							<Media src={imageUrl} alt={title || 'Product'} className="size-8 shrink-0 rounded object-cover" />
+						)}
+						renderSeller={(pubkey) => <UserCard pubkey={pubkey} size="xs" onPress="none" />}
+					/>
 				</div>
 			)}
 		</div>

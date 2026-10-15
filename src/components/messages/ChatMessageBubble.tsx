@@ -16,6 +16,7 @@ import { fetchProductByATag, useProductTitle, useProductPrice, useProductImages 
 import { getCoordsFromATag } from '@/lib/utils/coords'
 import { extractActualContent, isSafeImageUrl } from '@/lib/utils/message-content'
 import { Link } from '@tanstack/react-router'
+import { getProductDescription, getProductId, getProductImages, getProductPrice, getProductTitle } from '@sdk/commerce/discovery'
 
 // Interface for embedded product event data
 interface EmbeddedProductEvent {
@@ -268,15 +269,19 @@ const OrderItem = ({ itemTag }: { itemTag: string[] }) => {
 
 // Component to display an embedded product from a Kind-16 message
 const EmbeddedProductMessage = ({ productData }: { productData: EmbeddedProductEvent }) => {
-	// Extract product info from tags
-	const tags = productData.tags || []
-	const title = tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Product'
-	const priceTag = tags.find((t) => t[0] === 'price')
+	const productReadEvent = {
+		pubkey: productData.pubkey,
+		created_at: productData.created_at,
+		content: productData.content,
+		tags: productData.tags ?? [],
+	}
+	const title = getProductTitle(productReadEvent)
+	const priceTag = getProductPrice(productReadEvent)
 	const price = priceTag ? `${priceTag[1]} ${priceTag[2] || 'SATS'}` : null
-	const images = tags.filter((t) => t[0] === 'image')
+	const images = getProductImages(productReadEvent)
 	const imageUrl = images.length > 0 ? images[0][1] : null
-	const productId = tags.find((t) => t[0] === 'd')?.[1]
-	const description = productData.content || ''
+	const productId = getProductId(productReadEvent)
+	const description = getProductDescription(productReadEvent)
 
 	return (
 		<div className="text-sm space-y-2">
