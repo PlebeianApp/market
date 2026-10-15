@@ -1,0 +1,46 @@
+validation — the spec <-> implementation cross-reference
+# command: python3 validation/evidence/hash-refs.py > validation/evidence/03-hash-refs.txt
+# (a) declared set: 35 statement identity/identities begin a line in the module's two specs
+#     plus 41 in the module's ancestors (a code token may cite itself, an ancestor, or core)
+# (b) code set: 26 distinct token(s) across validation/ts/**/*.ts (node_modules excluded)
+# (c) R2: 5 token(s) cited as provenance (marked `(provenance)`), 21 as fulfilment
+
+(c) resolution — every code token against the declared set
+  resolved    #029611  [fulfilment]  <- (module: validation/validation.md)  A **refusal is typed and names its cause**: the preset and the check that fired, in a value a caller reads, never a bare string and never a silent drop.
+  resolved    #06cc5e  [fulfilment]  <- (module: validation/validation.md)  The refusal causes are a closed four-member vocabulary — `differs`, `deleted`, `expired`, `malformed-reference` — and they stay distinguishable in the value. `[1:1]`
+  resolved    #07b8c7  [fulfilment]  <- (module: validation/validation.md)  validation` validates the **content** of an event against presets a host supplies, at an accept boundary, and **does nothing by default**: with no presets supplied it is a pass-through that refuses nothing.
+  resolved    #0df9fb  [fulfilment]  <- (module: validation/validation.md)  Nothing is **repaired** here: a malformed event is refused or passed, never corrected, which is the same fail-closed discipline the store's identity guard applies to its own inputs (`#75322f`, and commit `fb304df` there) and not a second implementation of it.
+  resolved    #0fea4f  [fulfilment]  <- (module: validation/validation.md)  The comparator vocabulary is closed — `eq`, `exists`, `in` — and a comparator outside it is a preset the engine cannot interpret before any candidate is judged, never a per-candidate verdict. `[1:1]`
+  resolved    #18faf1  [provenance]  <- (module: validation/validation.md)  The module knows **no event kind of its own**: a preset that names a kind is stating the host's claim, and this module never carries a kind table, a schema library or a domain vocabulary.
+  resolved    #40d21a  [provenance]  <- (module: validation/validation.md)  The **stop conditions** are stated so a reviewer can falsify them: a sentence here that needs a socket, a store, a second integrity check, a second head rule or a second filter predicate is an **architecture contradiction**, and so is a preset language that only one implementation could satisfy.
+  resolved    #485b96  [fulfilment]  <- (module: validation/validation.md)  A rule is data and its kind is a closed two-member union — a `format` and a `link`, and no third; the engine interprets no kind's semantics, and a rule a test cannot read is a rule a test cannot falsify. `[1:1]`
+  resolved    #4b58be  [provenance]  <- (module: validation/validation.md)  It is **not** part of the IO seam and **not** the composition's ordering: no sentence here needs a socket, a relay, a deadline or a merge, and a sentence that did would be an architecture contradiction.
+  resolved    #6bf840  [fulfilment]  <- (module: validation/validation.md)  The three outcomes are `accepted`, `refused` and `quarantined`, and a quarantined event is never admitted.
+  resolved    #77d411  [fulfilment]  <- (module: validation/validation.md)  The link half reads the occurrence its preset names — one reference per link check — and maps an unanswered, a rejected and a timed-out reference alike to quarantine.
+  resolved    #7efb71  [fulfilment]  <- (module: validation/validation.md)  A format names required tags with their cardinalities, value domains and a content byte bound, all read from the preset's data.
+  resolved    #82c32d  [fulfilment]  <- (module: validation/validation.md)  The port answers `held`, `deleted` or `expired`, or `undefined` meaning nobody could answer it, and the host — not this module — is what tells them apart.
+  resolved    #8393ac  [fulfilment]  <- (module: validation/validation.md)  The two operations are `validate`, the module's own entry, and `accept`, the composition's hook; the module installs no second boundary of its own, so one implementation serves the one gate. `[1:1]`
+  resolved    #8e6079  [fulfilment]  <- (module: validation/validation.md)  It reads **no host global, no framework and no app import** (`#465561`'s rule that a module may not import the app), and the presets, the clock and the hook are all injected ports.
+  resolved    #a3accd  [fulfilment]  <- (module: validation/validation.md)  The event view is a raw `nostr-tools` event adopted rather than wrapped (E2), so a comparison over `id` compares real bytes.
+  resolved    #ab04eb  [provenance]  <- (module: validation/validation.md)  The evidence obligations are stated as criteria: a pass-through case with no presets, a refusal case with a declared preset that fails, and an accept case with a declared preset that passes — each one failing if the module's default ever stops being a pass-through.
+  resolved    #bc3095  [provenance]  <- (module: validation/validation.md)  **Whether a refusal should ever be recoverable** (a preset that warns rather than refuses), which is the soft-guard pattern the wallet rule used and which this spec does not adopt because a validation module that warns is a validation module that does not validate.
+  resolved    #bd3b66  [fulfilment]  <- (module: validation/validation.md)  The reference byte length is counted over the language's own code points, so the memory bound needs no host global to measure it.
+  resolved    #c7e678  [fulfilment]  <- (module: validation/validation.md)  A comparison names each field by its tag and index, so the engine stays kind-blind and never reads what an element means.
+  resolved    #d10f8b  [fulfilment]  <- (module: validation/validation.md)  A link names its reference strategy — by id, by coordinate, or by id with a coordinate fallback — and the engine reads only the reference's shape, never a kind's meaning.
+  resolved    #d4f95d  [fulfilment]  <- (module: validation/validation.md)  The preset set is a **declared, inspectable value** in the sense the store's `EvictionPolicy` and the composition's `WriteBackPolicy` are declared values (`#75322f`, `#120968`): what it accepts is read by a test rather than inferred from prose.
+  resolved    #e4b72f  [fulfilment]  <- (module: validation/validation.md)  A format refusal additionally carries the requirement that fired — `missing-tag`, `cardinality`, `domain`, `content`, a closed vocabulary on a different axis from the four causes. `[1:1]`
+  resolved    #e80b77  [fulfilment]  <- (module: validation/validation.md)  The six bounds are declared values with their per-preset override, and a bound that is exceeded is an outcome, never an exception.
+  resolved    #f7aab6  [fulfilment]  <- (module: validation/validation.md)  A preset names the kinds it covers and the checks to run against them, with its own bound overrides, and an empty `kinds` list is the wildcard. `[1:1]`
+  resolved    #fb9a0a  [fulfilment]  <- (module: validation/validation.md)  The unresolved-reference book is session-scoped and bounded on both sides — its held bytes by the ceiling, its eviction record by a count plus the last few names, oldest first and recorded as data loss. `[1:1]`
+
+(d) uncovered declarations — a top-level export carrying no token
+  49 of 64 declaration(s) carry a token; 15 exempt as test support (R3: ts/harness.ts, ts/*.test.ts)
+
+(e) uncovered files — under validation/, named by neither spec
+  0 file(s) named by no statement
+
+(f) summary
+  code tokens: 26   resolved: 26   unresolved: 0
+  declarations: 64   uncovered: 0   exempt: 15
+  files: 0 uncovered
+  RESULT: every code token resolves to a declared statement.

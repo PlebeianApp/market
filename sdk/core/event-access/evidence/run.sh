@@ -283,9 +283,14 @@ PY
 	echo '$ git cat-file -e $SPEC_BASE^{commit}   (the frozen spec this increment amends)'
 	run git -C "$ASSEMBLY" cat-file -e "$SPEC_BASE^{commit}"
 	echo '$ git show '"$SPEC_BASE"':event-access/event-access.md | grep -cE "^- `#[0-9a-f]{6}` —"   (BEFORE)'
-	git -C "$ASSEMBLY" show "$SPEC_BASE:event-access/event-access.md" | grep -cE '^- `#[0-9a-f]{6}` —'
+	# Anchored to the RETROFIT ASSEMBLY: the module sits at <assembly>/event-access and the spec was
+	# frozen at $SPEC_BASE in THAT module's own repository. In the market worktree the module lives at
+	# sdk/core/event-access and neither $SPEC_BASE nor the root-relative spec path exists, so the read
+	# is printed as a failure (its own output and exit code) rather than aborting the script — the
+	# script's own rule from its header: a failed read is printed, never scored and never a silent abort.
+	git -C "$ASSEMBLY" show "$SPEC_BASE:event-access/event-access.md" 2>&1 | grep -cE '^- `#[0-9a-f]{6}` —' || true
 	echo '$ git show HEAD:event-access/event-access.md | grep -cE "^- `#[0-9a-f]{6}` —"   (HEAD)'
-	git -C "$ASSEMBLY" show HEAD:event-access/event-access.md | grep -cE '^- `#[0-9a-f]{6}` —'
+	git -C "$ASSEMBLY" show HEAD:event-access/event-access.md 2>&1 | grep -cE '^- `#[0-9a-f]{6}` —' || true
 	echo '$ grep -cE "^- `#[0-9a-f]{6}` —" event-access/event-access.md   (the paired half, AFTER)'
 	grep -cE '^- `#[0-9a-f]{6}` —' "$MODULE/event-access.md"
 	echo '# ^ expected: the SAME number on all three lines. The pair is taken on THIS file alone — the method S'
@@ -342,15 +347,19 @@ PY
 	echo '#   neither declared nor imported anywhere in ts/ (sections 1 and 4b).'
 
 	banner "11 · conservation: the specimens are at their pins, with their own numbers"
+	echo '# Anchored to the RETROFIT ASSEMBLY ($ASSEMBLY/market and $ASSEMBLY/core are sibling mounts).'
+	echo '# In the market worktree neither mount exists, so each read below is printed with its own output'
+	echo '# and exit code — the script S own rule, a failed read is printed rather than scored — and the'
+	echo '# script continues. The two pins are recorded in the market worktree instead by §0 S guarded reads.'
 	echo '$ git -C market rev-parse HEAD   /   git -C core rev-parse HEAD'
-	git -C "$ASSEMBLY/market" rev-parse HEAD
-	git -C "$ASSEMBLY/core" rev-parse HEAD
+	git -C "$ASSEMBLY/market" rev-parse HEAD 2>&1 || true
+	git -C "$ASSEMBLY/core" rev-parse HEAD 2>&1 || true
 	echo '$ git -C market status --short | wc -l'
-	git -C "$ASSEMBLY/market" status --short | wc -l
+	git -C "$ASSEMBLY/market" status --short 2>&1 | wc -l || true
 	echo '$ wc -l < market/src/lib/stores/ndk.ts'
-	wc -l <"$ASSEMBLY/market/src/lib/stores/ndk.ts"
+	wc -l <"$ASSEMBLY/market/src/lib/stores/ndk.ts" 2>&1 || true
 	echo '$ cat market/scripts/ndk-baseline.txt'
-	cat "$ASSEMBLY/market/scripts/ndk-baseline.txt"
+	cat "$ASSEMBLY/market/scripts/ndk-baseline.txt" 2>&1 || true
 	echo ''
 	echo '# ^ expected: the two pins, 0, 1055, 161 — identical before and after, because this increment'
 	echo '#   adds a module and moves no number of either specimen.'

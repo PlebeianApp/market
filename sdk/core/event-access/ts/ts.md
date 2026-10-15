@@ -82,6 +82,15 @@ module's own, and a lockfile is a source artifact rather than a build output.
   fetch is the library's**: `createLoaderBackedFill` composes the loader family's own engine over the injected
   pool (cache → relay hints → extra relays) and the fill site takes that function, while the live fill and the
   publish path stay the seam's.
+- `composition-root.ts` — **the composition root**, and the one file in `ts/` that names a sibling
+  (`../../validation/ts/index`): it builds the validator from the host's declared `ValidatorOptions`
+  and passes `validator.accept` as `WriteBackPolicy.accept` on the policy handed to the existing
+  `createEventAccess` construction site — the design's composition rung
+  (`runs/2026-10-13-validation-layer/proposal/FINAL-composed.md` §1.4). It is **outside** this
+  module's contract surface on purpose (not exported by `index.ts`): the socket it fills already
+  exists, so nothing in `index.ts`, `composition.ts` or `types.ts` changes. Its specifier is the
+  reason this directory's stated allow-list is widened by one entry; the widening is reported, not
+  hidden.
 - `harness.ts` — **the host side** of both ports, test support only, never exported by `index.ts` and never
   imported by the implementation: a **model** of the store's two predicate branches (a malformed identity value
   rejected with the typed refusal; a present-but-empty `#`-key list answered as nothing, traced to
@@ -106,6 +115,14 @@ module's own, and a lockfile is a source artifact rather than a build output.
   tier receives them — and increment 3's three: the fill goes through the loader with LF-1/LF-2 intact, the
   live subscription is not routed through a loader, and the loader takes our pool by construction with no
   adapter and no cast.
+- `composition-root.test.ts` — **the boundary semantics of the wiring**, four cases over the **real**
+  validator through the **real** gate: absent hook ⇒ accept-all (and the same event refused once a
+  rule is declared); a refusing validator drops the event at **all three** destinations — not
+  written, not delivered, not published — with its positive companion; the quarantine outcome holds
+  the event and never admits it, naming the reference nobody could answer; and a link rule makes the
+  composition **fetch the referenced event** through its own existing read path (the extra fetch the
+  maintainer described), with no second read path grown for it. Each case names the careless
+  implementation that turns it red.
 - `ports.test.ts` — the fail-closed filter boundary in both branches (and the echoing fake's counter-case), the
   two structural no-socket shapes with their recorded call counts stated, the **foreign** refusal surfaced on
   all four verbs, and a signal already aborted opening nothing.

@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent } from 'nostr-tools'
 import { parseMarketConfig } from './marketConfig'
-import { EventSchemaRegistry, validateEventWithSchema, validateWithSchema } from './validation'
-import { createWorkflowError } from './errors'
+import { createWorkflowError, ValidationError } from './errors'
+import * as sdk from './index'
 
 describe('SDK Core validation and config', () => {
 	test('normalizes workflow failure and uncertainty metadata without discarding causes', () => {
@@ -19,40 +19,26 @@ describe('SDK Core validation and config', () => {
 		})
 	})
 
-	test('wraps schema success and failure in a Result', () => {
-		const schema = { parse: (input: unknown) => ({ value: String(input) }) }
-		expect(validateWithSchema(42, schema)).toEqual({ ok: true, value: { value: '42' } })
-		expect(
-			validateWithSchema('bad', {
-				parse: () => {
-					throw new Error('invalid input')
-				},
-			}),
-		).toMatchObject({ ok: false, error: { code: 'validation_failed', message: 'invalid input' } })
-	})
+	// The three cases that used the retired seed names — `validateWithSchema` (moved to the rung,
+	// proved at `sdk/core/composition/ts/schema.test.ts`), `validateEventWithSchema` (retired: the
+	// engine routes by kind, so its kind check has no separate rule), and `EventSchemaRegistry`
+	// (whose per-kind one-owner rule becomes V2's registry guard, with its cases) — went with the
+	// shadowing file `sdk/core/validation.ts` (design.md §5). Nothing replaced them here, because
+	// nothing here is the rule any more: the rule lives at the rung.
 
-	test('checks event kind before calling a kind-specific parser', () => {
-		let parses = 0
-		const result = validateEventWithSchema(
-			{ kind: 1 },
-			{
-				kind: 30408,
-				parse: () => {
-					parses++
-					return 'parsed'
-				},
-			},
-		)
-
-		expect(result).toMatchObject({ ok: false, error: { code: 'validation_failed', path: ['kind'] } })
-		expect(parses).toBe(0)
-	})
-
-	test('routes event validation through a kind registry and rejects missing/duplicate registrations', () => {
-		const registry = new EventSchemaRegistry().register({ kind: 30408, parse: (input) => ({ source: input }) })
-		expect(registry.validate({ kind: 30408, title: 'Lot' })).toEqual({ ok: true, value: { source: { kind: 30408, title: 'Lot' } } })
-		expect(registry.validate({ kind: 30402 })).toMatchObject({ ok: false, error: { path: ['kind'] } })
-		expect(() => registry.register({ kind: 30408, parse: (input) => input })).toThrow('already registered')
+	test('the barrel reaches the validation module directory and keeps the two ValidationErrors distinct', () => {
+		// The retired file meant `./validation` resolved to a FILE while the landed module directory
+		// was unreachable. With the file gone, `sdk/core/index.ts` cites `./validation/ts/index` — the
+		// module — and aliases the module's own `ValidationError`, so the two same-named classes cannot
+		// shadow each other in the one export surface.
+		// The mutation that turns this red: re-export the module's `ValidationError` verbatim (then
+		// `sdk.ValidationModuleError` is undefined), or leave the file in place (then `createValidator`
+		// would not be the module's).
+		expect(sdk.ValidationError).toBe(ValidationError) // the SDK's own
+		expect(sdk.ValidationModuleError).not.toBe(sdk.ValidationError) // the module's, a distinct class
+		expect(sdk.ValidationModuleError.name).toBe('ValidationError')
+		expect(sdk.createValidator).toBeFunction()
+		expect(sdk.PASS_THROUGH.name).toBe('pass-through')
 	})
 
 	// Removed with the hand-built validation layer: `parseNostrEventShape` and

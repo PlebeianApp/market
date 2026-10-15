@@ -1,0 +1,295 @@
+
+===== validation — build, test and isolation evidence =====
+# command:   bash validation/evidence/run.sh   (the caller redirects to validation/evidence/01-build-and-tests.txt)
+# generated: 2026-09-30T17:43:56Z   host: Linux 6.12.94+deb13-amd64 x86_64
+# bun:       1.4.2
+# module:    /home/admin_maxime/projects/market-retrofit/validation
+# note: every line below is a command's own output, not a summary of it.
+
+===== 0 · the mounted specimens are untouched =====
+$ git -C /home/admin_maxime/projects/market-retrofit/market rev-parse HEAD
+56258b55e2805895c941eb879f7a3ea1308bc0c5
+exit: 0
+# ^ expected: 56258b55e2805895c941eb879f7a3ea1308bc0c5 (the pin).
+$ git -C /home/admin_maxime/projects/market-retrofit/market status --short
+（no output）
+exit: 0
+# ^ expected: no lines. The module writes nowhere near the mount.
+$ git -C /home/admin_maxime/projects/market-retrofit/core rev-parse HEAD
+1da98dabfa508bf07475b9b9add1bca581dd6e51
+exit: 0
+# ^ expected: 1da98dabfa508bf07475b9b9add1bca581dd6e51.
+$ git -C /home/admin_maxime/projects/market-retrofit/core status --short
+?? checks/__pycache__/
+exit: 0
+# ^ expected: one line at most, the pre-existing `?? checks/__pycache__/` inside the core
+#   mount; this module neither creates nor removes it.
+$ git status --short -- core market   (from the assembly root)
+ ? core
+$ ...and the same count, so a rise is visible:
+core/market lines: 1
+
+===== 1 · the module's own dependency store (inside validation/ts only) =====
+$ (cd validation/ts && /home/admin_maxime/.bun/bin/bun pm ls)
+/home/admin_maxime/projects/market-retrofit/validation/ts node_modules (15 installed)
+├── @types/bun@1.4.2
+├── nostr-tools@2.19.4
+└── typescript@5.9.3
+exit: 0
+# ^ expected: nostr-tools 2.19.4 (one copy), typescript and @types/bun. No applesauce-core,
+#   no rxjs: the module is data-driven and needs no store and no stream.
+$ python3 - <validation/ts/package.json>   (the declared lists, asserted, not summarised)
+dependencies:    nostr-tools
+devDependencies: @types/bun, typescript
+# ^ expected: dependencies exactly nostr-tools; applesauce-core and rxjs in NEITHER declared list.
+exit: 0
+
+===== 2 · bun test — the module's own runner over its own roots =====
+$ (cd validation/ts && /home/admin_maxime/.bun/bin/bun test)
+bun test v1.4.2 (744846f84)
+
+validation.test.ts:
+(pass) pass-through · with no presets, both operations refuse nothing [40.22ms]
+(pass) a refusal · a declared preset that fails names its preset and its check [12.79ms]
+(pass) an accept · a declared preset that passes is accepted [9.72ms]
+(pass) a format rule · refuses a malformed candidate and accepts a conforming one [35.36ms]
+(pass) a format rule · one check carrying several requirements: each failure names its own requirement in the value [37.37ms]
+(pass) a link rule · a held event whose named fields match is accepted [13.30ms]
+(pass) a link rule · a mismatched field refuses with cause 'differs' [11.09ms]
+(pass) a link rule · a deleted reference refuses with cause 'deleted' [7.69ms]
+(pass) a link rule · an expired reference refuses with cause 'expired' [7.25ms]
+(pass) a link rule · a malformed reference refuses with cause 'malformed-reference' [8.46ms]
+(pass) a link rule · an unresolved reference quarantines the event [6.93ms]
+(pass) a link rule · a resolver that rejects is quarantined, never an escaping exception [8.01ms]
+(pass) pass-through · re-asserted over a candidate no preset covers [10.79ms]
+(pass) preset selection · a specific match wins over a wildcard, whatever the host declared first [17.68ms]
+(pass) a bound exceeded · is an outcome, never a thrown exception [16.85ms]
+(pass) bound 1 · resolutions attempted per event (the fan-out ceiling counts links, one resolution each) [14.78ms]
+(pass) a link rule · reads the occurrence its preset names: one link is one resolution, however many tags the event carries [28.87ms]
+(pass) bound 2 · one hop: the referenced event carries links the engine does not follow (and a ceiling below one forbids the direct reference) [21.29ms]
+(pass) bound 2 · a preset asking for chain following is refused at the preset, before any candidate is judged [51.67ms]
+(pass) bound 3 · the wall-clock budget for one reference [28.86ms]
+(pass) bound 4 · the wall-clock budget for one event [37.44ms]
+(pass) bound 5 · memory held for unresolved references (oldest-first eviction, recorded and re-resolved) [16.33ms]
+(pass) bound 5 · the eviction record is bounded too: a count plus the last few, never an ever-growing log [704.27ms]
+(pass) bound 6 · revisit count and interval [5.81ms]
+(pass) bound 6 · the default clock is real: with no port and no clock a quarantined reference is retried once the interval has passed [30.95ms]
+(pass) quarantine · a revisit that turns unresolved into matched admits the event that was held [10.59ms]
+(pass) quarantine · is never admitted, and is session-scoped [9.20ms]
+(pass) the accept operation · is the composition's hook (flow, tier and resolve all reach it) [11.13ms]
+(pass) no repair · a malformed candidate is refused, never corrected [16.44ms]
+(pass) the comparator vocabulary · a comparison it does not carry is refused, naming the comparator [10.54ms]
+(pass) the comparator vocabulary · an uninterpretable preset fails at the preset, the same way whatever the candidate is [5.83ms]
+(pass) the declared values · the six bounds are the research §4 suggested defaults, readable without driving a call [0.08ms]
+
+ 32 pass
+ 0 fail
+ 348 expect() calls
+Ran 32 tests across 1 file. [1461.00ms]
+exit: 0
+# ^ expected: 32 cases in 1 file, all passing, 0 failing — one case per evidence obligation,
+#   each naming the careless implementation it fails on.
+
+===== 3 · the module's own compiler configuration =====
+$ (cd validation/ts && bash -c HOME="/home/admin_maxime" "/home/admin_maxime/.bun/bin/bun" run typecheck)
+$ tsc --noEmit
+exit: 0
+# ^ expected: exit 0 and no output (`tsc --noEmit`, the pinned typescript).
+#   A runner transpiles without typechecking, so this is the case for the contract surface:
+#   a renamed or missing export, or a type that stops matching the spec, fails here.
+
+===== 4 · the independence criterion — no host import, no relative path out of the module =====
+# The signer module's allow-list, applied here: every import specifier in ts/ is
+# module-relative or one of this module's own declared dependencies.
+$ grep -rnE "(from|module\(|import\(|require\()\s*['"][^'"]*(\.\./|@/|@nostr-dev-kit/)" <validation/ts, the module's own sources (node_modules excluded)>
+（no lines）
+matched lines: 0   exit: 1   (expected: 0 matched lines, exit 1)
+# ^ the second arm: a relative specifier that leaves the module directory is a host import by shape.
+
+===== 4b · every import specifier in the module, sorted and unique (the positive form) =====
+$ find validation/ts -maxdepth 1 -name "*.ts" | wc -l
+10
+# ^ the non-vacuity arm, asserted before the list is read: expected 10 (8 implementation files,
+#   harness.ts, and 1 test file).
+$ grep -rhoE ... | sed ... | sort -u
+./bounds
+./errors
+./format
+./harness
+./index
+./presets
+./resolve
+./types
+./validator
+bun:test
+nostr-tools
+nostr-tools/pure
+specifier count: 12   (the stated list; a bare zero would be the finding, not a pass)
+# ^ no disallowed specifier: the allow-list is ./<module file>, nostr-tools[/…], rxjs, bun:test.
+#   In particular no applesauce-core, no sibling path, and no app import.
+
+===== 5 · the contract: index.ts against the module MD's front-matter =====
+$ grep -nE ^export /home/admin_maxime/projects/market-retrofit/validation/ts/index.ts
+16:export { createValidator } from './validator'
+17:export { PASS_THROUGH } from './presets'
+18:export { ValidationError } from './errors'
+19:export type {
+exit: 0
+$ python3 - /home/admin_maxime/projects/market-retrofit/validation/validation.md /home/admin_maxime/projects/market-retrofit/validation/ts/index.ts
+contract.exports: 3 declared, 3 delivered
+contract.types: 8 declared, 8 delivered
+the two lists are equal: yes
+# nothing in the check routine reads these keys, so this diff IS the check.
+exit: 0
+$ (cd validation/ts && /home/admin_maxime/.bun/bin/bun -e import * as m from "./index.ts"; console.log(Object.keys(m).sort().join("\n")))
+PASS_THROUGH
+ValidationError
+createValidator
+exit: 0
+# ^ the runtime list: values only, and the same three the MD declares as exports.
+
+===== 6 · ts/ts.md's inventory against the directory itself =====
+$ find validation/ts -maxdepth 1 -type f | sort
+bounds.ts
+bun.lock
+errors.ts
+format.ts
+harness.ts
+index.ts
+package.json
+presets.ts
+resolve.ts
+ts.md
+tsconfig.json
+types.ts
+validation.test.ts
+validator.ts
+files found: 14   (13 without an install and no bun.lock, 14 with one)
+listed: 14   found: 14
+$ diff /dev/fd/63 /dev/fd/62
+（no output）
+exit: 0
+# ^ expected: exit 0. ts.md names bun.lock iff it exists, so the diff is empty in both tiers.
+
+===== 7 · the test-case count =====
+$ find validation/ts -maxdepth 1 -name "*.test.ts" | wc -l
+1
+$ grep -hcE "^[[:space:]]*(test|it)\(" validation/ts/*.test.ts   (one count per file, -h so a single file still sums)
+32
+$ ... summed (the declarations; equal to the runner's total, because every case has one literal title):
+32 test declarations in total
+$ the runner's own totals, for the same measure (bun reports on stderr, hence 2>&1):
+$ (cd validation/ts && bash -c "/home/admin_maxime/.bun/bin/bun" test 2>&1 | grep -E '^ *[0-9]+ (pass|fail)')
+ 32 pass
+ 0 fail
+exit: 0
+
+===== 8 · the check routine (from the assembly root) =====
+$ (cd /home/admin_maxime/projects/market-retrofit && python3 core/checks/check.py --root .)
+modules 10 · statements 318 · distinct identities 318
+0 hard finding(s), 0 note(s)
+exit: 0
+# ^ expected: modules 10, statements 318, 0 hard findings, 0 notes — this increment adds no
+#   statement: it changes levels.implementation and amends a body beneath a declaring line.
+$ grep -cE "^- `#[0-9a-f]{6}` —" validation/validation.md   (the bullet statements)
+16
+$ grep -c "#@" validation/validation.md   (an unfilled placeholder is not a statement)
+0
+# ^ expected 0: no new statement was needed, so no placeholder was written.
+$ git diff -U0 -- validation/validation.md | grep -E "^[+-]- `#"   (edited declaring lines)
+# ^ expected: no lines. The declaring lines must not be edited, ever; the amendment lands in the
+#   body beneath `#cb7159` and the front-matter edits are `levels.implementation` and
+#   `levels.tests` alone.
+$ git diff -U0 -- validation/validation.md | grep -E "^[+-]  implementation:"   (the front-matter edit)
+-  implementation: present in ts/ (increment I4, 2026-09-30; repaired by I4b the same day) — the contract's three exports and eight types, a green suite of thirty-one cases, a strict typecheck, and a falsification table of one mutation per case with zero failures
++  implementation: present in ts/ (increment I4, 2026-09-30; repaired by I4b the same day, and by the I4c clock fix the same day) — the contract's three exports and eight types, a green suite of thirty-two cases, a strict typecheck, and a falsification table of one mutation per case with zero failures
+# ^ expected: exactly the one before/after pair for `levels.implementation`, and nothing else in
+#   the front matter.
+$ grep -cE "^\*\*(Amended|Corrected) 2026-09-30" validation/validation.md   (amendment paragraphs)
+11
+# ^ a census: the amendments the spec closure wrote earlier, the bounded/deadline amendment, the
+#   two D-O24/D-O25 amendments, this increment's build-landed amendment and the I4b repair's.
+
+===== 9 · no socket, no host global, and the one bound timer =====
+$ grep -rnE "Date\.now|setInterval|globalThis|window\.|document\.|localStorage|indexedDB|WebSocket|wss?://|createServer|EventSource|serviceWorker|fetch\(" <the implementation (8 files, harness.ts excluded)>
+/home/admin_maxime/projects/market-retrofit/validation/ts/validator.ts:74:		this.clock = options.clock ?? (port !== undefined ? { now: () => port.now() } : { now: () => Date.now() })
+matched lines: 1   exit: 0   (expected: 1 matched line — the default clock in validator.ts)
+# ^ the one permitted line is the default clock: `{ now: () => Date.now() }` in validator.ts.
+#   Bound 6 is a revisit gate (`now - lastAttemptAt >= intervalMs`), so a clock frozen at a
+#   constant makes it unsatisfiable forever — a declared bound with no mechanism in a supported
+#   configuration. The default is therefore a real clock, the same shape the store's own
+#   `SYSTEM_CLOCK` takes (`event-store/ts/store.ts`), and it is this module's one host read.
+#   A second line is a finding; a missing line means the clock default moved and this criterion
+#   moved with it. 0 sockets, 0 host storage, 0 fetches, and 0 globals other than that clock.
+$ ...and the one timer the spec allows — the bound's own wall-clock wait:
+$ grep -nE setTimeout|clearTimeout /home/admin_maxime/projects/market-retrofit/validation/ts/index.ts /home/admin_maxime/projects/market-retrofit/validation/ts/types.ts /home/admin_maxime/projects/market-retrofit/validation/ts/errors.ts /home/admin_maxime/projects/market-retrofit/validation/ts/presets.ts /home/admin_maxime/projects/market-retrofit/validation/ts/bounds.ts /home/admin_maxime/projects/market-retrofit/validation/ts/resolve.ts /home/admin_maxime/projects/market-retrofit/validation/ts/format.ts /home/admin_maxime/projects/market-retrofit/validation/ts/validator.ts
+/home/admin_maxime/projects/market-retrofit/validation/ts/bounds.ts:83:		const timer = setTimeout(() => {
+/home/admin_maxime/projects/market-retrofit/validation/ts/bounds.ts:91:				clearTimeout(timer)
+/home/admin_maxime/projects/market-retrofit/validation/ts/bounds.ts:97:				clearTimeout(timer)
+exit: 0
+# ^ expected: 3 matched lines, all in bounds.ts (`withDeadline`: one arm, two clears). A bound is on
+#   how long this module waits for a resolver the host injected, never on the network it does not
+#   touch (`#4b58be`). No other file in the implementation holds a timer.
+
+===== 10 · one dependency, one type identity, no sibling import =====
+$ ls -d /home/admin_maxime/projects/market-retrofit/validation/ts/node_modules/nostr-tools
+/home/admin_maxime/projects/market-retrofit/validation/ts/node_modules/nostr-tools
+exit: 0
+$ find validation/ts/node_modules -type d -name nostr-tools | sort
+validation/ts/node_modules/nostr-tools
+# ^ expected: a single nostr-tools copy, so `Event` is one structural type across the port boundary.
+$ ls -d /home/admin_maxime/projects/market-retrofit/validation/ts/node_modules/applesauce-core /home/admin_maxime/projects/market-retrofit/validation/ts/node_modules/rxjs
+ls: cannot access '/home/admin_maxime/projects/market-retrofit/validation/ts/node_modules/applesauce-core': No such file or directory
+ls: cannot access '/home/admin_maxime/projects/market-retrofit/validation/ts/node_modules/rxjs': No such file or directory
+exit: 2
+# ^ expected: "No such file or directory" for both — the module declared neither and installed neither.
+$ grep -rnE "@plebeian-apps/|applesauce" validation/ts --include="*.ts" --exclude-dir=node_modules
+# ^ expected: no lines. Neither a sibling module nor the vendor store is named anywhere in ts/.
+
+===== 11 · conservation: the specimens are at their pins, with their own numbers =====
+$ git -C market rev-parse HEAD   /   git -C core rev-parse HEAD
+56258b55e2805895c941eb879f7a3ea1308bc0c5
+1da98dabfa508bf07475b9b9add1bca581dd6e51
+$ git -C market status --short | wc -l
+0
+$ wc -l < market/src/lib/stores/ndk.ts
+1055
+$ cat market/scripts/ndk-baseline.txt
+161
+# ^ expected: the two pins, 0, 1055, 161 — identical before and after, because this increment
+#   adds a module and moves no number of either specimen.
+
+===== 12 · the evidence lint — a ratchet, and this module contributes nothing to it =====
+# The ratchet is the finding count, not the script count: the lint counts `evidence/*.sh`, so this
+# module adds exactly one script — `falsify.py` is not a `.sh` and is not linted — and that one
+# script must contribute 0 findings.
+# baseline before this module's script existed (MEASURED, same command):
+#   evidence: 13 script(s) checked, 7 hard finding(s), 1 note(s)
+$ (cd /home/admin_maxime/projects/market-retrofit && python3 core/checks/evidence.py --root .)
+  ok    event-access/evidence/run.sh
+  ----  event-store/evidence/run.sh
+  HARD  event-store/evidence/run.sh:84  writes into the tree (echo "# command:   bash event-store/evidence/run.sh > event-store/evidence/01-build-and-tests.txt") — an evidence script prints; the caller redirects. A script that writes cannot be run twice.
+  HARD  event-store/evidence/run.sh:281  writes into the tree (echo "regenerated: bash event-store/evidence/run.sh > event-store/evidence/01-build-and-tests.txt" >&2) — an evidence script prints; the caller redirects. A script that writes cannot be run twice.
+  ok    nostr-io/evidence/run.sh
+  ok    runs/2026-09-28-signer/research/evidence/02-existence-vs-refs.sh
+  ok    runs/2026-09-28-signer/research/evidence/04-a0-adjudication.sh
+  ----  runs/2026-09-28-signer/research/evidence/05-a0-remeasure.sh
+  HARD  runs/2026-09-28-signer/research/evidence/05-a0-remeasure.sh:24  `bun` invoked without an absolute path and no `PATH=` in the script — `bun` is not on this environment's PATH.
+  HARD  runs/2026-09-28-signer/research/evidence/05-a0-remeasure.sh:24  `node` invoked without an absolute path and no `PATH=` in the script — `node` is not on this environment's PATH.
+  HARD  runs/2026-09-28-signer/research/evidence/05-a0-remeasure.sh:25  `bun` invoked without an absolute path and no `PATH=` in the script — `bun` is not on this environment's PATH.
+  HARD  runs/2026-09-28-signer/research/evidence/05-a0-remeasure.sh:25  `node` invoked without an absolute path and no `PATH=` in the script — `node` is not on this environment's PATH.
+  HARD  runs/2026-09-28-signer/research/evidence/05-a0-remeasure.sh:148  `bun` invoked without an absolute path and no `PATH=` in the script — `bun` is not on this environment's PATH.
+  ok    runs/2026-09-28-signer/research/evidence/06-executed-master.sh
+  ok    runs/2026-09-29-event-store/research/evidence/01-store-surface.sh
+  ok    runs/2026-09-29-event-store/research/evidence/02-contract-and-implementations.sh
+  ok    runs/2026-09-29-event-store/research/evidence/03-consumers-and-contract.sh
+  ok    runs/2026-09-29-event-store/research/evidence/04-wallet-boundary.sh
+  ----  signer/evidence/probe.sh
+  NOTE  signer/evidence/probe.sh  no existence guard for the subject it reads.
+  ok    signer/evidence/run.sh
+  ok    validation/evidence/run.sh
+evidence: 14 script(s) checked, 7 hard finding(s), 1 note(s)
+exit: 1
+# ^ expected: 14 script(s) checked, the same 7 hard findings, the same 1 note, and 0 findings from
+#   validation/evidence/run.sh: it prints rather than redirecting, it sets `set -euo pipefail` in
+#   its first lines, it spells bun absolutely and exports PATH, and it asserts its subject first.
