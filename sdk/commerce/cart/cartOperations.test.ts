@@ -10,6 +10,7 @@ import {
 	updateCartProductQuantity,
 } from './cartOperations'
 import { currencyPrecision, minorUnitSum, UndeclaredCurrencyPrecisionError } from './money'
+import type { CartProductEntry } from './cartOperations'
 
 const sellerA = 'a'.repeat(64)
 const sellerB = 'b'.repeat(64)
@@ -54,6 +55,21 @@ describe('cart product operations', () => {
 		expect(grouped[sellerA]?.map((entry) => entry.id)).toEqual(['one', 'two'])
 		expect(grouped[sellerB]?.map((entry) => entry.id)).toEqual(['three'])
 		expect(Object.keys(grouped)).not.toContain('bad-pubkey')
+	})
+
+	/**
+	 * The availability rule that the demo's surface carried before this
+	 * increment: an out-of-stock listing is refused by the SDK itself.
+	 *
+	 * **The mutation that turns it red:** remove the `inStock === false`
+	 * check from `addCartProduct`. The product is then added regardless
+	 * of stock status and the test expects it to be present.
+	 */
+	test('an out-of-stock listing is refused by the SDK function itself', () => {
+		const cart = { coat: product('coat', 2) }
+		const unchanged = addCartProduct(cart, { id: 'scarf', amount: 1, sellerPubkey: sellerA, inStock: false } as CartProductEntry)
+		expect(unchanged).toBe(cart)
+		expect(unchanged.scarf).toBeUndefined()
 	})
 })
 

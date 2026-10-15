@@ -5,6 +5,8 @@ export interface CartProductEntry {
 	id: string
 	amount: number
 	sellerPubkey: string
+	/** When `false` the cart refuses the product without adding it — an out-of-stock listing cannot be put in the cart. */
+	inStock?: boolean
 }
 
 export type CartQuantityAction = 'increment' | 'decrement' | 'setAmount' | 'remove'
@@ -43,6 +45,7 @@ export function normalizeCartQuantity(quantity: number): number | null {
 /** Add a product or increase the existing product's quantity, preserving its other fields. */
 export function addCartProduct<T extends CartProductEntry>(products: Record<string, T>, product: T): Record<string, T> {
 	const increment = normalizeCartQuantity(product.amount)
+	if (product.inStock === false) return products
 	if (!product.id || !product.sellerPubkey || increment === null || increment === 0) return products
 
 	const existing = products[product.id]
