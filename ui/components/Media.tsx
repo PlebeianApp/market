@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
-import { isVideoUrl } from '@/lib/media'
-import { cn } from '@/lib/utils'
+import { isVideoUrl } from '../utils/media'
+import { cn } from '../utils/cn'
 import { ImageOff } from 'lucide-react'
 
 export interface MediaProps {

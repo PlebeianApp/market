@@ -1,4 +1,4 @@
-import type { Button } from '@/components/ui/button'
+import type { Button } from '../primitives/button'
 
 /** Helper type to extract "ButtonProps" type from shadcn "Button" component */
 export type ButtonProps = React.ComponentPropsWithoutRef<typeof Button>

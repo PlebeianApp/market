@@ -1,6 +1,6 @@
 import * as React from 'react'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Button } from '../primitives/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 import type { ButtonProps } from './ButtonProps'
 
 interface TooltipButtonProps extends ButtonProps {

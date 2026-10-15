@@ -1,5 +1,5 @@
-import { Button } from '@/components/ui/button'
-import { SheetClose } from '@/components/ui/sheet'
+import { Button } from '../primitives/button'
+import { SheetClose } from '../primitives/sheet'
 
 export function EmptyCartScreen() {
 	return (

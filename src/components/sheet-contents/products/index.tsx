@@ -1,4 +1,4 @@
-import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@ui/primitives/sheet'
 import { authActions, authStore } from '@/lib/stores/auth'
 import type { ProductFormState, ProductFormTab } from '@/lib/stores/product'
 import { DEFAULT_FORM_STATE, productFormActions, productFormStore } from '@/lib/stores/product'

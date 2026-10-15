@@ -1,5 +1,5 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Spinner } from '@/components/ui/spinner'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
+import { Spinner } from '@ui/primitives/spinner'
 import { authStore } from '@/lib/stores/auth'
 import { useProfile } from '@/queries/profiles'
 import { useConfigQuery } from '@/queries/config'

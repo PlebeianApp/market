@@ -1,8 +1,8 @@
 import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
-import { Media } from '@/components/Media'
-import { DashboardListItem } from '@/components/layout/DashboardListItem'
-import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Media } from '@ui/components/Media'
+import { DashboardListItem } from '@ui/components/DashboardListItem'
+import { Button } from '@ui/primitives/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
 import { productFormActions } from '@/lib/stores/product'
@@ -16,7 +16,7 @@ import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tans
 import { useStore } from '@tanstack/react-store'
 import { Trash } from 'lucide-react'
 import { useEffect, useState, useMemo } from 'react'
-import { TooltipButton } from '@/components/shared/TooltipButton'
+import { TooltipButton } from '@ui/components/TooltipButton'
 import { DashboardProductDetails, DashboardProductTrigger } from '@ui/components/DashboardProductListItem'
 
 function ProductListItem({

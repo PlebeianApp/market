@@ -1,6 +1,6 @@
-import { Button } from '@/components/ui/button'
-import { Media } from '@/components/Media'
-import { Input } from '@/components/ui/input'
+import { Button } from '@ui/primitives/button'
+import { Media } from '@ui/components/Media'
+import { Input } from '@ui/primitives/input'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -11,7 +11,7 @@ import {
 	useProductImages,
 	useProductStock,
 } from '@/queries/products'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton } from '@ui/primitives/skeleton'
 import { ShippingSelector } from '@/components/ShippingSelector'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import type { RichShippingInfo } from '@/lib/stores/cart'

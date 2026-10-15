@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/button'
+import { Button } from '../primitives/button'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 
 interface IncompleteInvoicesBannerProps {

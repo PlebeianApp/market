@@ -1,5 +1,5 @@
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Spinner } from '@/components/ui/spinner'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
+import { Spinner } from '@ui/primitives/spinner'
 import { MapPin } from 'lucide-react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'

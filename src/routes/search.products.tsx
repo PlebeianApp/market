@@ -2,9 +2,9 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useProductSearch } from '@/queries/products'
 import { ProductCard } from '@/components/ProductCard'
 import { useEffect, useState, useMemo } from 'react'
-import { Input } from '@/components/ui/input'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Label } from '@/components/ui/label'
+import { Input } from '@ui/primitives/input'
+import { RadioGroup, RadioGroupItem } from '@ui/primitives/radio-group'
+import { Label } from '@ui/primitives/label'
 import { filterAndSortProductSearchResults } from '@sdk/commerce/discovery'
 
 declare module '@tanstack/react-router' {

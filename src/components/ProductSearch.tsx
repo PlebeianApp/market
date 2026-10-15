@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { Input } from '@/components/ui/input'
+import { Input } from '@ui/primitives/input'
 import { useNavigate } from '@tanstack/react-router'
 import { useProductSearch, productQueryOptions } from '@/queries/products'
 import { useQueryClient } from '@tanstack/react-query'
 import { UserCard } from './UserCard'
 import { ProductSearchResults } from '@ui/components/ProductSearchResults'
-import { Media } from '@/components/Media'
+import { Media } from '@ui/components/Media'
 
 const DEBOUNCE_MS = 500
 

@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 import { useProfileName } from '@/queries/profiles'
 import { Link } from '@tanstack/react-router'
-import { Skeleton } from './ui/skeleton'
+import { Skeleton } from '@ui/primitives/skeleton'
 import { nip19 } from 'nostr-tools'
 
 interface ProfileNameProps extends React.HTMLAttributes<HTMLSpanElement> {

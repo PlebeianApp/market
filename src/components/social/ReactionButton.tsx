@@ -1,14 +1,14 @@
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '@ui/primitives/popover'
 import { usePublishReactionMutation } from '@/publish/reactions'
 import { useEventReactions } from '@/queries/reactions'
 import { useAuth } from '@/lib/stores/auth'
 import { usePublishDeletionMutation } from '@/publish/reactions'
 import { toast } from 'sonner'
-import type { ButtonProps } from '../shared/ButtonProps'
-import { TooltipButton } from '../shared/TooltipButton'
+import type { ButtonProps } from '@ui/components/ButtonProps'
+import { TooltipButton } from '@ui/components/TooltipButton'
 
 interface ReactionButtonProps extends ButtonProps {
 	event: NDKEvent

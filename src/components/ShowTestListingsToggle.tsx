@@ -1,5 +1,5 @@
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
+import { Checkbox } from '@ui/primitives/checkbox'
+import { Label } from '@ui/primitives/label'
 import { testLabelActions, testLabelStore } from '@/lib/stores/testLabels'
 import { useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'

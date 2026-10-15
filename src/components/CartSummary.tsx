@@ -1,5 +1,5 @@
 import CartItem from '@/components/CartItem'
-import { Separator } from '@/components/ui/separator'
+import { Separator } from '@ui/primitives/separator'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'

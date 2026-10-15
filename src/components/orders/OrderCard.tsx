@@ -1,4 +1,4 @@
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@ui/primitives/badge'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { Link } from '@tanstack/react-router'
 

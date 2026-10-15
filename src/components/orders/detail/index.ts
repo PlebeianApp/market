@@ -1,8 +1,8 @@
 // Order detail display components
 export { DeliveryAddressDisplay } from './DeliveryAddressDisplay'
-export { IncompleteInvoicesBanner } from './IncompleteInvoicesBanner'
+export { IncompleteInvoicesBanner } from '@ui/components/IncompleteInvoicesBanner'
 export { InvoiceCard } from './InvoiceCard'
-export { NoPaymentRequestsCard } from './NoPaymentRequestsCard'
+export { NoPaymentRequestsCard } from '@ui/components/NoPaymentRequestsCard'
 export { PaymentProgressBar } from '@ui/components/PaymentProgressBar'
 export { PaymentSummary } from './PaymentSummary'
 export { PickupAddressDisplay } from '@ui/components/PickupAddressDisplay'

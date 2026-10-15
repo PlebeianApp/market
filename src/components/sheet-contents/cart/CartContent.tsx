@@ -1,13 +1,13 @@
 import CartItem from '@/components/CartItem'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Button } from '@ui/primitives/button'
+import { ScrollArea } from '@ui/primitives/scroll-area'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { uiActions } from '@/lib/stores/ui'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo } from 'react'
-import { EmptyCartScreen } from './EmptyCartScreen'
+import { EmptyCartScreen } from '@ui/components/EmptyCartScreen'
 import { UserCard } from '@/components/UserCard'
 
 export function CartContent({ className = '' }: { className?: string }) {

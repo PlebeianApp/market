@@ -1,6 +1,6 @@
 import { ChatMessageBubble } from '@/components/messages/ChatMessageBubble'
 import { MessageInput } from '@/components/messages/MessageInput'
-import { Button } from '@/components/ui/button'
+import { Button } from '@ui/primitives/button'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
 import { sendChatMessage, useConversationMessages } from '@/queries/messages'

@@ -1,6 +1,6 @@
 import { OrderDataTable } from '@/components/orders/OrderDataTable'
 import { purchaseColumns } from '@/components/orders/orderColumns'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { ndkActions } from '@/lib/stores/ndk'
 import { notificationActions } from '@/lib/stores/notifications'
 import { useOrdersByBuyer } from '@/queries/orders'

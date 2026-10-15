@@ -1,5 +1,5 @@
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
+import { Textarea } from '@ui/primitives/textarea'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { MessageSquare } from 'lucide-react'
@@ -7,8 +7,8 @@ import { useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
-import { TooltipButton, type TooltipButtonProps } from '../shared/TooltipButton'
-import { Button } from '../ui/button'
+import { TooltipButton, type TooltipButtonProps } from '@ui/components/TooltipButton'
+import { Button } from '@ui/primitives/button'
 
 interface CommentButtonProps extends TooltipButtonProps {
 	event: NDKEvent

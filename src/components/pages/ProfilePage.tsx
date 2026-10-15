@@ -5,7 +5,7 @@ import { ItemGrid } from '@ui/components/ItemGrid'
 import { Nip05Badge } from '@/components/Nip05Badge'
 import { ProductCard } from '@/components/ProductCard'
 import { ProfileName } from '@/components/ProfileName'
-import { Button } from '@/components/ui/button'
+import { Button } from '@ui/primitives/button'
 import { ZapButton } from '@/components/social/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
@@ -30,7 +30,7 @@ import { Edit, MapPin, MessageCircle, Minus, Plus, RotateCcw, Share2, Timer } fr
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import { UserCard } from '../UserCard'
-import { TooltipButton } from '../shared/TooltipButton'
+import { TooltipButton } from '@ui/components/TooltipButton'
 
 interface ProfilePageProps {
 	profileId: string

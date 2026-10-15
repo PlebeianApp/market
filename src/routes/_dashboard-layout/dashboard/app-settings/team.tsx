@@ -1,7 +1,7 @@
 import { UserDisplayComponent } from '@/components/UserDisplayComponent'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
+import { Button } from '@ui/primitives/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
+import { Label } from '@ui/primitives/label'
 import { ProfileSearch } from '@/components/v4v/ProfileSearch'
 import {
 	useAddAdminMutation,

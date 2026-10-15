@@ -1,11 +1,11 @@
 import { CollectionDisplayComponent } from '@/components/CollectionDisplayComponent'
 import { ProductDisplayComponent } from '@/components/ProductDisplayComponent'
 import { UserDisplayComponent } from '@/components/UserDisplayComponent'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@ui/primitives/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
+import { Input } from '@ui/primitives/input'
+import { Label } from '@ui/primitives/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
 import { getATagFromCoords, getCoordsFromATag } from '@/lib/utils/coords'
 import {
 	useAddToBlacklistCollectionsMutation,

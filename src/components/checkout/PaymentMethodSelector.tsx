@@ -1,5 +1,5 @@
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@ui/primitives/badge'
+import { Card, CardContent } from '@ui/primitives/card'
 import { Bitcoin, Clock, Shield, Zap, CircleDollarSign } from 'lucide-react'
 
 export interface PaymentMethodOption {

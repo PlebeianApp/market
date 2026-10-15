@@ -1,5 +1,5 @@
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { Media } from '@/components/Media'
+import { Media } from '@ui/components/Media'
 import { format } from 'date-fns' // For formatting timestamp
 import {
 	ShoppingCartIcon,

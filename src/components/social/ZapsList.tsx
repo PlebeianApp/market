@@ -1,7 +1,7 @@
 import { useZapsViaProvider } from '@/queries/zaps'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Zap, ZapOff, MessageSquare } from 'lucide-react' // Icons
-import { Button } from '../ui/button'
+import { Button } from '@ui/primitives/button'
 import { cn } from '@/lib/utils' // Assuming you have a cn utility for class merging
 import { AvatarUser } from '../AvatarUser'
 

@@ -2,7 +2,7 @@ import { EntityActionsMenu } from '@/components/EntityActionsMenu'
 import { ItemGrid } from '@ui/components/ItemGrid'
 import { Nip05Badge } from '@/components/Nip05Badge.tsx'
 import { ProductCard } from '@/components/ProductCard'
-import { Button } from '@/components/ui/button'
+import { Button } from '@ui/primitives/button'
 import { UserCard } from '@/components/UserCard'
 import { ZapButton } from '@/components/social/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
@@ -31,7 +31,7 @@ import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Edit, MessageCircle, Share2 } from 'lucide-react'
 import { useEffect } from 'react'
 import { toast } from 'sonner'
-import { TooltipButton } from '@/components/shared/TooltipButton'
+import { TooltipButton } from '@ui/components/TooltipButton'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {

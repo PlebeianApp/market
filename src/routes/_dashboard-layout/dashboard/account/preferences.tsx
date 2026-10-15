@@ -1,5 +1,5 @@
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
+import { Switch } from '@ui/primitives/switch'
+import { Label } from '@ui/primitives/label'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useStore } from '@tanstack/react-store'

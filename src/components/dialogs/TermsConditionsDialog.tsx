@@ -1,6 +1,6 @@
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
+import { Button } from '@ui/primitives/button'
+import { ScrollArea } from '@ui/primitives/scroll-area'
 import { useConfigQuery } from '@/queries/config'
 import { ExternalLink } from 'lucide-react'
 

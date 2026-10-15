@@ -1,6 +1,6 @@
 import * as React from 'react'
-import { ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ToggleGroupItem } from '../primitives/toggle-group'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 
 /** Helper type to extract "ToggleGroupItemProps" type from shadcn "ToggleGroupItem" component */
 export type ToggleGroupItemProps = React.ComponentPropsWithoutRef<typeof ToggleGroupItem>

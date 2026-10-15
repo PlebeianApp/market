@@ -1,5 +1,5 @@
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@ui/primitives/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import { useConfigQuery } from '@/queries/config'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useQuery } from '@tanstack/react-query'

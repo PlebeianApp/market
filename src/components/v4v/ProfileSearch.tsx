@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { Input } from '@ui/primitives/input'
+import { Button } from '@ui/primitives/button'
 import { WotBadge } from '@/components/WotScore'
 import { Loader2, ExternalLink } from 'lucide-react'
 import { nip19 } from 'nostr-tools'

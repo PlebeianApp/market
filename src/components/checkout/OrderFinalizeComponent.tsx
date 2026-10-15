@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/button'
+import { Button } from '@ui/primitives/button'
 import type { CheckoutDeliveryRequirements } from '@sdk/commerce/checkout'
 import { cartStore } from '@/lib/stores/cart'
 import { uiActions } from '@/lib/stores/ui'

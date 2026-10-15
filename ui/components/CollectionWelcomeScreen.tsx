@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/button'
+import { Button } from '../primitives/button'
 
 export function CollectionWelcomeScreen({ onGetStarted }: { onGetStarted: () => void }) {
 	return (

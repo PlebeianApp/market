@@ -1,6 +1,6 @@
 import { PAYMENT_DETAILS_METHOD } from '@/lib/constants'
 import type { PaymentDetail } from '@/queries/payment'
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@ui/primitives/select'
 
 export interface WalletOption extends PaymentDetail {
 	displayName: string

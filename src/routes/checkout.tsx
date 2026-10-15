@@ -1,14 +1,14 @@
 import { CartSummary } from '@/components/CartSummary'
 import { LoginDialog } from '@/components/auth/LoginDialog'
-import { CheckoutProgress } from '@/components/checkout/CheckoutProgress'
+import { CheckoutProgress } from '@ui/components/CheckoutProgress'
 import { OrderFinalizeComponent } from '@/components/checkout/OrderFinalizeComponent'
 import { PaymentContent, type PaymentContentRef } from '@/components/checkout/PaymentContent'
 import { PaymentSummary } from '@/components/checkout/PaymentSummary'
 import { ShippingAddressForm, type CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
 import { WalletSelector, type WalletOption } from '@/components/checkout/WalletSelector'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Button } from '@ui/primitives/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@ui/primitives/card'
+import { ScrollArea } from '@ui/primitives/scroll-area'
 import {
 	isValidDigitalDeliveryContact,
 	findNextActionableInvoiceIndex,

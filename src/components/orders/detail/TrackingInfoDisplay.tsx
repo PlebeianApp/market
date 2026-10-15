@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/button'
+import { Button } from '@ui/primitives/button'
 import { copyToClipboard } from '@/lib/utils'
 import { Copy, Package } from 'lucide-react'
 

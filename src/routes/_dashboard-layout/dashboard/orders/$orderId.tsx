@@ -2,8 +2,8 @@ import { createFileRoute } from '@tanstack/react-router'
 import { OrderDetailComponent } from '@/components/orders/OrderDetailComponent'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useOrderById } from '@/queries/orders'
-import { Card, CardContent } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Card, CardContent } from '@ui/primitives/card'
+import { Skeleton } from '@ui/primitives/skeleton'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/orders/$orderId')({
 	component: OrderDetailRouteComponent,

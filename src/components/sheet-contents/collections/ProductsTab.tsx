@@ -1,4 +1,4 @@
-import { Media } from '@/components/Media'
+import { Media } from '@ui/components/Media'
 import { authStore } from '@/lib/stores/auth'
 import { collectionFormStore, collectionFormActions } from '@/lib/stores/collection'
 import { useProductsByPubkey } from '@/queries/products'

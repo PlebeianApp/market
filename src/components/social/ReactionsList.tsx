@@ -1,7 +1,7 @@
 import { groupReactionsByContent, useEventReactions, type Reaction } from '@/queries/reactions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useState } from 'react'
-import { Button } from '../ui/button'
+import { Button } from '@ui/primitives/button'
 import { useAuth } from '@/lib/stores/auth'
 import { usePublishDeletionMutation, usePublishReactionMutation } from '@/publish/reactions'
 

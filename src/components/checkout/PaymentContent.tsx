@@ -4,8 +4,8 @@ import {
 	type LightningPaymentProcessorRef,
 	type PaymentResult,
 } from '@/components/lightning/LightningPaymentProcessor'
-import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
+import { Button } from '@ui/primitives/button'
+import { Progress } from '@ui/primitives/progress'
 import { WalletSelector } from '@/components/checkout/WalletSelector'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { ChevronLeft, ChevronRight } from 'lucide-react'

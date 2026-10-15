@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/button'
+import { Button } from '@ui/primitives/button'
 import { TestLabelDialog } from '@/components/dashboard/TestLabelDialog'
 import { TEST_LABEL_PRODUCT_KIND } from '@/lib/constants/testLabels'
 import { getATagFromCoords } from '@/lib/utils/coords'

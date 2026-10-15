@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { Input } from '@/components/ui/input'
+import { Input } from '@ui/primitives/input'
 import { cn } from '@/lib/utils'
 import { COUNTRIES_ISO, COUNTRY_DIALING_CODES } from '@/lib/constants'
 import { ChevronDownIcon, CheckIcon } from 'lucide-react'

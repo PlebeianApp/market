@@ -1,4 +1,4 @@
-import { Media } from '@/components/Media'
+import { Media } from '@ui/components/Media'
 import { getCoordsFromATag } from '@/lib/utils/coords'
 import { fetchProductByATag, productKeys } from '@/queries/products'
 import { useQuery } from '@tanstack/react-query'

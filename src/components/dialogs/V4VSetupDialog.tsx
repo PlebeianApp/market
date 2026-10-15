@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
 import { V4VManager } from '@/components/v4v/V4VManager'
 import { salesV4VConfig, salesV4VLabels, type V4VConfig, type V4VLabels } from '@/lib/v4v/labels'
 import { salesV4VManagerProps } from '@/lib/v4v/sales-props'

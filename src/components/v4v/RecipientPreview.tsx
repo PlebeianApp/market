@@ -1,5 +1,5 @@
 import { nip19 } from 'nostr-tools'
-import { Card } from '@/components/ui/card'
+import { Card } from '@ui/primitives/card'
 import { UserCard } from '../UserCard'
 
 interface RecipientPreviewProps {

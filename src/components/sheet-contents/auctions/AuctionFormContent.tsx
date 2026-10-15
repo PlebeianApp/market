@@ -1,14 +1,14 @@
-import { Button } from '@/components/ui/button'
-import { Calendar } from '@/components/ui/calendar'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Button } from '@ui/primitives/button'
+import { Calendar } from '@ui/primitives/calendar'
+import { Checkbox } from '@ui/primitives/checkbox'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Input } from '@ui/primitives/input'
+import { Label } from '@ui/primitives/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@ui/primitives/popover'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
+import { Switch } from '@ui/primitives/switch'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
 import {
 	AUCTION_MIN_DURATION_SECONDS,
 	getAuctionPublishValidationIssues,
@@ -41,8 +41,8 @@ import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, CalendarIcon, ChevronDown, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
-import { InfoTooltip } from '@/components/shared/InfoTooltip'
-import { Slider } from '@/components/ui/slider'
+import { InfoTooltip } from '@ui/components/InfoTooltip'
+import { Slider } from '@ui/primitives/slider'
 
 type AuctionImage = { imageUrl: string; imageOrder: number }
 

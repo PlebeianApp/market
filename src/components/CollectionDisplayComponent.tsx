@@ -1,4 +1,4 @@
-import { Media } from '@/components/Media'
+import { Media } from '@ui/components/Media'
 import { useQuery } from '@tanstack/react-query'
 import { collectionQueryOptions } from '@/queries/collections'
 import { getCoordsFromATag } from '@/lib/utils/coords'

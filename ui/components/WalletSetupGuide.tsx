@@ -1,5 +1,5 @@
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '../primitives/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../primitives/card'
 import { ExternalLinkIcon, WalletIcon, ZapIcon } from 'lucide-react'
 
 interface WalletOption {

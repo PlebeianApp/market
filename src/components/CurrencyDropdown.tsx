@@ -1,5 +1,5 @@
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Button } from '@ui/primitives/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@ui/primitives/tooltip'
 import { CURRENCIES } from '@/lib/constants'
 import { uiActions, uiStore, type SupportedCurrency } from '@/lib/stores/ui'
 import { useStore } from '@tanstack/react-store'

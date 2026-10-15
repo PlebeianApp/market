@@ -1,5 +1,5 @@
 import { cartActions, useCart } from '@/lib/stores/cart'
-import { Media } from '@/components/Media'
+import { Media } from '@ui/components/Media'
 import { uiActions } from '@/lib/stores/ui'
 import { productQueryOptions } from '@/queries/products'
 import { getProductStock, getProductVisibility, isProductInStock } from '@sdk/commerce/discovery'

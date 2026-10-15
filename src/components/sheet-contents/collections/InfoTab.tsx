@@ -1,6 +1,6 @@
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Input } from '@ui/primitives/input'
+import { Label } from '@ui/primitives/label'
 import { collectionFormStore, collectionFormActions } from '@/lib/stores/collection'
 import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'

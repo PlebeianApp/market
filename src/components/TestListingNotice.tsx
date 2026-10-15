@@ -1,5 +1,5 @@
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@ui/primitives/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
 import { useTestLabelForCoordinate } from '@/queries/testLabels'
 import { Link } from '@tanstack/react-router'
 import { EyeOff } from 'lucide-react'

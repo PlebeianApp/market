@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@ui/primitives/card'
 import type { PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
 import { cn } from '@/lib/utils'
 import type { OrderWithRelatedEvents } from '@/queries/orders'

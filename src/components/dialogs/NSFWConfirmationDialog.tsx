@@ -1,5 +1,5 @@
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
+import { Button } from '@ui/primitives/button'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import { useStore } from '@tanstack/react-store'
 import { AlertTriangle } from 'lucide-react'

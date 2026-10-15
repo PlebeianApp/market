@@ -1,6 +1,6 @@
 import { BugReportItem } from '@/components/BugReportItem'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@ui/primitives/alert'
+import { Button } from '@ui/primitives/button'
 import { useBugReportsInfiniteScroll } from '@/hooks/useBugReportsInfiniteScroll'
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@/lib/blossom'
 import { getBugRelay, ndkActions } from '@/lib/stores/ndk'

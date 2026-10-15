@@ -1,8 +1,8 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { Circle, Loader2, CheckCircle2, XCircle } from 'lucide-react'
-import { Progress } from '@/components/ui/progress'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { Progress } from '../primitives/progress'
+import { Button } from '../primitives/button'
+import { cn } from '../utils/cn'
 
 export interface MigrationStep {
 	id: string

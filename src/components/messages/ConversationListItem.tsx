@@ -2,7 +2,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { notificationStore } from '@/lib/stores/notifications'
 import { Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Card } from '@/components/ui/card'
+import { Card } from '@ui/primitives/card'
 import { MessageSquareText } from 'lucide-react'
 import { UserCard } from '../UserCard'
 

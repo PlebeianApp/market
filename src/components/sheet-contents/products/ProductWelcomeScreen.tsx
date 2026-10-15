@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/button'
+import { Button } from '@ui/primitives/button'
 import { useConfigQuery } from '@/queries/config'
 
 export function ProductWelcomeScreen({ onGetStarted }: { onGetStarted: () => void }) {

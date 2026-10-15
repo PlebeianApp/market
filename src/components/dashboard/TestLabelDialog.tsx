@@ -7,9 +7,9 @@ import {
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+} from '@ui/primitives/alert-dialog'
+import { Label } from '@ui/primitives/label'
+import { Textarea } from '@ui/primitives/textarea'
 import { publishTestLabel, publishTestLabelDeletion } from '@/lib/actions/testLabelActions'
 import { TEST_LABEL_PRODUCT_KIND } from '@/lib/constants/testLabels'
 import { getATagFromCoords } from '@/lib/utils/coords'

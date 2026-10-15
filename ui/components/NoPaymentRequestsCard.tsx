@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '../primitives/card'
 import { Clock, CreditCard } from 'lucide-react'
 
 interface NoPaymentRequestsCardProps {

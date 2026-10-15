@@ -1,7 +1,7 @@
-import { cn } from '@/lib/utils'
-import { isVideoUrl } from '@/lib/media'
-import { Media } from '@/components/Media'
-import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel'
+import { cn } from '../utils/cn'
+import { isVideoUrl } from '../utils/media'
+import { Media } from './Media'
+import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '../primitives/carousel'
 import { ImageOff, Play } from 'lucide-react'
 import { useState, useEffect } from 'react'
 

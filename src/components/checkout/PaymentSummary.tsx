@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@ui/primitives/card'
 import { Check, Clock, Zap, Users, CreditCard, SkipForward } from 'lucide-react'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 

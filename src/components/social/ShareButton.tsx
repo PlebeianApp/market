@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { ShareProductDialog } from '../dialogs/ShareProductDialog'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { ButtonProps } from '../shared/ButtonProps'
-import { TooltipButton } from '../shared/TooltipButton'
+import type { ButtonProps } from '@ui/components/ButtonProps'
+import { TooltipButton } from '@ui/components/TooltipButton'
 
 interface ShareButtonProps extends ButtonProps {
 	event: NDKEvent

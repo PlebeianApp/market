@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, type ComponentType, type CSSProperties, type ReactNode } from 'react'
+import { createContext, useContext, useMemo, type ComponentType, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 
 export interface UiImageProps {
 	src: string
@@ -6,9 +6,18 @@ export interface UiImageProps {
 	className?: string
 }
 
+export interface UiLinkProps {
+	/** In-app path or absolute URL; the host decides how to navigate. */
+	href: string
+	className?: string
+	onClick?: (event: MouseEvent<HTMLAnchorElement>) => void
+	children: ReactNode
+}
+
 /** Host-replaceable primitives; components fall back to these when no per-call render prop is given. */
 export interface UiComponents {
 	Image: ComponentType<UiImageProps>
+	Link: ComponentType<UiLinkProps>
 }
 
 export const UI_THEME_TOKENS = [
@@ -37,7 +46,15 @@ function DefaultImage({ src, alt, className }: UiImageProps) {
 	return <img src={src} alt={alt} loading="lazy" className={className} />
 }
 
-const defaultComponents: UiComponents = { Image: DefaultImage }
+function DefaultLink({ href, className, onClick, children }: UiLinkProps) {
+	return (
+		<a href={href} className={className} onClick={onClick}>
+			{children}
+		</a>
+	)
+}
+
+const defaultComponents: UiComponents = { Image: DefaultImage, Link: DefaultLink }
 
 const UiComponentsContext = createContext<UiComponents>(defaultComponents)
 
@@ -82,4 +99,9 @@ export function useUiComponents(): UiComponents {
 export function UiImage(props: UiImageProps) {
 	const { Image } = useUiComponents()
 	return <Image {...props} />
+}
+
+export function UiLink(props: UiLinkProps) {
+	const { Link } = useUiComponents()
+	return <Link {...props} />
 }

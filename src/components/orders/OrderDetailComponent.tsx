@@ -1,10 +1,9 @@
 import { ProductCard } from '@/components/ProductCard'
 import { PaymentDialog } from '@/components/checkout/PaymentDialog'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { getAuctionClaimPublicMarkerFields, type PrivateAuctionClaimPayload } from '@/lib/auctions/privateAuctionClaimMessage'
+import { Card, CardContent, CardHeader, CardTitle } from '@ui/primitives/card'
+import { getAuctionClaimPublicMarkerFields } from '@/lib/auctions/privateAuctionClaimMessage'
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
-import { cn } from '@/lib/utils'
 import { getCoordsFromATag } from '@/lib/utils/coords'
 import { getStatusMessaging, getStatusStyles } from '@/lib/utils/orderUtils'
 import { usePrivateAuctionClaimForOrder } from '@/queries/auctions'
@@ -22,30 +21,13 @@ import { fetchV4VShares } from '@/queries/v4v'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
-import { format } from 'date-fns'
-import {
-	Ban,
-	Check,
-	CreditCard,
-	Download,
-	MapPin,
-	MessageSquare,
-	Package,
-	Receipt,
-	Truck,
-	CheckCircle,
-	Clock,
-	AlertTriangle,
-	ArrowRightLeft,
-	X,
-} from 'lucide-react'
+import { CreditCard, MessageSquare, Package, Receipt, Truck } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { DetailField } from '../ui/DetailField'
 import { OrderActions } from './OrderActions'
 import { PrivateOrderDetailsCard } from './PrivateOrderDetailsCard'
 import { TimelineEventCard } from './TimelineEventCard'
-import type { ComponentType, SVGProps } from 'react'
+import { OrderBuyerContactCard, OrderDetailHeader, OrderShippingCard, PrivateAuctionClaimCard } from '@ui/components/OrderDetailSections'
 
 // Imported helpers and components
 import { getOrderId, getOrderItems, getSellerPubkey, getShippingRef, getTotalAmount } from './orderDetailHelpers'
@@ -57,8 +39,6 @@ import {
 	NoPaymentRequestsCard,
 	PaymentProgressBar,
 	PaymentSummary,
-	PickupAddressDisplay,
-	ShippingInfoDisplay,
 	TrackingInfoDisplay,
 	V4VRecipientsCard,
 } from './detail'
@@ -66,19 +46,6 @@ import { UserCard } from '@/components/UserCard'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
-}
-
-function formatPrivateAuctionClaimAddress(payload: PrivateAuctionClaimPayload): string {
-	const { shippingAddress } = payload
-	return [
-		shippingAddress.name,
-		shippingAddress.firstLineOfAddress,
-		shippingAddress.additionalInformation,
-		[shippingAddress.city, shippingAddress.zipPostcode].filter(Boolean).join(' '),
-		shippingAddress.country,
-	]
-		.filter(Boolean)
-		.join('\n')
 }
 
 function privateAuctionClaimUnavailableMessage(status?: string, reason?: string): string {
@@ -92,30 +59,6 @@ function privateAuctionClaimUnavailableMessage(status?: string, reason?: string)
 		return 'Private auction claim details could not be loaded from the relay — this is usually temporary; retry in a moment.'
 	}
 	return 'Private auction claim details are not available from the encrypted claim path yet.'
-}
-
-// Map status icon names to Lucide components
-const STATUS_ICON_MAP: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
-	truck: Truck,
-	tick: Check,
-	check: Check,
-	clock: Clock,
-	cross: X,
-	ban: Ban,
-	circle: CheckCircle,
-}
-
-// Custom size classes for consistent rendering
-const ICON_SIZE_CLASSES = 'w-4 h-4'
-
-function renderStatusIcon(iconName?: string | null, className?: string) {
-	if (!iconName) return null
-
-	const IconComponent = STATUS_ICON_MAP[iconName]
-
-	if (!IconComponent) return null
-
-	return <IconComponent className={cn(ICON_SIZE_CLASSES, className)} />
 }
 
 export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
@@ -338,53 +281,20 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	return (
 		<div className="container mx-auto px-4 py-4">
 			<div className="space-y-6">
-				{/* Order Header */}
-				{/* === ORDER HEADER === */}
-				<Card>
-					<CardHeader className="p-0">
-						<div className={cn('p-4 rounded-t-xl', headerBgColor)}>
-							<div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
-								<div className="flex items-center space-x-3">
-									<div className={`p-2 rounded-lg ${'bg-blue-100'}`}>
-										<Package className="w-5 h-5 text-blue-700" />
-									</div>
-									<div>
-										<p className="text-sm font-medium text-gray-900">{'Products'}</p>
-										<h2 className="font-semibold truncate max-w-[300px] text-gray-800" title={headerTitle}>
-											{headerTitle}
-										</h2>
-										{headerSubText && <p className="text-xs text-gray-600 mt-0.5">{headerSubText}</p>}
-									</div>
-								</div>
-							</div>
-
-							<div className="border-t border-white/20 pt-4">
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									<DetailField label="Amount:" value={`${totalAmount} sats`} valueClassName="font-bold text-gray-900" />
-									<DetailField
-										label="Date:"
-										value={orderEvent.created_at ? format(new Date(orderEvent.created_at * 1000), 'dd.MM.yyyy, HH:mm') : 'N/A'}
-										valueClassName="text-gray-900"
-									/>
-								</div>
-							</div>
-						</div>
-					</CardHeader>
-
-					<CardContent className="pt-4">
-						{/* STATUS SECTION - Separated from actions */}
-						<div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-							<div className="flex items-center gap-2 mb-2">
-								<div className={`p-1.5 rounded-md ${statusBadgeBgColor}`}>{renderStatusIcon(iconName)}</div>
-								<span className="font-semibold text-gray-900 capitalize">{statusLabel}</span>
-							</div>
-							<p className="text-sm text-gray-700 ml-9">{statusExplanation || 'No pending actions required.'}</p>
-						</div>
-
-						{/* ORDER ACTIONS - Now at the bottom with labels */}
-						<OrderActions order={order} userPubkey={user?.pubkey || ''} />
-					</CardContent>
-				</Card>
+				<OrderDetailHeader
+					title={headerTitle}
+					subText={headerSubText}
+					totalSats={totalAmount}
+					createdAt={orderEvent.created_at}
+					status={{
+						label: statusLabel,
+						iconName,
+						headerBgColor,
+						badgeBgColor: statusBadgeBgColor,
+						explanation: statusExplanation,
+					}}
+					actions={<OrderActions order={order} userPubkey={user?.pubkey || ''} />}
+				/>
 
 				{/* Buyer Information Card */}
 				<Card>
@@ -396,69 +306,17 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 					</CardContent>
 				</Card>
 
-				{canViewLegacyBuyerContact && deliveryContact && (
-					<Card>
-						<CardHeader>
-							<CardTitle>Buyer Contact</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<p className="text-sm text-gray-700">
-								<strong>Delivery contact:</strong> {deliveryContact}
-							</p>
-							<p className="text-xs text-gray-500 mt-2">The seller can use this contact for order coordination after payment settles.</p>
-						</CardContent>
-					</Card>
-				)}
+				{canViewLegacyBuyerContact && deliveryContact && <OrderBuyerContactCard deliveryContact={deliveryContact} />}
 
 				{isOrderSeller && auctionClaimFields && (
-					<Card>
-						<CardHeader>
-							<CardTitle>Private Auction Claim Details</CardTitle>
-						</CardHeader>
-						<CardContent>
-							{privateAuctionClaimQuery.isLoading && <p className="text-sm text-gray-600">Loading private auction claim details...</p>}
-
-							{!privateAuctionClaimQuery.isLoading && privateAuctionClaimPayload && (
-								<div className="space-y-4">
-									<div>
-										<p className="text-sm font-semibold text-gray-900">Private shipping address</p>
-										<p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
-											{formatPrivateAuctionClaimAddress(privateAuctionClaimPayload)}
-										</p>
-									</div>
-
-									<div className="grid gap-3 sm:grid-cols-2">
-										{privateAuctionClaimPayload.email && (
-											<p className="text-sm text-gray-700">
-												<strong>Contact email:</strong> {privateAuctionClaimPayload.email}
-											</p>
-										)}
-										{privateAuctionClaimPayload.phone && (
-											<p className="text-sm text-gray-700">
-												<strong>Contact phone:</strong> {privateAuctionClaimPayload.phone}
-											</p>
-										)}
-									</div>
-
-									{privateAuctionClaimPayload.notes && (
-										<div>
-											<p className="text-sm font-semibold text-gray-900">Message to seller</p>
-											<p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{privateAuctionClaimPayload.notes}</p>
-										</div>
-									)}
-								</div>
-							)}
-
-							{!privateAuctionClaimQuery.isLoading && !privateAuctionClaimPayload && (
-								<p className="text-sm text-gray-600">
-									{privateAuctionClaimUnavailableMessage(
-										privateAuctionClaimResult?.status,
-										privateAuctionClaimResult?.status === 'unavailable' ? privateAuctionClaimResult.reason : undefined,
-									)}
-								</p>
-							)}
-						</CardContent>
-					</Card>
+					<PrivateAuctionClaimCard
+						isLoading={privateAuctionClaimQuery.isLoading}
+						claim={privateAuctionClaimPayload}
+						unavailableMessage={privateAuctionClaimUnavailableMessage(
+							privateAuctionClaimResult?.status,
+							privateAuctionClaimResult?.status === 'unavailable' ? privateAuctionClaimResult.reason : undefined,
+						)}
+					/>
 				)}
 				<PrivateOrderDetailsCard order={order} currentUserPubkey={user?.pubkey} showUnavailable={shouldShowPrivateDetailsUnavailable} />
 
@@ -495,57 +353,19 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 				{/* Shipping Information */}
 				{(shippingInfo || shippingAddress) && (
-					<Card>
-						<CardHeader>
-							<div className="flex items-center gap-2">
-								{isPickupService ? (
-									<MapPin className="w-5 h-5" />
-								) : isDigitalService ? (
-									<Download className="w-5 h-5" />
-								) : (
-									<Truck className="w-5 h-5" />
-								)}
-								<CardTitle>
-									{isPickupService ? 'Pickup Information' : isDigitalService ? 'Digital Delivery' : 'Shipping Information'}
-								</CardTitle>
-							</div>
-						</CardHeader>
-						<CardContent>
-							<div className="space-y-4">
-								{shippingInfo && <ShippingInfoDisplay shippingInfo={shippingInfo} />}
-
-								{isPickupService && pickupAddress && <PickupAddressDisplay pickupAddress={pickupAddress} />}
-
-								{isDigitalService && (
-									<div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-										<div className="flex items-start gap-2">
-											<Download className="w-4 h-4 text-purple-600 mt-0.5" />
-											<div>
-												<p className="font-medium text-purple-900">Digital Delivery</p>
-												<p className="text-sm text-purple-800 mt-1">
-													The seller will use the buyer-provided delivery contact after payment settles.
-												</p>
-											</div>
-										</div>
-									</div>
-								)}
-
-								{!isPickupService && !isDigitalService && shippingAddress && <DeliveryAddressDisplay shippingAddress={shippingAddress} />}
-
-								<TrackingInfoDisplay
-									trackingNumber={order.latestShipping?.tags.find((tag) => tag[0] === 'tracking')?.[1]}
-									carrier={order.latestShipping?.tags.find((tag) => tag[0] === 'carrier')?.[1]}
-									shippingStatus={order.latestShipping?.tags.find((tag) => tag[0] === 'status')?.[1]}
-								/>
-
-								{shippingInfo?.description && (
-									<div className="mt-4 p-3 bg-gray-50 rounded-lg">
-										<p className="text-sm text-gray-700">{shippingInfo.description}</p>
-									</div>
-								)}
-							</div>
-						</CardContent>
-					</Card>
+					<OrderShippingCard
+						mode={isPickupService ? 'pickup' : isDigitalService ? 'digital' : 'shipping'}
+						shippingInfo={shippingInfo}
+						pickupAddress={pickupAddress}
+						deliveryAddress={shippingAddress ? <DeliveryAddressDisplay shippingAddress={shippingAddress} /> : undefined}
+						tracking={
+							<TrackingInfoDisplay
+								trackingNumber={order.latestShipping?.tags.find((tag) => tag[0] === 'tracking')?.[1]}
+								carrier={order.latestShipping?.tags.find((tag) => tag[0] === 'carrier')?.[1]}
+								shippingStatus={order.latestShipping?.tags.find((tag) => tag[0] === 'status')?.[1]}
+							/>
+						}
+					/>
 				)}
 
 				{/* --- PAYMENT SECTION --- */}

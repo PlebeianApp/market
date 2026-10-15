@@ -1,5 +1,5 @@
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@ui/primitives/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
 import { authStore } from '@/lib/stores/auth'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'

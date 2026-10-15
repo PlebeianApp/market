@@ -1,5 +1,5 @@
 import { uiActions } from '@/lib/stores/ui'
-import { Media } from '@/components/Media'
+import { Media } from '@ui/components/Media'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link, useLocation } from '@tanstack/react-router'
 import { UserCard } from './UserCard'

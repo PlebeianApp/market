@@ -1,6 +1,6 @@
 import { useState, useEffect, Component, type ReactNode } from 'react'
-import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@ui/primitives/dialog'
+import { Button } from '@ui/primitives/button'
 import { cashuActions, cashuStore } from '@/lib/stores/cashu'
 import { nip60Store } from '@/lib/stores/nip60'
 import { useStore } from '@tanstack/react-store'

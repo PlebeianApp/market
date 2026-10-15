@@ -8,13 +8,13 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 	AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+} from '@ui/primitives/alert-dialog'
+import { Button } from '@ui/primitives/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@ui/primitives/card'
+import { Checkbox } from '@ui/primitives/checkbox'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
+import { Input } from '@ui/primitives/input'
+import { Label } from '@ui/primitives/label'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiStore } from '@/lib/stores/ui'
 import { parseNwcUri, useWallets, walletActions, type Wallet } from '@/lib/stores/wallet'

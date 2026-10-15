@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ProductDisplayView } from '../components/ProductDisplayView'
-import { UiImage, UiProvider, themeToStyle } from './UiProvider'
+import { UiImage, UiLink, UiProvider, themeToStyle } from './UiProvider'
 
 const image = { src: 'https://images.example/a.jpg', alt: 'A' }
 
@@ -46,6 +46,16 @@ describe('UiProvider', () => {
 			}),
 		)
 		expect(markup).toContain('data-src="https://images.example/mug.jpg"')
+	})
+
+	test('renders a plain anchor by default and lets the host replace the link primitive', () => {
+		expect(renderToStaticMarkup(<UiLink href="/products/1">Mug</UiLink>)).toBe('<a href="/products/1">Mug</a>')
+		const markup = renderToStaticMarkup(
+			<UiProvider components={{ Link: ({ href, children }) => <button data-to={href}>{children}</button> }}>
+				<UiLink href="/products/1">Mug</UiLink>
+			</UiProvider>,
+		)
+		expect(markup).toBe('<button data-to="/products/1">Mug</button>')
 	})
 
 	test('applies only known theme tokens as CSS variables without a layout wrapper otherwise', () => {

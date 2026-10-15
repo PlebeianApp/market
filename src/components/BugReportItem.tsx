@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/button'
+import { Button } from '@ui/primitives/button'
 import { AvatarUser } from '@/components/AvatarUser'
 import { useNavigate } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'

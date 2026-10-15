@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@ui/primitives/dialog'
+import { Button } from '@ui/primitives/button'
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
 import { ndkActions } from '@/lib/stores/ndk'
 import { useWallets, walletActions } from '@/lib/stores/wallet'

@@ -4,7 +4,7 @@ import * as AvatarPrimitive from '@radix-ui/react-avatar'
 
 import { cn } from '@/lib/utils'
 import { getNormalizedProfileDisplayName, getNormalizedProfilePicture, useProfile } from '@/queries/profiles'
-import { Spinner } from './ui/spinner'
+import { Spinner } from '@ui/primitives/spinner'
 
 interface AvatarUserProps extends React.ComponentProps<typeof AvatarPrimitive.Root> {
 	pubkey?: string

@@ -1,5 +1,5 @@
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@ui/primitives/button'
+import { Textarea } from '@ui/primitives/textarea'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
 import { Send } from 'lucide-react'

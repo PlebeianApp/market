@@ -3,7 +3,7 @@ import { NewAuctionContent } from '@/components/sheet-contents/NewAuctionContent
 import { NewProductContent } from '@/components/sheet-contents/NewProductContent'
 import { NewCollectionContent } from '@/components/sheet-contents/NewCollectionContent'
 import { ConversationSheetContent } from '@/components/sheet-contents/ConversationSheetContent'
-import { Sheet } from '@/components/ui/sheet'
+import { Sheet } from '@ui/primitives/sheet'
 import { useStore } from '@tanstack/react-store'
 import { uiStore } from '@/lib/stores/ui'
 import { useMemo, useState, useEffect } from 'react'
