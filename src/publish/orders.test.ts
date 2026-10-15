@@ -182,7 +182,7 @@ mock.module('@nostr-dev-kit/ndk', () => ({
 
 import type { CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
 import { decryptPrivateOrderMessage } from '@/lib/orders/privateOrderMessage'
-import { createOrder, createOrderCreationEvent, publishOrderWithDependencies } from '@/publish/orders'
+import { createOrder, createOrderCreationEvent, publishOrderWithDependencies, publishOrderWorkflowWithDependencies } from '@/publish/orders'
 import { privateDetailsMatchPublicOrder } from '@/queries/orders'
 import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@/lib/piiSentinelFixture'
 
@@ -429,6 +429,32 @@ describe('public order privacy guard', () => {
 			),
 		).rejects.toThrow('Delivery requirements could not be verified')
 
+		expect(publishedEvents).toHaveLength(0)
+	})
+
+	test('reports unresolved delivery against the affected seller without publishing', async () => {
+		const seller = createKeyPair()
+		const shippingRef = publicShippingRef(seller.pubkey, 'missing-service')
+		shippingServices = { [shippingRef]: null }
+
+		const outcome = await publishOrderWorkflowWithDependencies(
+			paramsFor({
+				productsBySeller: {
+					[seller.pubkey]: [{ id: 'unknown-product', amount: 1, shippingMethodId: shippingRef }],
+				},
+			}),
+		)
+
+		expect(outcome).toMatchObject({
+			status: 'failed',
+			failedSellerPubkey: seller.pubkey,
+			failedPhase: 'delivery_preflight',
+			unresolvedShippingRefs: [shippingRef],
+		})
+		if (outcome.status === 'failed') {
+			expect(outcome.progress).toHaveLength(1)
+			expect(outcome.progress[0]?.orderId).toBe(outcome.failedOrderId)
+		}
 		expect(publishedEvents).toHaveLength(0)
 	})
 
@@ -740,6 +766,43 @@ describe('public order privacy guard', () => {
 		expect(JSON.stringify(physicalDetails.details.items)).not.toContain(digitalSeller.pubkey)
 		expect(JSON.stringify(digitalDetails.details.items)).not.toContain(physicalSeller.pubkey)
 		expectPublicOrderEventsWithoutBuyerPii(orders)
+	})
+
+	test('returns partial progress when a later seller marker publish fails', async () => {
+		const firstSeller = createKeyPair()
+		const secondSeller = createKeyPair()
+		const firstShippingRef = publicShippingRef(firstSeller.pubkey, 'pickup')
+		const secondShippingRef = publicShippingRef(secondSeller.pubkey, 'pickup')
+		shippingServices = {
+			[firstShippingRef]: 'pickup',
+			[secondShippingRef]: 'pickup',
+		}
+		publishResults.push(new Set(['wss://relay.example']), new Set(['wss://relay.example']), new Error('later seller publish failed'))
+
+		const outcome = await publishOrderWorkflowWithDependencies(
+			paramsFor({
+				sellers: [firstSeller.pubkey, secondSeller.pubkey],
+				productsBySeller: {
+					[firstSeller.pubkey]: [{ id: 'first-product', amount: 1, shippingMethodId: firstShippingRef }],
+					[secondSeller.pubkey]: [{ id: 'second-product', amount: 1, shippingMethodId: secondShippingRef }],
+				},
+			}),
+		)
+
+		expect(outcome).toMatchObject({
+			status: 'partial',
+			orderIds: [expect.any(String)],
+			failedSellerPubkey: secondSeller.pubkey,
+			failedPhase: 'order_marker',
+			error: 'later seller publish failed',
+		})
+		if (outcome.status === 'partial') {
+			expect(outcome.progress.find((item) => item.sellerPubkey === firstSeller.pubkey)?.publishedEventIds).toHaveLength(2)
+			expect(outcome.progress.find((item) => item.sellerPubkey === secondSeller.pubkey)?.publishedEventIds).toEqual([])
+		}
+		// The mocked publisher records the attempted event before throwing; only
+		// the first seller is reported as confirmed in the workflow progress.
+		expect(publicOrderEvents()).toHaveLength(2)
 	})
 
 	test('multi-seller private payload preparation failure publishes nothing', async () => {

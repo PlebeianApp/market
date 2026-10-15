@@ -1,0 +1,217 @@
+# nostr-io — the repaired cases against the frozen implementation (the §4.1 red half)
+# command:   bash <the procedure printed below>   (the caller redirects to this file)
+# generated: 2026-09-29T19:49:22Z
+# bun:       1.4.2
+# frozen:    69ad15c (the candidate the two reviews name)
+#
+# **One-off, serialized transcript — and no script regenerates it, on purpose.** It is the red half
+# of the red-team repair, captured by hand with the copy/restore procedure below. A script that wrote
+# this file would be an evidence script that writes into the tree, which `core/checks/evidence.py`
+# reports as a hard finding, and those findings are a ratchet (D7 of
+# runs/2026-09-29-reframing/decisions-micro-harden-nostr-io.md). The procedure is in ts/ts.md,
+# "Running it", so a reader can reproduce it by hand; the next repair captures its own red half the
+# same way and with the same header line — see evidence/05-before-the-repair.txt.
+#
+# **Regenerating it.** The repaired sources are copied aside, the four implementation
+# files are restored from the frozen commit, the suite is run, and the copies are put back —
+# the procedure is the three commands below, in that order, with the copy/restore steps for
+# the repaired files. The frozen sha256 of each file is printed as it is restored, so the
+# subject of this run is identified rather than assumed.
+
+$ for f in index.ts types.ts pool.ts relay-adapter.ts; do git -C <assembly> show 69ad15c:nostr-io/ts/$f > nostr-io/ts/$f; done
+   index.ts          1c2e4d60153bd99cf56cd878919fc7db035ff446bd3af31270289a47736d6dd1
+   types.ts          1528e0b5467a370fee60f0eb23f2190534bf50d6946b50be3659848f357ae182
+   pool.ts           c525b5d748edaee63898385b8af2c089f262bb81ba002ae62a13ec43be41fc2c
+   relay-adapter.ts  c915a9142ab57e4182a063cb7a00ac7a48c3616c7984c436eb9ad99e481866d5
+
+   repaired copies held at: /tmp/nostr-io-fixed (restored after this run)
+
+$ (cd nostr-io/ts && bun test)
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) query > query · the wire's events arrive in order and EOSE resolves the read [6.70ms]
+(pass) query > query · a deadline that fires reports eose:false instead of inventing completeness [22.95ms]
+91 | 			tap((message) => {
+92 | 				if (message.type === 'EOSE') seen.add(message.from)
+93 | 			}),
+94 | 			map((message) => {
+95 | 				if (message.type === 'CLOSED') throw new RelaySeamError(mapClosedReason(message.reason), message.reason)
+96 | 				if (message.type === 'ERROR') throw new RelaySeamError('rejected', 'the relay reported an error')
+                                             ^
+RelaySeamError: the relay reported an error
+ reason: "rejected",
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/relay-adapter.ts:96:41)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/operators/map.js:10:37)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/operators/OperatorSubscriber.js:33:21)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/Subscriber.js:51:18)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/operators/tap.js:21:28)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/operators/OperatorSubscriber.js:33:21)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/Subscriber.js:51:18)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/observable/innerFrom.js:109:24)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/Observable.js:41:25)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/Observable.js:35:31)
+(fail) query > query · a relay refusal mid-read resolves with what arrived, and both backends agree [1.87ms]
+159 | 			const outcome = await within(seam.query({ kinds: [1] }))
+160 | 			expect(outcome.settled).toBe(true)
+161 | 			if (!outcome.settled) throw new Error('the read never settled: the completion count is not the unique target set')
+162 | 
+163 | 			// the fix site, on the record: the pool was handed the relay once
+164 | 			expect(backend.targets()).toEqual([[RELAY_A]])
+                                   ^
+error: expect(received).toEqual(expected)
+
+  [
+    [
+      "wss://relay.alpha.invalid",
++     "wss://relay.alpha.invalid",
+    ],
+  ]
+
+- Expected  - 0
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:164:30)
+(fail) query > query · a relay URL the policy names twice is targeted once [1.57ms]
+179 | 		const pool = workingPool({ request: () => range(0, CEILING + 1).pipe(map(() => FIRST)) })
+180 | 		const policy = recordingPolicy([RELAY_A])
+181 | 		const seam = createNostrIo({ pool: pool.port, policy: policy.policy })
+182 | 
+183 | 		const read: WireResult = await seam.query({ kinds: [1] })
+184 | 		expect(read.events.length).toBe(CEILING)
+                                   ^
+error: expect(received).toBe(expected)
+
+Expected: 10000
+Received: 10001
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:184:30)
+(fail) query > query · a read stops at the stated ceiling [3.06ms]
+198 | 			pool: workingPool({ request: () => drip }).port,
+199 | 			policy: policy.policy,
+200 | 		})
+201 | 		try {
+202 | 			const outcome = await within(seam.query({ kinds: [1] }, { deadlineMs: 40 }), 1000)
+203 | 			expect(outcome.settled).toBe(true)
+                                 ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:203:28)
+(fail) query > query · a dripping wire is bounded by the wall-clock deadline [1002.16ms]
+232 | 			expect(arrived.map((event) => event.id)).toEqual([FIRST.id])
+233 | 
+234 | 			// the refusal is on the error channel, not a silent end to the event stream
+235 | 			const failure = await firstValueFrom(subscription.errors.pipe(timeout(500)))
+236 | 			expect(failure).toBeInstanceOf(RelaySeamError)
+237 | 			expect(failure.reason).toBe('rate-limited')
+                                ^
+error: expect(received).toBe(expected)
+
+Expected: "rate-limited"
+Received: "rejected"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:237:27)
+(fail) subscribe > subscribe · live events and a relay refusal reach their channels [4.87ms]
+262 | 				const seam = createNostrIo({ pool: backend.port, policy: policy.policy })
+263 | 
+264 | 				const subscription: Subscription = seam.subscribe({ kinds: [1] })
+265 | 				const failure = await firstValueFrom(subscription.errors.pipe(timeout(500)))
+266 | 				expect(failure).toBeInstanceOf(RelaySeamError)
+267 | 				expect(failure.reason).toBe(reason)
+                                 ^
+error: expect(received).toBe(expected)
+
+Expected: "rate-limited"
+Received: "rejected"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:267:28)
+(fail) subscribe > subscribe · a relay's own NIP-01 refusal prefix reaches the vocabulary on both paths [1.62ms]
+288 | 		const seam = createNostrIo({ pool: backend.port, policy: policy.policy })
+289 | 
+290 | 		const subscription: Subscription = seam.subscribe({ kinds: [1] }, { closeOnEose: true })
+291 | 		// an EOSE the pool already holds must not complete the output before the events
+292 | 		const arrived = await collect(subscription.events, 2)
+293 | 		expect(arrived.map((event) => event.id)).toEqual([FIRST.id, SECOND.id])
+                                                 ^
+error: expect(received).toEqual(expected)
+
+- [
+-   "0971ce9389f720a52f8dcdcfb092530bd687cdf0bfdc3e7605428b70ea3bf144",
+-   "eeb85a42d905de09f6d203db9cd3523e9c437c9bb8a55e79a43b9d90c69fdf1b",
+- ]
++ []
+
+- Expected  - 4
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:293:44)
+(fail) subscribe > subscribe · closeOnEose ends the stream at the boundary, after the events that preceded it [1.02ms]
+(pass) subscribe > subscribe · unsubscribe twice closes once and throws nothing [0.31ms]
+(pass) publish > publish · one ack per targeted relay, and a silent relay is reported not dropped [14.06ms]
+(pass) count > count · NIP-45's count carries the relay's approximation flag [1.78ms]
+(pass) connect > connect · the relay set is the injected policy's answer [0.95ms]
+377 | 			const policy = recordingPolicy([RELAY_A])
+378 | 			const seam = createNostrIo({ pool: holding.port, policy: policy.policy })
+379 | 
+380 | 			const statuses: RelayStatus[] = await seam.connect()
+381 | 			expect(statuses.map((status) => status.url)).toEqual([RELAY_A])
+382 | 			expect(statuses[0].ready).toBe(true)
+                                   ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:382:30)
+(fail) connect > connect · a relay the pool already holds is reported by its own state, and a URL that is not a relay is refused [6.15ms]
+(pass) the multi-backend case > the multi-backend case · the same suite passes over the vendor adapter and over a hand-written pool [1.51ms]
+
+invariants.test.ts:
+(pass) M5 · the store-free case > M5 · the store-free case: a recording pool that throws is reached only by the wire verbs, and not at all when the seam is asked for nothing [7.99ms]
+(pass) #5ecac1 · the reason vocabulary > #5ecac1 · the reason vocabulary maps a relay's own refusal text, and a refusal is never a bare string [0.25ms]
+114 | 				},
+115 | 			})
+116 | 		})
+117 | 		// what arrived was delivered, and the channel **completed** — it did not end on a bare Error
+118 | 		expect(arrived).toEqual([FIRST.id])
+119 | 		expect(ended).toBe('completed')
+                      ^
+error: expect(received).toBe(expected)
+
+Expected: "completed"
+Received: "errored on Error: the socket died"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/invariants.test.ts:119:17)
+(fail) #5ecac1 · every live channel is typed > #5ecac1 · a pool whose own streams error reaches the caller as a typed refusal, on no channel as a bare Error [10.42ms]
+185 | 			['publish', () => seam.publish(signedEvent({ kind: 1, created_at: 1000 }))],
+186 | 			['count', () => seam.count({ kinds: [1] })],
+187 | 		]
+188 | 		for (const [operation, run] of operations) {
+189 | 			const refused = await rejection(run())
+190 | 			expect(isRefusal(refused)).toBe(true)
+                                    ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/invariants.test.ts:190:31)
+(fail) #5ecac1 · every live channel is typed > #5ecac1 · a policy that cannot answer is a typed refusal on every operation, and never reaches the wire [1.71ms]
+(pass) #06200d · relay policy is injected, never owned > #06200d · the policy is read on every call and its relays are neither added to, preferred nor reordered [6.58ms]
+(pass) #3820a9 · two seams in one process > #3820a9 · two seams share no socket, no subscription and no relay set [0.65ms]
+
+ 11 pass
+ 10 fail
+ 95 expect() calls
+Ran 21 tests across 2 files. [1390.00ms]
+exit: 1
+
+$ ...and the repaired files put back, and the suite run again:
+$ restored          483436d78099fab594f31cf762603567e3ecd128d756b71c1fc908e43075edd0  index.ts b737c68c710cb4b1404bb7993b1d5c776a478fd544301fff8ddfbde007017041  types.ts f1abe03b6158281aae63e1a9d87014d878969d76c505feb2f569c478f7c0ffd7  pool.ts 7e12d535ffff215224930f82edc9f2e5e45c0a2125e1175474f5d1ec04d413b6  relay-adapter.ts 
+ 21 pass
+ 0 fail
+exit: 0

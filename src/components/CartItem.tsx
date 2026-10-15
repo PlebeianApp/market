@@ -16,7 +16,7 @@ import { ShippingSelector } from '@/components/ShippingSelector'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions, cartStore } from '@/lib/stores/cart'
-import { normalizePublishedProductShippingTags, resolvePublishedProductShippingOptions } from '@/lib/utils/productShippingSelections'
+import { normalizePublishedProductShippingTags, resolvePublishedProductShippingOptions } from '@sdk/commerce/products'
 import { useQuery } from '@tanstack/react-query'
 import { PriceDisplay } from '@/components/PriceDisplay'
 

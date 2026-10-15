@@ -229,6 +229,11 @@ describe('NIP-17 order transport publish seam', () => {
 		})
 
 		expect(validationFailed.status).toBe('validation_failed')
+		if (validationFailed.status !== 'validation_failed') throw new Error('expected validation failure')
+		expect(validationFailed.error).toMatchObject({
+			code: 'signer_pubkey_mismatch',
+			failure: { workflow: 'nip17_order_transport', phase: 'validation', status: 'failed' },
+		})
 
 		const wrapFailed = await publishNip17OrderTransportMessage({
 			rumor,

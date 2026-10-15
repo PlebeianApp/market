@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client'
 import { createQueryClient } from './lib/queryClient'
 import { routeTree } from './routeTree.gen'
 import type { AppRouterContext } from './lib/router-utils'
-import { bootApp, bootStore } from './lib/boot'
+import { bootApp, bootStore } from '@platform/web/boot'
 import { UpdateAvailableDialog } from './components/UpdateAvailableDialog'
 import { useServiceWorker } from './hooks/useServiceWorker'
 

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>relay-config — the one relay configuration port</title>
+		<style>
+			:root {
+				--bg: #0d1017;
+				--surface: #151a23;
+				--border: #242c3a;
+				--text: #e6e9ef;
+				--muted: #97a1b3;
+				--ours: #6ee7a8;
+				--library: #7aa2ff;
+				--default: #f2c14e;
+				--mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+			}
+			* { box-sizing: border-box; }
+			body {
+				margin: 0;
+				background: var(--bg);
+				color: var(--text);
+				font: 16px/1.6 system-ui, -apple-system, Segoe UI, sans-serif;
+			}
+			main { max-width: 960px; margin: 0 auto; padding: 3rem 1.25rem 5rem; }
+			h1 { font-size: 1.8rem; margin: 0 0 0.25rem; }
+			.lede { color: var(--muted); margin: 0 0 2rem; }
+			h2 { font-size: 1.15rem; margin: 2.25rem 0 0.75rem; }
+			code { font-family: var(--mono); font-size: 0.9em; background: #10151d; padding: 0.1rem 0.35rem; border-radius: 4px; }
+			.grid { display: grid; gap: 1rem; }
+			@media (min-width: 720px) { .grid.three { grid-template-columns: repeat(3, 1fr); } }
+			.card {
+				display: block;
+				background: var(--surface);
+				border: 1px solid var(--border);
+				border-radius: 12px;
+				padding: 1rem 1.1rem;
+			}
+			.card h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+			.tag { display: inline-block; font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; border-radius: 999px; padding: 0.12rem 0.55rem; margin-bottom: 0.6rem; }
+			.tag.ours { background: rgba(110, 231, 168, 0.14); color: var(--ours); }
+			.tag.library { background: rgba(122, 162, 255, 0.14); color: var(--library); }
+			.tag.default { background: rgba(242, 193, 78, 0.14); color: var(--default); }
+			ul.members { list-style: none; margin: 0; padding: 0; }
+			ul.members li { padding: 0.28rem 0; border-bottom: 1px dashed var(--border); }
+			ul.members li:last-child { border-bottom: 0; }
+			.flow { display: grid; gap: 0.6rem; align-items: center; }
+			.flow .arrow { color: var(--muted); text-align: center; font-family: var(--mono); }
+			.rule { font-size: 0.95rem; }
+			.rule b { color: var(--ours); }
+			footer { color: var(--muted); font-size: 0.85rem; margin-top: 3rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+			button {
+				background: #1c2431; color: var(--text); border: 1px solid var(--border);
+				border-radius: 8px; padding: 0.45rem 0.8rem; font-family: var(--mono); cursor: pointer;
+			}
+			button:hover { border-color: var(--library); }
+			pre { background: #10151d; border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem 1rem; overflow-x: auto; }
+			.answer { color: var(--ours); font-family: var(--mono); font-size: 0.9rem; min-height: 1.4rem; }
+		</style>
+	</head>
+	<body>
+		<main>
+			<h1>relay-config — the one relay configuration port</h1>
+			<p class="lede">
+				One question: <em>which relays?</em> One port answers it, by role. The library parses the relay lists;
+				the app's own relays, its two switches and its one configuration write stay ours; and the app's
+				instance config is injected as <b>data</b>, never imported from <code>src/</code>.
+			</p>
+
+			<h2>Three groups of members, and saying which is which IS the port</h2>
+			<div class="grid three">
+				<div class="card">
+					<span class="tag library">the library's</span>
+					<h3>Library-derived</h3>
+					<ul class="members">
+						<li><code>userRead(pubkey)</code> — 10002 inboxes</li>
+						<li><code>userWrite(pubkey)</code> — 10002 outboxes</li>
+						<li><code>dmRelays(pubkey)</code> — 10050, or <code>undefined</code></li>
+						<li><code>role(role, pubkey)</code> — 10007 / 10006 / 10012 / 10086</li>
+					</ul>
+					<p><small>Parsing, marker rules and validation are the library's. No hand-rolled list parse exists here.</small></p>
+				</div>
+				<div class="card">
+					<span class="tag ours">ours</span>
+					<h3>Ours</h3>
+					<ul class="members">
+						<li><code>instance('app'|'bug'|'cvm'|'zap')</code></li>
+						<li><code>outboxEnabled()</code></li>
+						<li><code>dmFallback()</code> — <code>'refuse'</code> by default</li>
+						<li><code>setWriteRelay(url)</code> — a config write</li>
+					</ul>
+					<p><small>The library models <em>another party's</em> relay lists; it has no word for <em>this app's</em> relays.</small></p>
+				</div>
+				<div class="card">
+					<span class="tag default">injected</span>
+					<h3>The default layer</h3>
+					<ul class="members">
+						<li><code>RelayDefaults</code> — the app's slots, as data</li>
+						<li><code>instanceZap</code> — <b>additive</b>, never a replacement</li>
+						<li><code>outboxEnabled</code>, <code>dmFallback</code></li>
+					</ul>
+					<p><small>With no event to derive from, the instance roles answer from it — it is the floor, not a substitute.</small></p>
+				</div>
+			</div>
+
+			<h2>The flow — a store subscription, never a dial</h2>
+			<div class="flow">
+				<div class="card">seeded event in the store (<code>10050</code>, <code>10002</code>, <code>10007</code>…)</div>
+				<div class="arrow">▼&nbsp;&nbsp;the library's model / validator / <code>getRelaysFromList</code></div>
+				<div class="card">the port answers, by role</div>
+				<div class="arrow">▼&nbsp;&nbsp;no pool, no socket</div>
+				<div class="card">the caller (the DM path, later)</div>
+			</div>
+
+			<h2>Try the rules</h2>
+			<p class="rule">
+				<b>ZAP_RELAYS is never dropped.</b> The dedicated zap relays stand; an instance zap set extends them.
+			</p>
+			<p>
+				<button id="addZap">configure an instance zap set</button>
+				<span class="answer" id="zapAnswer"></span>
+			</p>
+			<p class="rule">
+				<b>The DM target is the recipient's <code>10050</code>, or nothing.</b> No <code>10002</code> is substituted.
+			</p>
+			<p>
+				<button id="dm">ask dmRelays for a recipient with no 10050</button>
+				<span class="answer" id="dmAnswer"></span>
+			</p>
+
+			<pre id="code"></pre>
+
+			<footer>
+				The import allow-list is <code>./&lt;module file&gt;</code>, <code>applesauce-core[/…]</code>,
+				<code>applesauce-common[/…]</code>, <code>nostr-tools[/…]</code>, <code>rxjs</code>,
+				<code>bun:test</code>. This is the only SDK module that names <code>applesauce-common</code>.
+			</footer>
+		</main>
+		<script>
+			// The three rules a reader can press, mirrored from the tests. No build step, no vendor script.
+			const floor = ['wss://relay.coinos.io', 'wss://nwc.primal.net', 'wss://relay.primal.net']
+			const instanceZap = ['wss://instance-zap.test']
+			document.getElementById('addZap').addEventListener('click', () => {
+				const union = [...new Set([...floor, ...instanceZap, 'wss://app.test'])]
+				document.getElementById('zapAnswer').textContent = `instance('zap') → [${union.length}] ${union.join(', ')}`
+			})
+			document.getElementById('dm').addEventListener('click', () => {
+				document.getElementById('dmAnswer').textContent = "dmRelays(pubkey) → undefined  // the library's own answer"
+			})
+			document.getElementById('code').textContent =
+				"// the port, declared once\n" +
+				"export interface RelayConfigPort {\n" +
+				"  userRead(pubkey: string): Observable<string[]>\n" +
+				"  userWrite(pubkey: string): Observable<string[]>\n" +
+				"  dmRelays(pubkey: string): Observable<string[] | undefined>\n" +
+				"  role(role: 'search' | 'blocked' | 'favorite' | 'lookup', pubkey: string): Observable<string[] | undefined>\n" +
+				"  instance(role: 'app' | 'bug' | 'cvm' | 'zap'): readonly string[]\n" +
+				"  outboxEnabled(): boolean\n" +
+				"  dmFallback(): 'refuse' | 'nip65-read'\n" +
+				"  setWriteRelay(url: string): void\n" +
+				"}\n" +
+				"// createRelayConfig(store: { modelStore(): IEventStore }, defaults: RelayDefaults): RelayConfigPort"
+		</script>
+	</body>
+</html>

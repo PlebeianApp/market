@@ -1,10 +1,11 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useProductSearch, getProductTitle } from '@/queries/products'
+import { useProductSearch } from '@/queries/products'
 import { ProductCard } from '@/components/ProductCard'
 import { useEffect, useState, useMemo } from 'react'
 import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
+import { filterAndSortProductSearchResults } from '@sdk/commerce/discovery'
 
 declare module '@tanstack/react-router' {
 	interface FileRoutesByPath {
@@ -36,30 +37,10 @@ function SearchProductsPage() {
 
 	// Process results: filter out excluded terms and sort
 	const results = useMemo(() => {
-		let filtered = rawResults
-
-		// Apply exclusion filter if there are exclude terms
-		if (localExclude.trim()) {
-			const excludeTerms = localExclude
-				.toLowerCase()
-				.split(/\s+/)
-				.filter((term) => term.length > 0)
-			filtered = rawResults.filter((event) => {
-				const title = getProductTitle(event)?.toLowerCase() || ''
-				const content = event.content?.toLowerCase() || ''
-				const searchText = `${title} ${content}`
-
-				// Exclude if any exclude term is found
-				return !excludeTerms.some((term) => searchText.includes(term))
-			})
-		}
-
-		// Apply sorting
-		if (localSort === 'oldest') {
-			return [...filtered].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
-		} else {
-			return [...filtered].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-		}
+		return filterAndSortProductSearchResults(rawResults, {
+			exclude: localExclude,
+			sort: localSort === 'oldest' ? 'oldest' : 'newest',
+		})
 	}, [rawResults, localSort, localExclude])
 
 	// Update URL when local state changes

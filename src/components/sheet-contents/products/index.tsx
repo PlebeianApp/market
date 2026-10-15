@@ -2,7 +2,7 @@ import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/compo
 import { authActions, authStore } from '@/lib/stores/auth'
 import type { ProductFormState, ProductFormTab } from '@/lib/stores/product'
 import { DEFAULT_FORM_STATE, productFormActions, productFormStore } from '@/lib/stores/product'
-import { resolveProductWorkflow, type V4VSetupState } from '@/lib/workflow/productWorkflowResolver'
+import { resolveProductWorkflow, type V4VSetupState } from '@sdk/commerce/products'
 import { useV4VConfiguration } from '@/queries/v4v'
 import { useConfigQuery } from '@/queries/config'
 import { useStore } from '@tanstack/react-store'

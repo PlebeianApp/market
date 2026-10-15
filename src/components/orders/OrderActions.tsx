@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
+import { getOrderManagementActions } from '@sdk/commerce/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { Ban, Check, CheckCircle, Clock, Package, Truck, X } from 'lucide-react'
@@ -43,17 +44,13 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 	const isBuyer = userPubkey === buyerPubkey
 	const isSeller = userPubkey === sellerPubkey
 
-	// Determine which actions are allowed based on role and current status
-	const canCancel = status === ORDER_STATUS.PENDING && (isBuyer || isSeller)
 	const hasBeenShipped = order.shippingUpdates.some((update) => update.tags.find((tag) => tag[0] === 'status')?.[1] === 'shipped')
-
-	// Seller actions
-	const canConfirm = isSeller && status === ORDER_STATUS.PENDING
-	const canProcess = isSeller && status === ORDER_STATUS.CONFIRMED
-	const canShip = isSeller && status === ORDER_STATUS.PROCESSING && !hasBeenShipped
-
-	// Buyer actions
-	const canReceive = isBuyer && status === ORDER_STATUS.PROCESSING && hasBeenShipped
+	const actions = getOrderManagementActions({
+		role: isBuyer ? 'buyer' : isSeller ? 'seller' : 'other',
+		orderStatus: status,
+		shippingStatus: hasBeenShipped ? 'shipped' : null,
+	})
+	const { canCancel, canConfirm, canProcess, canShip, canReceive } = actions
 
 	const handleStatusUpdate = (newStatus: string, reason?: string, tracking?: string) => {
 		const orderEventId = order.order.id

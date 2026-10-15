@@ -2,8 +2,8 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { LIVE_CHAT_KIND } from '@/lib/nip53'
 import { liveActivityKeys } from '@/queries/queryKeyFactory'
+import { createLiveChatMessageTemplate } from '@sdk/commerce/messaging'
 
 interface PublishLiveChatMessageParams {
 	liveActivityCoord: string
@@ -25,12 +25,20 @@ export const publishLiveChatMessage = async ({ liveActivityCoord, content }: Pub
 
 	const relayHint = connectedRelays[0]?.url ?? ''
 
+	// Build the event through SDK rules, then sign and publish at the app boundary.
+	const template = createLiveChatMessageTemplate({
+		liveActivityCoord,
+		content,
+		relayHint,
+		createdAt: Math.floor(Date.now() / 1000),
+	})
+
 	const event = new NDKEvent(ndk)
-	event.kind = LIVE_CHAT_KIND
-	event.content = content
-	event.created_at = Math.floor(Date.now() / 1000)
+	event.kind = template.kind
+	event.content = template.content
+	event.created_at = template.created_at
+	event.tags = template.tags
 	event.pubkey = user.pubkey
-	event.tags = [['a', liveActivityCoord, relayHint, 'root']]
 
 	await event.sign(ndk.signer)
 	await ndkActions.publishEvent(event)

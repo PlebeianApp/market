@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import type { CheckoutDeliveryRequirements } from '@/lib/checkout/deliveryRequirements'
+import type { CheckoutDeliveryRequirements } from '@sdk/commerce/checkout'
 import { cartStore } from '@/lib/stores/cart'
 import { uiActions } from '@/lib/stores/ui'
 import { getShippingEvent, getShippingPickupAddressString, getShippingService } from '@/queries/shipping'

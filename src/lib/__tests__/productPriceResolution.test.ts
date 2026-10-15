@@ -9,7 +9,7 @@ mock.module('@/publish/products', () => ({
 
 import { publishProduct } from '@/publish/products'
 import { productFormActions } from '@/lib/stores/product'
-import { applyFiatPriceEdit, deriveSatsPriceFromFiat, resolvePublishPrice } from '@/lib/utils/productPriceResolution'
+import { applyFiatPriceEdit, deriveSatsPriceFromFiat, resolvePublishPrice } from '@sdk/commerce/products/productPriceResolution'
 
 // Deterministic converter for tests: 1 unit of currency = 100_000 sats.
 // Like the real converter, it returns 0 for currencies it has no rate for.

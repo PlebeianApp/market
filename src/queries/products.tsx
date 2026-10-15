@@ -24,6 +24,30 @@ import { filterBlacklistedEvents, filterBlacklistedPubkeys } from '@/lib/utils/b
 import { excludeTestLabeledEvents } from '@/queries/testLabels'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { isValidHexKey } from '@/lib/utils'
+import { isProductInStock as isProductInStockFromSdk } from '@sdk/commerce/discovery'
+import {
+	getProductCategories as getProductCategoriesFromSdk,
+	getProductCollection as getProductCollectionFromSdk,
+	getProductContentWarning as getProductContentWarningFromSdk,
+	getProductCoordinates as getProductCoordinatesFromSdk,
+	getProductCreatedAt as getProductCreatedAtFromSdk,
+	getProductDescription as getProductDescriptionFromSdk,
+	getProductDimensions as getProductDimensionsFromSdk,
+	getProductId as getProductIdFromSdk,
+	getProductImages as getProductImagesFromSdk,
+	getProductLocation as getProductLocationFromSdk,
+	getProductPrice as getProductPriceFromSdk,
+	getProductPubkey as getProductPubkeyFromSdk,
+	getProductShippingOptions as getProductShippingOptionsFromSdk,
+	getProductSpecs as getProductSpecsFromSdk,
+	getProductStock as getProductStockFromSdk,
+	getProductSummary as getProductSummaryFromSdk,
+	getProductTitle as getProductTitleFromSdk,
+	getProductType as getProductTypeFromSdk,
+	getProductVisibility as getProductVisibilityFromSdk,
+	getProductWeight as getProductWeightFromSdk,
+	isNSFWProduct as isNSFWProductFromSdk,
+} from '@sdk/commerce/discovery'
 
 // Re-export productKeys for use in other query files
 export { productKeys }
@@ -107,19 +131,7 @@ export const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
  * @returns true if the product is in stock
  */
 export const isProductInStock = (event: NDKEvent): boolean => {
-	const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
-	const visibility = visibilityTag?.[1] || 'on-sale'
-
-	// Pre-order items are always considered "in stock" for display purposes
-	if (visibility === 'pre-order') return true
-
-	const stockTag = event.tags.find((t) => t[0] === 'stock')
-	// No stock tag means out of stock (matching ProductCard behavior)
-	if (!stockTag) return false
-
-	const stockValue = parseInt(stockTag[1], 10)
-	// Stock must be a valid number > 0
-	return !isNaN(stockValue) && stockValue > 0
+	return isProductInStockFromSdk(event)
 }
 
 // --- DATA FETCHING FUNCTIONS ---
@@ -489,8 +501,7 @@ export const productsByCollectionQueryOptions = (collectionEvent: NDKEvent | nul
  * @returns The product ID string
  */
 export const getProductId = (event: NDKEvent | null): string => {
-	const dTag = event?.tags.find((t) => t[0] === 'd')
-	return dTag?.[1] || ''
+	return getProductIdFromSdk(event)
 }
 
 /**
@@ -499,8 +510,7 @@ export const getProductId = (event: NDKEvent | null): string => {
  * @returns The product coordinates string
  */
 export const getProductCoordinates = (event: NDKEvent): string => {
-	const id = getProductId(event)
-	return `30402:${event.pubkey}:${id}`
+	return getProductCoordinatesFromSdk(event)
 }
 
 /**
@@ -508,23 +518,21 @@ export const getProductCoordinates = (event: NDKEvent): string => {
  * @param event The product event or null
  * @returns The product title string
  */
-export const getProductTitle = (event: NDKEvent | null): z.infer<typeof ProductTitleTagSchema>[1] =>
-	event?.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Product'
+export const getProductTitle = (event: NDKEvent | null): z.infer<typeof ProductTitleTagSchema>[1] => getProductTitleFromSdk(event)
 
 /**
  * Gets the product description from a product event
  * @param event The product event or null
  * @returns The product description string
  */
-export const getProductDescription = (event: NDKEvent | null): string => event?.content || ''
+export const getProductDescription = (event: NDKEvent | null): string => getProductDescriptionFromSdk(event)
 
 /**
  * Gets the product summary from a product event
  * @param event The product event or null
  * @returns The product summary string
  */
-export const getProductSummary = (event: NDKEvent | null): z.infer<typeof ProductSummaryTagSchema>[1] =>
-	event?.tags.find((t) => t[0] === 'summary')?.[1] || ''
+export const getProductSummary = (event: NDKEvent | null): z.infer<typeof ProductSummaryTagSchema>[1] => getProductSummaryFromSdk(event)
 
 /**
  * Gets the price tag from a product event
@@ -536,12 +544,7 @@ export const getProductSummary = (event: NDKEvent | null): z.infer<typeof Produc
  * - [3]: frequency (optional string)
  */
 export const getProductPrice = (event: NDKEvent | null): z.infer<typeof ProductPriceTagSchema> | undefined => {
-	if (!event) return undefined
-	const priceTag = event.tags.find((t) => t[0] === 'price')
-	if (!priceTag) return undefined
-
-	// Return the tuple directly to match the schema
-	return priceTag as z.infer<typeof ProductPriceTagSchema>
+	return getProductPriceFromSdk(event) as z.infer<typeof ProductPriceTagSchema> | undefined
 }
 
 /**
@@ -554,17 +557,7 @@ export const getProductPrice = (event: NDKEvent | null): z.infer<typeof ProductP
  * - [3]: order (optional string - numeric)
  */
 export const getProductImages = (event: NDKEvent | null): z.infer<typeof ProductImageTagSchema>[] => {
-	if (!event) return []
-	return event.tags
-		.filter((t) => t[0] === 'image')
-		.map((t) => t as z.infer<typeof ProductImageTagSchema>)
-		.sort((a, b) => {
-			// Sort by order if available
-			if (a[3] && b[3]) {
-				return parseInt(a[3]) - parseInt(b[3])
-			}
-			return 0
-		})
+	return getProductImagesFromSdk(event) as z.infer<typeof ProductImageTagSchema>[]
 }
 
 /**
@@ -576,8 +569,7 @@ export const getProductImages = (event: NDKEvent | null): z.infer<typeof Product
  * - [2]: value (string)
  */
 export const getProductSpecs = (event: NDKEvent | null): z.infer<typeof ProductSpecTagSchema>[] => {
-	if (!event) return []
-	return event.tags.filter((t) => t[0] === 'spec').map((t) => t as z.infer<typeof ProductSpecTagSchema>)
+	return getProductSpecsFromSdk(event) as z.infer<typeof ProductSpecTagSchema>[]
 }
 
 /**
@@ -589,11 +581,7 @@ export const getProductSpecs = (event: NDKEvent | null): z.infer<typeof ProductS
  * - [2]: physicalType ('digital' | 'physical')
  */
 export const getProductType = (event: NDKEvent | null): z.infer<typeof ProductTypeTagSchema> | undefined => {
-	if (!event) return undefined
-	const typeTag = event.tags.find((t) => t[0] === 'type')
-	if (!typeTag) return undefined
-
-	return typeTag as z.infer<typeof ProductTypeTagSchema>
+	return getProductTypeFromSdk(event) as z.infer<typeof ProductTypeTagSchema> | undefined
 }
 
 /**
@@ -604,9 +592,7 @@ export const getProductType = (event: NDKEvent | null): z.infer<typeof ProductTy
  * - [1]: visibility ('hidden' | 'on-sale' | 'pre-order')
  */
 export const getProductVisibility = (event: NDKEvent | null): z.infer<typeof ProductVisibilityTagSchema> | undefined => {
-	if (!event) return undefined
-	const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
-	return visibilityTag ? (visibilityTag as z.infer<typeof ProductVisibilityTagSchema>) : undefined
+	return getProductVisibilityFromSdk(event) as z.infer<typeof ProductVisibilityTagSchema> | undefined
 }
 
 /**
@@ -617,9 +603,7 @@ export const getProductVisibility = (event: NDKEvent | null): z.infer<typeof Pro
  * - [1]: stock (string - numeric)
  */
 export const getProductStock = (event: NDKEvent | null): z.infer<typeof ProductStockTagSchema> | undefined => {
-	if (!event) return undefined
-	const stockTag = event.tags.find((t) => t[0] === 'stock')
-	return stockTag ? (stockTag as z.infer<typeof ProductStockTagSchema>) : undefined
+	return getProductStockFromSdk(event) as z.infer<typeof ProductStockTagSchema> | undefined
 }
 
 /**
@@ -631,11 +615,7 @@ export const getProductStock = (event: NDKEvent | null): z.infer<typeof ProductS
  * - [2]: unit (string)
  */
 export const getProductWeight = (event: NDKEvent | null): z.infer<typeof ProductWeightTagSchema> | undefined => {
-	if (!event) return undefined
-	const weightTag = event.tags.find((t) => t[0] === 'weight')
-	if (!weightTag) return undefined
-
-	return weightTag as z.infer<typeof ProductWeightTagSchema>
+	return getProductWeightFromSdk(event) as z.infer<typeof ProductWeightTagSchema> | undefined
 }
 
 /**
@@ -647,11 +627,7 @@ export const getProductWeight = (event: NDKEvent | null): z.infer<typeof Product
  * - [2]: unit (string)
  */
 export const getProductDimensions = (event: NDKEvent | null): z.infer<typeof ProductDimensionsTagSchema> | undefined => {
-	if (!event) return undefined
-	const dimensionsTag = event.tags.find((t) => t[0] === 'dim')
-	if (!dimensionsTag) return undefined
-
-	return dimensionsTag as z.infer<typeof ProductDimensionsTagSchema>
+	return getProductDimensionsFromSdk(event) as z.infer<typeof ProductDimensionsTagSchema> | undefined
 }
 
 /**
@@ -660,8 +636,7 @@ export const getProductDimensions = (event: NDKEvent | null): z.infer<typeof Pro
  * @returns An array of shipping option tuples with format [tag, shipping_reference, extra_cost?]
  */
 export const getProductShippingOptions = (event: NDKEvent | null): Array<string[]> => {
-	if (!event) return []
-	return event.tags.filter((t) => t[0] === 'shipping_option')
+	return getProductShippingOptionsFromSdk(event)
 }
 
 /**
@@ -670,9 +645,7 @@ export const getProductShippingOptions = (event: NDKEvent | null): Array<string[
  * @returns The collection reference string or null
  */
 export const getProductCollection = (event: NDKEvent | null): string | null => {
-	if (!event) return null
-	const collectionTag = event.tags.find((t) => t[0] === 'collection')
-	return collectionTag?.[1] || null
+	return getProductCollectionFromSdk(event)
 }
 
 /**
@@ -681,8 +654,7 @@ export const getProductCollection = (event: NDKEvent | null): string | null => {
  * @returns An array of category tuples
  */
 export const getProductCategories = (event: NDKEvent | null): z.infer<typeof ProductCategoryTagSchema>[] => {
-	if (!event) return []
-	return event.tags.filter((t) => t[0] === 't').map((t) => t as z.infer<typeof ProductCategoryTagSchema>)
+	return getProductCategoriesFromSdk(event) as z.infer<typeof ProductCategoryTagSchema>[]
 }
 
 /**
@@ -690,21 +662,21 @@ export const getProductCategories = (event: NDKEvent | null): z.infer<typeof Pro
  * @param event The product event or null
  * @returns The creation timestamp (number)
  */
-export const getProductCreatedAt = (event: NDKEvent | null): number => event?.created_at || 0
+export const getProductCreatedAt = (event: NDKEvent | null): number => getProductCreatedAtFromSdk(event)
 
 /**
  * Gets the pubkey from a product event
  * @param event The product event or null
  * @returns The pubkey (string)
  */
-export const getProductPubkey = (event: NDKEvent | null): string => event?.pubkey || ''
+export const getProductPubkey = (event: NDKEvent | null): string => getProductPubkeyFromSdk(event)
 
 /**
  * Gets the location for product from the event tags
  * @param event The product event or null
  * @returns The location in string format or empty string
  */
-export const getProductLocation = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'location')?.[1] || ''
+export const getProductLocation = (event: NDKEvent | null): string => getProductLocationFromSdk(event)
 
 /**
  * Gets the content warning tag from a product event
@@ -712,9 +684,7 @@ export const getProductLocation = (event: NDKEvent | null): string => event?.tag
  * @returns The content warning tuple or undefined
  */
 export const getProductContentWarning = (event: NDKEvent | null): z.infer<typeof ProductContentWarningTagSchema> | undefined => {
-	if (!event) return undefined
-	const contentWarningTag = event.tags.find((t) => t[0] === 'content-warning')
-	return contentWarningTag ? (contentWarningTag as z.infer<typeof ProductContentWarningTagSchema>) : undefined
+	return getProductContentWarningFromSdk(event) as z.infer<typeof ProductContentWarningTagSchema> | undefined
 }
 
 /**
@@ -723,9 +693,7 @@ export const getProductContentWarning = (event: NDKEvent | null): z.infer<typeof
  * @returns true if the product is marked as NSFW
  */
 export const isNSFWProduct = (event: NDKEvent | null): boolean => {
-	if (!event) return false
-	const contentWarning = getProductContentWarning(event)
-	return contentWarning?.[1] === 'nsfw'
+	return isNSFWProductFromSdk(event)
 }
 
 /**

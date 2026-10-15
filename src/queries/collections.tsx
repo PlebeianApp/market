@@ -15,6 +15,14 @@ import {
 	normalizeCommunityArrayFixture,
 	resolveCommunityQueryFixtureStep,
 } from '@/lib/tests/communityQueryFixtures'
+import {
+	getCollectionCoordinates as getCollectionCoordinatesFromSdk,
+	getCollectionId as getCollectionIdFromSdk,
+	getCollectionImages as getCollectionImagesFromSdk,
+	getCollectionShippingOptions as getCollectionShippingOptionsFromSdk,
+	getCollectionSummary as getCollectionSummaryFromSdk,
+	getCollectionTitle as getCollectionTitleFromSdk,
+} from '@sdk/commerce/collections'
 
 // --- DELETED COLLECTIONS TRACKING ---
 // Track deleted collection d-tags with deletion timestamps to filter them from relay responses.
@@ -247,31 +255,23 @@ export const fetchCollectionById = async (id: string): Promise<NDKEvent | null> 
 /**
  * Gets the collection title from an event
  */
-export const getCollectionTitle = (event: NDKEvent | null): z.infer<typeof CollectionTitleTagSchema>[1] =>
-	event?.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Collection'
+export const getCollectionTitle = (event: NDKEvent | null): z.infer<typeof CollectionTitleTagSchema>[1] => getCollectionTitleFromSdk(event)
 
 /**
  * Get the collection summary from an event
  */
 export const getCollectionSummary = (event: NDKEvent | null): z.infer<typeof CollectionSummaryTagSchema>[1] =>
-	event?.tags.find((t) => t[0] === 'summary')?.[1] || 'No summary available.'
+	getCollectionSummaryFromSdk(event)
 
 /**
  * Gets the collection ID from an event
  */
 export const getCollectionId = (event: NDKEvent): string => {
-	const dTag = event.tags.find((tag) => tag[0] === 'd')
-	return dTag?.[1] || ''
+	return getCollectionIdFromSdk(event)
 }
 
 export const getCollectionImages = (event: NDKEvent | null): z.infer<typeof CollectionImageTagSchema>[] => {
-	if (!event) return []
-	return event.tags
-		.filter((t) => t[0] === 'image')
-		.map((t) => t as z.infer<typeof CollectionImageTagSchema>)
-		.sort((a, b) => {
-			return 0
-		})
+	return getCollectionImagesFromSdk(event) as z.infer<typeof CollectionImageTagSchema>[]
 }
 
 /**
@@ -280,16 +280,14 @@ export const getCollectionImages = (event: NDKEvent | null): z.infer<typeof Coll
  * @returns An array of shipping option tuples with format [tag, shipping_reference, extra_cost?]
  */
 export const getCollectionShippingOptions = (event: NDKEvent | null): Array<string[]> => {
-	if (!event) return []
-	return event.tags.filter((t) => t[0] === 'shipping_option')
+	return getCollectionShippingOptionsFromSdk(event)
 }
 
 /**
  * Creates collection coordinates string
  */
 export const getCollectionCoordinates = (event: NDKEvent): string => {
-	const id = getCollectionId(event)
-	return `30405:${event.pubkey}:${id}`
+	return getCollectionCoordinatesFromSdk(event)
 }
 
 // --- REACT QUERY OPTIONS ---

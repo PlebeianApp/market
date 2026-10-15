@@ -1,0 +1,96 @@
+event-access — the spec <-> implementation cross-reference
+# command: python3 event-access/evidence/hash-refs.py > event-access/evidence/03-hash-refs.txt
+# (a) declared set: 64 statement identity/identities begin a line in the module's two specs
+#     plus 41 in the module's ancestors (a code token may cite itself, an ancestor, or core)
+# (b) code set: 49 distinct token(s) across event-access/ts/**/*.ts (node_modules excluded)
+# (R3) test support declared in the module's front-matter: ts/harness.ts, ts/*.test.ts
+
+(c) resolution — every code token against the declared set (R2: a `(provenance)` marker is read as provenance, never as fulfilment)
+  resolved    #0c7fe3  <- (module: event-access/event-access.md)  **No app import** (M6): no `@/` alias, no host import and no relative specifier that leaves the module directory, the same criterion the signer's evidence script already states.
+  resolved    #168225  <- (module: event-access/event-access.md)  EventAccessOptions` is the composition's input: the two ports, the optional declared policy, and the optional injected resolver (D-O21).
+  resolved    #239d01  <- (module: event-access/event-access.md)  subscribe` never publishes, its cancellation is idempotent, and **no subscription is ever silently dropped** (M13): a subscription that spans both tiers either lives or ends with a stated reason.
+  resolved    #24438d  <- (module: event-access/event-access.md)  The composition's second port is the seam's own contract `NostrIo` (`nostr-io/ts/types.ts:222-229`) rather than the read-only pool shape: `UpstreamPool` and `NostrRequest` (`nostr-io/ts/types.ts:51-53`) are the seam's **pool-injection** shapes and are not this module's port, so they leave the front-matter list; `publish` populates `accepted` and `refused` from the seam's own publish outcome (`nostr-io/ts/types.ts:226`) while keeping the local write first, and I2's fake is a hand-written `NostrIo` that records every call and throws from every method (D-O13).
+  resolved    #2ffa85  <- (module: event-access/event-access.md)  **`publish` writes locally before or independently of any relay attempt** (M14) and never depends on a relay accepting: `stored` is the local write's outcome, `accepted` and `refused` are the relays' own answers, and a publication no relay took is still a local write.
+  resolved    #30c592  <- (module: event-access/event-access.md)  event-access` owns the caller-facing event operations — query, subscribe, publish, count, delete and the `{events, complete}` envelope `query` answers with — over the store's local endpoint and the injected upstream pool, and it is the only module that knows both tiers.
+  resolved    #34dcaa  <- (module: event-access/event-access.md)  **Provenance is pinned**: `AnswerOrigin` is `'local' | 'network'`, and when both tiers produced the same id the reported origin is **`'local'`** — local-first is the ordering rule and the network copy is the duplicate the id-unique union merges away — with one case asserting the both-tier id is `'local'` and one asserting a network-only id is `'network'` (D-O14(c)).
+  resolved    #3aa514  <- (module: event-access/event-access.md)  Reason` is the seam's six error conditions restated as a string union, imported and never re-spelled (E5, D-O7).
+  resolved    #42626d  <- (module: event-access/event-access.md)  **The merged answer's provenance is per answer and per event id** (M12): a declared companion read reports the tier that produced an id within an answer, and telling a locally answered event from a network-answered one never depends on a flag mutated on a shared event instance.
+  provenance  #496306  <- (module: event-access/event-access.md)  The printed `WriteBackPolicy` carries `accept?: AcceptHook`, with `AcceptHook = (event: Event) => 'accept' | 'reject'`: absent means accept everything, which is `validation`'s pass-through default, and a rejection follows the policy's existing `onReject` behaviour (D-O14(d)).
+  provenance  #5015f4  <- (module: event-access/event-access.md)  The vendor's provenance is deliberately **not adopted**: its single bit marks the canonical stored instance "from cache" and a later network add does not clear it (`research/05-applesauce-precedent.md` section 5, MEASURED there), so a cache hit and a network hit collapse onto one object — which is the defect this module's mechanism exists to avoid rather than to inherit.
+  resolved    #62b9a1  <- (module: event-access/event-access.md)  The evidence obligations are stated as criteria: LF-1 to LF-7 each on their named path, the provenance case, the `persist:false` case, the filter-boundary case, the two no-socket cases, and one falsification mutation per criterion so that no case is green because it never ran.
+  resolved    #68a0c1  <- (module: event-access/event-access.md)  **Every operation has exactly one named path**: P1 `query{localFirst:true}`, P2 `query{localFirst:false}`, P3 `subscribe`, P4 `publish`, **P5 the pointer read, defined as a `query` whose filter carries a single id** (it is a query and not a seventh operation), P6 `count` and **P7 `delete`** — the composition routed through the endpoint's removal, with the resulting change reaching open subscriptions — so the named-path set equals `contract.operations`, `delete` gains its own evidence obligation and no undefined "pointer read" remains (D-O14(a)).
+  resolved    #6de405  <- (module: event-access/event-access.md)  **`count` never fetches** (M14): it counts through the store's endpoint, it reports `approximate: false` because the local index is exact, and it is the local one of the two counts — the wire's NIP-45 count is a different operation and belongs to `nostr-io`.
+  resolved    #7aa770  <- (module: event-access/event-access.md)  isExcluded` answers whether the declared policy excludes an event, by its `<kind>:<label>` pair; an empty exclusion list excludes nothing.
+  resolved    #7f4e0a  <- (module: event-access/event-access.md)  **An empty identity list matches nothing and is never dropped** (M7), and that rule is the store's, applied here by delegation; the same library shape still applies to non-identity `#`-keys, and the gap is named rather than closed by this spec.
+  resolved    #87b422  <- (module: event-access/event-access.md)  **A local answer is never withheld** (M8): `complete: false` is this module's fact to report, a failed or slow relay degrades completeness and never the answer, and the module may not substitute the local set for a network set.
+  resolved    #88163e  <- (module: event-access/event-access.md)  toFilterArray` normalises one filter or many into an array and drops no key, an empty one included; it is the one mechanical step NIP-01 requires before a filter reaches either tier, and it is **not** the predicate.
+  resolved    #8cb8af  <- (module: event-access/event-access.md)  **LF-3 · a later write reaches open subscriptions exactly once**, asserted on the subscription path, whether the write came from a publish, from another read's fill, from a deletion or from expiry.
+  resolved    #8cd1d6  <- (module: event-access/event-access.md)  The options that move with the operations are `localFirst` (default true), `deadlineMs` (default 8000), `persist` (default true) on a read, and `onlyNew`, `closeOnEose` and `signal` on a subscription, while the store endpoint keeps its own `keep*` read options beside them.
+  resolved    #97386c  <- (module: event-access/event-access.md)  **[1:1]** `EventAccessError` is this module's only error type — a contract `Reason` plus a human-readable message — so every refusal is a value and never a bare string (E5).
+  resolved    #9afce0  <- (module: event-access/event-access.md)  **The endpoint port is printed in full and every `contract.types` name resolves**: `StoreEndpoint` is declared in this document with a signature and a return shape for each member — `tier` (E4's declared tier), `read` (the local read, where a malformed identity filter is rejected with the typed refusal this module surfaces), `write`, `count`, `remove`, `changes` (the local change notification, **typed here** because the store's own spec leaves it untyped while this composition depends on it) and its own `EndpointReadOptions` — and every name in the front-matter `contract.types` list resolves to a declaration printed in this document or to a named `path:line` inside the assembly, so no member and no name is left to the implementer's choice (D-O12).
+  resolved    #9b7257  <- (module: event-access/event-access.md)  **The write-back policy is one declared, inspectable value** (`WriteBackPolicy`, the precedent being the store's `EvictionPolicy`): what a read's fill writes, whether `persist:false` is honoured, what is excluded, and what a rejected write does — four answers a test reads rather than prose a reader infers.
+  resolved    #9c64ce  <- (module: event-access/event-access.md)  toRefArray` normalises a removal target or many into an array — a bare string is one id — and drops no target.
+  resolved    #a1e6b7  <- (module: event-access/event-access.md)  The wallet rule is an **input** to that policy and not a decision taken here: a wallet event belongs in the wallet host's own store, the pair that identifies one is declared by that host, and this module ships no kind list and refuses nothing by kind.
+  resolved    #a72685  <- (module: event-access/event-access.md)  **What is genuinely ours**, in one line, since a module whose library already owns the composition would be a wrapper: the ordering as a rule rather than a merge, the id-unique merged union, the merged answer's provenance, the declared write-back policy, and the completeness fact — the vendor supplies the plumbing and none of those five.
+  resolved    #b40aaa  <- (module: event-access/event-access.md)  The merged union is **id-unique** (M2): an event returned by the local answer and by a fill is one event in the answer, and the union is taken after the merge rather than by the caller.
+  resolved    #bec31a  <- (module: event-access/event-access.md)  **An endpoint declares its own tier**: the store endpoint carries whether it is local or remote, so the merge orders and marks without knowing which module it is talking to, and the composition never guesses from a URL or a type name.
+  resolved    #c3818e  <- (module: event-access/event-access.md)  applyWriteBack` applies the declared policy to a fill's fresh events — the `writeBack` mode, `honourPersist`, and the exclusion rule — and returns the events handed to the store and what it refused, or nothing when the policy writes nothing.
+  resolved    #c65b19  <- (module: event-access/event-access.md)  The declared exceptions are E1 rxjs' `Observable` on the implementation's own awaiting members, E2 raw `nostr-tools` events, E3 the extended filter as the store declares it, E4 the endpoint's tier field, E5 reason-carrying errors, and E6 the vendor's two write-back operators adopted as implementations of the policy.
+  resolved    #c75e32  <- (module: event-access/event-access.md)  AcceptContext` is what the one gate is told: the endpoint's declared tier and a `resolve` for a linked reference, with **no `operation` member**, because the maintainer's 2026-10-02 ruling removed the flow from the rule.
+  resolved    #c843e4  <- (module: event-access/event-access.md)  The event view is a raw `nostr-tools` event and the filter is NIP-01's, adopted structurally and never wrapped (E2).
+  resolved    #c8e35c  <- (module: event-access/event-access.md)  AcceptHook` is `(event, context) => AcceptDecision | Promise<AcceptDecision>`, widened by D-O21 from the single-argument synchronous form the earlier statement printed, and it keeps `accept?`'s name and place on `WriteBackPolicy`.
+  resolved    #c90101  <- (module: event-access/event-access.md)  Three criteria stop being vacuous: LF-5 names its observable (`complete:false` with the reason, not merely that the call resolves), LF-6's fixture carries a **non-empty** local set so a rejecting implementation differs from a resolving one, and the `persist:false` criterion carries the companion positive assertion that `persist:true` over the same fake **does** write back (D-O14(f)).
+  resolved    #cdeea8  <- (module: event-access/event-access.md)  ReferenceResolver` is the injected link half: absent means a reference resolves against the endpoint's own local set through this module's existing read path, never a second one.
+  resolved    #cf8c70  <- (module: event-access/event-access.md)  **LF-5 · a deadline resolves with what arrived and says so**, asserted on the `query{localFirst:false}` path against a pool that never answers, because a local answer is never withheld by a slow relay (M8).
+  resolved    #d0e7d5  <- (module: event-access/event-access.md)  EndpointWriteOutcome` is what the local write answers — the counts `stored` and `refused` — so the policy's `onReject` has something to read.
+  resolved    #d80075  <- (module: event-access/event-access.md)  **Two rules are relied on and never re-implemented**: the store's one head per address (M3) and its three kinds of deletion (M9) — a second implementation of one predicate is refused, and deletion routes through this module without being decided by it.
+  resolved    #dc7054  <- (module: event-access/event-access.md)  createEventAccess` is the contract's factory: it takes the two injected ports, the optional declared policy and the optional injected resolver, and returns the `EventAccess` handle.
+  resolved    #dce3ab  <- (module: event-access/event-access.md)  query` returns `QueryResult {events, complete}` exactly as the re-cut carries it and never a bare array, because a bare array cannot carry "the deadline fired" and a caller renders a partial list as the whole answer.
+  resolved    #df42e2  <- (module: event-access/event-access.md)  **LF-7 · one event is the same sequence with one element**, asserted on the pointer path by call order on the recording pool — local first, then relay hints, then extra relays — and this spec states that this is the path it covers, because the ecosystem's own timeline path is a concurrent merge and a capability on one path is never stated as supported for another.
+  resolved    #e38020  <- (module: event-access/event-access.md)  PublishOptions` carries only a signal: relay choice is the seam's injected policy, so this module declares no `relayUrls` member.
+  resolved    #e391d0  <- (module: event-access/event-access.md)  **The filter-boundary criterion is hardened**: the injected endpoint fake must apply the store's real predicate in **both** branches — a malformed identity value rejected with the typed refusal this module surfaces (`event-store/ts/filters.ts:51`) and a present-but-empty `#`-key list answered as nothing (`event-store/ts/filters.ts:92`) — must **not** echo the caller's filter or its order, and the recording pool's expected call order and hits are stated, so no criterion is satisfied by a fixture that recorded nothing; a case driven over an echoing fake must fail, and that case carries its own mutation (D-O14(b), the review's §6.5).
+  resolved    #e6aa61  <- (module: event-access/event-access.md)  **No socket, proved structurally** (M5): a hand-written endpoint that records every call and throws from every method is injected, and the local operations still resolve with the recorded call count stated, while the import allow-list states its expected hits.
+  resolved    #ebd41f  <- (module: event-access/event-access.md)  The seam's read and publish results are consumed structurally, restated here as `WireResult`, `UpstreamAck` and `UpstreamPublishOutcome`, so no sibling import is taken and none is needed (D-O13, D-O19).
+  resolved    #efb57a  <- (module: event-access/event-access.md)  AcceptDecision` is what the gate answers — `'accept'` or `'reject'` — a value and never a silent drop (E5).
+  resolved    #f64bec  <- (module: event-access/event-access.md)  The **stop conditions** are stated so a reviewer can falsify them: a sentence here that needs a socket is not admissible, a second head rule or a second filter validator is an **architecture contradiction**, and so is anything that makes the store aware of a relay or the seam aware of a store.
+  resolved    #f775fb  <- (module: event-access/event-access.md)  **The fail-closed filter boundary is here and the predicate is not**: filters enter the system through this module, identity validation is required before a filter reaches either tier, and the predicate is the store's single implementation as repaired in commit `fb304df` — reached through the endpoint's declared validation capability, with no second implementation grown here.
+  resolved    #fe552a  <- (module: event-access/event-access.md)  exclusionLabel` reads an event's `d` tag value, the empty string when it carries none, and it is the one place the policy's exclusion label is read.
+
+(d) uncovered declarations — a top-level export carrying no token (R3 test support exempt)
+  exempt      event-access/ts/harness.ts  KEY
+  exempt      event-access/ts/harness.ts  PUBKEY
+  exempt      event-access/ts/harness.ts  OTHER_KEY
+  exempt      event-access/ts/harness.ts  OTHER_PUBKEY
+  exempt      event-access/ts/harness.ts  RELAY_A
+  exempt      event-access/ts/harness.ts  RELAY_B
+  exempt      event-access/ts/harness.ts  EventFields
+  exempt      event-access/ts/harness.ts  signedEvent
+  exempt      event-access/ts/harness.ts  ChangeSink
+  exempt      event-access/ts/harness.ts  ChangeFeed
+  exempt      event-access/ts/harness.ts  BroadcastFeed
+  exempt      event-access/ts/harness.ts  ModelEndpointOptions
+  exempt      event-access/ts/harness.ts  EndpointFixture
+  exempt      event-access/ts/harness.ts  modelEndpoint
+  exempt      event-access/ts/harness.ts  secondaryEndpoint
+  exempt      event-access/ts/harness.ts  echoingEndpoint
+  exempt      event-access/ts/harness.ts  throwingEndpoint
+  exempt      event-access/ts/harness.ts  ForeignError
+  exempt      event-access/ts/harness.ts  foreignEndpoint
+  exempt      event-access/ts/harness.ts  throwingUpstream
+  exempt      event-access/ts/harness.ts  UpstreamScript
+  exempt      event-access/ts/harness.ts  recordingUpstream
+  exempt      event-access/ts/harness.ts  bareUpstream
+  exempt      event-access/ts/harness.ts  neverAnsweringUpstream
+  exempt      event-access/ts/harness.ts  failingUpstream
+  exempt      event-access/ts/harness.ts  collect
+  exempt      event-access/ts/harness.ts  quiet
+  39 of 66 declaration(s) carry a token; 27 exempt by the test-support declaration
+
+(e) uncovered files — under event-access/, named by neither spec
+  0 file(s) named by no statement
+
+(f) summary
+  code tokens: 49   resolved: 49   unresolved: 0   of the resolved, provenance-only: 2
+  declarations: 66   covered: 39   exempt: 27   uncovered: 0
+  files: 0 uncovered
+  RESULT: every code token resolves to a declared statement.

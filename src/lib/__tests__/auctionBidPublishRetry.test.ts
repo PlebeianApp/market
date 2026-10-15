@@ -20,6 +20,7 @@ import type { NDKSigner } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import type { Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from 'nostr-tools'
+import type { NostrEventLike } from '../nostr/eventLike'
 import { authStore } from '../stores/auth'
 import {
 	findBidderRecord,
@@ -116,11 +117,41 @@ const buildFormData = (amount: number) => {
 		// unconditional, so the lock always attaches NUT-12 metadata below.
 		auctionStartAt: now - 100,
 		auctionEffectiveEndAt: now + 3_600,
-		auctionLocktimeAt: now + 7_200,
+		auctionLocktimeAt: now + 3_600,
 		settlementGraceSeconds: 300,
 		sellerPubkey: SELLER_PK,
 		p2pkXpub: REAL_AUCTION_XPUB,
 		mintCandidates: ['https://mint.test'],
+	}
+}
+
+const setAuctionFixture = (formData: ReturnType<typeof buildFormData>) => {
+	auctionEventFixture = {
+		id: formData.auctionEventId,
+		pubkey: formData.sellerPubkey,
+		kind: 30408,
+		created_at: formData.auctionStartAt,
+		content: 'auction fixture',
+		tags: [
+			['d', 'auction-1'],
+			['title', 'Auction fixture'],
+			['auction_type', 'english'],
+			['start_at', String(formData.auctionStartAt)],
+			['end_at', String(formData.auctionEffectiveEndAt)],
+			['max_end_at', String(formData.auctionLocktimeAt)],
+			['settlement_grace', String(formData.settlementGraceSeconds)],
+			['currency', 'SAT'],
+			['reserve', '0'],
+			['starting_bid', '10'],
+			['bid_increment', '1'],
+			['mint', 'https://mint.test'],
+			['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
+			['key_scheme', 'hd_p2pk'],
+			['p2pk_xpub', REAL_AUCTION_XPUB],
+			['auditors', 'b'.repeat(64)],
+			['auditor_quorum', '1'],
+			['max_skew_sec', '120'],
+		],
 	}
 }
 
@@ -157,6 +188,7 @@ const updatePendingTokenContextMock = mock(() => ({ tokenId: 'pending-token-1', 
 /** Raw payloads passed to the relay publish surface, in call order. */
 const publishedPayloads: Array<{ id: string; sig?: string; kind: number; created_at?: number; tags?: string[][] }> = []
 let publishShouldFail = false
+let auctionEventFixture: NostrEventLike
 
 const publishEventMock = mock(async (event: NDKEvent) => {
 	publishedPayloads.push({
@@ -195,6 +227,10 @@ mock.module('@/lib/stores/ndk', () => ({
 	ndkStore: {
 		state: { ndk: ndkInstance },
 	},
+}))
+
+mock.module('@/queries/auctions', () => ({
+	fetchAuction: mock(async () => auctionEventFixture),
 }))
 
 // #1235 round-3 B1: capture the REAL nip60 surface BEFORE registering the
@@ -237,7 +273,9 @@ const setAuthUser = () =>
 /** Run `publishAuctionBid` through the I/O seam with `publishSigner` active. */
 const publishWithSigner = (amount: number, publishSigner: NDKSigner = signer) => {
 	currentSigner = publishSigner
-	return publishAuctionBid(buildFormData(amount))
+	const formData = buildFormData(amount)
+	setAuctionFixture(formData)
+	return publishAuctionBid(formData)
 }
 
 /** Run `republishAuctionBid` through the I/O seam with `publishSigner` active. */

@@ -1,0 +1,8 @@
+# the BPMN set is *generated* — one command rebuilds all five, with no network
+# (python3 build.py). The generated files are not tracked; this folder tracks the
+# generator, the render harness and the vendored bpmn-js dist they need.
+signer-session.bpmn
+viewer.html
+_render-canvas.html
+signer-session.png
+checks.txt

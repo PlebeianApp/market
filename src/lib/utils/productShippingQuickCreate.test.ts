@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { attachShippingOptionByRef } from '@/lib/utils/productShippingQuickCreate'
+import { attachShippingOptionByRef } from '@sdk/commerce/products/productShipping'
 
 describe('product shipping quick-create attachment', () => {
 	test('attaches the created shipping option by canonical shipping ref', () => {

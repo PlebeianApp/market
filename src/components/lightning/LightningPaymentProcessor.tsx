@@ -5,7 +5,8 @@ import { Label } from '@/components/ui/label'
 import { QRCode } from '@/components/ui/qr-code'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
-import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
+import { nip60Store } from '@/lib/stores/nip60'
+import { createNip60WalletPort } from '@/lib/sdkAdapters'
 import type { PaymentProof } from '@/lib/payments/proof'
 import { paymentProofToReceiptPreimage } from '@/lib/payments/proof'
 import { handleNWCPayment, handleWebLNPayment, hasWebLN, validatePreimage } from '@/lib/utils/payment.utils'
@@ -15,6 +16,8 @@ import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, ChevronRight, Copy, CreditCard, Loader2, Zap } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { toast } from 'sonner'
+
+const nip60WalletPort = createNip60WalletPort()
 
 export interface LightningPaymentData {
 	amount: number
@@ -501,7 +504,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			walletPreimageRef.current = null
 
 			try {
-				const walletResult = await nip60Actions.payLightningInvoice(invoice)
+				const walletResult = await nip60WalletPort.pay({ invoice })
 				if (walletResult.preimage && validatePreimage(invoice, walletResult.preimage)) {
 					walletPreimageRef.current = walletResult.preimage
 				}

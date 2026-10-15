@@ -1,0 +1,1303 @@
+nostr-io module — evidence falsification
+# command:   python3 nostr-io/evidence/falsify.py   (the caller redirects to nostr-io/evidence/02-invariant-falsification.txt)
+# generated: 2026-09-30T07:24:03Z
+# bun:       1.4.2
+# cases in the suite: 24 across 2 files
+#
+# For each evidence obligation and each case the repair added: one mutation is applied, the
+# named case (or the named command) is run, the file is restored byte-for-byte (sha256 verified)
+# and the check is run again. A mutation whose check does NOT go red is reported FALSIFICATION FAILED.
+# Run serialized: for the length of one mutation the tree is deliberately broken.
+
+==============================================================================
+mutation 1 — #d700bc · the store-free case
+breaks:   the seam reaches the pool while it is being constructed, so building it already needs the wire
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · M5 · the store-free case: a recording pool that throws is reached only by the wire verbs, and not at all when the seam is asked for nothing
+$ the mutation applied (old -> new):
+-         this.pool = options.pool ?? relayPoolAdapter()
+        this.policy = options.policy
++         this.pool = options.pool ?? relayPoolAdapter()
+        void this.pool.status([])
+        this.policy = options.policy
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t M5\ ·\ the\ store\-free\ case:\ a\ recording\ pool\ that\ throws\ is\ reached\ only\ by\ the\ wire\ verbs,\ and\ not\ at\ all\ when\ the\ seam\ is\ asked\ for\ nothing
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+93 |  */
+94 | export function fakePool(): FakePool {
+95 | 	const calls: string[] = []
+96 | 	const refuse = (method: string): never => {
+97 | 		calls.push(method)
+98 | 		throw new Error(`the fake pool was called: ${method} — the seam was asked a store-free structure for the wire`)
+                 ^
+error: the fake pool was called: status — the seam was asked a store-free structure for the wire
+      at refuse (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/harness.ts:98:13)
+      at new Seam (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/index.ts:109:18)
+      at createNostrIo (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/index.ts:337:9)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/invariants.test.ts:32:25)
+(fail) M5 · the store-free case > M5 · the store-free case: a recording pool that throws is reached only by the wire verbs, and not at all when the seam is asked for nothing [1.15ms]
+
+ 0 pass
+ 5 filtered out
+ 1 fail
+Ran 1 test across 1 file. [228.00ms]
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) M5 · the store-free case > M5 · the store-free case: a recording pool that throws is reached only by the wire verbs, and not at all when the seam is asked for nothing [15.63ms]
+
+ 1 pass
+ 5 filtered out
+ 0 fail
+ 9 expect() calls
+Ran 1 test across 1 file. [233.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 2 — #7bf6f6 · the second-backend claim (the multi-backend case)
+breaks:   the vendor adapter's request completes before the wire's boundary, so the same suite stops being satisfied by two backends
+file:     nostr-io/ts/relay-adapter.ts
+sha256:   8d63e1ed7444caef530f0777d4e47ac3b1ab999d707cdbb1c83867e1a5469836 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · the multi-backend case · the same suite passes over the vendor adapter and over a hand-written pool
+$ the mutation applied (old -> new):
+-             takeWhile(() => seen.size < target.length, true),
++             takeWhile(() => false, true),
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t the\ multi\-backend\ case\ ·\ the\ same\ suite\ passes\ over\ the\ vendor\ adapter\ and\ over\ a\ hand\-written\ pool
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+512 | 			}
+513 | 		}
+514 | 
+515 | 		// the same contract outcome from two different PoolPort implementations:
+516 | 		// the seam is adapter-shaped, and nothing it reports is the vendor's idiom
+517 | 		expect(observed).toEqual({
+                         ^
+error: expect(received).toEqual(expected)
+
+  {
+    "a hand-written pool": {
+      "acks": [
+        {
+          "accepted": true,
+          "url": "wss://relay.alpha.invalid",
+        },
+      ],
+      "count": {
+        "approximate": false,
+        "count": 3,
+      },
+      "eose": true,
+      "events": [
+        "72fa0c61e66ebdb272f88c57a8820eda4867de367e2c44398e850df410b5a6e0",
+        "08abef36ff24d47288dcf8795757574b5fd157f6c5651dbd12841b16301bfcb1",
+      ],
+      "policyReads": [
+        "query",
+        "publish",
+        "count",
+      ],
+    },
+    "the vendor adapter": {
+      "acks": [
+        {
+          "accepted": true,
++         "message": undefined,
++         "reason": undefined,
+          "url": "wss://relay.alpha.invalid",
+        },
+      ],
+      "count": {
+        "approximate": false,
+        "count": 3,
+      },
+      "eose": true,
+      "events": [
+        "72fa0c61e66ebdb272f88c57a8820eda4867de367e2c44398e850df410b5a6e0",
+-       "08abef36ff24d47288dcf8795757574b5fd157f6c5651dbd12841b16301bfcb1",
+      ],
+      "policyReads": [
+        "query",
+        "publish",
+        "count",
+      ],
+    },
+  }
+
+- Expected  - 1
++ Received  + 2
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:517:20)
+(fail) the multi-backend case > the multi-backend case · the same suite passes over the vendor adapter and over a hand-written pool [11.43ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [259.00ms]
+exit: 1
+
+$ sha256 after restore: 8d63e1ed7444caef530f0777d4e47ac3b1ab999d707cdbb1c83867e1a5469836 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) the multi-backend case > the multi-backend case · the same suite passes over the vendor adapter and over a hand-written pool [10.40ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [253.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 3 — #10b5ac · the query path · the deadline (a wall clock over the whole read)
+breaks:   the deadline fires but the read reports the boundary as reached, so a cold answer is scored as a complete one
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · query · a deadline that fires reports eose:false instead of inventing completeness
+$ the mutation applied (old -> new):
+-             const deadline = timer(opts.deadlineMs).pipe(tap(() => { timedOut = true }))
++             const deadline = timer(opts.deadlineMs).pipe(tap(() => { timedOut = false }))
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t query\ ·\ a\ deadline\ that\ fires\ reports\ eose:false\ instead\ of\ inventing\ completeness
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+111 | 		const seam = createNostrIo({ pool: backend.port, policy: policy.policy })
+112 | 
+113 | 		const result: WireResult = await seam.query({ kinds: [1] }, { deadlineMs: 20 })
+114 | 		expect(result.events).toEqual([])
+115 | 		// a cold answer is not a complete one: the seam reports the boundary it reached
+116 | 		expect(result.eose).toBe(false)
+                            ^
+error: expect(received).toBe(expected)
+
+Expected: false
+Received: true
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:116:23)
+(fail) query > query · a deadline that fires reports eose:false instead of inventing completeness [31.71ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [289.00ms]
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) query > query · a deadline that fires reports eose:false instead of inventing completeness [26.07ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [267.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 4 — #15aa73 · the subscribe path
+breaks:   the idempotence guard is dropped, so a second unsubscribe reaches the pool again
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · subscribe · unsubscribe twice closes once and throws nothing
+$ the mutation applied (old -> new):
+-             if (closed) return
++             if (false) return
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t subscribe\ ·\ unsubscribe\ twice\ closes\ once\ and\ throws\ nothing
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+331 | 
+332 | 		const subscription: Subscription = seam.subscribe({ kinds: [1] })
+333 | 		subscription.unsubscribe()
+334 | 		expect(() => subscription.unsubscribe()).not.toThrow()
+335 | 		// the pool's teardown ran once: the cancellation is idempotent (`#15aa73`)
+336 | 		expect(counted.teardowns()).toBe(1)
+                                    ^
+error: expect(received).toBe(expected)
+
+Expected: 1
+Received: 2
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:336:31)
+(fail) subscribe > subscribe · unsubscribe twice closes once and throws nothing [3.15ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [238.00ms]
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) subscribe > subscribe · unsubscribe twice closes once and throws nothing [2.54ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [228.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 5 — #ae22a4 · the publish path
+breaks:   the pool's acks stop being lined up against the target set, so a relay that answered is treated as one that did not
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · publish · one ack per targeted relay, and a silent relay is reported not dropped
+$ the mutation applied (old -> new):
+- new Map(acks.map((ack) => [relayIdentity(ack.url), ack] as const))
++ new Map(acks.slice(1).map((ack) => [relayIdentity(ack.url), ack] as const))
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t publish\ ·\ one\ ack\ per\ targeted\ relay,\ and\ a\ silent\ relay\ is\ reported\ not\ dropped
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+348 | 			const event: Event = signedEvent({ kind: 1, content: 'published', created_at: 1000 })
+349 | 			const outcome: PublishOutcome = await seam.publish(event)
+350 | 			expect(outcome.id).toBe(event.id)
+351 | 			// one ack per targeted relay, in the policy's own order
+352 | 			expect(outcome.acks.map((ack) => ack.url)).toEqual([RELAY_A, RELAY_B])
+353 | 			expect(outcome.acks.find((ack) => ack.url === RELAY_A)?.accepted).toBe(true)
+                                                                           ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:353:70)
+(fail) publish > publish · one ack per targeted relay, and a silent relay is reported not dropped [8.16ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [245.00ms]
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) publish > publish · one ack per targeted relay, and a silent relay is reported not dropped [11.73ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 13 expect() calls
+Ran 1 test across 1 file. [251.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 6 — #752c02 · the count path
+breaks:   the adapter stops reading NIP-45's approximation flag, so the contract fabricates an exact count
+file:     nostr-io/ts/relay-adapter.ts
+sha256:   8d63e1ed7444caef530f0777d4e47ac3b1ab999d707cdbb1c83867e1a5469836 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · count · NIP-45's count carries the relay's approximation flag
+$ the mutation applied (old -> new):
+-     return widened.approximate === true
++     return false
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t count\ ·\ NIP\-45's\ count\ carries\ the\ relay's\ approximation\ flag
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+393 | 			const policy = recordingPolicy(script.relays)
+394 | 			const seam = createNostrIo({ pool: backend.port, policy: policy.policy })
+395 | 
+396 | 			const result: CountResult = await seam.count({ kinds: [1] })
+397 | 			expect(result.count).toBe(42)
+398 | 			expect(result.approximate).toBe(true)
+                                    ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:398:31)
+(fail) count > count · NIP-45's count carries the relay's approximation flag [5.34ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [254.00ms]
+exit: 1
+
+$ sha256 after restore: 8d63e1ed7444caef530f0777d4e47ac3b1ab999d707cdbb1c83867e1a5469836 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) count > count · NIP-45's count carries the relay's approximation flag [10.29ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 9 expect() calls
+Ran 1 test across 1 file. [288.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 7 — #5ecac1 · the reason mapping
+breaks:   a rate-limited refusal is mapped to the generic rejection, so the vocabulary stops naming the condition
+file:     nostr-io/ts/pool.ts
+sha256:   f1abe03b6158281aae63e1a9d87014d878969d76c505feb2f569c478f7c0ffd7 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · #5ecac1 · the reason vocabulary maps a relay's own refusal text, and a refusal is never a bare string
+$ the mutation applied (old -> new):
+-     if (text.startsWith('rate-limited') || text.includes('rate limited') || text.includes('too many')) return 'rate-limited'
++     if (text.startsWith('rate-limited') || text.includes('rate limited') || text.includes('too many')) return 'rejected'
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t \#5ecac1\ ·\ the\ reason\ vocabulary\ maps\ a\ relay's\ own\ refusal\ text,\ and\ a\ refusal\ is\ never\ a\ bare\ string
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+60 | describe('#5ecac1 · the reason vocabulary', () => {
+61 | 	test("#5ecac1 · the reason vocabulary maps a relay's own refusal text, and a refusal is never a bare string", () => {
+62 | 		const vocabulary: RelayReason[] = ['auth-required', 'rate-limited', 'timeout', 'not-found', 'closed', 'rejected']
+63 | 
+64 | 		expect(mapClosedReason('auth-required: we need a nip-42 handshake')).toBe('auth-required')
+65 | 		expect(mapClosedReason('rate-limited: too many requests')).toBe('rate-limited')
+                                                                  ^
+error: expect(received).toBe(expected)
+
+Expected: "rate-limited"
+Received: "rejected"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/invariants.test.ts:65:62)
+(fail) #5ecac1 · the reason vocabulary > #5ecac1 · the reason vocabulary maps a relay's own refusal text, and a refusal is never a bare string [0.63ms]
+
+ 0 pass
+ 5 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [238.00ms]
+exit: 1
+
+$ sha256 after restore: f1abe03b6158281aae63e1a9d87014d878969d76c505feb2f569c478f7c0ffd7 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) #5ecac1 · the reason vocabulary > #5ecac1 · the reason vocabulary maps a relay's own refusal text, and a refusal is never a bare string [0.66ms]
+
+ 1 pass
+ 5 filtered out
+ 0 fail
+ 12 expect() calls
+Ran 1 test across 1 file. [220.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 8 — #4dab02 · the import allow-list (asserted by run.sh, section 4b)
+breaks:   a specifier that is neither module-relative nor a declared dependency appears, so the independence criterion goes red
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+command:  ! ( grep -rhoE "(from|import)[[:space:]]+[\"'][^\"']+[\"']" --include='*.ts' --exclude-dir=node_modules . | sed -E "s/^(from|import)[[:space:]]+[\"']?//; s/[\"']$//" | sort -u | grep -vE '^(\./[A-Za-z0-9._-]+|applesauce-relay(/[A-Za-z0-9._/-]+)?|nostr-tools(/[A-Za-z0-9._/-]+)?|rxjs|bun:test)$' | grep -q . )
+$ the mutation applied (old -> new):
+- import { relayPoolAdapter } from './relay-adapter'
++ import 'applesauce-core'
+import { relayPoolAdapter } from './relay-adapter'
+
+$ bash -c ! ( grep -rhoE "(from|import)[[:space:]]+[\"'][^\"']+[\"']" --include='*.ts' --exclude-dir=node_modules . | sed -E "s/^(from|import)[[:space:]]+[\"']?//; s/[\"']$//" | sort -u | grep -vE '^(\./[A-Za-z0-9._-]+|applesauce-relay(/[A-Za-z0-9._/-]+)?|nostr-tools(/[A-Za-z0-9._/-]+)?|rxjs|bun:test)$' | grep -q . )
+
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named command went red under the mutation
+
+$ ...and the same check on the restored file:
+
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 9 — #5ecac1 · the vendor path's own refusal text (rate-limited / auth-required)
+breaks:   the adapter answers 'rejected' for every ERROR message again, so a relay's own NIP-01 prefix stops reaching the vocabulary — the state the suite's own live-refusal case was blind to before the wire was scripted the way the vendor really emits it
+file:     nostr-io/ts/relay-adapter.ts
+sha256:   8d63e1ed7444caef530f0777d4e47ac3b1ab999d707cdbb1c83867e1a5469836 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · subscribe · a relay's own NIP-01 refusal prefix reaches the vocabulary on both paths
+$ the mutation applied (old -> new):
+-                 if (message.type === 'ERROR') {
+                    const refusal = refusalFrom(message.error)
+                    return { relay: message.from, reason: refusal.reason, message: refusal.message }
+                }
++                 if (message.type === 'ERROR') {
+                    return { relay: message.from, reason: 'rejected', message: 'the relay reported an error' }
+                }
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t subscribe\ ·\ a\ relay's\ own\ NIP\-01\ refusal\ prefix\ reaches\ the\ vocabulary\ on\ both\ paths
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+290 | 				const seam = createNostrIo({ pool: backend.port, policy: policy.policy })
+291 | 
+292 | 				const subscription: Subscription = seam.subscribe({ kinds: [1] })
+293 | 				const failure = await firstValueFrom(subscription.errors.pipe(timeout(500)))
+294 | 				expect(failure).toBeInstanceOf(RelaySeamError)
+295 | 				expect(failure.reason).toBe(reason)
+                                 ^
+error: expect(received).toBe(expected)
+
+Expected: "rate-limited"
+Received: "rejected"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:295:28)
+(fail) subscribe > subscribe · a relay's own NIP-01 refusal prefix reaches the vocabulary on both paths [10.42ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [247.00ms]
+exit: 1
+
+$ sha256 after restore: 8d63e1ed7444caef530f0777d4e47ac3b1ab999d707cdbb1c83867e1a5469836 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) subscribe > subscribe · a relay's own NIP-01 refusal prefix reaches the vocabulary on both paths [18.49ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 18 expect() calls
+Ran 1 test across 1 file. [249.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 10 — #10b5ac · the query path · a refusal mid-read is a value, not a rejection
+breaks:   the refusal is dropped instead of carried, so the read invents a reached boundary and the failures list is silently empty
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · query · a relay refusal mid-read resolves with what arrived, and both backends agree
+$ the mutation applied (old -> new):
+-                 error: (error: unknown) => {
+                    failures.push(asRelaySeamError(error))
+                    resolve()
+                },
++                 error: () => resolve(),
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t query\ ·\ a\ relay\ refusal\ mid\-read\ resolves\ with\ what\ arrived,\ and\ both\ backends\ agree
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+134 | 
+135 | 			const read: WireResult = await seam.query({ kinds: [1] })
+136 | 			expect(policy.calls).toEqual(['query'])
+137 | 			// the *same* outcome object from either backend: what arrived, the boundary
+138 | 			// fact, and the refusal as a value from the vocabulary
+139 | 			expect({ [suffix]: readShape(read) }).toEqual({
+                                               ^
+error: expect(received).toEqual(expected)
+
+  {
+    "the vendor adapter": {
+-     "eose": false,
++     "eose": true,
+      "events": [
+        "f9b16fa510f2da0caace31d344ea35f9f534f5a87468ba0f636e1f96e5205487",
+      ],
+-     "failures": [
+-       {
+-         "message": "rate-limited: slow down",
+-         "reason": "rate-limited",
+-       },
+-     ],
++     "failures": [],
+    },
+  }
+
+- Expected  - 7
++ Received  + 2
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:139:42)
+(fail) query > query · a relay refusal mid-read resolves with what arrived, and both backends agree [13.30ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [262.00ms]
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) query > query · a relay refusal mid-read resolves with what arrived, and both backends agree [13.70ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [263.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 11 — #5ecac1 · a pool whose own event stream errors (the live channel is mapped)
+breaks:   the events channel stops being mapped, so the library's bare Error reaches the caller and ends a live read
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · #5ecac1 · a pool whose own streams error reaches the caller as a typed refusal, on no channel as a bare Error
+$ the mutation applied (old -> new):
+-         const carried = inner.events.pipe(
+            catchError((error: unknown) => {
+                refusals.next(asRelaySeamError(error))
+                return EMPTY
+            }),
+        )
++         const carried = inner.events
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t \#5ecac1\ ·\ a\ pool\ whose\ own\ streams\ error\ reaches\ the\ caller\ as\ a\ typed\ refusal,\ on\ no\ channel\ as\ a\ bare\ Error
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+114 | 				},
+115 | 			})
+116 | 		})
+117 | 		// what arrived was delivered, and the channel **completed** — it did not end on a bare Error
+118 | 		expect(arrived).toEqual([FIRST.id])
+119 | 		expect(ended).toBe('completed')
+                      ^
+error: expect(received).toBe(expected)
+
+Expected: "completed"
+Received: "errored on Error: the socket died"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/invariants.test.ts:119:17)
+(fail) #5ecac1 · every live channel is typed > #5ecac1 · a pool whose own streams error reaches the caller as a typed refusal, on no channel as a bare Error [13.23ms]
+
+ 0 pass
+ 5 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [232.00ms]
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) #5ecac1 · every live channel is typed > #5ecac1 · a pool whose own streams error reaches the caller as a typed refusal, on no channel as a bare Error [17.44ms]
+
+ 1 pass
+ 5 filtered out
+ 0 fail
+ 9 expect() calls
+Ran 1 test across 1 file. [231.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 12 — #5ecac1 · a pool whose own failure channel dies (the typed channel stays typed)
+breaks:   the failure channel stops being mapped, so the channel the module types as its own refusal type ends on the library's Error
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · #5ecac1 · a pool whose own streams error reaches the caller as a typed refusal, on no channel as a bare Error
+$ the mutation applied (old -> new):
+-                 map((failure) => new RelaySeamError(failure.reason, failure.message ?? `relay ${failure.relay} did not answer`)),
+                // a pool whose own failure channel dies still reports a typed refusal
+                catchError((error: unknown) => of(asRelaySeamError(error))),
++                 map((failure) => new RelaySeamError(failure.reason, failure.message ?? `relay ${failure.relay} did not answer`)),
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t \#5ecac1\ ·\ a\ pool\ whose\ own\ streams\ error\ reaches\ the\ caller\ as\ a\ typed\ refusal,\ on\ no\ channel\ as\ a\ bare\ Error
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+128 | 		// it must deliver the refusal as a value, not end on the library's Error
+129 | 		const deadFailures = workingPool({
+130 | 			subscribe: () => ({
+131 | 				events: NEVER,
+132 | 				failures: new Observable<never>((subscriber) => {
+133 | 					subscriber.error(new Error('the failure channel died'))
+                                ^
+error: the failure channel died
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/invariants.test.ts:133:27)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/Observable.js:41:25)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/Observable.js:35:31)
+      at errorContext (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/util/errorContext.js:22:9)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/Observable.js:26:24)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/operators/map.js:9:16)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/util/lift.js:14:28)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/Observable.js:30:30)
+      at errorContext (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/util/errorContext.js:22:9)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/rxjs/dist/cjs/internal/Observable.js:26:24)
+(fail) #5ecac1 · every live channel is typed > #5ecac1 · a pool whose own streams error reaches the caller as a typed refusal, on no channel as a bare Error [16.80ms]
+
+ 0 pass
+ 5 filtered out
+ 1 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [237.00ms]
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) #5ecac1 · every live channel is typed > #5ecac1 · a pool whose own streams error reaches the caller as a typed refusal, on no channel as a bare Error [22.41ms]
+
+ 1 pass
+ 5 filtered out
+ 0 fail
+ 9 expect() calls
+Ran 1 test across 1 file. [239.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 13 — #5ecac1 · a policy that cannot answer is a typed refusal, not a bare Error
+breaks:   the policy's own error is rethrown unmapped — the pre-repair shape, where the policy read sat outside its operation's guard
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · #5ecac1 · a policy that cannot answer is a typed refusal on every operation, and never reaches the wire
+$ the mutation applied (old -> new):
+-             relays = uniqueRelays(this.policy('query'))
+        } catch (error) {
+            return refuse(error)
+        }
++             relays = uniqueRelays(this.policy('query'))
+        } catch (error) {
+            throw error
+        }
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t \#5ecac1\ ·\ a\ policy\ that\ cannot\ answer\ is\ a\ typed\ refusal\ on\ every\ operation,\ and\ never\ reaches\ the\ wire
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+185 | 			['publish', () => seam.publish(signedEvent({ kind: 1, created_at: 1000 }))],
+186 | 			['count', () => seam.count({ kinds: [1] })],
+187 | 		]
+188 | 		for (const [operation, run] of operations) {
+189 | 			const refused = await rejection(run())
+190 | 			expect(isRefusal(refused)).toBe(true)
+                                    ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/invariants.test.ts:190:31)
+(fail) #5ecac1 · every live channel is typed > #5ecac1 · a policy that cannot answer is a typed refusal on every operation, and never reaches the wire [2.23ms]
+
+ 0 pass
+ 5 filtered out
+ 1 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [228.00ms]
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) #5ecac1 · every live channel is typed > #5ecac1 · a policy that cannot answer is a typed refusal on every operation, and never reaches the wire [17.60ms]
+
+ 1 pass
+ 5 filtered out
+ 0 fail
+ 12 expect() calls
+Ran 1 test across 1 file. [227.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 14 — #e574c2 · relay health is looked up under the pool's own key
+breaks:   the lookup uses the policy's raw spelling again, which the pool's map never holds, so a relay the pool has is reported as an invented 'not connected'
+file:     nostr-io/ts/relay-adapter.ts
+sha256:   8d63e1ed7444caef530f0777d4e47ac3b1ab999d707cdbb1c83867e1a5469836 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · connect · a relay the pool already holds is reported by its own state, and a URL that is not a relay is refused
+$ the mutation applied (old -> new):
+-             const relay = this.pool.relays.get(key)
++             const relay = this.pool.relays.get(url)
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t connect\ ·\ a\ relay\ the\ pool\ already\ holds\ is\ reported\ by\ its\ own\ state,\ and\ a\ URL\ that\ is\ not\ a\ relay\ is\ refused
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+469 | 			const policy = recordingPolicy([RELAY_A])
+470 | 			const seam = createNostrIo({ pool: holding.port, policy: policy.policy })
+471 | 
+472 | 			const statuses: RelayStatus[] = await seam.connect()
+473 | 			expect(statuses.map((status) => status.url)).toEqual([RELAY_A])
+474 | 			expect(statuses[0].ready).toBe(true)
+                                   ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:474:30)
+(fail) connect > connect · a relay the pool already holds is reported by its own state, and a URL that is not a relay is refused [9.16ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [266.00ms]
+exit: 1
+
+$ sha256 after restore: 8d63e1ed7444caef530f0777d4e47ac3b1ab999d707cdbb1c83867e1a5469836 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) connect > connect · a relay the pool already holds is reported by its own state, and a URL that is not a relay is refused [17.08ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 7 expect() calls
+Ran 1 test across 1 file. [255.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 15 — closeOnEose · the source is subscribed before the boundary gate
+breaks:   the pre-repair gate is restored — the notifier is subscribed first, so an EOSE the pool already holds completes the output before the events that preceded it
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · subscribe · closeOnEose ends the stream at the boundary, after the events that preceded it
+$ the mutation applied (old -> new):
+-         const events = opts.closeOnEose ? atEose(carried) : carried
++         const events = opts.closeOnEose ? carried.pipe(takeUntil(inner.eose.pipe(tap(() => unsubscribe())))) : carried
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t subscribe\ ·\ closeOnEose\ ends\ the\ stream\ at\ the\ boundary,\ after\ the\ events\ that\ preceded\ it
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+316 | 		const seam = createNostrIo({ pool: backend.port, policy: policy.policy })
+317 | 
+318 | 		const subscription: Subscription = seam.subscribe({ kinds: [1] }, { closeOnEose: true })
+319 | 		// an EOSE the pool already holds must not complete the output before the events
+320 | 		const arrived = await collect(subscription.events, 2)
+321 | 		expect(arrived.map((event) => event.id)).toEqual([FIRST.id, SECOND.id])
+                                                 ^
+error: expect(received).toEqual(expected)
+
+- [
+-   "f8b75323e9c772596c187fb3727a9b85ec851823e8c52be9c31d6a92e680d9a4",
+-   "560da745b920b7ac99b9349af3daf18364798d72ce329d04badd63076b27796d",
+- ]
++ []
+
+- Expected  - 4
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:321:44)
+(fail) subscribe > subscribe · closeOnEose ends the stream at the boundary, after the events that preceded it [6.87ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [240.00ms]
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) subscribe > subscribe · closeOnEose ends the stream at the boundary, after the events that preceded it [6.73ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [266.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 16 — #06200d · the unique target set (the host's set, de-duplicated once)
+breaks:   the seam hands the pool the host's array as-is again, so a relay named twice answers twice and its own boundary is counted twice
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · query · a relay URL the policy names twice is targeted once
+$ the mutation applied (old -> new):
+-             relays = uniqueRelays(this.policy('query'))
++             relays = [...this.policy('query')]
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t query\ ·\ a\ relay\ URL\ the\ policy\ names\ twice\ is\ targeted\ once
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+159 | 			const outcome = await within(seam.query({ kinds: [1] }))
+160 | 			expect(outcome.settled).toBe(true)
+161 | 			if (!outcome.settled) throw new Error('the read never settled: the completion count is not the unique target set')
+162 | 
+163 | 			// the fix site, on the record: the pool was handed the relay once
+164 | 			expect(backend.targets()).toEqual([[RELAY_A]])
+                                   ^
+error: expect(received).toEqual(expected)
+
+  [
+    [
+      "wss://relay.alpha.invalid",
++     "wss://relay.alpha.invalid",
+    ],
+  ]
+
+- Expected  - 0
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:164:30)
+(fail) query > query · a relay URL the policy names twice is targeted once [11.77ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [277.00ms]
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) query > query · a relay URL the policy names twice is targeted once [8.17ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [257.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 17 — the stated ceiling · a read stops at MAX_EVENTS_PER_READ
+breaks:   the ceiling guard is removed, so the read keeps every event a relay sends instead of stopping at the stated bound
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · query · a read stops at the stated ceiling
+$ the mutation applied (old -> new):
+-                     if (events.length >= MAX_EVENTS_PER_READ) {
+                        truncated = true
+                        capReached.next()
+                    }
++                     if (false) {
+                        truncated = true
+                        capReached.next()
+                    }
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t query\ ·\ a\ read\ stops\ at\ the\ stated\ ceiling
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+179 | 		const pool = workingPool({ request: () => range(0, CEILING + 1).pipe(map(() => FIRST)) })
+180 | 		const policy = recordingPolicy([RELAY_A])
+181 | 		const seam = createNostrIo({ pool: pool.port, policy: policy.policy })
+182 | 
+183 | 		const read: WireResult = await seam.query({ kinds: [1] })
+184 | 		expect(read.events.length).toBe(CEILING)
+                                   ^
+error: expect(received).toBe(expected)
+
+Expected: 10000
+Received: 10001
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:184:30)
+(fail) query > query · a read stops at the stated ceiling [6.58ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [249.00ms]
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) query > query · a read stops at the stated ceiling [9.12ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [301.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 18 — the wall-clock deadline · a dripping wire is bounded
+breaks:   the deadline is disarmed, so a wire that keeps emitting without ever reaching EOSE leaves the caller's read pending — the inactivity-gap behaviour in its strongest form
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · query · a dripping wire is bounded by the wall-clock deadline
+$ the mutation applied (old -> new):
+-             const deadline = timer(opts.deadlineMs).pipe(tap(() => { timedOut = true }))
+            bounded = bounded.pipe(takeUntil(deadline))
++             const deadline = NEVER
+            bounded = bounded.pipe(takeUntil(deadline))
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t query\ ·\ a\ dripping\ wire\ is\ bounded\ by\ the\ wall\-clock\ deadline
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+157 | 		let timedOut = false
+158 | 		let truncated = false
+159 | 		const capReached = new Subject<void>()
+160 | 		let bounded = source.pipe(takeUntil(capReached))
+161 | 		if (opts.deadlineMs !== undefined) {
+162 | 			const deadline = NEVER
+                          ^
+ReferenceError: NEVER is not defined
+      at query (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/index.ts:162:21)
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:202:38)
+(fail) query > query · a dripping wire is bounded by the wall-clock deadline [2.60ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+Ran 1 test across 1 file. [241.00ms]
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) query > query · a dripping wire is bounded by the wall-clock deadline [49.31ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [311.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 19 — #752c02 / D2 · the wire count settles, and is the sum of the relays' own indices
+breaks:   the awaited operator is restored to `lastValueFrom`, which resolves only on completion — and the vendor's group COUNT stream is rooted in a `BehaviorSubject` and never completes (`group.js:12`, `:21`, `:187-190`) — so the count never settles. Red through `within()`'s guard, never by hanging the runner: the case's own guard is the read's bound.
+file:     nostr-io/ts/relay-adapter.ts
+sha256:   8d63e1ed7444caef530f0777d4e47ac3b1ab999d707cdbb1c83867e1a5469836 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · count · the wire count settles against a pool whose COUNT stream never completes, and is the sum of the relays' own indices
+$ the mutation applied (old -> new):
+- await firstValueFrom(this.pool.count([...relays], [...filters]))
++ await (await import('rxjs')).lastValueFrom(this.pool.count([...relays], [...filters]))
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t count\ ·\ the\ wire\ count\ settles\ against\ a\ pool\ whose\ COUNT\ stream\ never\ completes,\ and\ is\ the\ sum\ of\ the\ relays'\ own\ indices
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+429 | 			for (const { backend, suffix } of backends(script)) {
+430 | 				const policy = recordingPolicy(script.relays)
+431 | 				const seam = createNostrIo({ pool: backend.port, policy: policy.policy })
+432 | 
+433 | 				const outcome = await within(seam.count({ kinds: [1] }), 500)
+434 | 				expect(outcome.settled).toBe(true)
+                                  ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:434:29)
+(fail) count > count · the wire count settles against a pool whose COUNT stream never completes, and is the sum of the relays' own indices [505.61ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [785.00ms]
+exit: 1
+
+$ sha256 after restore: 8d63e1ed7444caef530f0777d4e47ac3b1ab999d707cdbb1c83867e1a5469836 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) count > count · the wire count settles against a pool whose COUNT stream never completes, and is the sum of the relays' own indices [9.29ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 14 expect() calls
+Ran 1 test across 1 file. [300.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 20 — #ae22a4 / D12 · a relay's own identity is used for the ack match
+breaks:   the ack map is keyed by the host's raw spelling again while the pool files every answer under its own normalised key (`relay.js:653`, `:674`), so a relay that answered `ok: true` is reported as refusing the event — B2's publish half
+file:     nostr-io/ts/index.ts
+sha256:   8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · publish · an ack is matched under the pool's own identity while the caller keeps the host's spelling
+$ the mutation applied (old -> new):
+- new Map(acks.map((ack) => [relayIdentity(ack.url), ack] as const))
++ new Map(acks.map((ack) => [ack.url, ack] as const))
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t publish\ ·\ an\ ack\ is\ matched\ under\ the\ pool's\ own\ identity\ while\ the\ caller\ keeps\ the\ host's\ spelling
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+376 | 
+377 | 			const event: Event = signedEvent({ kind: 1, content: 'published', created_at: 1000 })
+378 | 			const outcome: PublishOutcome = await seam.publish(event)
+379 | 			// the relay answered, and the seam reports it as having answered — under
+380 | 			// the spelling the caller used, not the pool's
+381 | 			expect(outcome.acks).toEqual([{ url: RELAY_A, accepted: true }])
+                              ^
+error: expect(received).toEqual(expected)
+
+  [
+    {
+-     "accepted": true,
++     "accepted": false,
++     "message": "no acknowledgement from this relay",
++     "reason": "rejected",
+      "url": "wss://relay.alpha.invalid",
+    },
+  ]
+
+- Expected  - 1
++ Received  + 3
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:381:25)
+(fail) publish > publish · an ack is matched under the pool's own identity while the caller keeps the host's spelling [11.45ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [247.00ms]
+exit: 1
+
+$ sha256 after restore: 8410bccbd98b61daeede481d42c92033b5fbdfb6caf5a0fa4ccd7e1308ad6481 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) publish > publish · an ack is matched under the pool's own identity while the caller keeps the host's spelling [11.03ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [265.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 21 — #10b5ac / D12 · the boundary gate counts a normalised-unique target list
+breaks:   the gate counts the host's raw spellings again, so a set naming one relay in two spellings can never reach its boundary and the read never settles — B2's read half
+file:     nostr-io/ts/relay-adapter.ts
+sha256:   8d63e1ed7444caef530f0777d4e47ac3b1ab999d707cdbb1c83867e1a5469836 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     conformance.test.ts · query · a target set naming one relay in two spellings still settles, and the host's set reaches the pool unrewritten
+$ the mutation applied (old -> new):
+-             takeWhile(() => seen.size < target.length, true),
++             takeWhile(() => seen.size < [...relays].length, true),
+
+$ /home/admin_maxime/.bun/bin/bun test conformance.test.ts -t query\ ·\ a\ target\ set\ naming\ one\ relay\ in\ two\ spellings\ still\ settles,\ and\ the\ host's\ set\ reaches\ the\ pool\ unrewritten
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+225 | 		for (const { backend, suffix } of backends(script)) {
+226 | 			const policy = recordingPolicy(script.relays)
+227 | 			const seam = createNostrIo({ pool: backend.port, policy: policy.policy })
+228 | 
+229 | 			const outcome = await within(seam.query({ kinds: [1] }), 500)
+230 | 			expect(outcome.settled).toBe(true)
+                                 ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:230:28)
+(fail) query > query · a target set naming one relay in two spellings still settles, and the host's set reaches the pool unrewritten [507.87ms]
+
+ 0 pass
+ 17 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [768.00ms]
+exit: 1
+
+$ sha256 after restore: 8d63e1ed7444caef530f0777d4e47ac3b1ab999d707cdbb1c83867e1a5469836 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the obligation is really covered) — the named case failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) query > query · a target set naming one relay in two spellings still settles, and the host's set reaches the pool unrewritten [8.03ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [262.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+21 mutation(s) applied, 0 falsification failure(s)
+every mutated file was restored and its sha256 verified; the module's tree is as it was before this run.
+
+21 mutation(s), 0 falsification failure(s)

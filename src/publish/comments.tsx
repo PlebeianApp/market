@@ -6,9 +6,7 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { isAddressableKind } from 'nostr-tools/kinds'
-
-// NIP-22 Comment kind
-const COMMENT_KIND = 1111
+import { createCommentTemplate } from '@sdk/commerce/messaging'
 
 interface PublishCommentParams {
 	content: string
@@ -33,59 +31,20 @@ export const publishComment = async ({ content, targetEvent, parentComment }: Pu
 		throw new Error('No connected relays. Please check your relay connections and try again.')
 	}
 
-	// Create NIP-22 comment event
+	// Build the event through SDK rules, then sign and publish at the app boundary.
+	const template = createCommentTemplate({
+		content,
+		targetEvent,
+		parentComment: parentComment ? { id: parentComment.id, authorPubkey: parentComment.authorPubkey } : undefined,
+		createdAt: Math.floor(Date.now() / 1000),
+	})
+
 	const commentEvent = new NDKEvent(ndk)
-	commentEvent.kind = COMMENT_KIND
-	commentEvent.content = content
-	commentEvent.created_at = Math.floor(Date.now() / 1000)
+	commentEvent.kind = template.kind
+	commentEvent.content = template.content
+	commentEvent.created_at = template.created_at
+	commentEvent.tags = template.tags
 	commentEvent.pubkey = user.pubkey
-
-	const tags: string[][] = []
-
-	// === ROOT SCOPE (Uppercase) ===
-	if (isAddressableKind(targetEvent.kind)) {
-		// Addressable Event (e.g., NIP-99 Product 30402)
-		const targetAddress = getEventAddress(targetEvent)
-
-		tags.push(['A', targetAddress])
-	} else {
-		// Regular Event (e.g., Kind 1, 4, etc.)
-		tags.push(['E', targetEvent.id])
-	}
-
-	// Root Kind
-	tags.push(['K', targetEvent.kind.toString()])
-
-	// Root Pubkey
-	tags.push(['P', targetEvent.pubkey])
-
-	// === PARENT SCOPE (Lowercase) ===
-	if (parentComment) {
-		// This is a reply to another comment
-
-		// Note: In NIP-22, replies to comments often use 'e' if the comment is treated as a regular event,
-		// or 'a' if the comment is addressable. Since we don't have the full parent event here,
-		// we default to 'e' for replies unless we know the parent is addressable.
-
-		tags.push(['e', parentComment.id])
-		tags.push(['k', '1111']) // Parent should be a comment (kind '1111')
-		tags.push(['p', parentComment?.authorPubkey])
-	} else {
-		// Top-level comment on the target
-		if (isAddressableKind(targetEvent.kind)) {
-			// Addressable Target
-			const targetAddress = getEventAddress(targetEvent)
-
-			tags.push(['a', targetAddress])
-		} else {
-			// Regular Target
-			tags.push(['e', targetEvent.id])
-		}
-		tags.push(['k', targetEvent.kind.toString()])
-		tags.push(['p', targetEvent.pubkey])
-	}
-
-	commentEvent.tags = tags
 
 	try {
 		await commentEvent.sign(ndk.signer)

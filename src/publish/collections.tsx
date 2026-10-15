@@ -4,7 +4,8 @@ import { collectionsKeys } from '@/queries/queryKeyFactory'
 import { markCollectionAsDeleted } from '@/queries/collections'
 import { toast } from 'sonner'
 import { ndkActions } from '@/lib/stores/ndk'
-import type { RichShippingInfo } from '@/lib/stores/cart'
+import { buildCollectionEventData, COLLECTION_EVENT_KIND } from '@sdk/commerce/collections'
+import type { CollectionShippingInput } from '@sdk/commerce/collections'
 import { createClientTag } from './nip89'
 
 export interface CollectionFormData {
@@ -13,10 +14,7 @@ export interface CollectionFormData {
 	description: string
 	headerImageUrl?: string
 	products: string[] // Array of product coordinates
-	shippings: Array<{
-		shipping: Pick<RichShippingInfo, 'id' | 'name'> | null
-		extraCost: string
-	}>
+	shippings: CollectionShippingInput[]
 }
 
 /**
@@ -31,43 +29,19 @@ export const createCollectionEvent = (
 	handlerId?: string, // Optional handler ID for client tag
 ): NDKEvent => {
 	const event = new NDKEvent(ndk)
-	event.kind = 30405 // Collections kind
-	event.content = formData.description
-
-	// Generate a unique ID if not provided (for new collections)
-	const id = collectionId || crypto.randomUUID()
-
-	// Required tags
-	event.tags = [
-		['d', id], // Collection identifier
-		['title', formData.name],
-		...(formData.summary ? [['summary', formData.summary]] : []),
-	]
-
-	// Optional header image
-	if (formData.headerImageUrl) {
-		event.tags.push(['image', formData.headerImageUrl])
-	}
-
-	// Add product references
-	formData.products.forEach((productCoords) => {
-		event.tags.push(['a', productCoords])
+	const eventData = buildCollectionEventData({
+		collectionId: collectionId || crypto.randomUUID(),
+		name: formData.name,
+		summary: formData.summary,
+		description: formData.description,
+		headerImageUrl: formData.headerImageUrl,
+		products: formData.products,
+		shippings: formData.shippings,
+		clientTag: appPubkey && handlerId ? createClientTag(appPubkey, handlerId) : undefined,
 	})
-
-	// Add shipping option references
-	const shippingTags = formData.shippings
-		.filter((ship) => ship.shipping && ship.shipping.id)
-		.map((ship) => {
-			// shipping.id is already a full reference like "30406:pubkey:id"
-			return ship.extraCost ? ['shipping_option', ship.shipping!.id, ship.extraCost] : ['shipping_option', ship.shipping!.id]
-		})
-
-	event.tags.push(...shippingTags)
-
-	// Add client tag if app pubkey and handler ID are provided (NIP-89)
-	if (appPubkey && handlerId) {
-		event.tags.push(createClientTag(appPubkey, handlerId))
-	}
+	event.kind = eventData.kind as typeof COLLECTION_EVENT_KIND
+	event.content = eventData.content
+	event.tags = eventData.tags
 
 	return event
 }

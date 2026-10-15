@@ -6,11 +6,15 @@
 		"strictNullChecks": true,
 		"moduleResolution": "bundler",
 		"module": "preserve",
+		"target": "ESNext",
 		"allowImportingTsExtensions": true,
 		"verbatimModuleSyntax": true,
 		"noEmit": true,
 		"paths": {
-			"@/*": ["./src/*"]
+			"@/*": ["./src/*"],
+			"@sdk/*": ["./sdk/*"],
+			"@ui/*": ["./ui/*"],
+			"@platform/*": ["./platform/*"]
 		}
 	},
 	"include": ["**/*.ts", "**/*.tsx", "scripts/**/*.ts"]

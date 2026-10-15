@@ -1,0 +1,294 @@
+
+===== nostr-io — build, test and isolation evidence =====
+# command:   bash nostr-io/evidence/run.sh   (the caller redirects to nostr-io/evidence/01-build-and-tests.txt)
+# generated: 2026-09-30T07:24:17Z   host: Linux 6.12.94+deb13-amd64 x86_64
+# bun:       1.4.2
+# module:    /home/admin_maxime/projects/market-retrofit/nostr-io
+# note: every line below is a command's own output, not a summary of it.
+
+===== 0 · the mounted specimen is untouched =====
+$ git -C /home/admin_maxime/projects/market-retrofit/market rev-parse HEAD
+56258b55e2805895c941eb879f7a3ea1308bc0c5
+exit: 0
+# ^ expected: 56258b55e2805895c941eb879f7a3ea1308bc0c5 (the pin).
+$ git -C /home/admin_maxime/projects/market-retrofit/market status --short
+（no output）
+exit: 0
+# ^ expected: no lines. The module writes nowhere near the mount.
+
+===== 1 · the module's own dependency store (inside nostr-io/ts only) =====
+$ (cd nostr-io/ts && /home/admin_maxime/.bun/bin/bun pm ls)
+/home/admin_maxime/projects/market-retrofit/nostr-io/ts node_modules (27 installed)
+├── @types/bun@1.4.2
+├── applesauce-relay@6.2.1
+├── nostr-tools@2.19.4
+├── rxjs@7.8.2
+└── typescript@5.9.3
+exit: 0
+# ^ expected: applesauce-relay 6.2.1 (exact, the order's pin), one nostr-tools ~2.19, rxjs 7.8.2.
+$ python3 - <nostr-io/ts/package.json>   (the declared lists, asserted, not summarised)
+dependencies:    applesauce-relay, nostr-tools, rxjs
+devDependencies: @types/bun, typescript
+# ^ expected: dependencies exactly applesauce-relay 6.2.1, nostr-tools, rxjs, and applesauce-core in
+#   NEITHER list. applesauce-core is in node_modules only as a transitive dependency of
+#   applesauce-relay (see section 10) — that is expected and is not a dependency of this module.
+exit: 0
+
+===== 2 · bun test — the module's own runner over its own roots =====
+$ (cd nostr-io/ts && /home/admin_maxime/.bun/bin/bun test)
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) query > query · the wire's events arrive in order and EOSE resolves the read [7.71ms]
+(pass) query > query · a deadline that fires reports eose:false instead of inventing completeness [21.79ms]
+(pass) query > query · a relay refusal mid-read resolves with what arrived, and both backends agree [2.62ms]
+(pass) query > query · a relay URL the policy names twice is targeted once [1.61ms]
+(pass) query > query · a read stops at the stated ceiling [3.06ms]
+(pass) query > query · a dripping wire is bounded by the wall-clock deadline [41.20ms]
+(pass) query > query · a target set naming one relay in two spellings still settles, and the host's set reaches the pool unrewritten [1.05ms]
+(pass) subscribe > subscribe · live events and a relay refusal reach their channels [4.24ms]
+(pass) subscribe > subscribe · a relay's own NIP-01 refusal prefix reaches the vocabulary on both paths [3.03ms]
+(pass) subscribe > subscribe · closeOnEose ends the stream at the boundary, after the events that preceded it [0.82ms]
+(pass) subscribe > subscribe · unsubscribe twice closes once and throws nothing [0.34ms]
+(pass) publish > publish · one ack per targeted relay, and a silent relay is reported not dropped [8.31ms]
+(pass) publish > publish · an ack is matched under the pool's own identity while the caller keeps the host's spelling [8.52ms]
+(pass) count > count · NIP-45's count carries the relay's approximation flag [1.35ms]
+(pass) count > count · the wire count settles against a pool whose COUNT stream never completes, and is the sum of the relays' own indices [0.89ms]
+(pass) connect > connect · the relay set is the injected policy's answer [0.86ms]
+(pass) connect > connect · a relay the pool already holds is reported by its own state, and a URL that is not a relay is refused [4.44ms]
+(pass) the multi-backend case > the multi-backend case · the same suite passes over the vendor adapter and over a hand-written pool [1.56ms]
+
+invariants.test.ts:
+(pass) M5 · the store-free case > M5 · the store-free case: a recording pool that throws is reached only by the wire verbs, and not at all when the seam is asked for nothing [4.85ms]
+(pass) #5ecac1 · the reason vocabulary > #5ecac1 · the reason vocabulary maps a relay's own refusal text, and a refusal is never a bare string [0.18ms]
+(pass) #5ecac1 · every live channel is typed > #5ecac1 · a pool whose own streams error reaches the caller as a typed refusal, on no channel as a bare Error [5.39ms]
+(pass) #5ecac1 · every live channel is typed > #5ecac1 · a policy that cannot answer is a typed refusal on every operation, and never reaches the wire [4.04ms]
+(pass) #06200d · relay policy is injected, never owned > #06200d · the policy is read on every call and its relays are neither added to, preferred nor reordered [5.10ms]
+(pass) #3820a9 · two seams in one process > #3820a9 · two seams share no socket, no subscription and no relay set [0.50ms]
+
+ 24 pass
+ 0 fail
+ 174 expect() calls
+Ran 24 tests across 2 files. [406.00ms]
+exit: 0
+# ^ expected: 24 cases in 2 files, all passing, 0 failing — the 12 the increment
+#   landed, plus the 9 the red-team repair added, plus the 3 the D1/D12 repair adds
+#   (a count that settles against a non-completing COUNT stream, an ack matched under
+#   the pool own identity, and a two-spelling target whose read settles). Six cases fail
+#   against the frozen adapter under the repaired fixture: the red half is
+#   05-before-the-repair.txt.
+
+===== 3 · the module's own compiler configuration =====
+$ (cd nostr-io/ts && /home/admin_maxime/.bun/bin/bun run typecheck)
+$ tsc --noEmit
+exit: 0
+# ^ expected: exit 0 and no output (`tsc --noEmit`, the pinned typescript).
+#   A runner transpiles without typechecking, so this is the case for the
+#   contract own type surface (#ba52de names rxjs Observable as the adopted stream
+#   shape, so it is permitted in a caller-facing signature): the typecheck proves the
+#   contract compiles strictly, and it neither detects nor is meant to detect a library type.
+$ the typecheck measured (budget, not a flag: D4) — the child peak RSS in KB, no /usr/bin/time on this host
+$ (cd nostr-io/ts && python3 -c "import resource,subprocess,sys; p=subprocess.run(['/home/admin_maxime/.bun/bin/bun','run','typecheck'],cwd='/home/admin_maxime/projects/market-retrofit/nostr-io/ts'); print('%d KB child peak RSS' % resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss); sys.exit(p.returncode)")
+$ tsc --noEmit
+252696 KB child peak RSS
+exit: 0
+# ^ expected: exit 0, and a child peak RSS of about 250 000 KB (244-250 MiB across the three measurements:
+#   D4 247 MiB on 2026-09-29, the recheck 245 MiB, this module 249). No --max-old-space-size and no
+#   needed, and the bound is a measurement rather than a promise, so a version bump that moves it shows up
+#   here instead of in a claim. The RSS figure is a volatile field: it moves by a few MiB run to run.
+
+===== 4 · the independence criterion — no host import, no relative path out of the module =====
+# The signer module's allow-list, applied here: every import specifier in ts/ is
+# module-relative or one of the seam's own declared dependencies.
+$ grep -rnE "(from|module\(|import\(|require\()\s*['"][^'"]*(\.\./|@/|@nostr-dev-kit/)" <nostr-io/ts, the module's own sources (node_modules excluded)>
+（no lines）
+matched lines: 0   exit: 1   (expected: 0 matched lines, exit 1)
+# ^ the second arm: a relative specifier that leaves the module directory is a host import by shape.
+
+===== 4b · every import specifier in the module, sorted and unique (the positive form) =====
+$ find nostr-io/ts -maxdepth 1 -name "*.ts" | wc -l
+8
+# ^ the non-vacuity arm, asserted before the list is read: expected 8 (5 implementation files, harness.ts, and 2 test files).
+$ grep -rhoE ... | sed ... | sort -u
+./errors
+./harness
+./index
+./pool
+./relay-adapter
+./types
+applesauce-relay
+bun:test
+nostr-tools
+nostr-tools/pure
+rxjs
+specifier count: 11   (the stated list; a bare zero would be the finding, not a pass)
+# ^ no disallowed specifier: the allow-list is ./<module file>, applesauce-relay[/…],
+#   nostr-tools[/…], rxjs, bun:test. In particular no applesauce-core: the store is not
+#   importable from this module even though it is present in node_modules.
+
+===== 5 · the contract: index.ts against the module MD's front-matter =====
+$ grep -nE ^export /home/admin_maxime/projects/market-retrofit/nostr-io/ts/index.ts
+339:export { createNostrIo, RelaySeamError, MAX_EVENTS_PER_READ }
+340:export { toUpstreamPool } from './pool'
+341:export type {
+exit: 0
+$ python3 - /home/admin_maxime/projects/market-retrofit/nostr-io/nostr-io.md /home/admin_maxime/projects/market-retrofit/nostr-io/ts/index.ts
+contract.exports: 4 declared, 4 delivered
+contract.types: 19 declared, 19 delivered
+the two lists are equal: yes
+# nothing in the check routine reads these keys, so this diff IS the check.
+exit: 0
+$ (cd nostr-io/ts && /home/admin_maxime/.bun/bin/bun -e import * as m from "./index.ts"; console.log(Object.keys(m).sort().join("\n")))
+MAX_EVENTS_PER_READ
+RelaySeamError
+createNostrIo
+toUpstreamPool
+exit: 0
+# ^ the runtime list: values only, and the same ones the MD declares as exports.
+
+===== 6 · ts/ts.md's inventory against the directory itself =====
+$ find nostr-io/ts -maxdepth 1 -type f | sort
+bun.lock
+conformance.test.ts
+errors.ts
+harness.ts
+index.ts
+invariants.test.ts
+package.json
+pool.ts
+relay-adapter.ts
+ts.md
+tsconfig.json
+types.ts
+files found: 12   (11 without the lock, 12 with it)
+listed: 12   found: 12
+$ diff /dev/fd/63 /dev/fd/62
+（no output）
+exit: 0
+# ^ expected: exit 0. ts.md names bun.lock iff it exists, so the diff is empty
+#   rather than the lock being filtered out of the find.
+
+===== 7 · the test-case count =====
+$ find nostr-io/ts -maxdepth 1 -name "*.test.ts" | wc -l
+2
+$ grep -cE "^[[:space:]]*(test|it)\(" nostr-io/ts/*.test.ts   (file:count)
+/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:18
+/home/admin_maxime/projects/market-retrofit/nostr-io/ts/invariants.test.ts:6
+$ ... summed (the declarations; equal to the runner's total, because every case has one literal title):
+24 test declarations in total
+$ the runner's own totals, for the same measure (bun reports on stderr, hence 2>&1):
+$ (cd nostr-io/ts && bash -c "/home/admin_maxime/.bun/bin/bun" test 2>&1 | grep -E '^ *[0-9]+ (pass|fail)')
+ 24 pass
+ 0 fail
+exit: 0
+
+===== 8 · the check routine (from the assembly root) =====
+$ (cd /home/admin_maxime/projects/market-retrofit && python3 core/checks/check.py --root .)
+modules 10 · statements 318 · distinct identities 318
+0 hard finding(s), 0 note(s)
+exit: 0
+# ^ expected: 0 hard findings, 0 notes, with the module and statement counts quoted.
+$ grep -cE "^- `#[0-9a-f]{6}` —" nostr-io/nostr-io.md   (the bullet statements)
+30
+$ grep -cE "^`#[0-9a-f]{6}` —" nostr-io/nostr-io.md   (the two that open a paragraph, not a bullet)
+2
+# ^ expected: 30 bullet + 2 paragraph = 32 — the twenty-nine statements the spec declared,
+#   plus the two the red-team repair added (the stated ceiling and the wall-clock deadline),
+#   plus the one the D1/D12 repair adds (D2: what a wire count over a set is), each
+#   carrying its assigned identity.
+$ grep -c "#@" nostr-io/nostr-io.md
+0
+# ^ expected 0: an unfilled placeholder is not a statement.
+$ grep -n "MAX_EVENTS_PER_READ = " nostr-io/ts/index.ts   (the stated ceiling, as an inspectable value)
+60:const MAX_EVENTS_PER_READ = 10_000
+# ^ expected: `const MAX_EVENTS_PER_READ = 10_000`, exported in the entry value block
+#   (section 5 above) — the number the ceiling case in conformance.test.ts states. A bound is a
+#   declared value, not a number buried in a branch.
+
+===== 9 · the socket primitives this module is allowed to name, and the list it must not contain =====
+# nostr-io IS the wire: a bare zero for socket-shaped strings would be a false criterion.
+# So the expected output is a stated list, and every hit below is named.
+$ grep -rnE wss?:// --include=*.ts --exclude-dir=node_modules /home/admin_maxime/projects/market-retrofit/nostr-io/ts
+/home/admin_maxime/projects/market-retrofit/nostr-io/ts/pool.ts:53: * implies, and take the serialisation — so `wss://relay.invalid` and
+/home/admin_maxime/projects/market-retrofit/nostr-io/ts/pool.ts:54: * `wss://relay.invalid/` are the one relay the pool holds. A string that is not a
+/home/admin_maxime/projects/market-retrofit/nostr-io/ts/harness.ts:308:export const RELAY_A: RelayUrl = 'wss://relay.alpha.invalid'
+/home/admin_maxime/projects/market-retrofit/nostr-io/ts/harness.ts:309:export const RELAY_B: RelayUrl = 'wss://relay.beta.invalid'
+/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:366:		// naming `wss://relay.alpha.invalid` (the ordinary spelling, no trailing slash)
+exit: 0
+# ^ expected: 5 matched lines — two fixture constants in harness.ts (RELAY_A and RELAY_B),
+#   both on the reserved .invalid TLD and never dialled, two doc-comment lines in pool.ts
+#   naming the same spelling as the normalisation example, and one doc-comment line in
+#   conformance.test.ts naming the host spelling the ack case uses. Values and comments, not
+#   call sites: the grep below, for the call sites that would connect, is the other half of the
+#   criterion. node_modules is excluded on purpose: it is the vendor's shipped bytes, not this module.
+$ ...and the call sites that would connect, which must be zero:
+$ grep -rnE "new WebSocket|WebSocket\(|fetch\(|https?://|createServer|EventSource|serviceWorker" <the implementation and tests>
+（no lines）
+matched lines: 0   exit: 1   (expected: 0 matched lines, exit 1)
+# ^ 0 socket constructors, 0 fetches, 0 servers. The only connection any case can open
+#   is none: the vendor backend is driven through a stubbed RelayPool transport.
+
+===== 10 · one type identity across the seam =====
+$ ls -d /home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/applesauce-relay/node_modules/nostr-tools
+ls: cannot access '/home/admin_maxime/projects/market-retrofit/nostr-io/ts/node_modules/applesauce-relay/node_modules/nostr-tools': No such file or directory
+exit: 2
+# ^ expected: "No such file or directory" — a single nostr-tools copy in the tree,
+#   so `Event` is one type across the module/implementation boundary.
+$ find nostr-io/ts/node_modules -type d -name nostr-tools | sort
+nostr-io/ts/node_modules/nostr-tools
+# ^ applesauce-core is present in this tree as a transitive dependency of applesauce-relay;
+#   it is not imported by any file in ts/ (section 4b) and not declared (section 1).
+
+===== 11 · conservation: the specimen is at its pin, with its own numbers =====
+$ git -C market rev-parse HEAD
+56258b55e2805895c941eb879f7a3ea1308bc0c5
+$ git -C market status --short | wc -l
+0
+$ wc -l < market/src/lib/stores/ndk.ts
+1055
+$ find market/src -type f \( -name "*.test.ts" -o -name "*.test.tsx" \) | wc -l
+113
+$ find market/contextvm market/src/queries/__tests__ market/src/lib/__tests__ -type f -name "*.test.ts" ! -name "*.integration.test.ts" | wc -l
+92
+$ find market/e2e/tests -name "*.spec.ts" | wc -l
+37
+$ cat market/scripts/ndk-baseline.txt
+161
+# ^ expected: the pin, 0, 1055, 113, 92, 37, 161 — identical before and after,
+#   because this increment adds a module and moves no number of the specimen.
+
+===== 12 · the evidence lint — a ratchet, and this module contributes nothing to it =====
+# The ratchet is the finding count, not the script count: adding a script raises the
+# number of scripts checked by exactly one, and that script must contribute 0 findings.
+# baseline before this module's script existed (MEASURED, same command):
+#   evidence: 11 script(s) checked, 7 hard finding(s), 1 note(s)
+#   (the two extra hard findings over the frozen run's 5 are on
+#    event-store/evidence/run.sh:84 and :281, and the note on signer/evidence/probe.sh;
+#    all three pre-existing and not this run's to retrofit)
+$ (cd /home/admin_maxime/projects/market-retrofit && python3 core/checks/evidence.py --root .)
+  ----  event-store/evidence/run.sh
+  HARD  event-store/evidence/run.sh:84  writes into the tree (echo "# command:   bash event-store/evidence/run.sh > event-store/evidence/01-build-and-tests.txt") — an evidence script prints; the caller redirects. A script that writes cannot be run twice.
+  HARD  event-store/evidence/run.sh:281  writes into the tree (echo "regenerated: bash event-store/evidence/run.sh > event-store/evidence/01-build-and-tests.txt" >&2) — an evidence script prints; the caller redirects. A script that writes cannot be run twice.
+  ok    nostr-io/evidence/run.sh
+  ok    runs/2026-09-28-signer/research/evidence/02-existence-vs-refs.sh
+  ok    runs/2026-09-28-signer/research/evidence/04-a0-adjudication.sh
+  ----  runs/2026-09-28-signer/research/evidence/05-a0-remeasure.sh
+  HARD  runs/2026-09-28-signer/research/evidence/05-a0-remeasure.sh:24  `bun` invoked without an absolute path and no `PATH=` in the script — `bun` is not on this environment's PATH.
+  HARD  runs/2026-09-28-signer/research/evidence/05-a0-remeasure.sh:24  `node` invoked without an absolute path and no `PATH=` in the script — `node` is not on this environment's PATH.
+  HARD  runs/2026-09-28-signer/research/evidence/05-a0-remeasure.sh:25  `bun` invoked without an absolute path and no `PATH=` in the script — `bun` is not on this environment's PATH.
+  HARD  runs/2026-09-28-signer/research/evidence/05-a0-remeasure.sh:25  `node` invoked without an absolute path and no `PATH=` in the script — `node` is not on this environment's PATH.
+  HARD  runs/2026-09-28-signer/research/evidence/05-a0-remeasure.sh:148  `bun` invoked without an absolute path and no `PATH=` in the script — `bun` is not on this environment's PATH.
+  ok    runs/2026-09-28-signer/research/evidence/06-executed-master.sh
+  ok    runs/2026-09-29-event-store/research/evidence/01-store-surface.sh
+  ok    runs/2026-09-29-event-store/research/evidence/02-contract-and-implementations.sh
+  ok    runs/2026-09-29-event-store/research/evidence/03-consumers-and-contract.sh
+  ok    runs/2026-09-29-event-store/research/evidence/04-wallet-boundary.sh
+  ----  signer/evidence/probe.sh
+  NOTE  signer/evidence/probe.sh  no existence guard for the subject it reads.
+  ok    signer/evidence/run.sh
+evidence: 12 script(s) checked, 7 hard finding(s), 1 note(s)
+exit: 1
+# ^ expected: 12 script(s) checked, the same 7 hard findings, the same 1 note, and
+#   0 findings from nostr-io/evidence/run.sh: it prints rather than redirecting, it sets
+#   `set -euo pipefail` in its first lines, it spells bun absolutely and exports PATH,
+#   and it asserts its subject before reading it.

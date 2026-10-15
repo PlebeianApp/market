@@ -4,6 +4,7 @@ import {
 	parseInstanceConfigEnvironment,
 	resolveHandlerIdChain,
 	resolveInstanceConfig,
+	toMarketConfig,
 } from '@/lib/instance-config'
 import { APP_SETTINGS_D_TAG } from '@/lib/appSettings'
 import { AppSettingsSchema } from '@/lib/schemas/app'
@@ -115,6 +116,36 @@ describe('resolveInstanceConfig', () => {
 		const second = resolveInstanceConfig(null)
 		expect(second.publicRelays).toEqual(DEFAULT_INSTANCE_CONFIG.publicRelays)
 		expect(second.socialLinks).toEqual(DEFAULT_INSTANCE_CONFIG.socialLinks)
+	})
+})
+
+describe('toMarketConfig', () => {
+	test('maps public instance settings into the versioned SDK market contract', () => {
+		const instance = resolveInstanceConfig(null, {
+			handlerId: 'market-handler',
+			name: 'Market',
+			displayName: 'Market Display',
+			siteUrl: 'https://market.example',
+			publicRelays: ['wss://public-relay.example'],
+			trustedMints: ['https://mint.example'],
+			defaultCurrency: 'USD',
+		})
+		const result = toMarketConfig({ ...instance, appRelay: 'wss://app-relay.example' })
+
+		expect(result).toEqual({
+			ok: true,
+			value: {
+				schemaVersion: 'market-config-v1',
+				marketId: 'market-handler',
+				name: 'Market',
+				displayName: 'Market Display',
+				siteUrl: 'https://market.example/',
+				appRelay: 'wss://app-relay.example',
+				relayUrls: ['wss://public-relay.example'],
+				trustedMints: ['https://mint.example/'],
+				defaultCurrency: 'USD',
+			},
+		})
 	})
 })
 

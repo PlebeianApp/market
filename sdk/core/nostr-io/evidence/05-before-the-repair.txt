@@ -1,0 +1,135 @@
+# nostr-io — the D1/D12 red half: the repaired fixture (D13) against the frozen adapter
+# command:   (the procedure printed below; the caller redirects to this file)
+# generated: 2026-09-30T07:23:57Z
+# bun:       1.4.2
+# frozen:    6727ead (the candidate runs/2026-09-29-reframing/review/final-blind-nostr-io.addendum.md names)
+#
+# **What this is, and why no script regenerates it.** A one-off, serialized transcript, captured the way
+# 04-before-the-repair.txt was. The harness's model of the vendor is made faithful first — every frame and
+# publish response carries the relay's own normalised identity, and the group's request and COUNT streams
+# never complete (D13) — and the three cases this repair adds are in place, while the two repairs themselves
+# are NOT applied: relay-adapter.ts and index.ts are restored from 6727ead, so the adapter still awaits
+# `lastValueFrom(this.pool.count(...))` (B1/D1) and index.ts still keys the ack map by the host's spelling
+# (B2/D12). Every case the repair is about fails here — the new count case, the new ack case and the new
+# two-spelling read case — and the two cases that already existed and shared the fixture's blindness (the
+# publish case and the multi-backend case) fail with them. Six failures in all.
+#
+# The procedure, exactly as run (nothing else wrote to the tree, and the tree was restored before the suite
+# was run again — `bun test` is 24 pass / 0 fail on the restored files, which is the run after this one):
+#   cd nostr-io/ts
+#   mkdir -p /tmp/d1d12-final && cp relay-adapter.ts index.ts /tmp/d1d12-final/
+#   for f in relay-adapter.ts index.ts; do git -C <assembly> show 6727ead:nostr-io/ts/$f > $f; done
+#   bun test                       # the transcript below
+#   cp /tmp/d1d12-final/relay-adapter.ts /tmp/d1d12-final/index.ts .   # then: bun run typecheck; bun test
+# It is deliberately not a script: core/checks/evidence.py reports a hard finding for any evidence script
+# that writes into the tree, and those findings are a ratchet (D7 of
+# runs/2026-09-29-reframing/decisions-micro-harden-nostr-io.md). A third repair that needs one changes that
+# decision before it writes a red-half script.
+#
+# Volatile fields, named: the per-case durations in [brackets], the `Ran 24 tests …` wall-clock, and the
+# bun version banner. The pass/fail lines, the counts and the assertions are not volatile.
+#
+# sha256 of the subjects this run read (identity, not assumption):
+#   relay-adapter.ts     7e12d535ffff215224930f82edc9f2e5e45c0a2125e1175474f5d1ec04d413b6   (6727ead — the frozen adapter)
+#   index.ts             483436d78099fab594f31cf762603567e3ecd128d756b71c1fc908e43075edd0   (6727ead — the frozen entry)
+#   harness.ts           b270565dfc8dadafac194a7e68a515e5e92b1df64d8767dc4a062f835d7889e8   (this repair's fixture, D13)
+#   conformance.test.ts  6653d3101ee582bca174b7e7083717b3599aa49e5d3c1a076ac2d583af5443e6   (this repair's cases)
+
+bun test v1.4.2 (744846f84)
+
+conformance.test.ts:
+(pass) query > query · the wire's events arrive in order and EOSE resolves the read [7.44ms]
+(pass) query > query · a deadline that fires reports eose:false instead of inventing completeness [21.73ms]
+(pass) query > query · a relay refusal mid-read resolves with what arrived, and both backends agree [2.68ms]
+(pass) query > query · a relay URL the policy names twice is targeted once [1.57ms]
+(pass) query > query · a read stops at the stated ceiling [3.10ms]
+(pass) query > query · a dripping wire is bounded by the wall-clock deadline [40.99ms]
+225 | 		for (const { backend, suffix } of backends(script)) {
+226 | 			const policy = recordingPolicy(script.relays)
+227 | 			const seam = createNostrIo({ pool: backend.port, policy: policy.policy })
+228 | 
+229 | 			const outcome = await within(seam.query({ kinds: [1] }), 500)
+230 | 			expect(outcome.settled).toBe(true)
+                                 ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:230:28)
+(fail) query > query · a target set naming one relay in two spellings still settles, and the host's set reaches the pool unrewritten [502.40ms]
+(pass) subscribe > subscribe · live events and a relay refusal reach their channels [4.95ms]
+(pass) subscribe > subscribe · a relay's own NIP-01 refusal prefix reaches the vocabulary on both paths [3.07ms]
+(pass) subscribe > subscribe · closeOnEose ends the stream at the boundary, after the events that preceded it [0.90ms]
+(pass) subscribe > subscribe · unsubscribe twice closes once and throws nothing [0.32ms]
+348 | 			const event: Event = signedEvent({ kind: 1, content: 'published', created_at: 1000 })
+349 | 			const outcome: PublishOutcome = await seam.publish(event)
+350 | 			expect(outcome.id).toBe(event.id)
+351 | 			// one ack per targeted relay, in the policy's own order
+352 | 			expect(outcome.acks.map((ack) => ack.url)).toEqual([RELAY_A, RELAY_B])
+353 | 			expect(outcome.acks.find((ack) => ack.url === RELAY_A)?.accepted).toBe(true)
+                                                                           ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:353:70)
+(fail) publish > publish · one ack per targeted relay, and a silent relay is reported not dropped [5.76ms]
+376 | 
+377 | 			const event: Event = signedEvent({ kind: 1, content: 'published', created_at: 1000 })
+378 | 			const outcome: PublishOutcome = await seam.publish(event)
+379 | 			// the relay answered, and the seam reports it as having answered — under
+380 | 			// the spelling the caller used, not the pool's
+381 | 			expect(outcome.acks).toEqual([{ url: RELAY_A, accepted: true }])
+                              ^
+error: expect(received).toEqual(expected)
+
+  [
+    {
+-     "accepted": true,
++     "accepted": false,
++     "message": "no acknowledgement from this relay",
++     "reason": "rejected",
+      "url": "wss://relay.alpha.invalid",
+    },
+  ]
+
+- Expected  - 1
++ Received  + 3
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:381:25)
+(fail) publish > publish · an ack is matched under the pool's own identity while the caller keeps the host's spelling [4.45ms]
+(fail) count > count · NIP-45's count carries the relay's approximation flag [5000.01ms]
+  ^ this test timed out after 5000ms.
+429 | 			for (const { backend, suffix } of backends(script)) {
+430 | 				const policy = recordingPolicy(script.relays)
+431 | 				const seam = createNostrIo({ pool: backend.port, policy: policy.policy })
+432 | 
+433 | 				const outcome = await within(seam.count({ kinds: [1] }), 500)
+434 | 				expect(outcome.settled).toBe(true)
+                                  ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/nostr-io/ts/conformance.test.ts:434:29)
+(fail) count > count · the wire count settles against a pool whose COUNT stream never completes, and is the sum of the relays' own indices [504.20ms]
+(pass) connect > connect · the relay set is the injected policy's answer [1.41ms]
+(pass) connect > connect · a relay the pool already holds is reported by its own state, and a URL that is not a relay is refused [4.63ms]
+(fail) the multi-backend case > the multi-backend case · the same suite passes over the vendor adapter and over a hand-written pool [5000.01ms]
+  ^ this test timed out after 5000ms.
+
+invariants.test.ts:
+(pass) M5 · the store-free case > M5 · the store-free case: a recording pool that throws is reached only by the wire verbs, and not at all when the seam is asked for nothing [5.58ms]
+(pass) #5ecac1 · the reason vocabulary > #5ecac1 · the reason vocabulary maps a relay's own refusal text, and a refusal is never a bare string [0.19ms]
+(pass) #5ecac1 · every live channel is typed > #5ecac1 · a pool whose own streams error reaches the caller as a typed refusal, on no channel as a bare Error [6.04ms]
+(pass) #5ecac1 · every live channel is typed > #5ecac1 · a policy that cannot answer is a typed refusal on every operation, and never reaches the wire [4.50ms]
+(pass) #06200d · relay policy is injected, never owned > #06200d · the policy is read on every call and its relays are neither added to, preferred nor reordered [4.43ms]
+(pass) #3820a9 · two seams in one process > #3820a9 · two seams share no socket, no subscription and no relay set [0.45ms]
+
+ 18 pass
+ 6 fail
+ 135 expect() calls
+Ran 24 tests across 2 files. [11.38s]

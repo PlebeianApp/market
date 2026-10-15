@@ -1,6 +1,11 @@
-import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
-import { normalizeProductShippingSelections, type ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
+import {
+	buildSellerProductEventData,
+	normalizeProductShippingSelections,
+	validateSellerProductForPublish,
+	type SellerProductListingInput,
+	type SellerProductPublishValidationIssue,
+} from '@sdk/commerce/products'
 import { productKeys } from '@/queries/queryKeyFactory'
 import { markProductAsDeleted } from '@/queries/products'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -8,24 +13,25 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createClientTag } from './nip89'
 
-export interface ProductFormData {
-	name: string
-	summary: string
-	description: string
-	price: string
-	quantity: string
-	currency: string
-	status: 'hidden' | 'on-sale' | 'pre-order'
-	productType: 'single' | 'variable'
-	mainCategory: string
-	selectedCollection: string | null
-	categories: Array<{ key: string; name: string; checked: boolean }>
-	images: Array<{ imageUrl: string; imageOrder: number }>
-	specs: Array<{ key: string; value: string }>
-	shippings: ProductShippingSelectionInput[]
-	weight: { value: string; unit: string } | null
-	dimensions: { value: string; unit: string } | null
-	isNSFW: boolean
+export type ProductFormData = SellerProductListingInput
+
+function productPublishIssueMessage(issue: SellerProductPublishValidationIssue): string {
+	switch (issue) {
+		case 'product-name-required':
+			return 'Product name is required'
+		case 'product-description-required':
+			return 'Product description is required'
+		case 'product-price-invalid':
+			return 'Valid product price is required'
+		case 'product-quantity-invalid':
+			return 'Valid product quantity is required'
+		case 'product-image-required':
+			return 'At least one product image is required'
+		case 'product-main-category-required':
+			return 'Main category is required'
+		case 'product-shipping-required':
+			return 'At least one shipping option is required'
+	}
 }
 
 /**
@@ -40,67 +46,14 @@ export const createProductEvent = (
 	handlerId?: string, // Optional handler ID for client tag
 ): NDKEvent => {
 	const event = new NDKEvent(ndk)
-	event.kind = 30402 // Product listings kind
-	event.content = formData.description
-
 	// Generate a unique ID if not provided (for new products)
 	const id = productId || `product_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
-
-	// Build tags
-	const imagesTags = formData.images.map((img) => ['image', img.imageUrl, '800x600', img.imageOrder.toString()] as NDKTag)
-
-	const categoryTags: NDKTag[] = []
-	categoryTags.push(['t', formData.mainCategory] as NDKTag)
-
-	formData.categories
-		.filter((cat) => cat.checked && cat.name.trim() !== '')
-		.forEach((cat) => {
-			categoryTags.push(['t', cat.name] as NDKTag)
-		})
-
-	const specTags = formData.specs.map((spec) => ['spec', spec.key, spec.value] as NDKTag)
-
-	const normalizedShippings = normalizeProductShippingSelections(formData.shippings)
-
-	const shippingTags = normalizedShippings
-		.filter((ship) => ship.shippingRef)
-		.map((ship) => {
-			return ship.extraCost
-				? (['shipping_option', ship.shippingRef, ship.extraCost] as NDKTag)
-				: (['shipping_option', ship.shippingRef] as NDKTag)
-		})
-
-	const weightTag = formData.weight ? [['weight', formData.weight.value, formData.weight.unit] as NDKTag] : []
-
-	const dimensionsTag = formData.dimensions ? [['dim', formData.dimensions.value, formData.dimensions.unit] as NDKTag] : []
-
-	const collectionTag = formData.selectedCollection ? [['collection', formData.selectedCollection] as NDKTag] : []
-
-	// Add client tag if app pubkey and handler ID are provided (NIP-89)
-	const clientTag = appPubkey && handlerId ? [createClientTag(appPubkey, handlerId)] : []
-
-	// Add content warning tag for NSFW products
-	const contentWarningTag = formData.isNSFW ? [['content-warning', 'nsfw'] as NDKTag] : []
-
-	// Required tags
-	event.tags = [
-		['d', id], // Product identifier - this is the key for updates!
-		['title', formData.name],
-		['price', formData.price, formData.currency],
-		['type', formData.productType === 'single' ? 'simple' : 'variable', 'physical'],
-		['visibility', formData.status],
-		['stock', formData.quantity],
-		...(formData.summary ? [['summary', formData.summary] as NDKTag] : []),
-		...imagesTags,
-		...categoryTags,
-		...specTags,
-		...shippingTags,
-		...weightTag,
-		...dimensionsTag,
-		...collectionTag,
-		...clientTag,
-		...contentWarningTag,
-	]
+	const eventData = buildSellerProductEventData(formData, id, {
+		clientTag: appPubkey && handlerId ? createClientTag(appPubkey, handlerId) : undefined,
+	})
+	event.kind = eventData.kind
+	event.content = eventData.content
+	event.tags = eventData.tags as NDKTag[]
 
 	return event
 }
@@ -109,36 +62,8 @@ export const createProductEvent = (
  * Publishes a new product
  */
 export const publishProduct = async (formData: ProductFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	// Validation
-	if (!formData.name.trim()) {
-		throw new Error('Product name is required')
-	}
-
-	if (!formData.description.trim()) {
-		throw new Error('Product description is required')
-	}
-
-	if (!formData.price.trim() || isNaN(Number(formData.price))) {
-		throw new Error('Valid product price is required')
-	}
-
-	if (!formData.quantity.trim() || isNaN(Number(formData.quantity))) {
-		throw new Error('Valid product quantity is required')
-	}
-
-	if (formData.images.length === 0) {
-		throw new Error('At least one product image is required')
-	}
-
-	if (!formData.mainCategory) {
-		throw new Error('Main category is required')
-	}
-
-	// Validate shipping options
-	const validShippings = normalizeProductShippingSelections(formData.shippings).filter((ship) => ship.shippingRef)
-	if (validShippings.length === 0) {
-		throw new Error('At least one shipping option is required')
-	}
+	const validation = validateSellerProductForPublish(formData)
+	if (!validation.ok) throw new Error(productPublishIssueMessage(validation.issue))
 
 	const event = createProductEvent(formData, signer, ndk)
 
@@ -157,40 +82,11 @@ export const updateProduct = async (
 	signer: NDKSigner,
 	ndk: NDK,
 ): Promise<string> => {
-	// Validation
 	if (!productDTag) {
 		throw new Error('Product d tag is required for updates')
 	}
-
-	if (!formData.name.trim()) {
-		throw new Error('Product name is required')
-	}
-
-	if (!formData.description.trim()) {
-		throw new Error('Product description is required')
-	}
-
-	if (!formData.price.trim() || isNaN(Number(formData.price))) {
-		throw new Error('Valid product price is required')
-	}
-
-	if (!formData.quantity.trim() || isNaN(Number(formData.quantity))) {
-		throw new Error('Valid product quantity is required')
-	}
-
-	if (formData.images.length === 0) {
-		throw new Error('At least one product image is required')
-	}
-
-	if (!formData.mainCategory) {
-		throw new Error('Main category is required')
-	}
-
-	// Validate shipping options
-	const validShippings = normalizeProductShippingSelections(formData.shippings).filter((ship) => ship.shippingRef)
-	if (validShippings.length === 0) {
-		throw new Error('At least one shipping option is required')
-	}
+	const validation = validateSellerProductForPublish(formData)
+	if (!validation.ok) throw new Error(productPublishIssueMessage(validation.issue))
 
 	// Create event with the same d tag to update the existing product
 	const event = createProductEvent(formData, signer, ndk, productDTag)

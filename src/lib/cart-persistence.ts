@@ -1,37 +1,25 @@
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { NormalizedCart } from '@/lib/stores/cart'
+import { isExpectedCartSnapshot } from '@/lib/schemas/cartPersistence'
 import {
-	CART_PERSISTENCE_KIND,
-	CART_PERSISTENCE_VERSION,
-	MAX_PERSISTED_CART_ITEMS,
-	MAX_PERSISTED_CART_ITEM_QUANTITY,
+	createCartIntent,
+	normalizePersistedCart,
+	normalizeShippingForRestore,
 	parseCartPersistenceContent,
-	isExpectedCartSnapshot,
-	isValidCartProductRef,
-	isValidCartShippingRef,
+	type BuyerCartProductInput,
+	type LiveProductRecord,
+	type LiveShippingRecord,
 	type PersistedCartContent,
-	type PersistedCartItem,
-} from '@/lib/schemas/cartPersistence'
+} from '@sdk/commerce/cart/cartIntent'
 
-type LiveProductRecord = {
-	productRef: string
-	sellerPubkey: string
-	productId: string
-	shippingRefs: string[]
-}
+export { normalizePersistedCart, normalizeShippingForRestore }
 
-type LiveShippingRecord = {
-	shippingRef: string
-	sellerPubkey: string
-}
+type ApplicationLiveProductRecord = LiveProductRecord
+type ApplicationLiveShippingRecord = LiveShippingRecord
 
 export interface RehydratedCart {
 	cart: NormalizedCart
 	updatedAt: number
-}
-
-function clampQuantity(quantity: number): number {
-	return Math.min(Math.max(Math.floor(quantity), 1), MAX_PERSISTED_CART_ITEM_QUANTITY)
 }
 
 function compareStrings(a: string, b: string): number {
@@ -40,56 +28,18 @@ function compareStrings(a: string, b: string): number {
 	return 0
 }
 
+/** App-state adapter: converts the UI/store cart shape into an SDK cart intent. */
 export function serializeCartIntent(cart: NormalizedCart): PersistedCartContent {
-	const items = Object.values(cart.products)
-		.map((product) => {
-			if (!product.id || !product.sellerPubkey) return null
-			const productRef = `30402:${product.sellerPubkey}:${product.id}`
-			if (!isValidCartProductRef(productRef)) return null
-			const shippingRef =
-				product.shippingMethodId && isValidCartShippingRef(product.shippingMethodId) ? product.shippingMethodId : undefined
-
-			return {
-				productRef,
-				quantity: clampQuantity(product.amount),
-				...(shippingRef ? { shippingRef } : {}),
-			} satisfies PersistedCartItem
-		})
-		.filter((item): item is PersistedCartItem => item !== null)
-		.sort((a, b) => compareStrings(a.productRef, b.productRef))
-		.slice(0, MAX_PERSISTED_CART_ITEMS)
-
-	return {
-		version: CART_PERSISTENCE_VERSION,
-		updatedAt: Math.floor(Date.now() / 1000),
-		items,
-	}
+	const products: BuyerCartProductInput[] = Object.values(cart.products).map((product) => ({
+		id: product.id,
+		amount: product.amount,
+		shippingMethodId: product.shippingMethodId,
+		sellerPubkey: product.sellerPubkey,
+	}))
+	return createCartIntent(products)
 }
 
-export function normalizePersistedCart(content: PersistedCartContent): PersistedCartContent {
-	const deduped = new Map<string, PersistedCartItem>()
-
-	for (const rawItem of content.items) {
-		if (!isValidCartProductRef(rawItem.productRef)) continue
-
-		deduped.set(rawItem.productRef, {
-			productRef: rawItem.productRef,
-			quantity: clampQuantity(rawItem.quantity),
-			shippingRef: rawItem.shippingRef && isValidCartShippingRef(rawItem.shippingRef) ? rawItem.shippingRef : undefined,
-		})
-	}
-
-	const items = Array.from(deduped.values())
-		.sort((a, b) => compareStrings(a.productRef, b.productRef))
-		.slice(0, MAX_PERSISTED_CART_ITEMS)
-
-	return {
-		version: CART_PERSISTENCE_VERSION,
-		updatedAt: Math.max(1, Math.floor(content.updatedAt)),
-		items,
-	}
-}
-
+/** Nostr event selection is kept in the application adapter, outside the SDK. */
 export function chooseNewerCartSnapshot(events: Array<Pick<NDKEvent, 'kind' | 'tags' | 'content' | 'created_at' | 'id'>>): NDKEvent | null {
 	const validEvents = events.filter((event): event is NDKEvent => {
 		if (!isExpectedCartSnapshot(event)) return false
@@ -107,56 +57,14 @@ export function chooseNewerCartSnapshot(events: Array<Pick<NDKEvent, 'kind' | 't
 	return validEvents[0] ?? null
 }
 
-export function normalizeShippingForRestore(
-	items: PersistedCartItem[],
-	liveProducts: Record<string, LiveProductRecord>,
-	liveShipping: Record<string, LiveShippingRecord>,
-): PersistedCartItem[] {
-	const sellerSelections = new Map<string, string | null>()
-
-	const prelim = items.map((item) => {
-		const product = liveProducts[item.productRef]
-		if (!product) return { ...item, shippingRef: undefined }
-
-		const shippingRef = item.shippingRef
-		if (!shippingRef) return { ...item, shippingRef: undefined }
-
-		const shipping = liveShipping[shippingRef]
-		const validForProduct = product.shippingRefs.includes(shippingRef)
-		const sameSeller = shipping?.sellerPubkey === product.sellerPubkey
-
-		if (!shipping || !validForProduct || !sameSeller) {
-			return { ...item, shippingRef: undefined }
-		}
-
-		const existing = sellerSelections.get(product.sellerPubkey)
-		if (existing === undefined) {
-			sellerSelections.set(product.sellerPubkey, shippingRef)
-		} else if (existing !== shippingRef) {
-			sellerSelections.set(product.sellerPubkey, null)
-		}
-
-		return { ...item, shippingRef }
-	})
-
-	return prelim.map((item) => {
-		const product = liveProducts[item.productRef]
-		if (!product || !item.shippingRef) return item
-		if (sellerSelections.get(product.sellerPubkey) === null) {
-			return { ...item, shippingRef: undefined }
-		}
-		return item
-	})
-}
-
+/** Converts normalized SDK cart intent into the existing app store model. */
 export function rehydrateCartFromLiveData(
 	snapshot: PersistedCartContent,
-	liveProducts: Record<string, LiveProductRecord>,
-	liveShipping: Record<string, LiveShippingRecord>,
+	liveProducts: Record<string, ApplicationLiveProductRecord>,
+	liveShipping: Record<string, ApplicationLiveShippingRecord>,
 ): RehydratedCart {
 	const normalized = normalizePersistedCart(snapshot)
 	const items = normalizeShippingForRestore(normalized.items, liveProducts, liveShipping)
-
 	const cart: NormalizedCart = {
 		sellers: {},
 		products: {},
@@ -170,7 +78,7 @@ export function rehydrateCartFromLiveData(
 
 		cart.products[product.productId] = {
 			id: product.productId,
-			amount: clampQuantity(item.quantity),
+			amount: item.quantity,
 			shippingMethodId: item.shippingRef ?? null,
 			shippingMethodName: null,
 			shippingCost: 0,
@@ -195,18 +103,12 @@ export function rehydrateCartFromLiveData(
 	}
 
 	for (const seller of Object.values(cart.sellers)) {
-		const sellerShippingRefs = seller.productIds
+		const shippingRefs = seller.productIds
 			.map((productId) => cart.products[productId]?.shippingMethodId)
 			.filter((shippingRef): shippingRef is string => !!shippingRef)
-
-		const uniqueShippingRefs = Array.from(new Set(sellerShippingRefs))
-		if (uniqueShippingRefs.length === 1) {
-			seller.shippingMethodId = uniqueShippingRefs[0]
-		}
+		const uniqueShippingRefs = Array.from(new Set(shippingRefs))
+		if (uniqueShippingRefs.length === 1) seller.shippingMethodId = uniqueShippingRefs[0]
 	}
 
-	return {
-		cart,
-		updatedAt: normalized.updatedAt,
-	}
+	return { cart, updatedAt: normalized.updatedAt }
 }

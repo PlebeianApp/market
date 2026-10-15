@@ -1,0 +1,19 @@
+{
+	"name": "@plebeian-apps/composition",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "The composition rung (sdk/core/composition): the one place a composition root may name its siblings. It builds the validator from the host's declared demands, wires validator.accept into event-access's one accept hook (composeEventAccess, relocated verbatim by V0), and — from V2 on — owns the declaration registry and its guard. It declares no third-party dependency of its own: it imports only its siblings, by path, named in ./siblings.ts.",
+	"exports": {
+		".": "./index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {},
+	"devDependencies": {
+		"@types/bun": "^1.2.0",
+		"typescript": "^5.6.0"
+	}
+}

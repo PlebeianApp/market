@@ -6,13 +6,16 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
-import type { RichShippingInfo } from '@/lib/stores/cart'
+import type { ProductShippingOption as RichShippingInfo } from '@sdk/commerce/products'
 import { useNDK } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductShippingForm } from '@/lib/stores/product'
 import { uiStore } from '@/lib/stores/ui'
-import { attachShippingOptionByRef } from '@/lib/utils/productShippingQuickCreate'
-import { resolveProductShippingSelections } from '@/lib/utils/productShippingSelections'
-import { applyFiatPriceEdit, deriveSatsPriceFromFiat } from '@/lib/utils/productPriceResolution'
+import {
+	attachShippingOptionByRef,
+	resolveProductShippingSelections,
+	applyFiatPriceEdit,
+	deriveSatsPriceFromFiat,
+} from '@sdk/commerce/products'
 import { MempoolService } from '@/lib/utils/mempool'
 import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
 import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'

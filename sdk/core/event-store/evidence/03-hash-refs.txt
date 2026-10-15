@@ -1,0 +1,49 @@
+event-store — the spec <-> implementation cross-reference
+# command: python3 event-store/evidence/hash-refs.py > event-store/evidence/03-hash-refs.txt
+# (a) declared set: 20 statement identity/identities begin a line in the module's two specs
+#     plus 41 in the module's ancestors (a code token may cite itself, an ancestor, or core)
+# (b) code set: 17 distinct token(s) across event-store/ts/**/*.ts (node_modules excluded)
+
+(c) resolution — every code token against the declared set
+  resolved    #004d63  <- (module: event-store/event-store.md)  Provenance is contract-visible (M12): every event a read answers with satisfies isFromCache, so a caller can tell a locally answered result from a network-answered one.
+  resolved    #2e71c3  <- (module: event-store/event-store.md)  A filter whose any `#`-key list is present and empty matches nothing and is answered as nothing, never dropped, for every `#`-key and not only the identity keys.
+  resolved    #337e0c  <- (module: event-store/event-store.md)  Two deletions are never conflated (M9): a local removal is temporary and restorable, a kind-5 deletion is durable and author-scoped, and NIP-40 expiry is neither.
+  resolved    #4757d0  <- (module: event-store/event-store.md)  subscribe streams AsyncIterable<Event> with an unsubscribe that is idempotent, and the removal notification the spec requires is not yet typed: the stream emits insertions, and the gap is named rather than invented.
+  resolved    #4f4cc6  <- (module: event-store/event-store.md)  query returns QueryResult {events, complete} and never a bare array, because a bare array cannot carry "the deadline fired" and a caller renders a partial list as the whole answer.
+  resolved    #5dcce6  <- (module: event-store/event-store.md)  The endpoint is **one shape that a relay and this store satisfy alike** ("the store is a local relay"), so what exists between this module and the IO seam is an endpoint a host plugs in and compatibility between them is configuration rather than coupling.
+  resolved    #76a7a3  <- (module: event-store/event-store.md)  Replaceable and addressable events resolve to one head per address, the greater created_at first and ties broken by the lexicographically lower id, with arrival order never deciding (M3).
+  resolved    #8ff9af  <- (module: event-store/event-store.md)  It is the successor to stores/ndk.ts's data half (#75322f): it owns no socket, it takes a resolved relay set at construction, and it knows nothing about wallets, signers or relay policy.
+  resolved    #9b4105  <- (module: event-store/event-store.md)  Identity inputs fail closed (M7): a malformed ids, authors, #e, #p or #P value rejects with reason 'rejected' and is never repaired, while an empty identity list is kept and matches nothing.
+  resolved    #9b7dd3  <- (module: event-store/event-store.md)  The persistence seam's two types are the library's own IEventDatabase and IAsyncEventDatabase, adopted verbatim (E7), and the four-member block the spec prints is those types' write half rather than a second vocabulary.
+  resolved    #9f5778  <- (ancestor: platform-core/platform-core.md)  nostr-io`: every relay read and write, behind one port
+  resolved    #a6d035  <- (module: event-store/event-store.md)  The declared exceptions are E1 rxjs Observable on the implementation's own dollar-suffixed members, E2 raw nostr-tools events, E3 the extended filter with this implementation's declaration, E4 pointer inputs, E5 reason-carrying errors, E6 the count flag and E7 the seam.
+  resolved    #b6c13c  <- (module: event-store/event-store.md)  publish verifies the event and stores it before or independently of any relay attempt, and never depends on a relay accepting (M14): a publication no relay took is still a local write.
+  resolved    #d62f7c  <- (module: event-store/event-store.md)  count counts the store and is never answered by fetching, and it reports approximate: false because an in-memory index is exact (E6); a wire COUNT belongs to a relay host, which this module is not.
+  resolved    #e472d3  <- (module: event-store/event-store.md)  What this module keeps is the **local truth** and the **local read/write endpoint** a caller routes through: an id-unique set of raw events, one head per address, the three kinds of deletion, provenance marking, counting from its own index and the event view, with no relay set, no deadline, no completeness fact and no write-back policy.
+  resolved    #e8d56c  <- (module: event-store/event-store.md)  FILTER_SUPPORT and EvictionPolicy are values a test reads rather than prose: the first is E3's required declaration and the second is M10's, the four policy answers this implementation declares instead of implying.
+  resolved    #f54c68  <- (module: event-store/event-store.md)  The caller-facing operation surface this module held — the five NIP-01 verbs and the `{events, complete}` envelope — has moved to `event-access/event-access.md` on 2026-09-29, and the declaring lines above are amended in this body rather than rewritten because their identities are cited elsewhere in this tree.
+
+(d) uncovered declarations — a top-level export carrying no token
+  UNCOVERED   event-store/ts/filters.ts  toFilterArray
+  UNCOVERED   event-store/ts/harness.ts  KEY
+  UNCOVERED   event-store/ts/harness.ts  PUBKEY
+  UNCOVERED   event-store/ts/harness.ts  OTHER_KEY
+  UNCOVERED   event-store/ts/harness.ts  OTHER_PUBKEY
+  UNCOVERED   event-store/ts/harness.ts  EventFields
+  UNCOVERED   event-store/ts/harness.ts  signedEvent
+  UNCOVERED   event-store/ts/harness.ts  version
+  UNCOVERED   event-store/ts/harness.ts  manualClock
+  UNCOVERED   event-store/ts/harness.ts  take
+  UNCOVERED   event-store/ts/types.ts  ClockPort
+  UNCOVERED   event-store/ts/types.ts  EndpointReadOptions
+  UNCOVERED   event-store/ts/types.ts  EventStoreOptions
+  34 of 47 declaration(s) carry a token
+
+(e) uncovered files — under event-store/, named by neither spec
+  0 file(s) named by no statement
+
+(f) summary
+  code tokens: 17   resolved: 17   unresolved: 0
+  declarations: 47   uncovered: 13
+  files: 0 uncovered
+  RESULT: every code token resolves to a declared statement.

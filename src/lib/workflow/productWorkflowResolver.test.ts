@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { resolveProductWorkflow } from '@/lib/workflow/productWorkflowResolver'
+import { resolveProductWorkflow } from '@sdk/commerce/products/productWorkflow'
 
 describe('resolveProductWorkflow', () => {
 	test('keeps edit sessions independent from create-only setup rules', () => {

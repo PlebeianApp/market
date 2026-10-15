@@ -1,18 +1,17 @@
+/** @deprecated Import NIP-17 order publishing from `@sdk/commerce/messaging`. */
 import type { NDKSigner } from '@nostr-dev-kit/ndk'
-import type { Event } from 'nostr-tools'
-import { createNip17GiftWrapsWithSigner } from '../nostr/nip17'
-import { resolveNip17RelayTargetsFromEvents, type Nip17DmRelayListEvent, type Nip17RelayTargetsResult } from '../nostr/nip17Relays'
-import { assertOrderMessageRumor, type OrderMessageRumor } from './orderMessageRumor'
+import {
+	publishNip17OrderMessage as sdkPublishNip17OrderMessage,
+	type OrderMessageRumor,
+	type PublishNip17GiftWrapParams,
+	type PublishNip17GiftWrapResult,
+} from '@sdk/commerce/messaging'
+import type { Nip17DmRelayListEvent, Nip17RelayTargetsResult } from '@sdk/core'
+import type { NostrRelayPort } from '@sdk/core'
+import { toEncryptingSigner } from '../nostr/ndkEncryptingSigner'
+import { createNostrRelayPort } from '../sdkAdapters'
 
-export type Nip17OrderPublishTarget = 'recipient' | 'sender'
-
-export type PublishNip17GiftWrapParams = {
-	target: Nip17OrderPublishTarget
-	relays: string[]
-	giftWrap: Event
-}
-
-export type PublishNip17GiftWrapResult = unknown
+export type { Nip17OrderPublishTarget, PublishNip17GiftWrapParams, PublishNip17GiftWrapResult } from '@sdk/commerce/messaging'
 
 export type PublishNip17OrderMessageParams = {
 	rumor: OrderMessageRumor
@@ -20,7 +19,8 @@ export type PublishNip17OrderMessageParams = {
 	recipientPubkey: string
 	recipientRelayEvents: Nip17DmRelayListEvent[]
 	senderRelayEvents: Nip17DmRelayListEvent[]
-	publishGiftWrap: (params: PublishNip17GiftWrapParams) => Promise<PublishNip17GiftWrapResult>
+	publishGiftWrap?: (params: PublishNip17GiftWrapParams) => Promise<PublishNip17GiftWrapResult>
+	relayPort?: NostrRelayPort<import('nostr-tools').Event>
 }
 
 export type PublishNip17OrderMessageResult = {
@@ -31,98 +31,13 @@ export type PublishNip17OrderMessageResult = {
 }
 
 export async function publishNip17OrderMessage(params: PublishNip17OrderMessageParams): Promise<PublishNip17OrderMessageResult> {
-	assertOrderMessageRumor(params.rumor)
-
-	const rumorRecipientPubkey = getOrderRumorRecipientPubkey(params.rumor)
-	if (rumorRecipientPubkey !== params.recipientPubkey) {
-		throw new Error('NIP-17 order rumor recipient does not match recipientPubkey')
-	}
-
-	const signerPubkey = await getSignerPubkey(params.signer)
-	if (signerPubkey !== params.rumor.pubkey) {
-		throw new Error('NIP-17 order rumor pubkey does not match signer pubkey')
-	}
-
-	const relayTargets = resolveNip17RelayTargetsFromEvents({
-		recipientPubkey: params.recipientPubkey,
-		senderPubkey: signerPubkey,
-		recipientEvents: params.recipientRelayEvents,
-		senderEvents: params.senderRelayEvents,
-	})
-
-	if (!relayTargets.ready || relayTargets.recipient.status !== 'ready' || relayTargets.sender.status !== 'ready') {
-		throw new Error('NIP-17 relay targets are not ready')
-	}
-
-	const wraps = await createNip17GiftWrapsWithSigner({
+	const common = {
 		rumor: params.rumor,
-		signer: params.signer,
+		signer: toEncryptingSigner(params.signer),
 		recipientPubkey: params.recipientPubkey,
-	})
-
-	await publishReadyGiftWrap({
-		target: 'sender',
-		relays: relayTargets.sender.relays,
-		giftWrap: wraps.sender.giftWrap,
-		publishGiftWrap: params.publishGiftWrap,
-	})
-
-	await publishReadyGiftWrap({
-		target: 'recipient',
-		relays: relayTargets.recipient.relays,
-		giftWrap: wraps.recipient.giftWrap,
-		publishGiftWrap: params.publishGiftWrap,
-	})
-
-	return {
-		rumorId: wraps.rumor.id,
-		recipientGiftWrapId: wraps.recipient.giftWrap.id,
-		senderGiftWrapId: wraps.sender.giftWrap.id,
-		relayTargets,
+		recipientRelayEvents: params.recipientRelayEvents,
+		senderRelayEvents: params.senderRelayEvents,
 	}
-}
-
-async function publishReadyGiftWrap(
-	params: PublishNip17GiftWrapParams & {
-		publishGiftWrap: (params: PublishNip17GiftWrapParams) => Promise<PublishNip17GiftWrapResult>
-	},
-): Promise<void> {
-	const result = await params.publishGiftWrap({
-		target: params.target,
-		relays: params.relays,
-		giftWrap: params.giftWrap,
-	})
-
-	if (publishResultHasRelayDetails(result) && !publishResultHasRelaySuccess(result)) {
-		throw new Error(`NIP-17 ${params.target} gift wrap could not be published`)
-	}
-}
-
-async function getSignerPubkey(signer: NDKSigner): Promise<string> {
-	const user = await signer.user()
-	if (!user?.pubkey) throw new Error('Signer pubkey unavailable')
-	return user.pubkey
-}
-
-function getOrderRumorRecipientPubkey(rumor: OrderMessageRumor): string {
-	const recipientTags = rumor.tags.filter((tag) => tag[0] === 'p')
-
-	if (recipientTags.length !== 1 || typeof recipientTags[0]?.[1] !== 'string' || recipientTags[0][1].length === 0) {
-		throw new Error('NIP-17 order rumor must have exactly one recipient p tag')
-	}
-
-	return recipientTags[0][1]
-}
-
-function publishResultHasRelayDetails(result: unknown): boolean {
-	return result instanceof Set || Array.isArray(result) || (typeof result === 'object' && result !== null && 'size' in result)
-}
-
-function publishResultHasRelaySuccess(result: unknown): boolean {
-	if (result instanceof Set) return result.size > 0
-	if (Array.isArray(result)) return result.length > 0
-	if (typeof result === 'object' && result !== null && 'size' in result && typeof (result as { size?: unknown }).size === 'number') {
-		return (result as { size: number }).size > 0
-	}
-	return true
+	if (params.publishGiftWrap) return sdkPublishNip17OrderMessage({ ...common, publishGiftWrap: params.publishGiftWrap })
+	return sdkPublishNip17OrderMessage({ ...common, relay: params.relayPort ?? createNostrRelayPort() })
 }

@@ -11,16 +11,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
 	isValidDigitalDeliveryContact,
+	findNextActionableInvoiceIndex,
+	isCheckoutInvoiceComplete,
 	resolveCheckoutDeliveryRequirements,
 	type CheckoutDeliveryRequirements,
-} from '@/lib/checkout/deliveryRequirements'
+} from '@sdk/commerce/checkout'
 import { authStore } from '@/lib/stores/auth'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { ndkStore } from '@/lib/stores/ndk'
 import { parseNwcUri, useWallets } from '@/lib/stores/wallet'
 import { persistInvoicesLocally, updatePersistedInvoiceLocally } from '@/lib/utils/invoiceStorage'
 import type { OrderInvoiceSet } from '@/lib/utils/orderUtils'
-import { publishOrderWithDependencies } from '@/publish/orders'
+import { publishOrderWorkflowWithDependencies } from '@/publish/orders'
+import type { SellerOrderPublishOutcome } from '@sdk/commerce/orders'
 import { publishPaymentReceipt } from '@/publish/payment'
 import { getShippingEvent, getShippingService } from '@/queries/shipping'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
@@ -63,6 +66,7 @@ function RouteComponent() {
 	const [deliveryRequirements, setDeliveryRequirements] = useState<CheckoutDeliveryRequirements>(EMPTY_DELIVERY_REQUIREMENTS)
 	const [isDeliveryRequirementsLoading, setIsDeliveryRequirementsLoading] = useState(false)
 	const [deliveryRequirementsError, setDeliveryRequirementsError] = useState<string | null>(null)
+	const [partialOrderOutcome, setPartialOrderOutcome] = useState<Extract<SellerOrderPublishOutcome, { status: 'partial' }> | null>(null)
 
 	// Ref to control PaymentContent
 	const paymentContentRef = useRef<PaymentContentRef>(null)
@@ -75,6 +79,7 @@ function RouteComponent() {
 		setShippingData(null)
 		setOrderInvoiceSets({})
 		setSpecOrderIds([])
+		setPartialOrderOutcome(null)
 	}, [Object.keys(cart.products).join(',')]) // Reset when cart products change
 
 	// Initialize wallets on mount
@@ -266,9 +271,7 @@ function RouteComponent() {
 		return 2 + invoiceStepCount + 1
 	}, [invoiceStepCount])
 
-	const isInvoiceCompleteForFlow = (invoice: PaymentInvoiceData) => {
-		return invoice.status === 'paid' || invoice.status === 'skipped' || invoice.status === 'expired'
-	}
+	const isInvoiceCompleteForFlow = isCheckoutInvoiceComplete
 
 	// Ensure currentInvoiceIndex stays within bounds
 	const safeInvoiceIndex = useMemo(() => {
@@ -525,21 +528,7 @@ function RouteComponent() {
 		},
 	})
 
-	const findNextPendingInvoiceIndex = (list: PaymentInvoiceData[], fromIndex: number) => {
-		for (let i = fromIndex + 1; i < list.length; i++) {
-			if (list[i].status === 'pending' || list[i].status === 'failed') {
-				return i
-			}
-		}
-
-		for (let i = 0; i <= fromIndex; i++) {
-			if (list[i].status === 'pending' || list[i].status === 'failed') {
-				return i
-			}
-		}
-
-		return -1
-	}
+	const findNextPendingInvoiceIndex = findNextActionableInvoiceIndex
 
 	const updateInvoiceStatus = (invoiceId: string, changes: Partial<PaymentInvoiceData>, options?: { skipAutoAdvance?: boolean }) => {
 		let nextPendingIndex: number | null = null
@@ -795,6 +784,7 @@ function RouteComponent() {
 
 	const canContinueToPayment =
 		!!shippingData &&
+		!partialOrderOutcome &&
 		deliveryRequirements.isResolved &&
 		!isDeliveryRequirementsLoading &&
 		!deliveryRequirementsError &&
@@ -804,15 +794,30 @@ function RouteComponent() {
 		if (shippingData && sellers.length > 0 && specOrderIds.length === 0) {
 			setIsCreatingOrder(true)
 			try {
-				const createdOrderIds = await publishOrderWithDependencies({
+				const orderOutcome = await publishOrderWorkflowWithDependencies({
 					shippingData,
 					sellers,
 					productsBySeller,
 					sellerData,
 					v4vShares,
 				})
-				setSpecOrderIds(createdOrderIds)
-				console.log('\n🎉 Order creation process complete. Generated Order IDs:', createdOrderIds)
+				if (orderOutcome.status === 'partial') {
+					setPartialOrderOutcome(orderOutcome)
+					toast.error(
+						`Order creation partially succeeded: ${orderOutcome.orderIds.length} seller order(s) were published. Do not retry this checkout.`,
+					)
+					setIsCreatingOrder(false)
+					return
+				}
+				if (orderOutcome.status === 'failed') throw new Error(orderOutcome.error)
+
+				setSpecOrderIds(orderOutcome.orderIds)
+				if (orderOutcome.paymentRequestFailures > 0) {
+					toast.warning(
+						`${orderOutcome.paymentRequestFailures} payment request(s) could not be published; orders were created and payment can be retried later.`,
+					)
+				}
+				console.log('\n🎉 Order creation process complete. Generated Order IDs:', orderOutcome.orderIds)
 			} catch (error) {
 				console.error('Failed to create spec-compliant orders:', error)
 				toast.error(`Order creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -1003,6 +1008,15 @@ function RouteComponent() {
 								{currentStep === 'summary' && (
 									<div className="h-full flex flex-col">
 										<div className="flex-1 overflow-y-auto">
+											{partialOrderOutcome && (
+												<div role="alert" className="mb-4 rounded-md border border-amber-500 bg-amber-50 p-4 text-sm text-amber-950">
+													<p className="font-semibold">Some seller orders were published, but checkout did not finish.</p>
+													<p>Do not retry this checkout. Published order IDs: {partialOrderOutcome.orderIds.join(', ') || 'none'}.</p>
+													<p>
+														Failure phase: {partialOrderOutcome.failedPhase}. {partialOrderOutcome.error}
+													</p>
+												</div>
+											)}
 											<OrderFinalizeComponent
 												shippingData={shippingData}
 												invoices={[]} // No invoices yet in summary step

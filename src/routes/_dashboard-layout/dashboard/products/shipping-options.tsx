@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { COUNTRIES_ISO, CURRENCIES, SHIPPING_TEMPLATES } from '@/lib/constants'
+import { validateShippingForm } from '@sdk/commerce/shipping'
 import { uiStore } from '@/lib/stores/ui'
 import { useNDK } from '@/lib/stores/ndk'
 import {
@@ -176,40 +177,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	}, [])
 
 	const validateForm = (): boolean => {
-		const errors: Record<string, string> = {}
-
-		if (!formData.title.trim()) {
-			errors.title = 'Title is required'
-		}
-		if (!formData.description.trim()) {
-			errors.description = 'Description is required'
-		}
-
-		// Price is not required for digital delivery (always free)
-		if (formData.service !== 'digital') {
-			if (!formData.price.trim()) {
-				errors.price = 'Price is required'
-			} else if (isNaN(Number(formData.price))) {
-				errors.price = 'Price must be a valid number'
-			}
-			if (!formData.currency.trim()) {
-				errors.currency = 'Currency is required'
-			}
-		}
-
-		// Countries are only required for non-pickup, non-digital, and non-worldwide services
-		if (formData.service !== 'pickup' && formData.service !== 'digital' && !isWorldwide && !formData.countries.length) {
-			errors.countries = 'At least one country is required'
-		}
-
-		if (formData.service === 'pickup') {
-			if (!formData.pickupAddress?.street?.trim()) {
-				errors.pickupStreet = 'Street address is required for local pickup'
-			}
-			if (!formData.pickupAddress?.city?.trim()) {
-				errors.pickupCity = 'City is required for local pickup'
-			}
-		}
+		const errors = validateShippingForm(formData, { isWorldwide })
 
 		setFieldErrors(errors)
 		return Object.keys(errors).length === 0

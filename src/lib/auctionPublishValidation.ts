@@ -2,7 +2,7 @@ import {
 	normalizeProductShippingSelection,
 	type ProductShippingSelection,
 	type ProductShippingSelectionInput,
-} from './utils/productShippingSelections'
+} from '@sdk/commerce/products'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from './auction/constants'
 
 export const AUCTION_MIN_DURATION_SECONDS = 60
