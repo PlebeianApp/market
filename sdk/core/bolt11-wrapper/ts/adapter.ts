@@ -5,7 +5,9 @@
  * three verbs, `#d16b28`) and the aggregator's two-member seam — the wrapper's registration (`#87e7a5`)
  * and a **leg-id-keyed** reconcile. It lives in the rail's own module by decision (the adapter layer is
  * per-rail and co-located); it satisfies both shapes **structurally** and imports neither the wallet nor
- * any rail: the wallet's declaration names no rail, so a rail must equally name no wallet (`#d91675`).
+ * any rail: the wallet's declaration names no rail, so a rail must equally name no wallet. (The wallet's
+ * statement to that effect is not cited here — it is not an ancestor of this module, so citing its token
+ * would be a claim this rail is not entitled to make.)
  *
  * THE SEAM THIS ADAPTER REPAIRS. The contract's `reconcile(reference)` means the rail's reference: the
  * bolt11 wrapper **decodes** its argument to a payment hash and looks the leg up under it. The aggregator's

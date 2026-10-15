@@ -29,6 +29,11 @@ needs a rung of its own. That rung is this one.
    engine's `validate` is the one predicate, and a second kind check has no separate rule.)
 3. From **V2**, the declaration registry and its guard (ownership · contribution · interpretability) —
    the contribution path by which a `sdk/commerce` module declares the validation its kinds demand.
+4. From **I2**, the **money composition path** — `composeMoney` (`ts/money.ts`): it constructs the
+   `bolt11-wrapper` rail's adapter and registers it with the `wallet` module's `PayAggregator`, so
+   `PayAggregator.reconcile` reaches the rail through the one seam it takes per rail. Nothing is
+   hand-wired: the registration is `PayAggregator.register`, so the rail's declaration is validated by the
+   real acceptance gate before the adapter becomes a port, and a malformed declaration throws at boot.
 
 ## Its independence rule, and why it is not "no sibling specifier"
 
@@ -53,9 +58,33 @@ error of the rung's own. Every other strict flag is kept.
 | --- | --- |
 | `../../validation/ts/index` | the engine (`createValidator`, and the types the root wires) |
 | `../../event-access/ts/index` | the one accept boundary (`createEventAccess`, `DEFAULT_WRITE_BACK`) |
-| `../../event-access/ts/harness` | the sibling's own host-side fakes, used by the moved R1–R4 suite |
+| `../../event-access/ts/harness` | **test-only** — the sibling's own host-side fakes, used by the moved R1–R4 suite; governed by `siblings.test.ts`'s directory-wide arm, **not** on the frozen declared list |
+| `../../bolt11-wrapper/ts/index` | the first rail — the adapter `composeMoney` constructs and registers |
+| `../../wallet/ts/index` | the set aggregator the adapter is registered with (`PayAggregator`) |
 | `../../errors` | the SDK's shared error module — `ValidationError` for the absorbed `validateWithSchema` |
 | `../../result` | the SDK's `Result` — the shape `validateWithSchema` (and, from V2, the guard) returns |
+
+The last two are the **money** siblings I2 adds (`ts/money.ts`); they are not dependencies of the
+validation path, which still composes only `validation` and `event-access`.
+
+## The money path (I2)
+
+`ts/money.ts` is the **money composition path**: `composeMoney` takes the rail's own injected inputs (its
+leg store, its invoice codec, its signer, the LNURL ports) plus the aggregator's set store, witness check
+and contract version, constructs the `Bolt11Adapter`, constructs the `PayAggregator`, and calls
+**`PayAggregator.register(adapter)`** — the aggregator's acceptance gate validates the rail's declaration,
+and the adapter becomes the port `reconcile` asks for a leg's handle. The clock is taken **once** by the
+root and injected into both the rail's leg record and the aggregator's set window, so the two deadlines
+cannot disagree.
+
+`ts/money.test.ts` is the increment's second criterion — one **offline** end-to-end set run over bolt11:
+`pay()` then `reconcile()` against the real rail with the rail's own fakes, the leg id resolved through the
+rail's leg store to the stored invoice, the rail settling on its validated preimage and the set deriving
+`complete`; a rail-produced **declared** witness reaching only `attested` and never completing the set; and
+a leg id the rail's store does not carry failing closed rather than settling anything.
+
+**The app still constructs nothing.** `composeMoney` is the composition root's money path; wiring it from
+`src/` is out of this rung's scope, by design (the increments' `src/` rule).
 
 ## The contribution path (V2)
 

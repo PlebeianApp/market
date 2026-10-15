@@ -23,10 +23,19 @@
  * `sdk/commerce` declaration V3's end-to-end case drives) are deliberately NOT on this list: the list is
  * what the rung's implementation composes, and a test's fixtures are not part of that. They are still
  * governed — by the directory-wide arm of `siblings.test.ts`.
+ *
+ * The two **money** siblings are the registration the rung gained: `./money.ts` constructs the bolt11
+ * rail's adapter and registers it with the set aggregator, so the rung now composes the rail
+ * (`../../bolt11-wrapper/ts/index`) and the aggregator it registers into (`../../wallet/ts/index`).
+ * Neither is a new dependency of the rung's *validation* path — `./compose.ts` still composes only
+ * `validation` and `event-access` — and the rung's rule is unchanged: name every sibling, import no app
+ * and no framework.
  */
 export const COMPOSITION_SIBLINGS: readonly string[] = Object.freeze([
 	'../../validation/ts/index',
 	'../../event-access/ts/index',
+	'../../bolt11-wrapper/ts/index',
+	'../../wallet/ts/index',
 	'../../errors',
 	'../../result',
 ])

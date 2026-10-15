@@ -14,6 +14,10 @@
  *    path by which a `sdk/commerce` module declares the validation its kinds demand, and the report.
  * 4. the **collection path** `composeCommerce` (`./compose`) — the one place the snapshot is built and R1
  *    (zero declarations ⇒ the socket stays absent) is preserved.
+ * 5. the **money composition path** `composeMoney` (`./money`) — the registration increment: it constructs
+ *    the bolt11 rail's adapter and registers it with the set aggregator, so `PayAggregator.reconcile`
+ *    reaches the rail through the one seam it takes per rail. This is why the rung now names the rail and
+ *    the aggregator as siblings (`./siblings.ts`).
  *
  * The rung's independence rule is *not* "no sibling specifier" (it composes siblings: see `./siblings.ts`);
  * it is **"no app import and no framework"**, the `sdk/boundary.test.ts` rule, with every sibling named on
@@ -45,6 +49,8 @@ export type {
 } from './declaration'
 export { composeCommerce } from './compose'
 export type { ComposedCommerce, ComposeCommerceOptions } from './compose'
+export { composeMoney } from './money'
+export type { Bolt11CompositionInputs, ComposedMoney, ComposeMoneyOptions } from './money'
 export { admissionNotice, inspectAdmission, judgeAdmission, QUARANTINE_MESSAGE } from './notice'
 export type { AdmittedNotice, AdmissionNotice, QuarantineNotice, RefusalNotice } from './notice'
 export { COMPOSITION_SIBLINGS } from './siblings'
