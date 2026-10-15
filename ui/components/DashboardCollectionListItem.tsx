@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { UiImage } from '../provider/UiProvider'
 import {
 	getCollectionImages,
 	getCollectionProductReferences,
@@ -32,9 +33,7 @@ export function DashboardCollectionDetails({
 			<div className="space-y-3">
 				{headerImage && (
 					<div className="h-32 w-full overflow-hidden rounded-md bg-gray-200">
-						{renderImage?.(headerImage) ?? (
-							<img src={headerImage} alt="Collection header" loading="lazy" className="h-full w-full object-cover" />
-						)}
+						{renderImage?.(headerImage) ?? <UiImage src={headerImage} alt="Collection header" className="h-full w-full object-cover" />}
 					</div>
 				)}
 				{summary && (

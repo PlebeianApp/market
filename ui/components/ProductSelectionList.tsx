@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { UiImage } from '../provider/UiProvider'
 import { cn } from '../utils/cn'
 
 export interface ProductSelectionItem {
@@ -63,7 +64,7 @@ export function ProductSelectionList({
 							<label htmlFor={checkboxId} className="flex min-w-0 flex-1 cursor-pointer items-center space-x-3">
 								{product.imageUrl &&
 									(renderImage?.(product.imageUrl, product.title) ?? (
-										<img src={product.imageUrl} alt={product.title} className="size-10 rounded object-cover" />
+										<UiImage src={product.imageUrl} alt={product.title} className="size-10 rounded object-cover" />
 									))}
 								<span className="min-w-0 flex-1 truncate text-sm font-medium">{product.title}</span>
 							</label>

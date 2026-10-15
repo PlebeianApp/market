@@ -6,6 +6,7 @@ import {
 	getCollectionTitle,
 	type CollectionReadEvent,
 } from '@sdk/commerce/collections'
+import { UiImage } from '../provider/UiProvider'
 import { cn } from '../utils/cn'
 
 export interface CollectionCardViewProps extends Omit<ComponentProps<'div'>, 'children'> {
@@ -26,7 +27,7 @@ export function CollectionCardView({ collection, renderLink, renderImage, render
 		<div className={cn('flex flex-col rounded-lg border border-zinc-800 bg-white shadow-sm', className)} {...props}>
 			{renderLink(
 				imageUrl ? (
-					(renderImage?.(imageUrl, title) ?? <img src={imageUrl} alt={title} loading="lazy" className="h-full w-full object-cover" />)
+					(renderImage?.(imageUrl, title) ?? <UiImage src={imageUrl} alt={title} className="h-full w-full object-cover" />)
 				) : (
 					<div className="flex h-full w-full items-center justify-center rounded-lg bg-gray-100 text-gray-400">No image</div>
 				),

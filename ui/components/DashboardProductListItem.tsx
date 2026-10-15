@@ -9,6 +9,7 @@ import {
 	type ProductReadEvent,
 } from '@sdk/commerce/discovery'
 import { Eye, EyeOff, Clock, Package } from 'lucide-react'
+import { UiImage } from '../provider/UiProvider'
 
 export function DashboardProductTrigger({ product, renderImage }: { product: ProductReadEvent; renderImage?: (url: string) => ReactNode }) {
 	const title = getProductTitle(product)
@@ -26,7 +27,7 @@ export function DashboardProductTrigger({ product, renderImage }: { product: Pro
 	return (
 		<div className="flex min-w-0 items-center gap-2 overflow-hidden">
 			{imageUrl ? (
-				(renderImage?.(imageUrl) ?? <img src={imageUrl} alt="" loading="lazy" className="size-10 shrink-0 rounded object-cover" />)
+				(renderImage?.(imageUrl) ?? <UiImage src={imageUrl} alt="" className="size-10 shrink-0 rounded object-cover" />)
 			) : (
 				<div className="flex size-10 shrink-0 items-center justify-center rounded bg-gray-100">
 					<Package className="size-5 text-gray-400" aria-hidden="true" />
@@ -59,7 +60,7 @@ export function DashboardProductDetails({
 		<div className="space-y-3">
 			{imageUrl && (
 				<div className="h-32 w-full overflow-hidden rounded-md bg-gray-200">
-					{renderImage?.(imageUrl, title) ?? <img src={imageUrl} alt={title} loading="lazy" className="h-full w-full object-cover" />}
+					{renderImage?.(imageUrl, title) ?? <UiImage src={imageUrl} alt={title} className="h-full w-full object-cover" />}
 				</div>
 			)}
 			<div>

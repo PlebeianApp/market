@@ -1,6 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { getProductDescription, getProductId, getProductImages, getProductTitle, type ProductReadEvent } from '@sdk/commerce/discovery'
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
+import { UiImage } from '../provider/UiProvider'
 import { cn } from '../utils/cn'
 
 export interface ProductDisplayViewProps extends Omit<ComponentProps<'div'>, 'children'> {
@@ -48,7 +49,7 @@ export function ProductDisplayView({
 		>
 			<div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
 				{imageUrl ? (
-					(renderImage?.(imageUrl, imageAlt) ?? <img src={imageUrl} alt={imageAlt} loading="lazy" className="h-full w-full object-cover" />)
+					(renderImage?.(imageUrl, imageAlt) ?? <UiImage src={imageUrl} alt={imageAlt} className="h-full w-full object-cover" />)
 				) : (
 					<div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">No image</div>
 				)}

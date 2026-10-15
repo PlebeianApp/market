@@ -7,6 +7,7 @@ import {
 	type CollectionReadEvent,
 } from '@sdk/commerce/collections'
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
+import { UiImage } from '../provider/UiProvider'
 import { cn } from '../utils/cn'
 
 export interface CollectionDisplayViewProps extends Omit<ComponentProps<'div'>, 'children'> {
@@ -54,7 +55,7 @@ export function CollectionDisplayView({
 		>
 			<div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
 				{imageUrl ? (
-					(renderImage?.(imageUrl, imageAlt) ?? <img src={imageUrl} alt={imageAlt} loading="lazy" className="h-full w-full object-cover" />)
+					(renderImage?.(imageUrl, imageAlt) ?? <UiImage src={imageUrl} alt={imageAlt} className="h-full w-full object-cover" />)
 				) : (
 					<div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">No image</div>
 				)}

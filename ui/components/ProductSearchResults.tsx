@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { getProductId, getProductImages, getProductPubkey, getProductTitle, type ProductReadEvent } from '@sdk/commerce/discovery'
+import { UiImage } from '../provider/UiProvider'
 import { cn } from '../utils/cn'
 
 export type ProductSearchResultEvent = ProductReadEvent & { id: string }
@@ -50,9 +51,7 @@ export function ProductSearchResults<TProduct extends ProductSearchResultEvent =
 									className="flex w-full items-center gap-3 rounded p-2 text-left hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 								>
 									{imageUrl ? (
-										(renderImage?.(imageUrl, title) ?? (
-											<img src={imageUrl} alt="" loading="lazy" className="size-8 shrink-0 rounded object-cover" />
-										))
+										(renderImage?.(imageUrl, title) ?? <UiImage src={imageUrl} alt="" className="size-8 shrink-0 rounded object-cover" />)
 									) : (
 										<span aria-hidden="true" className="size-8 shrink-0 rounded bg-white/10" />
 									)}

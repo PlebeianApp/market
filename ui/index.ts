@@ -20,4 +20,6 @@ export { DashboardCollectionTrigger, DashboardCollectionDetails } from './compon
 export { DashboardOverviewStats } from './components/DashboardOverviewStats'
 export type { DashboardOverviewOrder, DashboardOverviewStatsProps } from './components/DashboardOverviewStats'
 export { OrderAmountText, OrderDateText, OrderReferenceBadge } from './components/OrderListCells'
+export { UI_THEME_TOKENS, UiImage, UiProvider, themeToStyle, useUiComponents } from './provider/UiProvider'
+export type { UiComponents, UiImageProps, UiProviderProps, UiTheme, UiThemeToken } from './provider/UiProvider'
 export { cn } from './utils/cn'

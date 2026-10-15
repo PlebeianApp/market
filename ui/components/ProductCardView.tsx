@@ -9,6 +9,7 @@ import {
 	isProductInStock,
 	type ProductReadEvent,
 } from '@sdk/commerce/discovery'
+import { UiImage } from '../provider/UiProvider'
 import { cn } from '../utils/cn'
 
 export type ProductCardViewEvent = ProductReadEvent & { id: string }
@@ -65,10 +66,9 @@ export function ProductCardView({
 			<div className="relative block aspect-square overflow-hidden border-b border-zinc-800">
 				{imageUrl ? (
 					(renderImage?.(imageUrl, title) ?? (
-						<img
+						<UiImage
 							src={imageUrl}
 							alt={title}
-							loading="lazy"
 							className="h-full w-full rounded-t-[calc(var(--radius)-1px)] object-cover transition-transform duration-200 hover:scale-105"
 						/>
 					))
