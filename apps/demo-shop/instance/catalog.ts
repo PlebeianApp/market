@@ -7,6 +7,16 @@
  * module build the event data: `buildSellerProductEventData` from
  * `sdk/commerce/products/productListingWorkflow.ts`.
  *
+ * **Why the prices here are denominated in `BTC`.** Every event below is run
+ * through the repository's kind-30402 parser (`instance/productAdmission.ts`)
+ * before it can become a row, and that parser requires the `price` tag's
+ * currency to match `/^[A-Z]{3}$/`. The SDK's own price resolution emits `SATS`
+ * (`products/productPriceResolution.ts` returns `currency: 'SATS'`), which the
+ * parser rejects — so a `SATS`-denominated listing cannot be rendered by this
+ * instance at all. That disagreement is a verified defect, pinned by
+ * `instance/parserAgreement.test.ts`; this catalog chooses an admitted currency
+ * rather than weakening the parser or special-casing it away.
+ *
  * The two fields the SDK deliberately does not invent are supplied by the host,
  * because issuing them is a host responsibility: the seller `pubkey` and
  * `created_at`. So the data below is real commerce data that round-trips
@@ -49,9 +59,9 @@ export const DEMO_LISTINGS: readonly DemoListing[] = [
 			name: 'Merino Wool Coat',
 			summary: 'Hand-finished, unlined, made to last a decade',
 			description: 'A heavy merino coat cut for cold mornings. Made by a single atelier.',
-			price: '185000',
+			price: '0.00185',
 			quantity: '3',
-			currency: 'SATS',
+			currency: 'BTC',
 			status: 'on-sale',
 			productType: 'single',
 			mainCategory: 'clothing',
@@ -75,9 +85,9 @@ export const DEMO_LISTINGS: readonly DemoListing[] = [
 			name: 'Cast Iron Skillet',
 			summary: 'Pre-seasoned, 12 inch',
 			description: 'A skillet that will outlive its buyer.',
-			price: '45000',
+			price: '0.00045',
 			quantity: '12',
-			currency: 'SATS',
+			currency: 'BTC',
 			status: 'on-sale',
 			productType: 'single',
 			mainCategory: 'home',
@@ -98,9 +108,9 @@ export const DEMO_LISTINGS: readonly DemoListing[] = [
 			name: 'Linen Shirt',
 			summary: 'Breathable summer cut',
 			description: 'Washed linen, buttons in corozo.',
-			price: '62000',
+			price: '0.00062',
 			quantity: '0',
-			currency: 'SATS',
+			currency: 'BTC',
 			status: 'on-sale',
 			productType: 'single',
 			mainCategory: 'clothing',
@@ -121,9 +131,9 @@ export const DEMO_LISTINGS: readonly DemoListing[] = [
 			name: 'Ceramic Mug',
 			summary: 'Wheel-thrown, glazed in ash',
 			description: 'One mug, 300ml, thrown on a kick wheel.',
-			price: '18000',
+			price: '0.00018',
 			quantity: '25',
-			currency: 'SATS',
+			currency: 'BTC',
 			status: 'pre-order',
 			productType: 'single',
 			mainCategory: 'home',
@@ -144,9 +154,9 @@ export const DEMO_LISTINGS: readonly DemoListing[] = [
 			name: 'Field Notebook',
 			summary: 'Dot grid, 96 pages',
 			description: 'Thread-bound, lies flat, takes ink.',
-			price: '9000',
+			price: '0.00009',
 			quantity: '40',
-			currency: 'SATS',
+			currency: 'BTC',
 			status: 'on-sale',
 			productType: 'single',
 			mainCategory: 'stationery',
@@ -167,9 +177,9 @@ export const DEMO_LISTINGS: readonly DemoListing[] = [
 			name: 'Hidden Draft',
 			summary: 'Not for sale yet',
 			description: 'A listing that is not on sale.',
-			price: '1000',
+			price: '0.00001',
 			quantity: '5',
-			currency: 'SATS',
+			currency: 'BTC',
 			status: 'hidden',
 			productType: 'single',
 			mainCategory: 'misc',

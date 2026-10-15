@@ -65,14 +65,30 @@ export function latestRevisionPerAddress(events: readonly ProductReadEvent[]): P
 /**
  * An offline source over an already-known set of events.
  *
+ * Admission still applies: the same parser that guards the relay edge guards the
+ * instance's own catalog, so there is exactly one definition of "a row" in this
+ * app and no path that can render something the repository would reject (see
+ * `instance/parserAgreement.test.ts` for what that costs today).
+ *
  * The returned items are shallow copies, so a caller that mutates what it was
  * handed cannot corrupt the next read of the same source.
  */
-export function createFixtureProductSource(events: readonly ProductReadEvent[]): ProductSource {
+export function createFixtureProductSource(
+	events: readonly ProductReadEvent[],
+	options: { admit?: ((event: unknown) => ProductReadEvent | null) | null } = {},
+): ProductSource {
+	const admit = options.admit === undefined ? admitProductListing : options.admit
+
 	return {
 		kind: 'fixture',
 		async listProducts() {
-			return latestRevisionPerAddress(events.map((event) => ({ ...event, tags: event.tags.map((tag) => [...tag]) })))
+			const admitted: ProductReadEvent[] = []
+			for (const event of events) {
+				const copy = { ...event, tags: event.tags.map((tag) => [...tag]) }
+				const item = admit ? admit(copy) : copy
+				if (item) admitted.push(item)
+			}
+			return latestRevisionPerAddress(admitted)
 		},
 	}
 }

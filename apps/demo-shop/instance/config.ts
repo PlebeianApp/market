@@ -39,7 +39,7 @@ export function resolveInstanceConfig(env: Record<string, string | undefined> = 
 	return {
 		instanceId: env.DEMO_SHOP_INSTANCE_ID?.trim() || 'demo-shop',
 		displayName: env.DEMO_SHOP_NAME?.trim() || 'Demo Shop',
-		displayCurrency: env.DEMO_SHOP_CURRENCY?.trim() || 'SATS',
+		displayCurrency: env.DEMO_SHOP_CURRENCY?.trim() || 'BTC',
 		relayUrls,
 	}
 }
