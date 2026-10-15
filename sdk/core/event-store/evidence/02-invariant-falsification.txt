@@ -1,0 +1,3981 @@
+event-store module — invariant falsification
+# command:   python3 event-store/evidence/falsify.py > event-store/evidence/02-invariant-falsification.txt
+# generated: 2026-09-30T13:59:38Z
+# bun:       1.4.2
+# cases in the suite: 37 across 4 files
+#
+# For each named invariant: one mutation is applied, the named case is run, the file is
+# restored byte-for-byte (sha256 verified) and the case is run again. A mutation whose
+# case does NOT fail is reported FALSIFICATION FAILED. Run serialized: for the length of
+# one mutation the tree is deliberately broken.
+
+==============================================================================
+mutation 1 — M3
+breaks:   the tie-break flips, so the lexicographically HIGHER id wins an equal created_at
+file:     event-store/ts/heads.ts
+sha256:   26148d91b5f1174d70b7afd43932dc67e648a89594a97ac9b82c6d316a1179b3 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · M3 · one head per address, ties broken by the lexicographically lower id
+$ the mutation applied (old -> new):
+-     return a.id < b.id ? -1 : 1
++     return a.id > b.id ? -1 : 1
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t M3\ ·\ one\ head\ per\ address,\ ties\ broken\ by\ the\ lexicographically\ lower\ id
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+53 | 		const higher = a.id < b.id ? b : a
+54 | 
+55 | 		// the later arrival is the higher id, so an implementation that keeps what arrived last fails
+56 | 		await store.write([lower])
+57 | 		await store.write([higher])
+58 | 		expect((await store.read({ kinds: [ADDRESSABLE] })).map((candidate) => candidate.id)).toEqual([lower.id])
+                                                                                             ^
+error: expect(received).toEqual(expected)
+
+  [
+-   "673947fb1965089d618e4e17dbfd2c782c66eb9a05be7aacb0c2a3cc33f8989d",
++   "9df13a3f2ed806781c5b558ad42dbc0089f674241ed9f552298beae6f804843c",
+  ]
+
+- Expected  - 1
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-store/ts/invariants.test.ts:58:89)
+(fail) M3 > M3 · one head per address, ties broken by the lexicographically lower id [31.24ms]
+
+ 0 pass
+ 15 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [262.00ms]
+exit: 1
+
+$ sha256 after restore: 26148d91b5f1174d70b7afd43932dc67e648a89594a97ac9b82c6d316a1179b3 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) M3 > M3 · one head per address, ties broken by the lexicographically lower id [32.47ms]
+
+ 1 pass
+ 15 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [245.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 2 — M3
+breaks:   the collapse keeps the first arrival instead of the winner, so the input order decides
+file:     event-store/ts/heads.ts
+sha256:   26148d91b5f1174d70b7afd43932dc67e648a89594a97ac9b82c6d316a1179b3 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · M3 · the collapse does not depend on the input order
+$ the mutation applied (old -> new):
+-         if (!existing || compareVersions(event, existing) < 0) groups.set(uid, event)
++         if (!existing) groups.set(uid, event)
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t M3\ ·\ the\ collapse\ does\ not\ depend\ on\ the\ input\ order
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+68 | 		const b = version({ kind: 30000, d: 'x', created_at: 5000, content: 'b' })
+69 | 
+70 | 		const forward = collapseToHeads([a, b])
+71 | 		const backward = collapseToHeads([b, a])
+72 | 		expect(forward).toHaveLength(1)
+73 | 		expect(forward.map((candidate) => candidate.id)).toEqual(backward.map((candidate) => candidate.id))
+                                                        ^
+error: expect(received).toEqual(expected)
+
+  [
+-   "17233b7b6b51f125bad3f8a5f6d385d362e0c4b40cf75fa805e5f7e6fed8a214",
++   "91225e1f4d86f2ff713cf4f466e032a66305e863ddd70a40bb2457a0a13e16e1",
+  ]
+
+- Expected  - 1
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-store/ts/invariants.test.ts:73:52)
+(fail) M3 > M3 · the collapse does not depend on the input order [19.37ms]
+
+ 0 pass
+ 15 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [233.00ms]
+exit: 1
+
+$ sha256 after restore: 26148d91b5f1174d70b7afd43932dc67e648a89594a97ac9b82c6d316a1179b3 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) M3 > M3 · the collapse does not depend on the input order [17.14ms]
+
+ 1 pass
+ 15 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [212.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 3 — M7
+breaks:   the malformed-identity rejection returns instead of throwing, so a bad filter is accepted
+file:     event-store/ts/filters.ts
+sha256:   016854511d7f80c3384f50469bce9d78519fe647db5054543aa01835341bdc33 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · M7 · a malformed identity value rejects with reason 'rejected'
+$ the mutation applied (old -> new):
+-                     throw new StoreError('rejected', `${key}[${index}] is not a lower-case hex identifier of at most ${MAX_IDENTITY_LENGTH} characters`)
++                     return
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t M7\ ·\ a\ malformed\ identity\ value\ rejects\ with\ reason\ 'rejected'
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+79 | 		const store = createEventStore()
+80 | 		await store.write([signedEvent({ kind: 1, content: 'm7', created_at: 1000 })])
+81 | 
+82 | 		for (const authors of [['alice'], [''], ['ABCDEF'], ['ab'.repeat(33)]]) {
+83 | 			const failed = await store.read({ authors }).catch((error: unknown) => error)
+84 | 			expect(failed).toBeInstanceOf(StoreError)
+                       ^
+error: expect(received).toBeInstanceOf(expected)
+
+Expected constructor: [class StoreError extends Error]
+Received value: []
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-store/ts/invariants.test.ts:84:19)
+(fail) M7 > M7 · a malformed identity value rejects with reason 'rejected' [15.23ms]
+
+ 0 pass
+ 15 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [213.00ms]
+exit: 1
+
+$ sha256 after restore: 016854511d7f80c3384f50469bce9d78519fe647db5054543aa01835341bdc33 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) M7 > M7 · a malformed identity value rejects with reason 'rejected' [14.29ms]
+
+ 1 pass
+ 15 filtered out
+ 0 fail
+ 15 expect() calls
+Ran 1 test across 1 file. [210.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 4 — M7
+breaks:   toFilterArray drops empty arrays, so an empty identity list is broadened to everything
+file:     event-store/ts/filters.ts
+sha256:   016854511d7f80c3384f50469bce9d78519fe647db5054543aa01835341bdc33 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · M7 · an empty identity list matches nothing and is not broadened
+$ the mutation applied (old -> new):
+-     return Array.isArray(filters) ? [...filters] : [filters]
++     return (Array.isArray(filters) ? [...filters] : [filters]).map((filter) => Object.fromEntries(Object.entries(filter).filter(([, value]) => !Array.isArray(value) || value.length > 0)) as FilterIn)
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t M7\ ·\ an\ empty\ identity\ list\ matches\ nothing\ and\ is\ not\ broadened
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+105 | 		const all: Event[] = await store.read({ kinds: [1] })
+106 | 		expect(all.map((candidate) => candidate.id)).toEqual([event.id])
+107 | 
+108 | 		// NIP-01: an empty list matches nothing. Dropping the key would return the whole store.
+109 | 		const none: Event[] = await store.read({ kinds: [1], authors: [] })
+110 | 		expect(none).toEqual([])
+                     ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   {
++     "content": "m7-empty",
++     "created_at": 1000,
++     [Symbol(event-store)]: EventStore {
++       "_verifyEventMethod": [Function: verifyEvent],
++       "database": EventMemory {
++         "authors": 
++ Map {
++           "f78f76a64fd3cb364ecf3cb07d5b919e8b1c5182e15193cbb9473ddf7f011ecf" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "claims": WeakMap {},
++         "created_at": [
++           [Circular],
++         ],
++         "events": LRU {
++           "first": {
++             "expiry": 0,
++             "key": "25505bc384ab39ebf72f073ad29273fc2cdd5825808db549bee855c99359a605",
++             "next": null,
++             "prev": null,
++             "value": [Circular],
++           },
++           "items": {
++             "25505bc384ab39ebf72f073ad29273fc2cdd5825808db549bee855c99359a605": {
++               "expiry": 0,
++               "key": "25505bc384ab39ebf72f073ad29273fc2cdd5825808db549bee855c99359a605",
++               "next": null,
++               "prev": null,
++               "value": [Circular],
++             },
++           },
++           "last": {
++             "expiry": 0,
++             "key": "25505bc384ab39ebf72f073ad29273fc2cdd5825808db549bee855c99359a605",
++             "next": null,
++             "prev": null,
++             "value": [Circular],
++           },
++           "max": 0,
++           "resetTtl": false,
++           "size": 1,
++           "ttl": 0,
++         },
++         "kindAuthor": 
++ Map {
++           "1:f78f76a64fd3cb364ecf3cb07d5b919e8b1c5182e15193cbb9473ddf7f011ecf" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "kinds": 
++ Map {
++           1 =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "log": [Function: debug],
++         "replaceable": Map {},
++         "tags": LRU {
++           "first": null,
++           "items": {},
++           "last": null,
++           "max": 0,
++           "resetTtl": false,
++           "size": 0,
++           "ttl": 0,
++         },
++       },
++       "deletes": DeleteManager {
++         "deleted$": Observable {
++           "source": Subject {
++             "closed": false,
++             "currentObservers": null,
++             "hasError": false,
++             "isStopped": false,
++             "observers": [
++               SafeSubscriber {
++                 "_finalizers": [
++                   Subscription {
++                     "_finalizers": null,
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "initialTeardown": [Function],
++                   },
++                 ],
++                 "_parentage": Subscription {
++                   "_finalizers": [
++                     [Circular],
++                     SafeSubscriber {
++                       "_finalizers": [
++                         Subscription {
++                           "_finalizers": null,
++                           "_parentage": [Circular],
++                           "closed": false,
++                           "initialTeardown": [Function],
++                         },
++                       ],
++                       "_parentage": [Circular],
++                       "closed": false,
++                       "destination": ConsumerObserver {
++                         "partialObserver": {
++                           "complete": undefined,
++                           "error": undefined,
++                           "next": [Function: handleExpiredNotification],
++                         },
++                       },
++                       "initialTeardown": undefined,
++                       "isStopped": false,
++                     },
++                   ],
++                   "_parentage": null,
++                   "closed": false,
++                   "initialTeardown": undefined,
++                 },
++                 "closed": false,
++                 "destination": ConsumerObserver {
++                   "partialObserver": {
++                     "complete": undefined,
++                     "error": undefined,
++                     "next": [Function: handleDeleteNotification],
++                   },
++                 },
++                 "initialTeardown": undefined,
++                 "isStopped": false,
++               },
++             ],
++             "thrownError": null,
++           },
++         },
++         "deletedIdentifiers": Map {},
++         "deletedIds": Map {},
++         "deletedSubject": Subject {
++           "closed": false,
++           "currentObservers": null,
++           "hasError": false,
++           "isStopped": false,
++           "observers": [
++             SafeSubscriber {
++               "_finalizers": [
++                 Subscription {
++                   "_finalizers": null,
++                   "_parentage": [Circular],
++                   "closed": false,
++                   "initialTeardown": [Function],
++                 },
++               ],
++               "_parentage": Subscription {
++                 "_finalizers": [
++                   [Circular],
++                   SafeSubscriber {
++                     "_finalizers": [
++                       Subscription {
++                         "_finalizers": null,
++                         "_parentage": [Circular],
++                         "closed": false,
++                         "initialTeardown": [Function],
++                       },
++                     ],
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "destination": ConsumerObserver {
++                       "partialObserver": {
++                         "complete": undefined,
++                         "error": undefined,
++                         "next": [Function: handleExpiredNotification],
++                       },
++                     },
++                     "initialTeardown": undefined,
++                     "isStopped": false,
++                   },
++                 ],
++                 "_parentage": null,
++                 "closed": false,
++                 "initialTeardown": undefined,
++               },
++               "closed": false,
++               "destination": ConsumerObserver {
++                 "partialObserver": {
++                   "complete": undefined,
++                   "error": undefined,
++                   "next": [Function: handleDeleteNotification],
++                 },
++               },
++               "initialTeardown": undefined,
++               "isStopped": false,
++             },
++           ],
++           "thrownError": null,
++         },
++       },
++       "destroy$": ReplaySubject {
++         "_buffer": [],
++         "_bufferSize": 1,
++         "_infiniteTimeWindow": true,
++         "_timestampProvider": {
++           "delegate": undefined,
++           "now": [Function],
++         },
++         "_windowTime": Infinity,
++         "closed": false,
++         "currentObservers": null,
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "eventLoader": undefined,
++       "expiration": ExpirationManager {
++         "expirations": Map {},
++         "expired$": Observable {
++           "source": Subject {
++             "closed": false,
++             "currentObservers": null,
++             "hasError": false,
++             "isStopped": false,
++             "observers": [
++               SafeSubscriber {
++                 "_finalizers": [
++                   Subscription {
++                     "_finalizers": null,
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "initialTeardown": [Function],
++                   },
++                 ],
++                 "_parentage": Subscription {
++                   "_finalizers": [
++                     SafeSubscriber {
++                       "_finalizers": [
++                         Subscription {
++                           "_finalizers": null,
++                           "_parentage": [Circular],
++                           "closed": false,
++                           "initialTeardown": [Function],
++                         },
++                       ],
++                       "_parentage": [Circular],
++                       "closed": false,
++                       "destination": ConsumerObserver {
++                         "partialObserver": {
++                           "complete": undefined,
++                           "error": undefined,
++                           "next": [Function: handleDeleteNotification],
++                         },
++                       },
++                       "initialTeardown": undefined,
++                       "isStopped": false,
++                     },
++                     [Circular],
++                   ],
++                   "_parentage": null,
++                   "closed": false,
++                   "initialTeardown": undefined,
++                 },
++                 "closed": false,
++                 "destination": ConsumerObserver {
++                   "partialObserver": {
++                     "complete": undefined,
++                     "error": undefined,
++                     "next": [Function: handleExpiredNotification],
++                   },
++                 },
++                 "initialTeardown": undefined,
++                 "isStopped": false,
++               },
++             ],
++             "thrownError": null,
++           },
++         },
++         "expiredSubject": Subject {
++           "closed": false,
++           "currentObservers": null,
++           "hasError": false,
++           "isStopped": false,
++           "observers": [
++             SafeSubscriber {
++               "_finalizers": [
++                 Subscription {
++                   "_finalizers": null,
++                   "_parentage": [Circular],
++                   "closed": false,
++                   "initialTeardown": [Function],
++                 },
++               ],
++               "_parentage": Subscription {
++                 "_finalizers": [
++                   SafeSubscriber {
++                     "_finalizers": [
++                       Subscription {
++                         "_finalizers": null,
++                         "_parentage": [Circular],
++                         "closed": false,
++                         "initialTeardown": [Function],
++                       },
++                     ],
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "destination": ConsumerObserver {
++                       "partialObserver": {
++                         "complete": undefined,
++                         "error": undefined,
++                         "next": [Function: handleDeleteNotification],
++                       },
++                     },
++                     "initialTeardown": undefined,
++                     "isStopped": false,
++                   },
++                   [Circular],
++                 ],
++                 "_parentage": null,
++                 "closed": false,
++                 "initialTeardown": undefined,
++               },
++               "closed": false,
++               "destination": ConsumerObserver {
++                 "partialObserver": {
++                   "complete": undefined,
++                   "error": undefined,
++                   "next": [Function: handleExpiredNotification],
++                 },
++               },
++               "initialTeardown": undefined,
++               "isStopped": false,
++             },
++           ],
++           "thrownError": null,
++         },
++         "nextCheck": null,
++         "timer": null,
++       },
++       "insert$": Subject {
++         "closed": false,
++         "currentObservers": [],
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "internalSubscriptions": Subscription {
++         "_finalizers": [
++           SafeSubscriber {
++             "_finalizers": [
++               Subscription {
++                 "_finalizers": null,
++                 "_parentage": [Circular],
++                 "closed": false,
++                 "initialTeardown": [Function],
++               },
++             ],
++             "_parentage": [Circular],
++             "closed": false,
++             "destination": ConsumerObserver {
++               "partialObserver": {
++                 "complete": undefined,
++                 "error": undefined,
++                 "next": [Function: handleDeleteNotification],
++               },
++             },
++             "initialTeardown": undefined,
++             "isStopped": false,
++           },
++           SafeSubscriber {
++             "_finalizers": [
++               Subscription {
++                 "_finalizers": null,
++                 "_parentage": [Circular],
++                 "closed": false,
++                 "initialTeardown": [Function],
++               },
++             ],
++             "_parentage": [Circular],
++             "closed": false,
++             "destination": ConsumerObserver {
++               "partialObserver": {
++                 "complete": undefined,
++                 "error": undefined,
++                 "next": [Function: handleExpiredNotification],
++               },
++             },
++             "initialTeardown": undefined,
++             "isStopped": false,
++           },
++         ],
++         "_parentage": null,
++         "closed": false,
++         "initialTeardown": undefined,
++       },
++       "keepDeleted": true,
++       "keepExpired": true,
++       "keepOldVersions": true,
++       "memory": EventMemory {
++         "authors": 
++ Map {
++           "f78f76a64fd3cb364ecf3cb07d5b919e8b1c5182e15193cbb9473ddf7f011ecf" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "claims": WeakMap {},
++         "created_at": [
++           [Circular],
++         ],
++         "events": LRU {
++           "first": {
++             "expiry": 0,
++             "key": "25505bc384ab39ebf72f073ad29273fc2cdd5825808db549bee855c99359a605",
++             "next": null,
++             "prev": null,
++             "value": [Circular],
++           },
++           "items": {
++             "25505bc384ab39ebf72f073ad29273fc2cdd5825808db549bee855c99359a605": {
++               "expiry": 0,
++               "key": "25505bc384ab39ebf72f073ad29273fc2cdd5825808db549bee855c99359a605",
++               "next": null,
++               "prev": null,
++               "value": [Circular],
++             },
++           },
++           "last": {
++             "expiry": 0,
++             "key": "25505bc384ab39ebf72f073ad29273fc2cdd5825808db549bee855c99359a605",
++             "next": null,
++             "prev": null,
++             "value": [Circular],
++           },
++           "max": 0,
++           "resetTtl": false,
++           "size": 1,
++           "ttl": 0,
++         },
++         "kindAuthor": 
++ Map {
++           "1:f78f76a64fd3cb364ecf3cb07d5b919e8b1c5182e15193cbb9473ddf7f011ecf" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "kinds": 
++ Map {
++           1 =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "log": [Function: debug],
++         "replaceable": Map {},
++         "tags": LRU {
++           "first": null,
++           "items": {},
++           "last": null,
++           "max": 0,
++           "resetTtl": false,
++           "size": 0,
++           "ttl": 0,
++         },
++       },
++       "modelKeepWarm": 60000,
++       "models": Map {},
++       "remove$": Subject {
++         "closed": false,
++         "currentObservers": null,
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "update$": Subject {
++         "closed": false,
++         "currentObservers": null,
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++     },
++     [Symbol(event-uid)]: "25505bc384ab39ebf72f073ad29273fc2cdd5825808db549bee855c99359a605",
++     [Symbol(expiration-timestamp)]: undefined,
++     [Symbol(from-cache)]: true,
++     "id": "25505bc384ab39ebf72f073ad29273fc2cdd5825808db549bee855c99359a605",
++     [Symbol(indexable-tags)]:     Set {},
++     "kind": 1,
++     "pubkey": "f78f76a64fd3cb364ecf3cb07d5b919e8b1c5182e15193cbb9473ddf7f011ecf",
++     [Symbol(replaceable-identifier)]: "",
++     "sig": "b0929bd6df048955de63bb60805b69b1b198f31b6be879d7a9904312e873d621152464b4490714e369b90f64925fa2576830b61dfed083d2524fea3cc4b3e365",
++     "tags": [],
++     [Symbol(verified)]: true,
++   },
++ ]
+
+- Expected  - 1
++ Received  + 506
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-store/ts/invariants.test.ts:110:16)
+(fail) M7 > M7 · an empty identity list matches nothing and is not broadened [16.50ms]
+
+ 0 pass
+ 15 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [216.00ms]
+exit: 1
+
+$ sha256 after restore: 016854511d7f80c3384f50469bce9d78519fe647db5054543aa01835341bdc33 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) M7 > M7 · an empty identity list matches nothing and is not broadened [16.87ms]
+
+ 1 pass
+ 15 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [244.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 5 — M9
+breaks:   the author check is dropped, so any author's kind-5 deletes any event by id
+file:     event-store/ts/deletions.ts
+sha256:   ccb0b9e04531661581430d4c9d042319b29ef04494d59d5baea22e857fb92b6c (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · M9 · a kind-5 deletion is honoured for its own author's event only
+$ the mutation applied (old -> new):
+-                 if (entry.author !== event.pubkey) continue
++                 if (false) continue
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t M9\ ·\ a\ kind\-5\ deletion\ is\ honoured\ for\ its\ own\ author's\ event\ only
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+167 | 
+168 | 		// a kind-5 naming the target, signed by ANOTHER author: it deletes nothing of the target's
+169 | 		const foreign = signedEvent({ kind: 5, content: '', created_at: 1500, tags: [['e', target.id]] }, OTHER_KEY)
+170 | 		await store.write([foreign])
+171 | 		const afterForeign = (await store.read({ kinds: [1] })).map((candidate) => candidate.id)
+172 | 		expect(afterForeign).toContain(target.id)
+                             ^
+error: expect(received).toContain(expected)
+
+Expected to contain: "8f8899369b0a05372691174713395b531d184f50fdf801c2fad8530d060bdb3d"
+Received: [ "01ae1d50f43586386778fb4bb2f2f0ad7de55892a01fb9935a4de8dd144d38bf" ]
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-store/ts/invariants.test.ts:172:24)
+(fail) M9 > M9 · a kind-5 deletion is honoured for its own author's event only [30.91ms]
+
+ 0 pass
+ 15 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [272.00ms]
+exit: 1
+
+$ sha256 after restore: ccb0b9e04531661581430d4c9d042319b29ef04494d59d5baea22e857fb92b6c (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) M9 > M9 · a kind-5 deletion is honoured for its own author's event only [33.26ms]
+
+ 1 pass
+ 15 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [265.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 6 — M9
+breaks:   NIP-40's boundary flips to `<`, so an event expiring exactly now is read as live
+file:     event-store/ts/store.ts
+sha256:   3dda6ae1f5bc5ce089bdbac934349627b09e0e37b074bc197475294f246e627c (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · M9 · an expired event is excluded on read unless keepExpired, at the boundary expiration === now
+$ the mutation applied (old -> new):
+-                 if (expiration !== null && expiration <= clock.now()) return false
++                 if (expiration !== null && expiration < clock.now()) return false
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t M9\ ·\ an\ expired\ event\ is\ excluded\ on\ read\ unless\ keepExpired,\ at\ the\ boundary\ expiration\ ===\ now
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+211 | 		const store = createEventStore({ clock })
+212 | 		const expiring = signedEvent({ kind: 1, content: 'expiring', created_at: 1000, tags: [['expiration', '5000']] })
+213 | 		await store.write([expiring])
+214 | 
+215 | 		// NIP-40's boundary is `>=`: at exactly `now` the event is expired
+216 | 		expect(await store.read({ kinds: [1] })).toEqual([])
+                                                 ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   {
++     "content": "expiring",
++     "created_at": 1000,
++     [Symbol(event-store)]: EventStore {
++       "_verifyEventMethod": [Function: verifyEvent],
++       "database": EventMemory {
++         "authors": 
++ Map {
++           "51186816e0348445881824a5543dd5eca22e8bf983680cec321526ac120fb46c" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "claims": WeakMap {},
++         "created_at": [
++           [Circular],
++         ],
++         "events": LRU {
++           "first": {
++             "expiry": 0,
++             "key": "d3c281a78061d5bc38751c2830973a22602799a664e0728c81b1f940cd2088aa",
++             "next": null,
++             "prev": null,
++             "value": [Circular],
++           },
++           "items": {
++             "d3c281a78061d5bc38751c2830973a22602799a664e0728c81b1f940cd2088aa": {
++               "expiry": 0,
++               "key": "d3c281a78061d5bc38751c2830973a22602799a664e0728c81b1f940cd2088aa",
++               "next": null,
++               "prev": null,
++               "value": [Circular],
++             },
++           },
++           "last": {
++             "expiry": 0,
++             "key": "d3c281a78061d5bc38751c2830973a22602799a664e0728c81b1f940cd2088aa",
++             "next": null,
++             "prev": null,
++             "value": [Circular],
++           },
++           "max": 0,
++           "resetTtl": false,
++           "size": 1,
++           "ttl": 0,
++         },
++         "kindAuthor": 
++ Map {
++           "1:51186816e0348445881824a5543dd5eca22e8bf983680cec321526ac120fb46c" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "kinds": 
++ Map {
++           1 =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "log": [Function: debug],
++         "replaceable": Map {},
++         "tags": LRU {
++           "first": null,
++           "items": {},
++           "last": null,
++           "max": 0,
++           "resetTtl": false,
++           "size": 0,
++           "ttl": 0,
++         },
++       },
++       "deletes": DeleteManager {
++         "deleted$": Observable {
++           "source": Subject {
++             "closed": false,
++             "currentObservers": null,
++             "hasError": false,
++             "isStopped": false,
++             "observers": [
++               SafeSubscriber {
++                 "_finalizers": [
++                   Subscription {
++                     "_finalizers": null,
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "initialTeardown": [Function],
++                   },
++                 ],
++                 "_parentage": Subscription {
++                   "_finalizers": [
++                     [Circular],
++                     SafeSubscriber {
++                       "_finalizers": [
++                         Subscription {
++                           "_finalizers": null,
++                           "_parentage": [Circular],
++                           "closed": false,
++                           "initialTeardown": [Function],
++                         },
++                       ],
++                       "_parentage": [Circular],
++                       "closed": false,
++                       "destination": ConsumerObserver {
++                         "partialObserver": {
++                           "complete": undefined,
++                           "error": undefined,
++                           "next": [Function: handleExpiredNotification],
++                         },
++                       },
++                       "initialTeardown": undefined,
++                       "isStopped": false,
++                     },
++                   ],
++                   "_parentage": null,
++                   "closed": false,
++                   "initialTeardown": undefined,
++                 },
++                 "closed": false,
++                 "destination": ConsumerObserver {
++                   "partialObserver": {
++                     "complete": undefined,
++                     "error": undefined,
++                     "next": [Function: handleDeleteNotification],
++                   },
++                 },
++                 "initialTeardown": undefined,
++                 "isStopped": false,
++               },
++             ],
++             "thrownError": null,
++           },
++         },
++         "deletedIdentifiers": Map {},
++         "deletedIds": Map {},
++         "deletedSubject": Subject {
++           "closed": false,
++           "currentObservers": null,
++           "hasError": false,
++           "isStopped": false,
++           "observers": [
++             SafeSubscriber {
++               "_finalizers": [
++                 Subscription {
++                   "_finalizers": null,
++                   "_parentage": [Circular],
++                   "closed": false,
++                   "initialTeardown": [Function],
++                 },
++               ],
++               "_parentage": Subscription {
++                 "_finalizers": [
++                   [Circular],
++                   SafeSubscriber {
++                     "_finalizers": [
++                       Subscription {
++                         "_finalizers": null,
++                         "_parentage": [Circular],
++                         "closed": false,
++                         "initialTeardown": [Function],
++                       },
++                     ],
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "destination": ConsumerObserver {
++                       "partialObserver": {
++                         "complete": undefined,
++                         "error": undefined,
++                         "next": [Function: handleExpiredNotification],
++                       },
++                     },
++                     "initialTeardown": undefined,
++                     "isStopped": false,
++                   },
++                 ],
++                 "_parentage": null,
++                 "closed": false,
++                 "initialTeardown": undefined,
++               },
++               "closed": false,
++               "destination": ConsumerObserver {
++                 "partialObserver": {
++                   "complete": undefined,
++                   "error": undefined,
++                   "next": [Function: handleDeleteNotification],
++                 },
++               },
++               "initialTeardown": undefined,
++               "isStopped": false,
++             },
++           ],
++           "thrownError": null,
++         },
++       },
++       "destroy$": ReplaySubject {
++         "_buffer": [],
++         "_bufferSize": 1,
++         "_infiniteTimeWindow": true,
++         "_timestampProvider": {
++           "delegate": undefined,
++           "now": [Function],
++         },
++         "_windowTime": Infinity,
++         "closed": false,
++         "currentObservers": null,
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "eventLoader": undefined,
++       "expiration": ExpirationManager {
++         "expirations": Map {},
++         "expired$": Observable {
++           "source": Subject {
++             "closed": false,
++             "currentObservers": null,
++             "hasError": false,
++             "isStopped": false,
++             "observers": [
++               SafeSubscriber {
++                 "_finalizers": [
++                   Subscription {
++                     "_finalizers": null,
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "initialTeardown": [Function],
++                   },
++                 ],
++                 "_parentage": Subscription {
++                   "_finalizers": [
++                     SafeSubscriber {
++                       "_finalizers": [
++                         Subscription {
++                           "_finalizers": null,
++                           "_parentage": [Circular],
++                           "closed": false,
++                           "initialTeardown": [Function],
++                         },
++                       ],
++                       "_parentage": [Circular],
++                       "closed": false,
++                       "destination": ConsumerObserver {
++                         "partialObserver": {
++                           "complete": undefined,
++                           "error": undefined,
++                           "next": [Function: handleDeleteNotification],
++                         },
++                       },
++                       "initialTeardown": undefined,
++                       "isStopped": false,
++                     },
++                     [Circular],
++                   ],
++                   "_parentage": null,
++                   "closed": false,
++                   "initialTeardown": undefined,
++                 },
++                 "closed": false,
++                 "destination": ConsumerObserver {
++                   "partialObserver": {
++                     "complete": undefined,
++                     "error": undefined,
++                     "next": [Function: handleExpiredNotification],
++                   },
++                 },
++                 "initialTeardown": undefined,
++                 "isStopped": false,
++               },
++             ],
++             "thrownError": null,
++           },
++         },
++         "expiredSubject": Subject {
++           "closed": false,
++           "currentObservers": null,
++           "hasError": false,
++           "isStopped": false,
++           "observers": [
++             SafeSubscriber {
++               "_finalizers": [
++                 Subscription {
++                   "_finalizers": null,
++                   "_parentage": [Circular],
++                   "closed": false,
++                   "initialTeardown": [Function],
++                 },
++               ],
++               "_parentage": Subscription {
++                 "_finalizers": [
++                   SafeSubscriber {
++                     "_finalizers": [
++                       Subscription {
++                         "_finalizers": null,
++                         "_parentage": [Circular],
++                         "closed": false,
++                         "initialTeardown": [Function],
++                       },
++                     ],
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "destination": ConsumerObserver {
++                       "partialObserver": {
++                         "complete": undefined,
++                         "error": undefined,
++                         "next": [Function: handleDeleteNotification],
++                       },
++                     },
++                     "initialTeardown": undefined,
++                     "isStopped": false,
++                   },
++                   [Circular],
++                 ],
++                 "_parentage": null,
++                 "closed": false,
++                 "initialTeardown": undefined,
++               },
++               "closed": false,
++               "destination": ConsumerObserver {
++                 "partialObserver": {
++                   "complete": undefined,
++                   "error": undefined,
++                   "next": [Function: handleExpiredNotification],
++                 },
++               },
++               "initialTeardown": undefined,
++               "isStopped": false,
++             },
++           ],
++           "thrownError": null,
++         },
++         "nextCheck": null,
++         "timer": null,
++       },
++       "insert$": Subject {
++         "closed": false,
++         "currentObservers": [],
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "internalSubscriptions": Subscription {
++         "_finalizers": [
++           SafeSubscriber {
++             "_finalizers": [
++               Subscription {
++                 "_finalizers": null,
++                 "_parentage": [Circular],
++                 "closed": false,
++                 "initialTeardown": [Function],
++               },
++             ],
++             "_parentage": [Circular],
++             "closed": false,
++             "destination": ConsumerObserver {
++               "partialObserver": {
++                 "complete": undefined,
++                 "error": undefined,
++                 "next": [Function: handleDeleteNotification],
++               },
++             },
++             "initialTeardown": undefined,
++             "isStopped": false,
++           },
++           SafeSubscriber {
++             "_finalizers": [
++               Subscription {
++                 "_finalizers": null,
++                 "_parentage": [Circular],
++                 "closed": false,
++                 "initialTeardown": [Function],
++               },
++             ],
++             "_parentage": [Circular],
++             "closed": false,
++             "destination": ConsumerObserver {
++               "partialObserver": {
++                 "complete": undefined,
++                 "error": undefined,
++                 "next": [Function: handleExpiredNotification],
++               },
++             },
++             "initialTeardown": undefined,
++             "isStopped": false,
++           },
++         ],
++         "_parentage": null,
++         "closed": false,
++         "initialTeardown": undefined,
++       },
++       "keepDeleted": true,
++       "keepExpired": true,
++       "keepOldVersions": true,
++       "memory": EventMemory {
++         "authors": 
++ Map {
++           "51186816e0348445881824a5543dd5eca22e8bf983680cec321526ac120fb46c" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "claims": WeakMap {},
++         "created_at": [
++           [Circular],
++         ],
++         "events": LRU {
++           "first": {
++             "expiry": 0,
++             "key": "d3c281a78061d5bc38751c2830973a22602799a664e0728c81b1f940cd2088aa",
++             "next": null,
++             "prev": null,
++             "value": [Circular],
++           },
++           "items": {
++             "d3c281a78061d5bc38751c2830973a22602799a664e0728c81b1f940cd2088aa": {
++               "expiry": 0,
++               "key": "d3c281a78061d5bc38751c2830973a22602799a664e0728c81b1f940cd2088aa",
++               "next": null,
++               "prev": null,
++               "value": [Circular],
++             },
++           },
++           "last": {
++             "expiry": 0,
++             "key": "d3c281a78061d5bc38751c2830973a22602799a664e0728c81b1f940cd2088aa",
++             "next": null,
++             "prev": null,
++             "value": [Circular],
++           },
++           "max": 0,
++           "resetTtl": false,
++           "size": 1,
++           "ttl": 0,
++         },
++         "kindAuthor": 
++ Map {
++           "1:51186816e0348445881824a5543dd5eca22e8bf983680cec321526ac120fb46c" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "kinds": 
++ Map {
++           1 =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "log": [Function: debug],
++         "replaceable": Map {},
++         "tags": LRU {
++           "first": null,
++           "items": {},
++           "last": null,
++           "max": 0,
++           "resetTtl": false,
++           "size": 0,
++           "ttl": 0,
++         },
++       },
++       "modelKeepWarm": 60000,
++       "models": Map {},
++       "remove$": Subject {
++         "closed": false,
++         "currentObservers": null,
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "update$": Subject {
++         "closed": false,
++         "currentObservers": null,
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++     },
++     [Symbol(event-uid)]: "d3c281a78061d5bc38751c2830973a22602799a664e0728c81b1f940cd2088aa",
++     [Symbol(expiration-timestamp)]: 5000,
++     [Symbol(from-cache)]: true,
++     "id": "d3c281a78061d5bc38751c2830973a22602799a664e0728c81b1f940cd2088aa",
++     [Symbol(indexable-tags)]:     Set {},
++     "kind": 1,
++     "pubkey": "51186816e0348445881824a5543dd5eca22e8bf983680cec321526ac120fb46c",
++     [Symbol(replaceable-identifier)]: "",
++     "sig": "298481ae239b8416f5c5789607cdc6cc98032aa1a5e1240e4d3e0a15a63b6f8ca5ac2af7e840142e99020fd0654957a5ad432db51ad2382335670a7e7b32c927",
++     "tags": [
++       [
++         "expiration",
++         "5000",
++       ],
++     ],
++     [Symbol(verified)]: true,
++   },
++ ]
+
+- Expected  - 1
++ Received  + 511
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-store/ts/invariants.test.ts:216:44)
+(fail) M9 > M9 · an expired event is excluded on read unless keepExpired, at the boundary expiration === now [16.23ms]
+
+ 0 pass
+ 15 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [212.00ms]
+exit: 1
+
+$ sha256 after restore: 3dda6ae1f5bc5ce089bdbac934349627b09e0e37b074bc197475294f246e627c (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) M9 > M9 · an expired event is excluded on read unless keepExpired, at the boundary expiration === now [23.97ms]
+
+ 1 pass
+ 15 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [227.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 7 — M2
+breaks:   the id-unique union stops deduplicating, so an event matched twice is returned twice
+file:     event-store/ts/store.ts
+sha256:   3dda6ae1f5bc5ce089bdbac934349627b09e0e37b074bc197475294f246e627c (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · M2 · an event matched by two filters is returned once
+$ the mutation applied (old -> new):
+-                 if (seen.has(event.id)) continue
++                     // the id-unique union is gone (the mutation for M2)
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t M2\ ·\ an\ event\ matched\ by\ two\ filters\ is\ returned\ once
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+38 | 		const store = createEventStore()
+39 | 		const event = signedEvent({ kind: 1, content: 'm2', created_at: 1000 })
+40 | 		await store.write([event])
+41 | 
+42 | 		const result: Event[] = await store.read([{ ids: [event.id] }, { kinds: [1] }])
+43 | 		expect(result.map((candidate) => candidate.id)).toEqual([event.id])
+                                                       ^
+error: expect(received).toEqual(expected)
+
+  [
+    "7c2ea34067e602502ed5b3c34b3da899a3b61005440ee10b1ee9430c73ebf09d",
++   "7c2ea34067e602502ed5b3c34b3da899a3b61005440ee10b1ee9430c73ebf09d",
+  ]
+
+- Expected  - 0
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-store/ts/invariants.test.ts:43:51)
+(fail) M1–M2 > M2 · an event matched by two filters is returned once [17.15ms]
+
+ 0 pass
+ 15 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [221.00ms]
+exit: 1
+
+$ sha256 after restore: 3dda6ae1f5bc5ce089bdbac934349627b09e0e37b074bc197475294f246e627c (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) M1–M2 > M2 · an event matched by two filters is returned once [15.62ms]
+
+ 1 pass
+ 15 filtered out
+ 0 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [218.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 8 — M12
+breaks:   the read stops marking provenance, so a locally answered event is indistinguishable
+file:     event-store/ts/store.ts
+sha256:   3dda6ae1f5bc5ce089bdbac934349627b09e0e37b074bc197475294f246e627c (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · M12 · a read's events satisfy isFromCache; a never-stored event does not
+$ the mutation applied (old -> new):
+-         for (const event of out) markFromCache(event)
++             // the provenance marking is gone (the mutation for M12)
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t M12\ ·\ a\ read's\ events\ satisfy\ isFromCache;\ a\ never\-stored\ event\ does\ not
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+248 | 		expect(isFromCache(fresh)).toBe(false)
+249 | 
+250 | 		await store.write([fresh])
+251 | 		const result: Event[] = await store.read({ kinds: [1] })
+252 | 		expect(result).toHaveLength(1)
+253 | 		expect(isFromCache(result[0])).toBe(true)
+                                       ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-store/ts/invariants.test.ts:253:34)
+(fail) M11–M14 > M12 · a read's events satisfy isFromCache; a never-stored event does not [14.90ms]
+
+ 0 pass
+ 15 filtered out
+ 1 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [211.00ms]
+exit: 1
+
+$ sha256 after restore: 3dda6ae1f5bc5ce089bdbac934349627b09e0e37b074bc197475294f246e627c (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) M11–M14 > M12 · a read's events satisfy isFromCache; a never-stored event does not [24.40ms]
+
+ 1 pass
+ 15 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [232.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 9 — M5 + M14
+breaks:   a relay edge is re-attached to the handle — the second surface and the socket the module must not carry
+file:     event-store/ts/store.ts
+sha256:   3dda6ae1f5bc5ce089bdbac934349627b09e0e37b074bc197475294f246e627c (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · M5 + M14 · no socket is required: the handle is exactly the endpoint, and the count is local
+$ the mutation applied (old -> new):
+-         tier: 'local',
++         relay: undefined,
+        tier: 'local',
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t M5\ \+\ M14\ ·\ no\ socket\ is\ required:\ the\ handle\ is\ exactly\ the\ endpoint,\ and\ the\ count\ is\ local
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+269 | 		expect(counted.count).toBe(result.length)
+270 | 
+271 | 		// M5, structurally: the handle's own enumerable members are exactly the endpoint's
+272 | 		// members plus the declared eviction policy, so no second surface and no relay edge
+273 | 		// can appear silently. The names `NOT_A_RELAY_EDGE` forbids must all be absent.
+274 | 		expect(Object.keys(store).sort()).toEqual(['changes', 'count', 'eviction', 'read', 'remove', 'tier', 'write'])
+                                          ^
+error: expect(received).toEqual(expected)
+
+  [
+    "changes",
+    "count",
+    "eviction",
+    "read",
++   "relay",
+    "remove",
+    "tier",
+    "write",
+  ]
+
+- Expected  - 0
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-store/ts/invariants.test.ts:274:37)
+(fail) M11–M14 > M5 + M14 · no socket is required: the handle is exactly the endpoint, and the count is local [19.37ms]
+
+ 0 pass
+ 15 filtered out
+ 1 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [234.00ms]
+exit: 1
+
+$ sha256 after restore: 3dda6ae1f5bc5ce089bdbac934349627b09e0e37b074bc197475294f246e627c (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) M11–M14 > M5 + M14 · no socket is required: the handle is exactly the endpoint, and the count is local [15.84ms]
+
+ 1 pass
+ 15 filtered out
+ 0 fail
+ 8 expect() calls
+Ran 1 test across 1 file. [233.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 10 — M7
+breaks:   the identity arm stops recognising an empty identity-tag list — the narrower rule before I3a — so a filter naming nobody is handed to the library's invalidation primitive, which answers a filter carrying no condition with the whole store
+file:     event-store/ts/filters.ts
+sha256:   016854511d7f80c3384f50469bce9d78519fe647db5054543aa01835341bdc33 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     invariants.test.ts · M7 · an empty identity list is answered as nothing on every surface
+$ the mutation applied (old -> new):
+-         if (key === 'ids' || key === 'authors' || key.startsWith('#')) return true
++         if (key === 'ids' || key === 'authors') return true
+
+$ /home/admin_maxime/.bun/bin/bun test invariants.test.ts -t M7\ ·\ an\ empty\ identity\ list\ is\ answered\ as\ nothing\ on\ every\ surface
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+126 | 		// the empty form on every identity tag key, on both readers of the same predicate
+127 | 		const emptyE: FilterIn = { kinds: [1], '#e': [] }
+128 | 		const emptyP: FilterIn = { kinds: [1], '#p': [] }
+129 | 		const emptyUpperP: FilterIn = { kinds: [1], '#P': [] }
+130 | 		for (const empty of [emptyE, emptyP, emptyUpperP]) {
+131 | 			expect(await store.read(empty)).toEqual([])
+                                         ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   {
++     "content": "tags bob",
++     "created_at": 1000,
++     [Symbol(event-store)]: EventStore {
++       "_verifyEventMethod": [Function: verifyEvent],
++       "database": EventMemory {
++         "authors": 
++ Map {
++           "14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "claims": WeakMap {},
++         "created_at": [
++           [Circular],
++         ],
++         "events": LRU {
++           "first": {
++             "expiry": 0,
++             "key": "8adb8d73bdff29c17621f27110348fb28154a2c138686f67ee575d8f3a38fd1a",
++             "next": null,
++             "prev": null,
++             "value": [Circular],
++           },
++           "items": {
++             "8adb8d73bdff29c17621f27110348fb28154a2c138686f67ee575d8f3a38fd1a": {
++               "expiry": 0,
++               "key": "8adb8d73bdff29c17621f27110348fb28154a2c138686f67ee575d8f3a38fd1a",
++               "next": null,
++               "prev": null,
++               "value": [Circular],
++             },
++           },
++           "last": {
++             "expiry": 0,
++             "key": "8adb8d73bdff29c17621f27110348fb28154a2c138686f67ee575d8f3a38fd1a",
++             "next": null,
++             "prev": null,
++             "value": [Circular],
++           },
++           "max": 0,
++           "resetTtl": false,
++           "size": 1,
++           "ttl": 0,
++         },
++         "kindAuthor": 
++ Map {
++           "1:14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "kinds": 
++ Map {
++           1 =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "log": [Function: debug],
++         "replaceable": Map {},
++         "tags": LRU {
++           "first": {
++             "expiry": 0,
++             "key": "p:d9d82967c82cab3ee050efd19fd218aeca66ea539fc68aff1dcf83dacb659b52",
++             "next": {
++               "expiry": 0,
++               "key": "p:14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c",
++               "next": null,
++               "prev": [Circular],
++               "value":               Set {},
++             },
++             "prev": null,
++             "value":             
++ Set {
++               [Circular],
++             }
++ ,
++           },
++           "items": {
++             "p:14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c": {
++               "expiry": 0,
++               "key": "p:14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c",
++               "next": null,
++               "prev": {
++                 "expiry": 0,
++                 "key": "p:d9d82967c82cab3ee050efd19fd218aeca66ea539fc68aff1dcf83dacb659b52",
++                 "next": [Circular],
++                 "prev": null,
++                 "value":                 
++ Set {
++                   [Circular],
++                 }
++ ,
++               },
++               "value":               Set {},
++             },
++             "p:d9d82967c82cab3ee050efd19fd218aeca66ea539fc68aff1dcf83dacb659b52": {
++               "expiry": 0,
++               "key": "p:d9d82967c82cab3ee050efd19fd218aeca66ea539fc68aff1dcf83dacb659b52",
++               "next": {
++                 "expiry": 0,
++                 "key": "p:14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c",
++                 "next": null,
++                 "prev": [Circular],
++                 "value":                 Set {},
++               },
++               "prev": null,
++               "value":               
++ Set {
++                 [Circular],
++               }
++ ,
++             },
++           },
++           "last": {
++             "expiry": 0,
++             "key": "p:14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c",
++             "next": null,
++             "prev": {
++               "expiry": 0,
++               "key": "p:d9d82967c82cab3ee050efd19fd218aeca66ea539fc68aff1dcf83dacb659b52",
++               "next": [Circular],
++               "prev": null,
++               "value":               
++ Set {
++                 [Circular],
++               }
++ ,
++             },
++             "value":             Set {},
++           },
++           "max": 0,
++           "resetTtl": false,
++           "size": 2,
++           "ttl": 0,
++         },
++       },
++       "deletes": DeleteManager {
++         "deleted$": Observable {
++           "source": Subject {
++             "closed": false,
++             "currentObservers": null,
++             "hasError": false,
++             "isStopped": false,
++             "observers": [
++               SafeSubscriber {
++                 "_finalizers": [
++                   Subscription {
++                     "_finalizers": null,
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "initialTeardown": [Function],
++                   },
++                 ],
++                 "_parentage": Subscription {
++                   "_finalizers": [
++                     [Circular],
++                     SafeSubscriber {
++                       "_finalizers": [
++                         Subscription {
++                           "_finalizers": null,
++                           "_parentage": [Circular],
++                           "closed": false,
++                           "initialTeardown": [Function],
++                         },
++                       ],
++                       "_parentage": [Circular],
++                       "closed": false,
++                       "destination": ConsumerObserver {
++                         "partialObserver": {
++                           "complete": undefined,
++                           "error": undefined,
++                           "next": [Function: handleExpiredNotification],
++                         },
++                       },
++                       "initialTeardown": undefined,
++                       "isStopped": false,
++                     },
++                   ],
++                   "_parentage": null,
++                   "closed": false,
++                   "initialTeardown": undefined,
++                 },
++                 "closed": false,
++                 "destination": ConsumerObserver {
++                   "partialObserver": {
++                     "complete": undefined,
++                     "error": undefined,
++                     "next": [Function: handleDeleteNotification],
++                   },
++                 },
++                 "initialTeardown": undefined,
++                 "isStopped": false,
++               },
++             ],
++             "thrownError": null,
++           },
++         },
++         "deletedIdentifiers": Map {},
++         "deletedIds": Map {},
++         "deletedSubject": Subject {
++           "closed": false,
++           "currentObservers": null,
++           "hasError": false,
++           "isStopped": false,
++           "observers": [
++             SafeSubscriber {
++               "_finalizers": [
++                 Subscription {
++                   "_finalizers": null,
++                   "_parentage": [Circular],
++                   "closed": false,
++                   "initialTeardown": [Function],
++                 },
++               ],
++               "_parentage": Subscription {
++                 "_finalizers": [
++                   [Circular],
++                   SafeSubscriber {
++                     "_finalizers": [
++                       Subscription {
++                         "_finalizers": null,
++                         "_parentage": [Circular],
++                         "closed": false,
++                         "initialTeardown": [Function],
++                       },
++                     ],
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "destination": ConsumerObserver {
++                       "partialObserver": {
++                         "complete": undefined,
++                         "error": undefined,
++                         "next": [Function: handleExpiredNotification],
++                       },
++                     },
++                     "initialTeardown": undefined,
++                     "isStopped": false,
++                   },
++                 ],
++                 "_parentage": null,
++                 "closed": false,
++                 "initialTeardown": undefined,
++               },
++               "closed": false,
++               "destination": ConsumerObserver {
++                 "partialObserver": {
++                   "complete": undefined,
++                   "error": undefined,
++                   "next": [Function: handleDeleteNotification],
++                 },
++               },
++               "initialTeardown": undefined,
++               "isStopped": false,
++             },
++           ],
++           "thrownError": null,
++         },
++       },
++       "destroy$": ReplaySubject {
++         "_buffer": [],
++         "_bufferSize": 1,
++         "_infiniteTimeWindow": true,
++         "_timestampProvider": {
++           "delegate": undefined,
++           "now": [Function],
++         },
++         "_windowTime": Infinity,
++         "closed": false,
++         "currentObservers": null,
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "eventLoader": undefined,
++       "expiration": ExpirationManager {
++         "expirations": Map {},
++         "expired$": Observable {
++           "source": Subject {
++             "closed": false,
++             "currentObservers": null,
++             "hasError": false,
++             "isStopped": false,
++             "observers": [
++               SafeSubscriber {
++                 "_finalizers": [
++                   Subscription {
++                     "_finalizers": null,
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "initialTeardown": [Function],
++                   },
++                 ],
++                 "_parentage": Subscription {
++                   "_finalizers": [
++                     SafeSubscriber {
++                       "_finalizers": [
++                         Subscription {
++                           "_finalizers": null,
++                           "_parentage": [Circular],
++                           "closed": false,
++                           "initialTeardown": [Function],
++                         },
++                       ],
++                       "_parentage": [Circular],
++                       "closed": false,
++                       "destination": ConsumerObserver {
++                         "partialObserver": {
++                           "complete": undefined,
++                           "error": undefined,
++                           "next": [Function: handleDeleteNotification],
++                         },
++                       },
++                       "initialTeardown": undefined,
++                       "isStopped": false,
++                     },
++                     [Circular],
++                   ],
++                   "_parentage": null,
++                   "closed": false,
++                   "initialTeardown": undefined,
++                 },
++                 "closed": false,
++                 "destination": ConsumerObserver {
++                   "partialObserver": {
++                     "complete": undefined,
++                     "error": undefined,
++                     "next": [Function: handleExpiredNotification],
++                   },
++                 },
++                 "initialTeardown": undefined,
++                 "isStopped": false,
++               },
++             ],
++             "thrownError": null,
++           },
++         },
++         "expiredSubject": Subject {
++           "closed": false,
++           "currentObservers": null,
++           "hasError": false,
++           "isStopped": false,
++           "observers": [
++             SafeSubscriber {
++               "_finalizers": [
++                 Subscription {
++                   "_finalizers": null,
++                   "_parentage": [Circular],
++                   "closed": false,
++                   "initialTeardown": [Function],
++                 },
++               ],
++               "_parentage": Subscription {
++                 "_finalizers": [
++                   SafeSubscriber {
++                     "_finalizers": [
++                       Subscription {
++                         "_finalizers": null,
++                         "_parentage": [Circular],
++                         "closed": false,
++                         "initialTeardown": [Function],
++                       },
++                     ],
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "destination": ConsumerObserver {
++                       "partialObserver": {
++                         "complete": undefined,
++                         "error": undefined,
++                         "next": [Function: handleDeleteNotification],
++                       },
++                     },
++                     "initialTeardown": undefined,
++                     "isStopped": false,
++                   },
++                   [Circular],
++                 ],
++                 "_parentage": null,
++                 "closed": false,
++                 "initialTeardown": undefined,
++               },
++               "closed": false,
++               "destination": ConsumerObserver {
++                 "partialObserver": {
++                   "complete": undefined,
++                   "error": undefined,
++                   "next": [Function: handleExpiredNotification],
++                 },
++               },
++               "initialTeardown": undefined,
++               "isStopped": false,
++             },
++           ],
++           "thrownError": null,
++         },
++         "nextCheck": null,
++         "timer": null,
++       },
++       "insert$": Subject {
++         "closed": false,
++         "currentObservers": [],
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "internalSubscriptions": Subscription {
++         "_finalizers": [
++           SafeSubscriber {
++             "_finalizers": [
++               Subscription {
++                 "_finalizers": null,
++                 "_parentage": [Circular],
++                 "closed": false,
++                 "initialTeardown": [Function],
++               },
++             ],
++             "_parentage": [Circular],
++             "closed": false,
++             "destination": ConsumerObserver {
++               "partialObserver": {
++                 "complete": undefined,
++                 "error": undefined,
++                 "next": [Function: handleDeleteNotification],
++               },
++             },
++             "initialTeardown": undefined,
++             "isStopped": false,
++           },
++           SafeSubscriber {
++             "_finalizers": [
++               Subscription {
++                 "_finalizers": null,
++                 "_parentage": [Circular],
++                 "closed": false,
++                 "initialTeardown": [Function],
++               },
++             ],
++             "_parentage": [Circular],
++             "closed": false,
++             "destination": ConsumerObserver {
++               "partialObserver": {
++                 "complete": undefined,
++                 "error": undefined,
++                 "next": [Function: handleExpiredNotification],
++               },
++             },
++             "initialTeardown": undefined,
++             "isStopped": false,
++           },
++         ],
++         "_parentage": null,
++         "closed": false,
++         "initialTeardown": undefined,
++       },
++       "keepDeleted": true,
++       "keepExpired": true,
++       "keepOldVersions": true,
++       "memory": EventMemory {
++         "authors": 
++ Map {
++           "14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "claims": WeakMap {},
++         "created_at": [
++           [Circular],
++         ],
++         "events": LRU {
++           "first": {
++             "expiry": 0,
++             "key": "8adb8d73bdff29c17621f27110348fb28154a2c138686f67ee575d8f3a38fd1a",
++             "next": null,
++             "prev": null,
++             "value": [Circular],
++           },
++           "items": {
++             "8adb8d73bdff29c17621f27110348fb28154a2c138686f67ee575d8f3a38fd1a": {
++               "expiry": 0,
++               "key": "8adb8d73bdff29c17621f27110348fb28154a2c138686f67ee575d8f3a38fd1a",
++               "next": null,
++               "prev": null,
++               "value": [Circular],
++             },
++           },
++           "last": {
++             "expiry": 0,
++             "key": "8adb8d73bdff29c17621f27110348fb28154a2c138686f67ee575d8f3a38fd1a",
++             "next": null,
++             "prev": null,
++             "value": [Circular],
++           },
++           "max": 0,
++           "resetTtl": false,
++           "size": 1,
++           "ttl": 0,
++         },
++         "kindAuthor": 
++ Map {
++           "1:14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "kinds": 
++ Map {
++           1 =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "log": [Function: debug],
++         "replaceable": Map {},
++         "tags": LRU {
++           "first": {
++             "expiry": 0,
++             "key": "p:d9d82967c82cab3ee050efd19fd218aeca66ea539fc68aff1dcf83dacb659b52",
++             "next": {
++               "expiry": 0,
++               "key": "p:14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c",
++               "next": null,
++               "prev": [Circular],
++               "value":               Set {},
++             },
++             "prev": null,
++             "value":             
++ Set {
++               [Circular],
++             }
++ ,
++           },
++           "items": {
++             "p:14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c": {
++               "expiry": 0,
++               "key": "p:14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c",
++               "next": null,
++               "prev": {
++                 "expiry": 0,
++                 "key": "p:d9d82967c82cab3ee050efd19fd218aeca66ea539fc68aff1dcf83dacb659b52",
++                 "next": [Circular],
++                 "prev": null,
++                 "value":                 
++ Set {
++                   [Circular],
++                 }
++ ,
++               },
++               "value":               Set {},
++             },
++             "p:d9d82967c82cab3ee050efd19fd218aeca66ea539fc68aff1dcf83dacb659b52": {
++               "expiry": 0,
++               "key": "p:d9d82967c82cab3ee050efd19fd218aeca66ea539fc68aff1dcf83dacb659b52",
++               "next": {
++                 "expiry": 0,
++                 "key": "p:14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c",
++                 "next": null,
++                 "prev": [Circular],
++                 "value":                 Set {},
++               },
++               "prev": null,
++               "value":               
++ Set {
++                 [Circular],
++               }
++ ,
++             },
++           },
++           "last": {
++             "expiry": 0,
++             "key": "p:14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c",
++             "next": null,
++             "prev": {
++               "expiry": 0,
++               "key": "p:d9d82967c82cab3ee050efd19fd218aeca66ea539fc68aff1dcf83dacb659b52",
++               "next": [Circular],
++               "prev": null,
++               "value":               
++ Set {
++                 [Circular],
++               }
++ ,
++             },
++             "value":             Set {},
++           },
++           "max": 0,
++           "resetTtl": false,
++           "size": 2,
++           "ttl": 0,
++         },
++       },
++       "modelKeepWarm": 60000,
++       "models": Map {},
++       "remove$": Subject {
++         "closed": false,
++         "currentObservers": null,
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "update$": Subject {
++         "closed": false,
++         "currentObservers": null,
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++     },
++     [Symbol(event-uid)]: "8adb8d73bdff29c17621f27110348fb28154a2c138686f67ee575d8f3a38fd1a",
++     [Symbol(expiration-timestamp)]: undefined,
++     [Symbol(from-cache)]: true,
++     "id": "8adb8d73bdff29c17621f27110348fb28154a2c138686f67ee575d8f3a38fd1a",
++     [Symbol(indexable-tags)]:     
++ Set {
++       "p:d9d82967c82cab3ee050efd19fd218aeca66ea539fc68aff1dcf83dacb659b52",
++     }
++ ,
++     "kind": 1,
++     "pubkey": "14bde37c0eacfbad49cff88e9f66346cd776be5fbb2026860d07938ff345430c",
++     [Symbol(replaceable-identifier)]: "",
++     "sig": "cd48d3a410bd57c509843f840c6b4a7fd275a24ec237061695b1f8d3ed0ec96b55c3bd2f8bda360379fb87d3d61ba5163265dc86049ecbef249b76fcfd373ed2",
++     "tags": [
++       [
++         "p",
++         "d9d82967c82cab3ee050efd19fd218aeca66ea539fc68aff1dcf83dacb659b52",
++       ],
++     ],
++     [Symbol(verified)]: true,
++   },
++ ]
+
+- Expected  - 1
++ Received  + 649
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/event-store/ts/invariants.test.ts:131:36)
+(fail) M7 > M7 · an empty identity list is answered as nothing on every surface [17.91ms]
+
+ 0 pass
+ 15 filtered out
+ 1 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [218.00ms]
+exit: 1
+
+$ sha256 after restore: 016854511d7f80c3384f50469bce9d78519fe647db5054543aa01835341bdc33 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) M7 > M7 · an empty identity list is answered as nothing on every surface [16.91ms]
+
+ 1 pass
+ 15 filtered out
+ 0 fail
+ 13 expect() calls
+Ran 1 test across 1 file. [212.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+mutation 11 — D-O6 · the general empty-#-key rule (`#2e71c3`, I3a)
+breaks:   the rule narrows back to the identity keys, so a present-but-empty `#t`, `#d` or `#a` list is answered as if the key were absent — the whole store for a filter that matches nothing, which is NIP-01's fail-open shape from the other side
+file:     event-store/ts/filters.ts
+sha256:   016854511d7f80c3384f50469bce9d78519fe647db5054543aa01835341bdc33 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+case:     filters.test.ts · an empty #-key list matches nothing, for every #-key and not only the identity keys
+$ the mutation applied (old -> new):
+-         if (key === 'ids' || key === 'authors' || key.startsWith('#')) return true
++         if (key === 'ids' || key === 'authors') return true
+
+$ /home/admin_maxime/.bun/bin/bun test filters.test.ts -t an\ empty\ \#\-key\ list\ matches\ nothing,\ for\ every\ \#\-key\ and\ not\ only\ the\ identity\ keys
+bun test v1.4.2 (744846f84)
+
+filters.test.ts:
+79 | 		const tagged = signedEvent({ kind: 1, created_at: 1000, tags: [['t', 'a']] })
+80 | 		const addressed = signedEvent({ kind: 30402, created_at: 1000, tags: [['d', 'x']] })
+81 | 		await store.write([tagged, addressed])
+82 | 
+83 | 		for (const filter of [{ '#t': [] }, { '#d': [] }, { '#a': [] }, { '#p': [] }, { ids: [], authors: [] }]) {
+84 | 			expect(await store.read(filter)).toEqual([]) // answered as nothing...
+                                         ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   {
++     "content": "",
++     "created_at": 1000,
++     [Symbol(event-store)]: EventStore {
++       "_verifyEventMethod": [Function: verifyEvent],
++       "database": EventMemory {
++         "authors": 
++ Map {
++           "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69" =>           
++ Set {
++             {
++               "content": "",
++               "created_at": 1000,
++               [Symbol(event-store)]: [Circular],
++               [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(expiration-timestamp)]: undefined,
++               [Symbol(from-cache)]: true,
++               "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(indexable-tags)]:               
++ Set {
++                 "t:a",
++               }
++ ,
++               "kind": 1,
++               "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++               [Symbol(replaceable-identifier)]: "",
++               "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++               "tags": [
++                 [
++                   "t",
++                   "a",
++                 ],
++               ],
++               [Symbol(verified)]: true,
++             },
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "claims": WeakMap {},
++         "created_at": [
++           [Circular],
++           {
++             "content": "",
++             "created_at": 1000,
++             [Symbol(event-store)]: [Circular],
++             [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++             [Symbol(expiration-timestamp)]: undefined,
++             [Symbol(from-cache)]: true,
++             "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++             [Symbol(indexable-tags)]:             
++ Set {
++               "t:a",
++             }
++ ,
++             "kind": 1,
++             "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++             [Symbol(replaceable-identifier)]: "",
++             "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++             "tags": [
++               [
++                 "t",
++                 "a",
++               ],
++             ],
++             [Symbol(verified)]: true,
++           },
++         ],
++         "events": LRU {
++           "first": {
++             "expiry": 0,
++             "key": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++             "next": {
++               "expiry": 0,
++               "key": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++               "next": null,
++               "prev": [Circular],
++               "value": [Circular],
++             },
++             "prev": null,
++             "value": {
++               "content": "",
++               "created_at": 1000,
++               [Symbol(event-store)]: [Circular],
++               [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(expiration-timestamp)]: undefined,
++               [Symbol(from-cache)]: true,
++               "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(indexable-tags)]:               
++ Set {
++                 "t:a",
++               }
++ ,
++               "kind": 1,
++               "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++               [Symbol(replaceable-identifier)]: "",
++               "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++               "tags": [
++                 [
++                   "t",
++                   "a",
++                 ],
++               ],
++               [Symbol(verified)]: true,
++             },
++           },
++           "items": {
++             "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81": {
++               "expiry": 0,
++               "key": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++               "next": null,
++               "prev": {
++                 "expiry": 0,
++                 "key": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                 "next": [Circular],
++                 "prev": null,
++                 "value": {
++                   "content": "",
++                   "created_at": 1000,
++                   [Symbol(event-store)]: [Circular],
++                   [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                   [Symbol(expiration-timestamp)]: undefined,
++                   [Symbol(from-cache)]: true,
++                   "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                   [Symbol(indexable-tags)]:                   
++ Set {
++                     "t:a",
++                   }
++ ,
++                   "kind": 1,
++                   "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++                   [Symbol(replaceable-identifier)]: "",
++                   "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++                   "tags": [
++                     [
++                       "t",
++                       "a",
++                     ],
++                   ],
++                   [Symbol(verified)]: true,
++                 },
++               },
++               "value": [Circular],
++             },
++             "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a": {
++               "expiry": 0,
++               "key": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               "next": {
++                 "expiry": 0,
++                 "key": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++                 "next": null,
++                 "prev": [Circular],
++                 "value": [Circular],
++               },
++               "prev": null,
++               "value": {
++                 "content": "",
++                 "created_at": 1000,
++                 [Symbol(event-store)]: [Circular],
++                 [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                 [Symbol(expiration-timestamp)]: undefined,
++                 [Symbol(from-cache)]: true,
++                 "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                 [Symbol(indexable-tags)]:                 
++ Set {
++                   "t:a",
++                 }
++ ,
++                 "kind": 1,
++                 "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++                 [Symbol(replaceable-identifier)]: "",
++                 "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++                 "tags": [
++                   [
++                     "t",
++                     "a",
++                   ],
++                 ],
++                 [Symbol(verified)]: true,
++               },
++             },
++           },
++           "last": {
++             "expiry": 0,
++             "key": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++             "next": null,
++             "prev": {
++               "expiry": 0,
++               "key": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               "next": [Circular],
++               "prev": null,
++               "value": {
++                 "content": "",
++                 "created_at": 1000,
++                 [Symbol(event-store)]: [Circular],
++                 [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                 [Symbol(expiration-timestamp)]: undefined,
++                 [Symbol(from-cache)]: true,
++                 "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                 [Symbol(indexable-tags)]:                 
++ Set {
++                   "t:a",
++                 }
++ ,
++                 "kind": 1,
++                 "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++                 [Symbol(replaceable-identifier)]: "",
++                 "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++                 "tags": [
++                   [
++                     "t",
++                     "a",
++                   ],
++                 ],
++                 [Symbol(verified)]: true,
++               },
++             },
++             "value": [Circular],
++           },
++           "max": 0,
++           "resetTtl": false,
++           "size": 2,
++           "ttl": 0,
++         },
++         "kindAuthor": 
++ Map {
++           "1:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69" =>           
++ Set {
++             {
++               "content": "",
++               "created_at": 1000,
++               [Symbol(event-store)]: [Circular],
++               [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(expiration-timestamp)]: undefined,
++               [Symbol(from-cache)]: true,
++               "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(indexable-tags)]:               
++ Set {
++                 "t:a",
++               }
++ ,
++               "kind": 1,
++               "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++               [Symbol(replaceable-identifier)]: "",
++               "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++               "tags": [
++                 [
++                   "t",
++                   "a",
++                 ],
++               ],
++               [Symbol(verified)]: true,
++             },
++           }
++ ,
++           "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "kinds": 
++ Map {
++           1 =>           
++ Set {
++             {
++               "content": "",
++               "created_at": 1000,
++               [Symbol(event-store)]: [Circular],
++               [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(expiration-timestamp)]: undefined,
++               [Symbol(from-cache)]: true,
++               "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(indexable-tags)]:               
++ Set {
++                 "t:a",
++               }
++ ,
++               "kind": 1,
++               "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++               [Symbol(replaceable-identifier)]: "",
++               "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++               "tags": [
++                 [
++                   "t",
++                   "a",
++                 ],
++               ],
++               [Symbol(verified)]: true,
++             },
++           }
++ ,
++           30402 =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "log": [Function: debug],
++         "replaceable": 
++ Map {
++           "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x" => [
++             [Circular],
++           ],
++         }
++ ,
++         "tags": LRU {
++           "first": null,
++           "items": {},
++           "last": null,
++           "max": 0,
++           "resetTtl": false,
++           "size": 0,
++           "ttl": 0,
++         },
++       },
++       "deletes": DeleteManager {
++         "deleted$": Observable {
++           "source": Subject {
++             "closed": false,
++             "currentObservers": null,
++             "hasError": false,
++             "isStopped": false,
++             "observers": [
++               SafeSubscriber {
++                 "_finalizers": [
++                   Subscription {
++                     "_finalizers": null,
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "initialTeardown": [Function],
++                   },
++                 ],
++                 "_parentage": Subscription {
++                   "_finalizers": [
++                     [Circular],
++                     SafeSubscriber {
++                       "_finalizers": [
++                         Subscription {
++                           "_finalizers": null,
++                           "_parentage": [Circular],
++                           "closed": false,
++                           "initialTeardown": [Function],
++                         },
++                       ],
++                       "_parentage": [Circular],
++                       "closed": false,
++                       "destination": ConsumerObserver {
++                         "partialObserver": {
++                           "complete": undefined,
++                           "error": undefined,
++                           "next": [Function: handleExpiredNotification],
++                         },
++                       },
++                       "initialTeardown": undefined,
++                       "isStopped": false,
++                     },
++                   ],
++                   "_parentage": null,
++                   "closed": false,
++                   "initialTeardown": undefined,
++                 },
++                 "closed": false,
++                 "destination": ConsumerObserver {
++                   "partialObserver": {
++                     "complete": undefined,
++                     "error": undefined,
++                     "next": [Function: handleDeleteNotification],
++                   },
++                 },
++                 "initialTeardown": undefined,
++                 "isStopped": false,
++               },
++             ],
++             "thrownError": null,
++           },
++         },
++         "deletedIdentifiers": Map {},
++         "deletedIds": Map {},
++         "deletedSubject": Subject {
++           "closed": false,
++           "currentObservers": null,
++           "hasError": false,
++           "isStopped": false,
++           "observers": [
++             SafeSubscriber {
++               "_finalizers": [
++                 Subscription {
++                   "_finalizers": null,
++                   "_parentage": [Circular],
++                   "closed": false,
++                   "initialTeardown": [Function],
++                 },
++               ],
++               "_parentage": Subscription {
++                 "_finalizers": [
++                   [Circular],
++                   SafeSubscriber {
++                     "_finalizers": [
++                       Subscription {
++                         "_finalizers": null,
++                         "_parentage": [Circular],
++                         "closed": false,
++                         "initialTeardown": [Function],
++                       },
++                     ],
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "destination": ConsumerObserver {
++                       "partialObserver": {
++                         "complete": undefined,
++                         "error": undefined,
++                         "next": [Function: handleExpiredNotification],
++                       },
++                     },
++                     "initialTeardown": undefined,
++                     "isStopped": false,
++                   },
++                 ],
++                 "_parentage": null,
++                 "closed": false,
++                 "initialTeardown": undefined,
++               },
++               "closed": false,
++               "destination": ConsumerObserver {
++                 "partialObserver": {
++                   "complete": undefined,
++                   "error": undefined,
++                   "next": [Function: handleDeleteNotification],
++                 },
++               },
++               "initialTeardown": undefined,
++               "isStopped": false,
++             },
++           ],
++           "thrownError": null,
++         },
++       },
++       "destroy$": ReplaySubject {
++         "_buffer": [],
++         "_bufferSize": 1,
++         "_infiniteTimeWindow": true,
++         "_timestampProvider": {
++           "delegate": undefined,
++           "now": [Function],
++         },
++         "_windowTime": Infinity,
++         "closed": false,
++         "currentObservers": null,
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "eventLoader": undefined,
++       "expiration": ExpirationManager {
++         "expirations": Map {},
++         "expired$": Observable {
++           "source": Subject {
++             "closed": false,
++             "currentObservers": null,
++             "hasError": false,
++             "isStopped": false,
++             "observers": [
++               SafeSubscriber {
++                 "_finalizers": [
++                   Subscription {
++                     "_finalizers": null,
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "initialTeardown": [Function],
++                   },
++                 ],
++                 "_parentage": Subscription {
++                   "_finalizers": [
++                     SafeSubscriber {
++                       "_finalizers": [
++                         Subscription {
++                           "_finalizers": null,
++                           "_parentage": [Circular],
++                           "closed": false,
++                           "initialTeardown": [Function],
++                         },
++                       ],
++                       "_parentage": [Circular],
++                       "closed": false,
++                       "destination": ConsumerObserver {
++                         "partialObserver": {
++                           "complete": undefined,
++                           "error": undefined,
++                           "next": [Function: handleDeleteNotification],
++                         },
++                       },
++                       "initialTeardown": undefined,
++                       "isStopped": false,
++                     },
++                     [Circular],
++                   ],
++                   "_parentage": null,
++                   "closed": false,
++                   "initialTeardown": undefined,
++                 },
++                 "closed": false,
++                 "destination": ConsumerObserver {
++                   "partialObserver": {
++                     "complete": undefined,
++                     "error": undefined,
++                     "next": [Function: handleExpiredNotification],
++                   },
++                 },
++                 "initialTeardown": undefined,
++                 "isStopped": false,
++               },
++             ],
++             "thrownError": null,
++           },
++         },
++         "expiredSubject": Subject {
++           "closed": false,
++           "currentObservers": null,
++           "hasError": false,
++           "isStopped": false,
++           "observers": [
++             SafeSubscriber {
++               "_finalizers": [
++                 Subscription {
++                   "_finalizers": null,
++                   "_parentage": [Circular],
++                   "closed": false,
++                   "initialTeardown": [Function],
++                 },
++               ],
++               "_parentage": Subscription {
++                 "_finalizers": [
++                   SafeSubscriber {
++                     "_finalizers": [
++                       Subscription {
++                         "_finalizers": null,
++                         "_parentage": [Circular],
++                         "closed": false,
++                         "initialTeardown": [Function],
++                       },
++                     ],
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "destination": ConsumerObserver {
++                       "partialObserver": {
++                         "complete": undefined,
++                         "error": undefined,
++                         "next": [Function: handleDeleteNotification],
++                       },
++                     },
++                     "initialTeardown": undefined,
++                     "isStopped": false,
++                   },
++                   [Circular],
++                 ],
++                 "_parentage": null,
++                 "closed": false,
++                 "initialTeardown": undefined,
++               },
++               "closed": false,
++               "destination": ConsumerObserver {
++                 "partialObserver": {
++                   "complete": undefined,
++                   "error": undefined,
++                   "next": [Function: handleExpiredNotification],
++                 },
++               },
++               "initialTeardown": undefined,
++               "isStopped": false,
++             },
++           ],
++           "thrownError": null,
++         },
++         "nextCheck": null,
++         "timer": null,
++       },
++       "insert$": Subject {
++         "closed": false,
++         "currentObservers": [],
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "internalSubscriptions": Subscription {
++         "_finalizers": [
++           SafeSubscriber {
++             "_finalizers": [
++               Subscription {
++                 "_finalizers": null,
++                 "_parentage": [Circular],
++                 "closed": false,
++                 "initialTeardown": [Function],
++               },
++             ],
++             "_parentage": [Circular],
++             "closed": false,
++             "destination": ConsumerObserver {
++               "partialObserver": {
++                 "complete": undefined,
++                 "error": undefined,
++                 "next": [Function: handleDeleteNotification],
++               },
++             },
++             "initialTeardown": undefined,
++             "isStopped": false,
++           },
++           SafeSubscriber {
++             "_finalizers": [
++               Subscription {
++                 "_finalizers": null,
++                 "_parentage": [Circular],
++                 "closed": false,
++                 "initialTeardown": [Function],
++               },
++             ],
++             "_parentage": [Circular],
++             "closed": false,
++             "destination": ConsumerObserver {
++               "partialObserver": {
++                 "complete": undefined,
++                 "error": undefined,
++                 "next": [Function: handleExpiredNotification],
++               },
++             },
++             "initialTeardown": undefined,
++             "isStopped": false,
++           },
++         ],
++         "_parentage": null,
++         "closed": false,
++         "initialTeardown": undefined,
++       },
++       "keepDeleted": true,
++       "keepExpired": true,
++       "keepOldVersions": true,
++       "memory": EventMemory {
++         "authors": 
++ Map {
++           "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69" =>           
++ Set {
++             {
++               "content": "",
++               "created_at": 1000,
++               [Symbol(event-store)]: [Circular],
++               [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(expiration-timestamp)]: undefined,
++               [Symbol(from-cache)]: true,
++               "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(indexable-tags)]:               
++ Set {
++                 "t:a",
++               }
++ ,
++               "kind": 1,
++               "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++               [Symbol(replaceable-identifier)]: "",
++               "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++               "tags": [
++                 [
++                   "t",
++                   "a",
++                 ],
++               ],
++               [Symbol(verified)]: true,
++             },
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "claims": WeakMap {},
++         "created_at": [
++           [Circular],
++           {
++             "content": "",
++             "created_at": 1000,
++             [Symbol(event-store)]: [Circular],
++             [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++             [Symbol(expiration-timestamp)]: undefined,
++             [Symbol(from-cache)]: true,
++             "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++             [Symbol(indexable-tags)]:             
++ Set {
++               "t:a",
++             }
++ ,
++             "kind": 1,
++             "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++             [Symbol(replaceable-identifier)]: "",
++             "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++             "tags": [
++               [
++                 "t",
++                 "a",
++               ],
++             ],
++             [Symbol(verified)]: true,
++           },
++         ],
++         "events": LRU {
++           "first": {
++             "expiry": 0,
++             "key": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++             "next": {
++               "expiry": 0,
++               "key": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++               "next": null,
++               "prev": [Circular],
++               "value": [Circular],
++             },
++             "prev": null,
++             "value": {
++               "content": "",
++               "created_at": 1000,
++               [Symbol(event-store)]: [Circular],
++               [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(expiration-timestamp)]: undefined,
++               [Symbol(from-cache)]: true,
++               "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(indexable-tags)]:               
++ Set {
++                 "t:a",
++               }
++ ,
++               "kind": 1,
++               "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++               [Symbol(replaceable-identifier)]: "",
++               "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++               "tags": [
++                 [
++                   "t",
++                   "a",
++                 ],
++               ],
++               [Symbol(verified)]: true,
++             },
++           },
++           "items": {
++             "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81": {
++               "expiry": 0,
++               "key": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++               "next": null,
++               "prev": {
++                 "expiry": 0,
++                 "key": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                 "next": [Circular],
++                 "prev": null,
++                 "value": {
++                   "content": "",
++                   "created_at": 1000,
++                   [Symbol(event-store)]: [Circular],
++                   [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                   [Symbol(expiration-timestamp)]: undefined,
++                   [Symbol(from-cache)]: true,
++                   "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                   [Symbol(indexable-tags)]:                   
++ Set {
++                     "t:a",
++                   }
++ ,
++                   "kind": 1,
++                   "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++                   [Symbol(replaceable-identifier)]: "",
++                   "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++                   "tags": [
++                     [
++                       "t",
++                       "a",
++                     ],
++                   ],
++                   [Symbol(verified)]: true,
++                 },
++               },
++               "value": [Circular],
++             },
++             "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a": {
++               "expiry": 0,
++               "key": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               "next": {
++                 "expiry": 0,
++                 "key": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++                 "next": null,
++                 "prev": [Circular],
++                 "value": [Circular],
++               },
++               "prev": null,
++               "value": {
++                 "content": "",
++                 "created_at": 1000,
++                 [Symbol(event-store)]: [Circular],
++                 [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                 [Symbol(expiration-timestamp)]: undefined,
++                 [Symbol(from-cache)]: true,
++                 "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                 [Symbol(indexable-tags)]:                 
++ Set {
++                   "t:a",
++                 }
++ ,
++                 "kind": 1,
++                 "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++                 [Symbol(replaceable-identifier)]: "",
++                 "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++                 "tags": [
++                   [
++                     "t",
++                     "a",
++                   ],
++                 ],
++                 [Symbol(verified)]: true,
++               },
++             },
++           },
++           "last": {
++             "expiry": 0,
++             "key": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++             "next": null,
++             "prev": {
++               "expiry": 0,
++               "key": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               "next": [Circular],
++               "prev": null,
++               "value": {
++                 "content": "",
++                 "created_at": 1000,
++                 [Symbol(event-store)]: [Circular],
++                 [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                 [Symbol(expiration-timestamp)]: undefined,
++                 [Symbol(from-cache)]: true,
++                 "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                 [Symbol(indexable-tags)]:                 
++ Set {
++                   "t:a",
++                 }
++ ,
++                 "kind": 1,
++                 "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++                 [Symbol(replaceable-identifier)]: "",
++                 "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++                 "tags": [
++                   [
++                     "t",
++                     "a",
++                   ],
++                 ],
++                 [Symbol(verified)]: true,
++               },
++             },
++             "value": [Circular],
++           },
++           "max": 0,
++           "resetTtl": false,
++           "size": 2,
++           "ttl": 0,
++         },
++         "kindAuthor": 
++ Map {
++           "1:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69" =>           
++ Set {
++             {
++               "content": "",
++               "created_at": 1000,
++               [Symbol(event-store)]: [Circular],
++               [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(expiration-timestamp)]: undefined,
++               [Symbol(from-cache)]: true,
++               "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(indexable-tags)]:               
++ Set {
++                 "t:a",
++               }
++ ,
++               "kind": 1,
++               "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++               [Symbol(replaceable-identifier)]: "",
++               "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++               "tags": [
++                 [
++                   "t",
++                   "a",
++                 ],
++               ],
++               [Symbol(verified)]: true,
++             },
++           }
++ ,
++           "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69" =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "kinds": 
++ Map {
++           1 =>           
++ Set {
++             {
++               "content": "",
++               "created_at": 1000,
++               [Symbol(event-store)]: [Circular],
++               [Symbol(event-uid)]: "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(expiration-timestamp)]: undefined,
++               [Symbol(from-cache)]: true,
++               "id": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               [Symbol(indexable-tags)]:               
++ Set {
++                 "t:a",
++               }
++ ,
++               "kind": 1,
++               "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++               [Symbol(replaceable-identifier)]: "",
++               "sig": "4ab77bc34e5cb245cb0cae05302e7f36b80911024d4d31a5b34917d718010a0a455253ec63a7ed9105d214c9e1dcfc97bc079a4f3e42d3b12c1e4bc96b8328cd",
++               "tags": [
++                 [
++                   "t",
++                   "a",
++                 ],
++               ],
++               [Symbol(verified)]: true,
++             },
++           }
++ ,
++           30402 =>           
++ Set {
++             [Circular],
++           }
++ ,
++         }
++ ,
++         "log": [Function: debug],
++         "replaceable": 
++ Map {
++           "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x" => [
++             [Circular],
++           ],
++         }
++ ,
++         "tags": LRU {
++           "first": null,
++           "items": {},
++           "last": null,
++           "max": 0,
++           "resetTtl": false,
++           "size": 0,
++           "ttl": 0,
++         },
++       },
++       "modelKeepWarm": 60000,
++       "models": Map {},
++       "remove$": Subject {
++         "closed": false,
++         "currentObservers": null,
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "update$": Subject {
++         "closed": false,
++         "currentObservers": null,
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++     },
++     [Symbol(event-uid)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++     [Symbol(expiration-timestamp)]: undefined,
++     [Symbol(from-cache)]: true,
++     "id": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++     [Symbol(indexable-tags)]:     
++ Set {
++       "d:x",
++     }
++ ,
++     "kind": 30402,
++     "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++     [Symbol(replaceable-address)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++     [Symbol(replaceable-identifier)]: "x",
++     "sig": "00f44f8392ced26d5907470c2da238fe49a6da22f1f0b7b4319a1ff34d6af2f5ca194f7c3e26f33a6e3c66e36f8a668405ab1fad35ab59809bf501506325734e",
++     "tags": [
++       [
++         "d",
++         "x",
++       ],
++     ],
++     [Symbol(verified)]: true,
++   },
++   {
++     "content": "",
++     "created_at": 1000,
++     [Symbol(event-store)]: EventStore {
++       "_verifyEventMethod": [Function: verifyEvent],
++       "database": EventMemory {
++         "authors": 
++ Map {
++           "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69" =>           
++ Set {
++             [Circular],
++             {
++               "content": "",
++               "created_at": 1000,
++               [Symbol(event-store)]: [Circular],
++               [Symbol(event-uid)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++               [Symbol(expiration-timestamp)]: undefined,
++               [Symbol(from-cache)]: true,
++               "id": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++               [Symbol(indexable-tags)]:               
++ Set {
++                 "d:x",
++               }
++ ,
++               "kind": 30402,
++               "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++               [Symbol(replaceable-address)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++               [Symbol(replaceable-identifier)]: "x",
++               "sig": "00f44f8392ced26d5907470c2da238fe49a6da22f1f0b7b4319a1ff34d6af2f5ca194f7c3e26f33a6e3c66e36f8a668405ab1fad35ab59809bf501506325734e",
++               "tags": [
++                 [
++                   "d",
++                   "x",
++                 ],
++               ],
++               [Symbol(verified)]: true,
++             },
++           }
++ ,
++         }
++ ,
++         "claims": WeakMap {},
++         "created_at": [
++           {
++             "content": "",
++             "created_at": 1000,
++             [Symbol(event-store)]: [Circular],
++             [Symbol(event-uid)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++             [Symbol(expiration-timestamp)]: undefined,
++             [Symbol(from-cache)]: true,
++             "id": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++             [Symbol(indexable-tags)]:             
++ Set {
++               "d:x",
++             }
++ ,
++             "kind": 30402,
++             "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++             [Symbol(replaceable-address)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++             [Symbol(replaceable-identifier)]: "x",
++             "sig": "00f44f8392ced26d5907470c2da238fe49a6da22f1f0b7b4319a1ff34d6af2f5ca194f7c3e26f33a6e3c66e36f8a668405ab1fad35ab59809bf501506325734e",
++             "tags": [
++               [
++                 "d",
++                 "x",
++               ],
++             ],
++             [Symbol(verified)]: true,
++           },
++           [Circular],
++         ],
++         "events": LRU {
++           "first": {
++             "expiry": 0,
++             "key": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++             "next": {
++               "expiry": 0,
++               "key": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++               "next": null,
++               "prev": [Circular],
++               "value": {
++                 "content": "",
++                 "created_at": 1000,
++                 [Symbol(event-store)]: [Circular],
++                 [Symbol(event-uid)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++                 [Symbol(expiration-timestamp)]: undefined,
++                 [Symbol(from-cache)]: true,
++                 "id": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++                 [Symbol(indexable-tags)]:                 
++ Set {
++                   "d:x",
++                 }
++ ,
++                 "kind": 30402,
++                 "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++                 [Symbol(replaceable-address)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++                 [Symbol(replaceable-identifier)]: "x",
++                 "sig": "00f44f8392ced26d5907470c2da238fe49a6da22f1f0b7b4319a1ff34d6af2f5ca194f7c3e26f33a6e3c66e36f8a668405ab1fad35ab59809bf501506325734e",
++                 "tags": [
++                   [
++                     "d",
++                     "x",
++                   ],
++                 ],
++                 [Symbol(verified)]: true,
++               },
++             },
++             "prev": null,
++             "value": [Circular],
++           },
++           "items": {
++             "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81": {
++               "expiry": 0,
++               "key": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++               "next": null,
++               "prev": {
++                 "expiry": 0,
++                 "key": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++                 "next": [Circular],
++                 "prev": null,
++                 "value": [Circular],
++               },
++               "value": {
++                 "content": "",
++                 "created_at": 1000,
++                 [Symbol(event-store)]: [Circular],
++                 [Symbol(event-uid)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++                 [Symbol(expiration-timestamp)]: undefined,
++                 [Symbol(from-cache)]: true,
++                 "id": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++                 [Symbol(indexable-tags)]:                 
++ Set {
++                   "d:x",
++                 }
++ ,
++                 "kind": 30402,
++                 "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++                 [Symbol(replaceable-address)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++                 [Symbol(replaceable-identifier)]: "x",
++                 "sig": "00f44f8392ced26d5907470c2da238fe49a6da22f1f0b7b4319a1ff34d6af2f5ca194f7c3e26f33a6e3c66e36f8a668405ab1fad35ab59809bf501506325734e",
++                 "tags": [
++                   [
++                     "d",
++                     "x",
++                   ],
++                 ],
++                 [Symbol(verified)]: true,
++               },
++             },
++             "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a": {
++               "expiry": 0,
++               "key": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               "next": {
++                 "expiry": 0,
++                 "key": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++                 "next": null,
++                 "prev": [Circular],
++                 "value": {
++                   "content": "",
++                   "created_at": 1000,
++                   [Symbol(event-store)]: [Circular],
++                   [Symbol(event-uid)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++                   [Symbol(expiration-timestamp)]: undefined,
++                   [Symbol(from-cache)]: true,
++                   "id": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++                   [Symbol(indexable-tags)]:                   
++ Set {
++                     "d:x",
++                   }
++ ,
++                   "kind": 30402,
++                   "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++                   [Symbol(replaceable-address)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++                   [Symbol(replaceable-identifier)]: "x",
++                   "sig": "00f44f8392ced26d5907470c2da238fe49a6da22f1f0b7b4319a1ff34d6af2f5ca194f7c3e26f33a6e3c66e36f8a668405ab1fad35ab59809bf501506325734e",
++                   "tags": [
++                     [
++                       "d",
++                       "x",
++                     ],
++                   ],
++                   [Symbol(verified)]: true,
++                 },
++               },
++               "prev": null,
++               "value": [Circular],
++             },
++           },
++           "last": {
++             "expiry": 0,
++             "key": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++             "next": null,
++             "prev": {
++               "expiry": 0,
++               "key": "be948a6359d79334e25440d4837422d44b9b7e192342190e687319d758e1270a",
++               "next": [Circular],
++               "prev": null,
++               "value": [Circular],
++             },
++             "value": {
++               "content": "",
++               "created_at": 1000,
++               [Symbol(event-store)]: [Circular],
++               [Symbol(event-uid)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++               [Symbol(expiration-timestamp)]: undefined,
++               [Symbol(from-cache)]: true,
++               "id": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++               [Symbol(indexable-tags)]:               
++ Set {
++                 "d:x",
++               }
++ ,
++               "kind": 30402,
++               "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++               [Symbol(replaceable-address)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++               [Symbol(replaceable-identifier)]: "x",
++               "sig": "00f44f8392ced26d5907470c2da238fe49a6da22f1f0b7b4319a1ff34d6af2f5ca194f7c3e26f33a6e3c66e36f8a668405ab1fad35ab59809bf501506325734e",
++               "tags": [
++                 [
++                   "d",
++                   "x",
++                 ],
++               ],
++               [Symbol(verified)]: true,
++             },
++           },
++           "max": 0,
++           "resetTtl": false,
++           "size": 2,
++           "ttl": 0,
++         },
++         "kindAuthor": 
++ Map {
++           "1:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69" =>           
++ Set {
++             [Circular],
++           }
++ ,
++           "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69" =>           
++ Set {
++             {
++               "content": "",
++               "created_at": 1000,
++               [Symbol(event-store)]: [Circular],
++               [Symbol(event-uid)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++               [Symbol(expiration-timestamp)]: undefined,
++               [Symbol(from-cache)]: true,
++               "id": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++               [Symbol(indexable-tags)]:               
++ Set {
++                 "d:x",
++               }
++ ,
++               "kind": 30402,
++               "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++               [Symbol(replaceable-address)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++               [Symbol(replaceable-identifier)]: "x",
++               "sig": "00f44f8392ced26d5907470c2da238fe49a6da22f1f0b7b4319a1ff34d6af2f5ca194f7c3e26f33a6e3c66e36f8a668405ab1fad35ab59809bf501506325734e",
++               "tags": [
++                 [
++                   "d",
++                   "x",
++                 ],
++               ],
++               [Symbol(verified)]: true,
++             },
++           }
++ ,
++         }
++ ,
++         "kinds": 
++ Map {
++           1 =>           
++ Set {
++             [Circular],
++           }
++ ,
++           30402 =>           
++ Set {
++             {
++               "content": "",
++               "created_at": 1000,
++               [Symbol(event-store)]: [Circular],
++               [Symbol(event-uid)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++               [Symbol(expiration-timestamp)]: undefined,
++               [Symbol(from-cache)]: true,
++               "id": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++               [Symbol(indexable-tags)]:               
++ Set {
++                 "d:x",
++               }
++ ,
++               "kind": 30402,
++               "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++               [Symbol(replaceable-address)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++               [Symbol(replaceable-identifier)]: "x",
++               "sig": "00f44f8392ced26d5907470c2da238fe49a6da22f1f0b7b4319a1ff34d6af2f5ca194f7c3e26f33a6e3c66e36f8a668405ab1fad35ab59809bf501506325734e",
++               "tags": [
++                 [
++                   "d",
++                   "x",
++                 ],
++               ],
++               [Symbol(verified)]: true,
++             },
++           }
++ ,
++         }
++ ,
++         "log": [Function: debug],
++         "replaceable": 
++ Map {
++           "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x" => [
++             {
++               "content": "",
++               "created_at": 1000,
++               [Symbol(event-store)]: [Circular],
++               [Symbol(event-uid)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++               [Symbol(expiration-timestamp)]: undefined,
++               [Symbol(from-cache)]: true,
++               "id": "274c051ce58dd64ee77005e8b6ea9d2df5bf7b85238463d829af95291a1baf81",
++               [Symbol(indexable-tags)]:               
++ Set {
++                 "d:x",
++               }
++ ,
++               "kind": 30402,
++               "pubkey": "3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69",
++               [Symbol(replaceable-address)]: "30402:3da22d00f45dadca1484c723273a3386e40089f0de6f39f1dedd9f4178fc7d69:x",
++               [Symbol(replaceable-identifier)]: "x",
++               "sig": "00f44f8392ced26d5907470c2da238fe49a6da22f1f0b7b4319a1ff34d6af2f5ca194f7c3e26f33a6e3c66e36f8a668405ab1fad35ab59809bf501506325734e",
++               "tags": [
++                 [
++                   "d",
++                   "x",
++                 ],
++               ],
++               [Symbol(verified)]: true,
++             },
++           ],
++         }
++ ,
++         "tags": LRU {
++           "first": null,
++           "items": {},
++           "last": null,
++           "max": 0,
++           "resetTtl": false,
++           "size": 0,
++           "ttl": 0,
++         },
++       },
++       "deletes": DeleteManager {
++         "deleted$": Observable {
++           "source": Subject {
++             "closed": false,
++             "currentObservers": null,
++             "hasError": false,
++             "isStopped": false,
++             "observers": [
++               SafeSubscriber {
++                 "_finalizers": [
++                   Subscription {
++                     "_finalizers": null,
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "initialTeardown": [Function],
++                   },
++                 ],
++                 "_parentage": Subscription {
++                   "_finalizers": [
++                     [Circular],
++                     SafeSubscriber {
++                       "_finalizers": [
++                         Subscription {
++                           "_finalizers": null,
++                           "_parentage": [Circular],
++                           "closed": false,
++                           "initialTeardown": [Function],
++                         },
++                       ],
++                       "_parentage": [Circular],
++                       "closed": false,
++                       "destination": ConsumerObserver {
++                         "partialObserver": {
++                           "complete": undefined,
++                           "error": undefined,
++                           "next": [Function: handleExpiredNotification],
++                         },
++                       },
++                       "initialTeardown": undefined,
++                       "isStopped": false,
++                     },
++                   ],
++                   "_parentage": null,
++                   "closed": false,
++                   "initialTeardown": undefined,
++                 },
++                 "closed": false,
++                 "destination": ConsumerObserver {
++                   "partialObserver": {
++                     "complete": undefined,
++                     "error": undefined,
++                     "next": [Function: handleDeleteNotification],
++                   },
++                 },
++                 "initialTeardown": undefined,
++                 "isStopped": false,
++               },
++             ],
++             "thrownError": null,
++           },
++         },
++         "deletedIdentifiers": Map {},
++         "deletedIds": Map {},
++         "deletedSubject": Subject {
++           "closed": false,
++           "currentObservers": null,
++           "hasError": false,
++           "isStopped": false,
++           "observers": [
++             SafeSubscriber {
++               "_finalizers": [
++                 Subscription {
++                   "_finalizers": null,
++                   "_parentage": [Circular],
++                   "closed": false,
++                   "initialTeardown": [Function],
++                 },
++               ],
++               "_parentage": Subscription {
++                 "_finalizers": [
++                   [Circular],
++                   SafeSubscriber {
++                     "_finalizers": [
++                       Subscription {
++                         "_finalizers": null,
++                         "_parentage": [Circular],
++                         "closed": false,
++                         "initialTeardown": [Function],
++                       },
++                     ],
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "destination": ConsumerObserver {
++                       "partialObserver": {
++                         "complete": undefined,
++                         "error": undefined,
++                         "next": [Function: handleExpiredNotification],
++                       },
++                     },
++                     "initialTeardown": undefined,
++                     "isStopped": false,
++                   },
++                 ],
++                 "_parentage": null,
++                 "closed": false,
++                 "initialTeardown": undefined,
++               },
++               "closed": false,
++               "destination": ConsumerObserver {
++                 "partialObserver": {
++                   "complete": undefined,
++                   "error": undefined,
++                   "next": [Function: handleDeleteNotification],
++                 },
++               },
++               "initialTeardown": undefined,
++               "isStopped": false,
++             },
++           ],
++           "thrownError": null,
++         },
++       },
++       "destroy$": ReplaySubject {
++         "_buffer": [],
++         "_bufferSize": 1,
++         "_infiniteTimeWindow": true,
++         "_timestampProvider": {
++           "delegate": undefined,
++           "now": [Function],
++         },
++         "_windowTime": Infinity,
++         "closed": false,
++         "currentObservers": null,
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "eventLoader": undefined,
++       "expiration": ExpirationManager {
++         "expirations": Map {},
++         "expired$": Observable {
++           "source": Subject {
++             "closed": false,
++             "currentObservers": null,
++             "hasError": false,
++             "isStopped": false,
++             "observers": [
++               SafeSubscriber {
++                 "_finalizers": [
++                   Subscription {
++                     "_finalizers": null,
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "initialTeardown": [Function],
++                   },
++                 ],
++                 "_parentage": Subscription {
++                   "_finalizers": [
++                     SafeSubscriber {
++                       "_finalizers": [
++                         Subscription {
++                           "_finalizers": null,
++                           "_parentage": [Circular],
++                           "closed": false,
++                           "initialTeardown": [Function],
++                         },
++                       ],
++                       "_parentage": [Circular],
++                       "closed": false,
++                       "destination": ConsumerObserver {
++                         "partialObserver": {
++                           "complete": undefined,
++                           "error": undefined,
++                           "next": [Function: handleDeleteNotification],
++                         },
++                       },
++                       "initialTeardown": undefined,
++                       "isStopped": false,
++                     },
++                     [Circular],
++                   ],
++                   "_parentage": null,
++                   "closed": false,
++                   "initialTeardown": undefined,
++                 },
++                 "closed": false,
++                 "destination": ConsumerObserver {
++                   "partialObserver": {
++                     "complete": undefined,
++                     "error": undefined,
++                     "next": [Function: handleExpiredNotification],
++                   },
++                 },
++                 "initialTeardown": undefined,
++                 "isStopped": false,
++               },
++             ],
++             "thrownError": null,
++           },
++         },
++         "expiredSubject": Subject {
++           "closed": false,
++           "currentObservers": null,
++           "hasError": false,
++           "isStopped": false,
++           "observers": [
++             SafeSubscriber {
++               "_finalizers": [
++                 Subscription {
++                   "_finalizers": null,
++                   "_parentage": [Circular],
++                   "closed": false,
++                   "initialTeardown": [Function],
++                 },
++               ],
++               "_parentage": Subscription {
++                 "_finalizers": [
++                   SafeSubscriber {
++                     "_finalizers": [
++                       Subscription {
++                         "_finalizers": null,
++                         "_parentage": [Circular],
++                         "closed": false,
++                         "initialTeardown": [Function],
++                       },
++                     ],
++                     "_parentage": [Circular],
++                     "closed": false,
++                     "destination": ConsumerObserver {
++                       "partialObserver": {
++                         "complete": undefined,
++                         "error": undefined,
++                         "next": [Function: handleDeleteNotification],
++                       },
++                     },
++                     "initialTeardown": undefined,
++                     "isStopped": false,
++                   },
++                   [Circular],
++                 ],
++                 "_parentage": null,
++                 "closed": false,
++                 "initialTeardown": undefined,
++               },
++               "closed": false,
++               "destination": ConsumerObserver {
++                 "partialObserver": {
++                   "complete": undefined,
++                   "error": undefined,
++                   "next": [Function: handleExpiredNotification],
++                 },
++               },
++               "initialTeardown": undefined,
++               "isStopped": false,
++             },
++           ],
++           "thrownError": null,
++         },
++         "nextCheck": null,
++         "timer": null,
++       },
++       "insert$": Subject {
++         "closed": false,
++         "currentObservers": [],
++         "hasError": false,
++         "isStopped": false,
++         "observers": [],
++         "thrownError": null,
++       },
++       "internalSubscriptions": Subscription {
++         "_finalizers": [
++           SafeSubscriber {
++             "_finalizers": [
++               Subscription {
++                 "_finalizers": null,
++                 "_parentage": [Circular],
++                 "closed": false,
++                 "initialTeardown": [Function],
++               },
++             ],
++             "_parentage": [Circular],
++             "closed": false,
++             "destination": ConsumerObserver {
++               "partialObserver": {
++                 "complete": undefined,
++                 "error": undefined,
++                 "next": [Function: handleDeleteNotification],
++               },
++             },
++             "initialTeardown": undefined,
++             "isStopped": false,
++           },
++           SafeSubscriber {
++             "_finalizers": [
++               Subscription {
++                 "_finalizers": null,
++                 "_parentage": [Circular],
++                 "closed": false,
++
+exit: 1
+
+$ sha256 after restore: 016854511d7f80c3384f50469bce9d78519fe647db5054543aa01835341bdc33 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named case failed under the mutation
+
+$ ...and the same case on the restored file:
+bun test v1.4.2 (744846f84)
+
+filters.test.ts:
+(pass) D-O6 · the general empty-#-key rule > an empty #-key list matches nothing, for every #-key and not only the identity keys [25.09ms]
+
+ 1 pass
+ 5 filtered out
+ 0 fail
+ 14 expect() calls
+Ran 1 test across 1 file. [292.00ms]
+exit: 0   (0 = green again)
+the case is green again on the restored file: yes
+
+==============================================================================
+11 mutation(s) applied, 0 falsification failure(s)
+every mutated file was restored and its sha256 verified; the module's tree is as it was before this run.
+
+11 mutation(s), 0 falsification failure(s)
