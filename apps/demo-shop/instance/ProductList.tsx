@@ -11,6 +11,10 @@
  * `data-variant`, `data-selected`), so `styles.css` themes them from those
  * attributes rather than from a class-name convention.
  *
+ * This section is the `region-products` **region** — the named landmark the shell
+ * declares, carrying its own `aria-label` — so a reader addresses the product
+ * catalogue by name and never by the class that happens to lay it out.
+ *
  * This renders on the server and hydrates in the browser, so it must not read a
  * browser-only global at render time.
  */
@@ -78,7 +82,11 @@ function ProductRow({ item }: { item: ProductListItem }) {
 
 export function ProductList({ view, className }: { view: ProductListView; className?: string }) {
 	return (
-		<section aria-labelledby="product-list-heading" data-testid="product-list" className={cn('ds-list', className)}>
+		<section
+			aria-label="The product catalogue"
+			data-testid="product-list"
+			className={cn('ds-region region region-products ds-list', className)}
+		>
 			<div className="ds-list-head">
 				<h2 id="product-list-heading" className="ds-section-title">
 					Products

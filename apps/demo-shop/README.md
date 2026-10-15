@@ -30,6 +30,43 @@ carries the product titles and prices; the browser bundle then hydrates that sam
 markup from `window.__DEMO_SHOP__`. It is not a shell that only looks right once
 a browser has run.
 
+## House style
+
+The app's tokens and its two layout conventions come from the house style of the
+old market app (`market-app/visuals/webui/design.ts`) — **values and conventions
+only**; no markup, component or code was taken from there, and nothing under
+`sdk/` or `ui/` was edited to bring them in. The sheet stays the app's own
+(`apps/demo-shop/styles.css`), which is what ADR-0021 asks for: a theming change,
+not an import of another module's stylesheet.
+
+What that style is, as applied here:
+
+- a **warm paper** ground (`#fbf8f5`), never cold white;
+- a **monochrome primary** — `--ds-accent` is near-black `#141414`, so the
+  leading control is ink on paper — and exactly **one vivid colour**
+  (`#ff4fa3`) for emphasis;
+- **square corners**: `--ds-r: 0px`, and every `border-radius` in the sheet is
+  that one token;
+- a **single spacing unit** `--ds-u: 1.31rem` that every margin, padding and gap
+  is a whole multiple of;
+- status as **soft tinted pairs** (success / warn / danger), never a raw
+  saturated colour;
+- **named regions** — `region-nav`, `region-instance`, `region-products`, … each
+  carrying an `aria-label` — and a **skeleton** state (`data-skeleton="1"` with
+  `.sk` blocks).
+
+`instance/theme.test.ts` holds those as source facts, so a later edit cannot
+quietly reintroduce the old dark palette or round a corner. The browser pass is
+what proves the sheet *applies*: `scripts/capture-surface.mjs` reads the computed
+style off the live page as well as photographing it, because a grep of the served
+HTML says "the sheet is there" over a page that renders unstyled.
+
+The skeleton is used exactly where it is honest. Every other region on the page is
+server-rendered from data the server holds; the cart is the **browser's**, so the
+served bytes carry the skeleton where the count goes and the browser fills it
+after hydration. Nothing guesses at the number, and "this browser has no reachable
+storage" is its own named state rather than a `0`.
+
 ## Capture it
 
 ```sh
@@ -40,6 +77,18 @@ TMPDIR=/home/admin_maxime/work/.tmp bun run apps/demo-shop/scripts/capture-produ
 A real browser loads the page, the harness waits for the rendered rows, reads the
 page's own visible text back out of the DOM and writes `product-list.png`. The
 text is read as well as photographed so that *exists but is empty* cannot pass.
+
+`scripts/capture-surface.mjs` is the same harness generalised to any surface: it
+takes a URL, an output name, a wait selector and an optional click-then-navigate
+pair (which is how a flow that starts on one page and ends on another is
+captured), and it reports the page's text per named element, the named regions it
+rendered, the computed styles a styling change has to move, and any console
+error.
+
+```sh
+TMPDIR=/home/admin_maxime/work/.tmp bun run apps/demo-shop/scripts/capture-surface.mjs \
+  http://127.0.0.1:3400/ apps/demo-shop/.capture product-list.png
+```
 
 ## Test it
 
