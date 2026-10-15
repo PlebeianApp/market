@@ -8,7 +8,12 @@
  * empty" cannot pass.
  *
  * Usage:
- *   TMPDIR=/home/admin_maxime/work/.tmp bun run apps/demo-shop/scripts/capture-product-list.mjs [url] [outDir]
+ *   TMPDIR=/home/admin_maxime/work/.tmp bun run apps/demo-shop/scripts/capture-product-list.mjs [url] [outDir] [width] [height] [name]
+ *
+ * Defaults: http://127.0.0.1:3400/, ../.capture, 1280, 900, product-list.png.
+ * A second call at a narrow viewport is how the same page is shown holding at
+ * phone width:
+ *   … capture-product-list.mjs http://127.0.0.1:3400/ ../.capture 430 932 product-list-narrow.png
  *
  * NOTE: this is a capture harness, not a repository e2e spec. AGENTS.md ("Feature
  * Quality Gate") requires a targeted Playwright spec under `e2e/` with published
@@ -22,11 +27,14 @@ import { chromium } from 'playwright'
 
 const url = process.argv[2] ?? 'http://127.0.0.1:3400/'
 const outDir = resolve(process.argv[3] ?? new URL('../.capture', import.meta.url).pathname)
+const width = Number(process.argv[4] ?? 1280)
+const height = Number(process.argv[5] ?? 900)
+const name = process.argv[6] ?? 'product-list.png'
 
 await mkdir(outDir, { recursive: true })
 
 const browser = await chromium.launch()
-const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 })
+const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 2 })
 
 const consoleErrors = []
 page.on('console', (message) => {
@@ -60,7 +68,7 @@ const summary = {
 	consoleErrors,
 }
 
-const screenshotPath = resolve(outDir, 'product-list.png')
+const screenshotPath = resolve(outDir, name)
 await page.screenshot({ path: screenshotPath, fullPage: true })
 
 console.log(JSON.stringify({ screenshotPath, ...summary }, null, 2))
