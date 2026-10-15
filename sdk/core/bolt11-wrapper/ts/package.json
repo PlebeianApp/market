@@ -1,0 +1,19 @@
+{
+	"name": "@plebeian-apps/bolt11-wrapper",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "The bolt11 rail wrapper: the funds contract's port implemented over the invoice-and-preimage rail.",
+	"exports": {
+		".": "./index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit",
+		"evidence": "bash ../evidence/run.sh"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.2.0",
+		"typescript": "^5.6.0"
+	}
+}
