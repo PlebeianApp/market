@@ -1,11 +1,11 @@
-import { Checkbox } from '@/components/ui/checkbox'
 import { Media } from '@/components/Media'
 import { authStore } from '@/lib/stores/auth'
 import { collectionFormStore, collectionFormActions } from '@/lib/stores/collection'
 import { useProductsByPubkey } from '@/queries/products'
-import { getProductId, getProductTitle, getProductImages } from '@/queries/products'
+import { getProductCoordinates, getProductId, getProductTitle, getProductImages } from '@sdk/commerce/discovery'
 import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
+import { ProductSelectionList } from '@ui/components/ProductSelectionList'
 
 export function ProductsTab() {
 	const { selectedProducts, availableProducts } = useStore(collectionFormStore)
@@ -22,7 +22,7 @@ export function ProductsTab() {
 				const id = getProductId(product)
 				const title = getProductTitle(product)
 				const images = getProductImages(product)
-				const coordinates = `30402:${product.pubkey}:${id}`
+				const coordinates = getProductCoordinates(product)
 
 				return {
 					id,
@@ -44,57 +44,13 @@ export function ProductsTab() {
 		}
 	}
 
-	if (isLoading) {
-		return (
-			<div className="flex items-center justify-center h-32">
-				<div className="text-gray-500">Loading your products...</div>
-			</div>
-		)
-	}
-
-	if (availableProducts.length === 0) {
-		return (
-			<div className="flex flex-col items-center justify-center h-32 space-y-2">
-				<div className="text-gray-500">No products found</div>
-				<div className="text-sm text-gray-400">Create some products first to add them to collections</div>
-			</div>
-		)
-	}
-
 	return (
-		<div className="space-y-4">
-			<p className="text-gray-600">Select products to include in this collection</p>
-
-			<div className="space-y-3">
-				{availableProducts.map((product) => {
-					const isSelected = selectedProducts.includes(product.coordinates)
-
-					return (
-						<div key={product.coordinates} className="flex items-center space-x-3 p-3 border rounded-lg">
-							<Checkbox
-								id={product.coordinates}
-								checked={isSelected}
-								onCheckedChange={(checked) => handleProductToggle(product.coordinates, !!checked)}
-							/>
-
-							<div className="flex items-center space-x-3 flex-1">
-								{product.imageUrl && <Media src={product.imageUrl} alt={product.title} className="w-10 h-10 object-cover rounded" />}
-								<div className="flex-1">
-									<label htmlFor={product.coordinates} className="text-sm font-medium cursor-pointer">
-										{product.title}
-									</label>
-								</div>
-							</div>
-						</div>
-					)
-				})}
-			</div>
-
-			{selectedProducts.length > 0 && (
-				<div className="text-sm text-gray-600 mt-4">
-					{selectedProducts.length} product{selectedProducts.length !== 1 ? 's' : ''} selected
-				</div>
-			)}
-		</div>
+		<ProductSelectionList
+			items={availableProducts}
+			selectedCoordinates={selectedProducts}
+			isLoading={isLoading}
+			onToggle={handleProductToggle}
+			renderImage={(url, title) => <Media src={url} alt={title} className="size-10 rounded object-cover" />}
+		/>
 	)
 }

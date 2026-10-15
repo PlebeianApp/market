@@ -3,9 +3,10 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions, productFormStore } from '@/lib/stores/product'
-import { useCollectionsByPubkey, getCollectionTitle, getCollectionId } from '@/queries/collections'
+import { useCollectionsByPubkey } from '@/queries/collections'
 import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'
+import { CollectionSelectField } from '@ui/components/CollectionSelectField'
 
 export function NameTab() {
 	const { productType, name, summary, description, selectedCollection } = useStore(productFormStore)
@@ -35,33 +36,14 @@ export function NameTab() {
 	return (
 		<div className="space-y-4">
 			<div className="grid w-full gap-1.5">
-				<Label htmlFor="collection">Collection (Optional)</Label>
-				<Select
+				<Label htmlFor="product-collection-select">Collection (Optional)</Label>
+				<CollectionSelectField
+					id="product-collection-select"
+					data-testid="product-collection-select"
+					collections={collections}
 					value={selectedCollection || 'none'}
 					onValueChange={(value) => productFormActions.updateValues({ selectedCollection: value === 'none' ? null : value })}
-				>
-					<SelectTrigger className="border-2" data-testid="product-collection-select">
-						<SelectValue placeholder="Select a collection" />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value="none" data-testid="collection-option-none">
-							Not In A Collection
-						</SelectItem>
-						{collections.map((collection) => {
-							const collectionId = getCollectionId(collection)
-							const collectionTitle = getCollectionTitle(collection)
-							return (
-								<SelectItem
-									key={collectionId}
-									value={collectionId}
-									data-testid={`collection-option-${collectionTitle?.toLowerCase().replace(/\s+/g, '-') || 'unknown'}`}
-								>
-									{collectionTitle}
-								</SelectItem>
-							)
-						})}
-					</SelectContent>
-				</Select>
+				/>
 			</div>
 
 			<div className="grid w-full gap-1.5">
