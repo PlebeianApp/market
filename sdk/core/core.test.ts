@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent } from 'nostr-tools'
 import { parseMarketConfig } from './marketConfig'
-import { parseNostrEventShape, verifyNostrEvent } from './nostr/eventValidation'
 import { EventSchemaRegistry, validateEventWithSchema, validateWithSchema } from './validation'
 import { createWorkflowError } from './errors'
 
@@ -56,16 +55,11 @@ describe('SDK Core validation and config', () => {
 		expect(() => registry.register({ kind: 30408, parse: (input) => input })).toThrow('already registered')
 	})
 
-	test('validates event shape separately from id/signature verification', () => {
-		const event = finalizeEvent({ kind: 1, created_at: 10, content: 'test', tags: [] }, new Uint8Array(32).fill(1))
-		expect(parseNostrEventShape(event).ok).toBe(true)
-		expect(verifyNostrEvent(event).ok).toBe(true)
-		expect(verifyNostrEvent({ ...event, content: 'tampered' })).toMatchObject({ ok: false })
-		expect(parseNostrEventShape({ ...event, sig: 'bad' })).toMatchObject({
-			ok: false,
-			error: { code: 'validation_failed', path: ['sig'] },
-		})
-	})
+	// Removed with the hand-built validation layer: `parseNostrEventShape` and
+	// `verifyNostrEvent` were deleted with `sdk/core/nostr/eventValidation.ts` and
+	// had no replacement in the SDK modules, so this case went with them. Event
+	// validation is a known, unbuilt capability — a named gap in the PR body, not
+	// something this change silently replaced.
 
 	test('parses and normalizes explicit, versioned market relay targets', () => {
 		expect(

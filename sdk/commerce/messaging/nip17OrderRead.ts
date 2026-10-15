@@ -1,6 +1,6 @@
 import type { Event } from 'nostr-tools'
+import { unwrapDm } from '../../core/dm/ts/index.ts'
 import type { EncryptingSigner } from '../../core/ports/encryptingSigner'
-import { unwrapNip59GiftWrapWithSigner } from '../../core/nostr/nip59'
 import { assertOrderMessageRumor, type OrderMessageRumor } from './orderMessageRumor'
 
 export type Nip17OrderMessageDirection = 'sent' | 'received'
@@ -28,13 +28,8 @@ export type UnwrapNip17OrderMessagesParams = {
 export async function unwrapNip17OrderMessage(params: UnwrapNip17OrderMessageParams): Promise<UnwrappedNip17OrderMessage> {
 	const userPubkey = await getSignerPubkey(params.signer)
 
-	const unwrapped = await unwrapNip59GiftWrapWithSigner({
-		giftWrap: params.giftWrap,
-		signer: params.signer,
-		expectedRecipientPubkey: userPubkey,
-	})
-
-	const rumorValue: unknown = unwrapped.rumor
+	// The NIP-59 unwrap is the dm component's — the library's `unlockGiftWrap`, through the seal, to the rumor.
+	const { seal, rumor: rumorValue } = await unwrapDm({ giftWrap: params.giftWrap, signer: params.signer as EncryptingSigner })
 	assertOrderMessageRumor(rumorValue)
 
 	const rumor = rumorValue
@@ -50,7 +45,7 @@ export async function unwrapNip17OrderMessage(params: UnwrapNip17OrderMessagePar
 
 	return {
 		giftWrap: params.giftWrap,
-		seal: unwrapped.seal,
+		seal,
 		rumor,
 		direction: userIsSender ? 'sent' : 'received',
 		userPubkey,

@@ -1,14 +1,8 @@
-import { getPublicKey } from 'nostr-tools'
-import type { Event } from 'nostr-tools'
+import { finalizeEvent, getEventHash, getPublicKey, nip44 } from 'nostr-tools'
+import type { Event, UnsignedEvent } from 'nostr-tools'
+import { giftWrapSeal, unwrapDm, wrapDm } from '../../core/dm/ts/index.ts'
+import type { DmSigner } from '../../core/dm/ts/index.ts'
 import type { EncryptingSigner } from '../../core/ports/encryptingSigner'
-import {
-	createNip59GiftWrap,
-	createNip59GiftWrapWithSigner,
-	normalizeUnsignedRumorId,
-	unwrapNip59GiftWrap,
-	unwrapNip59GiftWrapWithSigner,
-	type UnsignedRumor,
-} from '../../core/nostr/nip59'
 
 const GAMMA_ORDER_KIND = 16
 const GAMMA_ORDER_CREATION_TYPE = '1'
@@ -16,6 +10,16 @@ const GAMMA_ORDER_SUBJECT = 'order-info'
 const PRODUCT_REF_KIND = '30402'
 const SHIPPING_REF_KIND = '30406'
 const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
+
+/** The unsigned NIP-59 rumor shape this module builds and reads (its `id` is canonical). */
+type UnsignedRumor = {
+	kind: number
+	pubkey: string
+	created_at: number
+	tags: string[][]
+	content: string
+	id?: string
+}
 
 export type PrivateOrderAddress = {
 	firstLineOfAddress?: string
@@ -76,7 +80,7 @@ export type DecryptedPrivateOrderMessage = {
 	details: PrivateOrderDeliveryDetails
 }
 
-export function createPrivateOrderDetailsRumor(params: CreatePrivateOrderDetailsRumorParams): UnsignedRumor {
+export function createPrivateOrderDetailsRumor(params: CreatePrivateOrderDetailsRumorParams): UnsignedRumor & { id: string } {
 	const { details, createdAt = unixNow() } = params
 	validatePrivateOrderDetails(details)
 
@@ -115,25 +119,24 @@ export function createPrivateOrderDetailsRumor(params: CreatePrivateOrderDetails
 	})
 }
 
-export function createEncryptedPrivateOrderMessage(
+export async function createEncryptedPrivateOrderMessage(
 	params: CreateEncryptedPrivateOrderMessageParams,
-): DecryptedPrivateOrderMessage & { giftWrap: Event } {
+): Promise<DecryptedPrivateOrderMessage & { giftWrap: Event }> {
 	const buyerPubkey = getPublicKey(params.buyerPrivateKey)
 	if (buyerPubkey !== params.details.buyerPubkey) {
 		throw new Error('Private order buyer key does not match buyer pubkey')
 	}
 
 	const rumor = createPrivateOrderDetailsRumor({ details: params.details, createdAt: params.createdAt })
-	const wrapped = createNip59GiftWrap({
-		rumor,
-		senderPrivateKey: params.buyerPrivateKey,
-		recipientPubkey: params.details.sellerPubkey,
-		wrapperPrivateKey: params.wrapperPrivateKey,
-		createdAt: params.createdAt,
-	})
+	// The gift wrap is the dm component's — the library's `sealRumor` + `wrapSeal` over a private-key signer.
+	const wraps = await wrapDm({ rumor, recipientPubkey: params.details.sellerPubkey, signer: signerFromPrivateKey(params.buyerPrivateKey) })
+	const seal = giftWrapSeal(wraps.recipient)
+	if (!seal) throw new Error('Private order gift wrap has no seal')
 
 	return {
-		...wrapped,
+		rumor: wraps.rumor,
+		seal,
+		giftWrap: wraps.recipient,
 		details: params.details,
 	}
 }
@@ -142,53 +145,46 @@ export async function createEncryptedPrivateOrderMessageWithSigner(
 	params: CreateEncryptedPrivateOrderMessageWithSignerParams,
 ): Promise<DecryptedPrivateOrderMessage & { giftWrap: Event }> {
 	const rumor = createPrivateOrderDetailsRumor({ details: params.details, createdAt: params.createdAt })
-	const wrapped = await createNip59GiftWrapWithSigner({
-		rumor,
-		signer: params.signer,
-		recipientPubkey: params.details.sellerPubkey,
-		wrapperPrivateKey: params.wrapperPrivateKey,
-		createdAt: params.createdAt,
-	})
+	const signer = params.signer
+	if (!signer) throw new Error('Signer pubkey unavailable')
+	const wraps = await wrapDm({ rumor, recipientPubkey: params.details.sellerPubkey, signer })
+	const seal = giftWrapSeal(wraps.recipient)
+	if (!seal) throw new Error('Private order gift wrap has no seal')
 
 	return {
-		...wrapped,
+		rumor: wraps.rumor,
+		seal,
+		giftWrap: wraps.recipient,
 		details: params.details,
 	}
 }
 
-export function decryptPrivateOrderMessage(params: DecryptPrivateOrderMessageParams): DecryptedPrivateOrderMessage {
+export async function decryptPrivateOrderMessage(params: DecryptPrivateOrderMessageParams): Promise<DecryptedPrivateOrderMessage> {
 	const sellerPubkey = params.expectedSellerPubkey ?? getPublicKey(params.sellerPrivateKey)
-	const unwrapped = unwrapNip59GiftWrap({
-		giftWrap: params.giftWrap,
-		recipientPrivateKey: params.sellerPrivateKey,
-		expectedRecipientPubkey: sellerPubkey,
-		expectedSenderPubkey: params.expectedBuyerPubkey,
-	})
+	// The NIP-59 unwrap is the dm component's — the library's `unlockGiftWrap` over a private-key signer.
+	const { seal, rumor } = await unwrapDm({ giftWrap: params.giftWrap, signer: signerFromPrivateKey(params.sellerPrivateKey) })
 
-	const details = parsePrivateOrderDetailsRumor(unwrapped.rumor, {
+	const details = parsePrivateOrderDetailsRumor(rumor, {
 		expectedSellerPubkey: sellerPubkey,
 		expectedBuyerPubkey: params.expectedBuyerPubkey,
 	})
 
-	return { ...unwrapped, details }
+	return { seal, rumor, details }
 }
 
 export async function decryptPrivateOrderMessageWithSigner(
 	params: DecryptPrivateOrderMessageWithSignerParams,
 ): Promise<DecryptedPrivateOrderMessage> {
-	const unwrapped = await unwrapNip59GiftWrapWithSigner({
-		giftWrap: params.giftWrap,
-		signer: params.signer,
-		expectedRecipientPubkey: params.expectedSellerPubkey,
-		expectedSenderPubkey: params.expectedBuyerPubkey,
-	})
+	const signer = params.signer
+	if (!signer) throw new Error('Signer pubkey unavailable')
+	const { seal, rumor } = await unwrapDm({ giftWrap: params.giftWrap, signer })
 
-	const details = parsePrivateOrderDetailsRumor(unwrapped.rumor, {
+	const details = parsePrivateOrderDetailsRumor(rumor, {
 		expectedSellerPubkey: params.expectedSellerPubkey,
 		expectedBuyerPubkey: params.expectedBuyerPubkey,
 	})
 
-	return { ...unwrapped, details }
+	return { seal, rumor, details }
 }
 
 export function parsePrivateOrderDetailsRumor(
@@ -292,6 +288,57 @@ function validatePrivateOrderDetails(details: PrivateOrderDeliveryDetails): void
 
 	if (details.shippingRef && !isAddressableRef(details.shippingRef, SHIPPING_REF_KIND, details.sellerPubkey)) {
 		throw new Error('Private order shipping ref is invalid')
+	}
+}
+
+/**
+ * The canonical rumor id. This is the library's own rule (`toRumor` stamps `getEventHash` and strips the
+ * signature); it is computed locally so the private-key convenience path does not need a signer to build a rumor.
+ */
+function normalizeUnsignedRumorId(rumor: UnsignedRumor): UnsignedRumor & { id: string } {
+	const canonicalId = getEventHash({
+		pubkey: rumor.pubkey,
+		created_at: rumor.created_at,
+		kind: rumor.kind,
+		tags: rumor.tags,
+		content: rumor.content,
+	})
+
+	if (rumor.id && rumor.id !== canonicalId) {
+		throw new Error('Private order rumor id is invalid')
+	}
+
+	return {
+		pubkey: rumor.pubkey,
+		created_at: rumor.created_at,
+		kind: rumor.kind,
+		tags: rumor.tags.map((tag) => [...tag]),
+		content: rumor.content,
+		id: canonicalId,
+	}
+}
+
+/**
+ * A `DmSigner` over a raw private key — the host seam for the convenience path. It is a port adapter (a bare
+ * signature out, NIP-44 through), not NIP-59 logic: the seal, the wrap and the unwrap stay in the dm component.
+ */
+function signerFromPrivateKey(privateKey: Uint8Array): DmSigner {
+	return {
+		getPublicKey: async () => getPublicKey(privateKey),
+		signEvent: async (event) =>
+			finalizeEvent(
+				{
+					kind: event.kind,
+					created_at: event.created_at,
+					tags: event.tags,
+					content: event.content,
+					pubkey: event.pubkey,
+				} as UnsignedEvent,
+				privateKey,
+			).sig,
+		encrypt: async (recipient, plaintext) => nip44.v2.encrypt(plaintext, nip44.v2.utils.getConversationKey(privateKey, recipient)),
+		decrypt: async (sender, ciphertext) => nip44.v2.decrypt(ciphertext, nip44.v2.utils.getConversationKey(privateKey, sender)),
+		supportsNip44: async () => true,
 	}
 }
 

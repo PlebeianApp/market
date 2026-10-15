@@ -1,8 +1,25 @@
 import { describe, expect, test } from 'bun:test'
 import { createCommentTemplate } from './commentEvents'
 
-const product = { id: 'product-event-id', kind: 30402, pubkey: 'seller-pubkey', tags: [['d', 'my-product']], content: '' }
-const regularPost = { id: 'post-event-id', kind: 1, pubkey: 'author-pubkey', tags: [], content: '' }
+const SIGNATURE = '0'.repeat(128)
+const product = {
+	id: 'product-event-id',
+	kind: 30402,
+	pubkey: 'seller-pubkey',
+	created_at: 1700000000,
+	tags: [['d', 'my-product']],
+	content: '',
+	sig: SIGNATURE,
+}
+const regularPost = {
+	id: 'post-event-id',
+	kind: 1,
+	pubkey: 'author-pubkey',
+	created_at: 1700000000,
+	tags: [],
+	content: '',
+	sig: SIGNATURE,
+}
 
 describe('createCommentTemplate', () => {
 	test('top-level comment on an addressable target uses A/a tags', () => {

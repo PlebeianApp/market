@@ -13,6 +13,10 @@ async function listSourceFiles(directory: string): Promise<string[]> {
 	const nested = await Promise.all(
 		entries.map(async (entry) => {
 			const fullPath = join(directory, entry.name)
+			// Skip installed dependencies: a local `node_modules` contains third-party
+			// type stubs whose own documentation comments mention React, which would
+			// otherwise be reported as a boundary violation by this module's code.
+			if (entry.name === 'node_modules') return []
 			if (entry.isDirectory()) return listSourceFiles(fullPath)
 			const extension = entry.name.slice(entry.name.lastIndexOf('.'))
 			return SOURCE_EXTENSIONS.has(extension) && !TEST_FILE.test(entry.name) ? [fullPath] : []
