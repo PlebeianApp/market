@@ -4,6 +4,13 @@
 
 Proposed — branch `auctions`
 
+> **Amendment (2026-10-15):** the third top-level folder is now **`apps/`**. The
+> `platform/` folder was renamed into it (`git mv platform apps`) and the import
+> alias was renamed `@platform/*` → `@apps/*`. The *part* described below is still
+> called Platform (application composition and instance runtime); `apps/` is where
+> it lives. This document keeps its number, title, and filename so that existing
+> citations of ADR-0021 stay valid — see "Revision — 2026-10-15" below.
+
 ## Date
 
 2026-10-07
@@ -23,7 +30,7 @@ The application currently has a runtime public configuration path at `/api/confi
 
 ## Decision
 
-Organize the product into three top-level folders in the existing repository: `sdk/`, `ui/`, and `platform/`. Start with folders and internal TypeScript imports in the existing Bun project. Do not create separately published packages or a package workspace in this initial step. The dependency direction is:
+Organize the product into three top-level folders in the existing repository: `sdk/`, `ui/`, and `apps/`. Start with folders and internal TypeScript imports in the existing Bun project. Do not create separately published packages or a package workspace in this initial step. The dependency direction is:
 
 ```text
 Platform (application composition and instance runtime)
@@ -35,7 +42,7 @@ SDK
   └── defines runtime-independent contracts and marketplace capabilities
 ```
 
-The folders remain in one repository and build/runtime environment. `sdk/` and `ui/` contain reusable TypeScript modules; `platform/` contains the Bun/TypeScript host application and instance runtime that composes them. This does not imply three separately deployed services or repositories. Preserve existing project boundaries: `contextvm/` remains a separate service area, while `deploy-simple/` and `.github/workflows/` remain deployment assets and CI configuration.
+The folders remain in one repository and build/runtime environment. `sdk/` and `ui/` contain reusable TypeScript modules; `apps/` contains the Bun/TypeScript host application and instance runtime that composes them. This does not imply three separately deployed services or repositories. Preserve existing project boundaries: `contextvm/` remains a separate service area, while `deploy-simple/` and `.github/workflows/` remain deployment assets and CI configuration.
 
 Migrate existing code from `src/` into the three folders incrementally. This ADR does not require a one-shot move or a change from Bun and TypeScript.
 
@@ -91,7 +98,7 @@ The platform's existing `/api/config` endpoint is a starting point for public pe
 
 ## Consequences
 
-- Existing code can be extracted incrementally into `sdk/`, `ui/`, and `platform/` without requiring a one-shot rewrite or three separate deployment units.
+- Existing code can be extracted incrementally into `sdk/`, `ui/`, and `apps/` without requiring a one-shot rewrite or three separate deployment units.
 - The current web application becomes the Platform host consuming the extracted SDK and UI.
 - The runtime remains Bun and TypeScript. This decision introduces no mobile adapters or mobile buyer workflows.
 - The folders are internal to the repository initially; publication and independent package versioning are deferred.
@@ -106,8 +113,8 @@ The platform's existing `/api/config` endpoint is a starting point for public pe
 1. Inventory current routes, components, query/publish modules, stores, server responsibilities, and extension-like integrations; map dependencies to SDK, UI, and Platform before moving files.
 2. Create the three top-level folders in the existing Bun/TypeScript repository. Keep `contextvm/`, `deploy-simple/`, and `.github/workflows/` in their current project/tooling boundaries.
 3. Define stable internal TypeScript APIs and dependency rules, beginning with SDK Core/Nostr I/O. Preserve existing protocol behavior and tests.
-4. Extract one complete commerce workflow into `sdk/` and migrate the existing web app to consume it from `platform/` as the first integration/characterization test.
-5. Extract reusable React components into `ui/`; keep route composition and app-specific wiring in `platform/` and provide theme/override APIs.
+4. Extract one complete commerce workflow into `sdk/` and migrate the existing web app to consume it from `apps/` as the first integration/characterization test.
+5. Extract reusable React components into `ui/`; keep route composition and app-specific wiring in `apps/` and provide theme/override APIs.
 6. Move extension interfaces and adapters into SDK modules; add extension config schemas there and make Platform own actual instance configuration, secrets, and service lifecycle.
 7. Re-compose the current web host app from Platform + UI + SDK without changing user-visible behavior. Add self-hosting and operational support as separately reviewable Platform work.
 8. Consider package publication or mobile clients only after the internal boundaries and APIs are stable, through a follow-up decision.
@@ -116,3 +123,29 @@ The platform's existing `/api/config` endpoint is a starting point for public pe
 
 - Should the internal folders later become separately versioned/published packages, and what consumers or evidence should trigger that step?
 - Which extensions run in-process, as separate services, or through third-party APIs, and what isolation/permission model is required for each?
+
+## Revision — 2026-10-15
+
+The maintainer decided that `apps/` is the canonical directory for the third
+top-level part and that everything in `platform/` moves over to it. This is a
+naming/structural change only; the part's name, responsibility, and the
+dependency rules above are unchanged.
+
+- The folder `platform/` was renamed to `apps/` (`git mv platform apps`). It held
+  two files, `index.ts` and `web/boot.ts`; both moved unchanged.
+- The import alias `@platform/*` was renamed to `@apps/*` in `tsconfig.json`, and
+  the two live importers (`src/frontend.tsx`, `src/lib/boot.ts`) were repointed.
+- The SDK boundary wall (`sdk/boundary.test.ts`) now forbids `@apps/` in place of
+  `@platform/`, as does the mirroring pattern in
+  `sdk/core/composition/ts/siblings.test.ts`. A forbidden-module pattern that
+  cannot match returns zero violations and reads as a clean tree, so renaming the
+  folder without renaming the pattern would have let the SDK silently import the
+  app. The prose naming that list was updated to match.
+- Dependency direction is unchanged: `apps/` (Platform) uses `ui/` and `sdk/`;
+  `sdk/` depends on neither. The wall is what keeps that true.
+- The document keeps its number, title, and filename so existing citations of
+  ADR-0021 remain valid. `platform/` now survives in this document only where it
+  names the part, or records this rename.
+
+Building the app instance in `apps/` is the next step; it is not part of this
+revision.
