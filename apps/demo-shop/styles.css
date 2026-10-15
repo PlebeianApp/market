@@ -374,6 +374,17 @@ a {
 	font-size: 16px;
 }
 
+/* The listing's address, underlined on hover: the row's title is the way in. */
+.ds-row-link {
+	text-decoration: underline;
+	text-decoration-color: var(--ds-border-strong);
+	text-underline-offset: 3px;
+}
+
+.ds-row-link:hover {
+	text-decoration-color: var(--ds-accent-2);
+}
+
 .ds-price {
 	flex-shrink: 0;
 	font-family: var(--ds-mono);
@@ -476,6 +487,23 @@ a {
 	gap: var(--ds-5);
 }
 
+.ds-back {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	text-decoration: underline;
+	text-decoration-color: var(--ds-border-strong);
+	text-underline-offset: 3px;
+}
+
+.ds-back:hover {
+	text-decoration-color: var(--ds-accent-2);
+}
+
+.ds-detail-title {
+	font-size: clamp(24px, 3.2vw, 34px);
+}
+
 .ds-detail-head {
 	display: flex;
 	flex-direction: column;
@@ -495,14 +523,33 @@ a {
 	font-size: 19px;
 }
 
+.ds-detail-summary {
+	margin: 0;
+	font-weight: 600;
+}
+
 .ds-detail-body {
 	font-size: 15px;
+}
+
+.ds-detail-body p {
+	margin: 0;
+}
+
+.ds-desc {
+	white-space: pre-wrap;
 }
 
 .ds-specs {
 	display: grid;
 	gap: var(--ds-1);
 	margin: 0;
+}
+
+.ds-spec-value {
+	margin: 0;
+	text-align: right;
+	overflow-wrap: anywhere;
 }
 
 .ds-spec-row {
@@ -517,11 +564,6 @@ a {
 	font-weight: 600;
 	color: var(--ds-muted);
 	min-width: 120px;
-}
-
-.ds-spec-value {
-	text-align: right;
-	overflow-wrap: anywhere;
 }
 
 .ds-shipping {

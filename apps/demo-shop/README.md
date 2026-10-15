@@ -1,8 +1,9 @@
 # `apps/demo-shop` — the demo instance
 
-The first slice of the app instance the checkout arc is being built in. It
-**boots**, **composes** the SDK's commerce modules and `ui/`, and **renders a
-product list from real commerce data**, with both of its edges injected.
+The app instance the checkout arc is being built in. It **boots**, **composes**
+the SDK's commerce modules and `ui/`, **renders a product list from real commerce
+data**, opens **one listing's page**, and lets a shopper **put that listing in the
+cart** — with both of its edges injected.
 
 This directory is the third part of ADR-0021 (`apps/`), not the SDK and not the
 UI. It may import `sdk/` and `ui/`; neither may import it — `sdk/boundary.test.ts`
@@ -17,18 +18,55 @@ TMPDIR=/home/admin_maxime/work/.tmp bun run apps/demo-shop/server.tsx
 # demo-shop: edge = fixture · 5 listings · 1 not on sale
 ```
 
-Then:
+## The addresses it serves
+
+| Address | Surface |
+| --- | --- |
+| `/` | the product list |
+| `/products/<coordinates>` | one listing's page, with its buy control |
+| `/api/products` | the list as JSON |
+| `/api/products/<coordinates>` | one listing as JSON, or `404` with its reason |
+| `/api/config` | this instance's public config, no secrets |
+| `/health` | liveness, with the edge it read and when |
+
+`<coordinates>` is the listing's **own addressable identity** —
+`30402:<seller pubkey>:<d tag>`, the string `getProductCoordinates` returns and the
+SDK's head rule keys on — not a slug invented for the URL. `instance/routes.ts` is
+the one place it is spelled, and `instance/routes.test.ts` holds the round trip
+from the path a row emits to the coordinates a route parses.
+
+A product address that resolves to nothing is answered **404 with a sentence**
+(`product-missing`), and a listing the read model calls hidden is one of those: the
+detail applies the same "not on sale is not a surface" rule the list applies when
+it drops the row.
 
 ```sh
-curl -sS http://127.0.0.1:3400/            # the page, server-rendered
-curl -sS http://127.0.0.1:3400/api/products # the same data as JSON
-curl -sS http://127.0.0.1:3400/api/config   # this instance's public config, no secrets
+curl -sS http://127.0.0.1:3400/                                     # the list, server-rendered
+curl -sS 'http://127.0.0.1:3400/products/30402:<pubkey>:wool-coat'  # the listing's page
+curl -sS 'http://127.0.0.1:3400/api/products/30402:<pubkey>:wool-coat'
 ```
 
-The page is server-rendered (`react-dom/server`), so **the HTTP response itself**
+The pages are server-rendered (`react-dom/server`), so **the HTTP response itself**
 carries the product titles and prices; the browser bundle then hydrates that same
-markup from `window.__DEMO_SHOP__`. It is not a shell that only looks right once
-a browser has run.
+markup from `window.__DEMO_SHOP__`, **including which route it is**, so the client
+renders the tree the server rendered and no surface is painted by another route's
+script. It is not a shell that only looks right once a browser has run.
+
+## The cart is the browser's
+
+There is no cart on the server and no session. `sdk/commerce/cart` ships the
+persistence contract (`PersistedCartContent` — versioned `30402:<seller>:<d>` refs
+with clamped integer quantities), the builder (`createCartIntent`), the parser
+(`parseCartPersistenceContent`) and the mutation (`addCartProduct`), and
+deliberately **no storage**: supplying it is the host's job (ADR-0021,
+"Configuration ownership"), so `instance/cartState.ts` takes it as an injected
+`CartStorage` port and `instance/useCart.ts` is the only place that reaches a
+browser global.
+
+That is also why the nav's count is a **skeleton** in the served bytes: the server
+cannot know this browser's cart, so it shows the loading state and the browser fills
+it after hydration. "This browser has no reachable cart storage" is its own named
+state, never a `0` nobody measured.
 
 ## House style
 
@@ -109,24 +147,35 @@ pool, and a `fetch` spy that throws is installed for the duration (ADR-0005).
 | `instance/productAdmission.ts` | the instance | the admission edge: untrusted event in, item or nothing out |
 | `instance/productSource.ts` | the instance | the `ProductSource` port, plus the fixture and relay adapters |
 | `instance/productListView.ts` | the instance | the read composition; every product rule comes from the SDK |
-| `instance/ProductList.tsx`, `App.tsx` | the instance | presentation, composing `ui/`'s `Badge`, `SelectableBadge`, `cn` |
+| `instance/productDetailView.ts` | the instance | one listing by address, over **the same** read composition |
+| `instance/routes.ts` | the instance | the app's addresses, spelled once and parsed once |
+| `instance/cartState.ts` | the instance | the browser's cart, through `@sdk/commerce/cart`, over an injected storage port |
+| `instance/useCart.ts` | the instance | the cart's three named page states, and the one write path |
+| `instance/ProductList.tsx`, `ProductDetail.tsx`, `App.tsx` | the instance | presentation, composing `ui/`'s `Badge`, `SelectableBadge`, `cn` |
 | `instance/boot.ts` | the instance | config → edge → read → view |
-| `server.tsx`, `client.tsx` | the instance | `Bun.serve` + SSR, and the browser hydration entry |
+| `server.tsx`, `client.tsx` | the instance | `Bun.serve` + per-route SSR, and the browser hydration entry |
 
 Nobody in `sdk/` or `ui/` was edited to make this work.
 
 ## What this slice does **not** prove
 
-- **No cart, no checkout, no payment.** Steps 2–5 of the arc are not here. The
-  page is a product list and nothing on it is interactive.
+- **No cart view and no checkout.** Adding to the cart works and is persisted in
+  the browser; the surface that *shows* the cart, and the checkout entry, are the
+  next increment. Nothing here touches money.
 - **The relay edge has never been run against a live relay.** It is composed and
   it is tested through an injected transport, which is a real test of the seam but
   is not a live read. The demo runs on the fixture edge.
+- **The instance reads its edge once, at boot.** The list and a listing's page
+  therefore resolve against one read — which is what makes them agree — but a
+  listing published after boot is not in either of them.
 - **The `.capture` PNG is regenerable, not checked in.** It is an acceptance
   artefact and is git-ignored.
 - **There is no Playwright spec under `e2e/`.** AGENTS.md's Feature Quality Gate
   wants one, with video, in `e2e/`; the acceptance harness here
-  (`scripts/capture-product-list.mjs`) is not that.
+  (`scripts/capture-surface.mjs`) is not that.
+- **The published images are shown as a URL, not fetched.** The demo catalog points
+  at a non-resolving example host, and a page that fetched it would put a failed
+  request in every visitor's console.
 
 ## Known gaps this slice surfaced
 
@@ -145,7 +194,7 @@ Nobody in `sdk/` or `ui/` was edited to make this work.
    whose `adapter.ts` imports `applesauce-common/helpers/gift-wrap`. That package
    is in neither the root `package.json` nor `bun.lock`, so the barrel throws
    `Cannot find module` on import. This instance composes
-   `@sdk/commerce/products` and `@sdk/commerce/discovery` by name instead.
+   `@sdk/commerce/{products,discovery,cart}` by name instead.
 3. **The SDK exposes no importable kind-30402 parser.** Admission
    (`instance/productAdmission.ts`) therefore depends on
    `src/lib/schemas/productListing.ts` — the transitional `src/` dependency that
@@ -164,3 +213,17 @@ Nobody in `sdk/` or `ui/` was edited to make this work.
    `find contextvm src sdk …`; nothing under `apps/` is run by it. The instance's
    tests must be invoked by path (or `apps` added to that script — a root
    `package.json` change this slice is not permitted to make).
+7. **The commerce read model exposes a listing's shipping *refs* and nothing else
+   about shipping.** `getProductShippingOptions` returns the `shipping_option`
+   tags — a `30406:<seller>:<d>` ref and an amount — while the service, the
+   destination and the currency live in the kind-30406 shipping event, which no
+   read model here reads. So a listing's page shows the amount **exactly as
+   tagged, with no unit invented**, and anything that has to decide *what kind of
+   delivery* an option is (the checkout's own
+   `resolveCheckoutDeliveryRequirements`) will need that record. Named here
+   because it is the surface the checkout entry is about to need.
+8. **`addCartProduct` knows nothing about availability.** The SDK's cart folds any
+   product in, so "this listing is out of stock" is a rule the *surface* has to
+   state, and `ProductDetail.tsx` refuses by name rather than quietly adding. A
+   cart that could be filled with unavailable listings is a cart whose checkout
+   can only fail later.

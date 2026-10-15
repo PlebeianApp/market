@@ -88,6 +88,23 @@ page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`
 const steps = [`goto ${url}`]
 await page.goto(url, { waitUntil: 'networkidle' })
 
+/**
+ * Wait for the surface, then for the browser-owned cart read to land, BEFORE any
+ * click. A click on a server-rendered control before hydration reaches nothing —
+ * React has not attached the handler yet — so a capture taken that way reports a
+ * working control as dead. This is also why the click sits after the wait rather
+ * than before it.
+ */
+await page.waitForSelector(waitSelector, { timeout: 15_000 })
+steps.push(`wait for ${waitSelector}`)
+
+const cartSettled = () =>
+	!document.querySelector('[data-testid="cart-status"][data-cart-state="reading"]')
+
+await page.waitForFunction(cartSettled, { timeout: 15_000 }).catch(() => {
+	consoleErrors.push('timed out waiting for the cart status to leave its reading state')
+})
+
 if (clickSelector) {
 	await page.waitForSelector(clickSelector, { timeout: 15_000 })
 	await page.click(clickSelector)
@@ -100,15 +117,11 @@ if (clickSelector) {
 if (thenUrl) {
 	await page.goto(thenUrl, { waitUntil: 'networkidle' })
 	steps.push(`goto ${thenUrl}`)
+	await page.waitForSelector(waitSelector, { timeout: 15_000 })
+	await page.waitForFunction(cartSettled, { timeout: 15_000 }).catch(() => {
+		consoleErrors.push('timed out waiting for the cart status to leave its reading state')
+	})
 }
-
-await page.waitForSelector(waitSelector, { timeout: 15_000 })
-// Hydration fills the browser-owned regions after the first paint. Wait for the
-// cart's own read to land before reading anything, or the capture photographs
-// the skeleton and reports the surface as empty.
-await page.waitForFunction(() => !document.querySelector('[data-testid="cart-status"][data-cart-state="reading"]'), { timeout: 15_000 }).catch(() => {
-	consoleErrors.push('timed out waiting for the cart status to leave its reading state')
-})
 
 const readText = async (testId) => {
 	const locator = page.locator(`[data-testid="${testId}"]`)

@@ -90,6 +90,17 @@ export function formatProductPrice(amount: string, currency: string): string {
 	return `${groupThousands(amount)} ${currency}`
 }
 
+/**
+ * A short, human pubkey: `7e7c3b5a…0f12`.
+ *
+ * One definition, because the list row, the product page and the cart each show
+ * it — three copies of a display rule is three chances for one of them to keep a
+ * leading space the others trimmed.
+ */
+export function shortPubkey(pubkey: string): string {
+	return pubkey.length <= 12 ? pubkey : `${pubkey.slice(0, 8)}…${pubkey.slice(-4)}`
+}
+
 /** Read a listing's price tag into a displayable price, or `null` when it has none. */
 export function resolveProductPrice(event: ProductReadEvent): ProductPriceView | null {
 	const tag = getProductPrice(event)
@@ -97,6 +108,24 @@ export function resolveProductPrice(event: ProductReadEvent): ProductPriceView |
 	const currency = tag?.[2]
 	if (!amount || !currency) return null
 	return { amount, currency, display: formatProductPrice(amount, currency) }
+}
+
+/**
+ * A listing's availability, in words — **one place**, because a verdict put into
+ * words is where copies drift: the row, the detail and the cart each need this
+ * line, and three near-copies of it disagree the first time one is edited.
+ *
+ * A listing with no `stock` tag reads "out of stock" with no count, never a bare
+ * " in stock" with a leading space.
+ */
+export function stockLabel(item: Pick<ProductListItem, 'inStock' | 'stock'>): string {
+	const count = item.stock === null ? '' : ` · ${item.stock}`
+	return item.inStock ? `in stock${count}` : `out of stock${count}`
+}
+
+/** The tone the availability line is rendered in. The word and its colour come from one read. */
+export function stockTone(item: Pick<ProductListItem, 'inStock'>): 'ok' | 'out' {
+	return item.inStock ? 'ok' : 'out'
 }
 
 function toItem(event: ProductReadEvent): ProductListItem {

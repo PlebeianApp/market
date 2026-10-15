@@ -8,9 +8,10 @@
  *   a record that does not match `PersistedCartContentSchema`, so a record this
  *   module did not write is not silently trusted;
  * - `CART_PERSISTENCE_VERSION` — the version the storage key is scoped by;
- * - `createCartIntent` / `addCartProduct` — the SDK's own builder and mutation,
- *   which is the pipe's writing half and is what the surface that *adds* to the
- *   cart composes (the write path arrives with the first writer, not before it).
+ * - `createCartIntent` / `addCartProduct` — the SDK's own builder and mutation:
+ *   the builder turns buyer-facing entries into the persisted record (refs,
+ *   clamped integer quantities, deduped and sorted) and the mutation decides what
+ *   adding a product that is already in the cart means.
  *
  * What the SDK does not ship is the front of the pipe: a place to put the bytes.
  * Supplying storage is the host's job (ADR-0021, "the SDK owns contracts and the
@@ -25,7 +26,9 @@
  * and counts.
  */
 
-import { CART_PERSISTENCE_VERSION, parseCartPersistenceContent } from '@sdk/commerce/cart'
+import { CART_PERSISTENCE_VERSION, addCartProduct, createCartIntent, parseCartPersistenceContent } from '@sdk/commerce/cart'
+
+import type { ProductListItem } from './productListView'
 
 /** Where this instance keeps its cart. Instance-scoped: one shop's cart is not another's. */
 export const CART_STORAGE_KEY = `demo-shop.cart.v${CART_PERSISTENCE_VERSION}`
@@ -33,6 +36,7 @@ export const CART_STORAGE_KEY = `demo-shop.cart.v${CART_PERSISTENCE_VERSION}`
 /** The front of the pipe. `read` returning `null` means "nothing is stored yet". */
 export interface CartStorage {
 	read(): string | null
+	write(value: string): void
 }
 
 /** One line as the page shows it: the SDK's ref, plus the parts of it a row needs. */
@@ -101,6 +105,45 @@ export function cartCount(cart: Cart): number {
 }
 
 /**
+ * The line a listing becomes when it is put in the cart: the SDK's own
+ * `productRef` identity, plus the parts a row needs to render.
+ */
+export function cartLineFrom(item: ProductListItem, amount: number): CartLine {
+	return { productRef: item.coordinates, id: item.id, sellerPubkey: item.sellerPubkey, amount }
+}
+
+/**
+ * Fold a listing into the cart, through the SDK's own mutation.
+ *
+ * `addCartProduct` decides what "adding a product that is already there" means —
+ * it increments, and it clamps — so nothing here re-states that. It is handed a
+ * map keyed by the listing's `d`, which is the key the cart's own refs and the
+ * app's product addresses agree on.
+ */
+export function addLineToCart(cart: Cart, line: CartLine): Cart {
+	const map: Record<string, CartLine> = {}
+	for (const existing of cart.lines) map[existing.id] = existing
+
+	const after = addCartProduct(map, line)
+	// `addCartProduct` answers with the same object when it changed nothing, so
+	// "no change" is a reference the caller can trust rather than a diff.
+	if (after === map) return cart
+	return { lines: Object.values(after) }
+}
+
+/**
+ * Write the cart, through the SDK's builder.
+ *
+ * `createCartIntent` is given the lines and the clock the caller owns, and its
+ * answer — not this module's idea of what the bytes should be — is what lands in
+ * storage. A line the builder drops (a ref it refuses) therefore cannot reach the
+ * store at all.
+ */
+export function writeCart(storage: CartStorage, cart: Cart, updatedAtMs: number): void {
+	storage.write(JSON.stringify(createCartIntent(cart.lines, updatedAtMs)))
+}
+
+/**
  * The browser adapter — the only place in this module that touches a global.
  *
  * `null` when there is no `localStorage` (a server render, or a browser that
@@ -116,7 +159,10 @@ export function browserCartStorage(): CartStorage | null {
 		const probe = `${CART_STORAGE_KEY}.probe`
 		store.setItem(probe, '1')
 		store.removeItem(probe)
-		return { read: () => store.getItem(CART_STORAGE_KEY) }
+		return {
+			read: () => store.getItem(CART_STORAGE_KEY),
+			write: (value) => store.setItem(CART_STORAGE_KEY, value),
+		}
 	} catch {
 		return null
 	}

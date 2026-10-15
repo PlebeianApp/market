@@ -23,12 +23,8 @@ import * as React from 'react'
 
 import { Badge, SelectableBadge, cn } from '@ui/index'
 
-import type { ProductListItem, ProductListView } from './productListView'
-
-/** A short, human pubkey: `7e7c3b5a…0f12`. */
-function shortPubkey(pubkey: string): string {
-	return pubkey.length <= 12 ? pubkey : `${pubkey.slice(0, 8)}…${pubkey.slice(-4)}`
-}
+import { shortPubkey, stockLabel, type ProductListItem, type ProductListView } from './productListView'
+import { productPath } from './routes'
 
 function ProductRow({ item }: { item: ProductListItem }) {
 	return (
@@ -40,8 +36,10 @@ function ProductRow({ item }: { item: ProductListItem }) {
 			data-visibility={item.visibility}
 		>
 			<div className="ds-row-head">
-				<h3 className="ds-row-title" data-testid="product-title">
-					{item.title}
+				<h3 className="ds-row-title">
+					<a className="ds-row-link" href={productPath(item.coordinates)} data-testid="product-title">
+						{item.title}
+					</a>
 				</h3>
 				<span className="ds-price" data-testid="product-price">
 					{item.price ? item.price.display : 'no price'}
@@ -56,8 +54,7 @@ function ProductRow({ item }: { item: ProductListItem }) {
 
 			<div className="ds-badges">
 				<Badge data-testid="product-stock-badge" variant={item.inStock ? 'secondary' : 'destructive'}>
-					{item.inStock ? 'in stock' : 'out of stock'}
-					{item.stock === null ? '' : ` · ${item.stock}`}
+					{stockLabel(item)}
 				</Badge>
 				{item.visibility !== 'on-sale' ? (
 					<Badge data-testid="product-visibility-badge" variant="outline">
@@ -80,6 +77,14 @@ function ProductRow({ item }: { item: ProductListItem }) {
 	)
 }
 
+/**
+ * The product list.
+ *
+ * A row's title is a link to the listing's own address — the **coordinates** the
+ * SDK's head rule keys on (`30402:<seller>:<d>`), which is the same value the
+ * detail route resolves against. The address a row emits and the address the
+ * route serves are therefore one string, not two spellings of one idea.
+ */
 export function ProductList({ view, className }: { view: ProductListView; className?: string }) {
 	return (
 		<section

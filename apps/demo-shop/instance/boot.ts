@@ -12,6 +12,8 @@
  * `@apps/` in a production SDK module.
  */
 
+import type { ProductReadEvent } from '@sdk/commerce/discovery'
+
 import { buildCatalogEvents } from './catalog'
 import { resolveInstanceConfig, type DemoShopInstanceConfig } from './config'
 import { buildProductListView, type ProductListView, type ProductListViewOptions } from './productListView'
@@ -27,6 +29,15 @@ export interface InstanceRuntime {
 	readonly config: DemoShopInstanceConfig
 	/** Which edge produced the data, so the page can say so. */
 	readonly sourceKind: ProductSource['kind']
+	/**
+	 * The admitted read, kept as it came back.
+	 *
+	 * Every surface resolves against **this one read**: the list and a listing's
+	 * page cannot disagree about what exists, so a listing can never appear in the
+	 * list and then refuse to open. (The demo instance reads its edge once, at
+	 * boot; the relay adapter's own deadline is what bounds that read.)
+	 */
+	readonly events: readonly ProductReadEvent[]
 	readonly view: ProductListView
 	/** The listing fields the SDK would need to agree on with the read model, kept for the page. */
 	readonly loadedAtMs: number
@@ -81,6 +92,7 @@ export async function bootInstance(options: BootInstanceOptions = {}): Promise<I
 	return {
 		config,
 		sourceKind: source.kind,
+		events,
 		view,
 		loadedAtMs: now(),
 	}

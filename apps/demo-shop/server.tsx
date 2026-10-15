@@ -5,12 +5,20 @@
  *
  * 1. It boots the instance (`instance/boot.ts`): config → an injected product
  *    edge → the SDK's read model → a view.
- * 2. It renders that view to HTML with `react-dom/server`, so the **HTTP
- *    response itself carries the product titles and prices** rather than an
- *    empty shell that only looks right once a browser runs.
+ * 2. It picks the route and renders **that** route's props to HTML with
+ *    `react-dom/server`, so the **HTTP response itself carries the product titles
+ *    and prices** rather than an empty shell that only looks right once a browser
+ *    runs. A listing's page carries its own title in the document too.
  * 3. It serves the browser bundle, which hydrates the same markup with the same
- *    props (`window.__DEMO_SHOP__`), so step 1's read happens once, on the
- *    server, and steps 2–5 have somewhere to attach.
+ *    props (`window.__DEMO_SHOP__`) — including which route it is, so the client
+ *    renders the tree the server rendered and no surface is painted by another
+ *    route's script.
+ *
+ * Route matching is **exact-or-parse, never prefix-alone**: `/` is compared
+ * exactly, and a product address is one whose remainder parses to coordinates
+ * (`instance/routes.ts`). A prefix check would answer every listing's page with
+ * the list — the parent-route-swallows-its-child defect — and `/products/` with no
+ * coordinates resolves to nothing at all.
  *
  * The bundle is built in memory at boot with `Bun.build`, which resolves
  * `tsconfig.json`'s `@sdk/*`, `@ui/*` and `@/*` paths. No dependency is added to
@@ -23,8 +31,10 @@
 import { join } from 'node:path'
 import { renderToString } from 'react-dom/server'
 
-import { App, type DemoShopPageProps } from './instance/App'
+import { App, type DemoShopPageProps, type DemoShopShellProps } from './instance/App'
 import { bootInstance, type BootInstanceOptions, type InstanceRuntime } from './instance/boot'
+import { findProductDetail } from './instance/productDetailView'
+import { apiCoordinatesFromProductPath, coordinatesFromProductPath } from './instance/routes'
 
 const HERE = import.meta.dir
 
@@ -45,13 +55,25 @@ function serialiseProps(props: DemoShopPageProps): string {
 	return JSON.stringify(props).replace(/</g, '\\u003c')
 }
 
+/** The document's own title, so the served bytes name the listing they carry. */
+function pageTitle(props: DemoShopPageProps): string {
+	switch (props.route) {
+		case 'product':
+			return `${props.detail.item.title} · ${props.instanceName}`
+		case 'product-missing':
+			return `No listing · ${props.instanceName}`
+		default:
+			return props.instanceName
+	}
+}
+
 function pageHtml(body: string, props: DemoShopPageProps): string {
 	return `<!doctype html>
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>${props.instanceName}</title>
+		<title>${pageTitle(props)}</title>
 		<link rel="stylesheet" href="/styles.css" />
 	</head>
 	<body>
@@ -61,6 +83,53 @@ function pageHtml(body: string, props: DemoShopPageProps): string {
 	</body>
 </html>
 `
+}
+
+function shell(runtime: InstanceRuntime): DemoShopShellProps {
+	return {
+		instanceName: runtime.config.displayName,
+		instanceId: runtime.config.instanceId,
+		sourceKind: runtime.sourceKind,
+		view: runtime.view,
+	}
+}
+
+/** The props for a page request, and the status its resolution earns. */
+function pageProps(runtime: InstanceRuntime, pathname: string): { props: DemoShopPageProps; status: number } {
+	const coordinates = coordinatesFromProductPath(pathname)
+
+	if (coordinates !== null) {
+		const lookup = findProductDetail(runtime.events, coordinates)
+		if (lookup.found) return { props: { ...shell(runtime), route: 'product', detail: lookup.detail }, status: 200 }
+		return {
+			props: { ...shell(runtime), route: 'product-missing', missing: { coordinates, reason: lookup.reason } },
+			status: 404,
+		}
+	}
+
+	return { props: { ...shell(runtime), route: 'products' }, status: 200 }
+}
+
+/** The JSON twin of a page, so a probe can read the same read the page rendered. */
+function listingJson(runtime: InstanceRuntime, coordinates: string): Response {
+	const lookup = findProductDetail(runtime.events, coordinates)
+	if (!lookup.found) {
+		return Response.json(
+			{ instanceId: runtime.config.instanceId, coordinates, found: false, reason: lookup.reason },
+			{ status: 404 },
+		)
+	}
+
+	return Response.json({
+		instanceId: runtime.config.instanceId,
+		coordinates,
+		found: true,
+		item: lookup.detail.item,
+		description: lookup.detail.description,
+		imageUrl: lookup.detail.imageUrl,
+		specs: lookup.detail.specs,
+		shipping: lookup.detail.shipping,
+	})
 }
 
 export interface StartedDemoShop {
@@ -73,25 +142,25 @@ export async function startDemoShop(options: BootInstanceOptions = {}): Promise<
 	const clientJs = await bundleClient()
 	const stylesheet = Bun.file(join(HERE, 'styles.css'))
 
-	const props: DemoShopPageProps = {
-		instanceName: runtime.config.displayName,
-		instanceId: runtime.config.instanceId,
-		sourceKind: runtime.sourceKind,
-		view: runtime.view,
-	}
-
 	const server = Bun.serve({
 		port: Number(process.env.DEMO_SHOP_PORT ?? DEFAULT_PORT),
 		hostname: process.env.DEMO_SHOP_HOST ?? '127.0.0.1',
 		fetch(request) {
 			const url = new URL(request.url)
 
-			switch (url.pathname) {
-				case '/':
-					return new Response(pageHtml(renderToString(<App {...props} />), props), {
-						headers: { 'content-type': 'text/html; charset=utf-8' },
-					})
+			// The page routes. `/` is exact; a product address is one that parses.
+			if (url.pathname === '/' || coordinatesFromProductPath(url.pathname) !== null) {
+				const { props, status } = pageProps(runtime, url.pathname)
+				return new Response(pageHtml(renderToString(<App {...props} />), props), {
+					status,
+					headers: { 'content-type': 'text/html; charset=utf-8' },
+				})
+			}
 
+			const apiCoordinates = apiCoordinatesFromProductPath(url.pathname)
+			if (apiCoordinates !== null) return listingJson(runtime, apiCoordinates)
+
+			switch (url.pathname) {
 				case '/api/products':
 					return Response.json({
 						instanceId: runtime.config.instanceId,

@@ -199,7 +199,13 @@ describe('the layout conventions the style source keeps', () => {
 		}
 
 		expect(violations).toEqual([])
-		expect([...seen].sort()).toEqual(['region-foot', 'region-instance', 'region-nav', 'region-products'])
+		expect([...seen].sort()).toEqual([
+			'region-foot',
+			'region-instance',
+			'region-nav',
+			'region-product',
+			'region-products',
+		])
 	})
 
 	test('the skeleton state exists, and is the cart count the server cannot know', async () => {
