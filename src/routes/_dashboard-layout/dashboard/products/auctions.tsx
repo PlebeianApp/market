@@ -32,7 +32,7 @@ import {
 import { useComments } from '@/queries/comments'
 import { useLiveActivity, useLiveChatMessages } from '@/queries/liveChat'
 import { AUCTION_KIND } from '@/lib/auction/constants'
-import { getOrderId } from '@/queries/orders'
+import { getOrderReference } from '@sdk/commerce/orders'
 import { useProfileName } from '@/queries/profiles'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
@@ -384,7 +384,7 @@ function AuctionListItem({
 	}
 
 	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
-	const orderId = claimOrdersQuery.data?.[0] ? getOrderId(claimOrdersQuery.data[0]) : undefined
+	const orderId = getOrderReference(claimOrdersQuery.data?.[0] ?? null) ?? undefined
 	const waitingForShippingMethod = status === 'Ended' && !!latestSettlement && winnerReleasedPath && !orderId
 	const showReleasePathDetails =
 		waitingForReleasePath || releasePathReceived || settlementGrieved || settlementGrievedNoRelease || waitingForShippingMethod

@@ -1,38 +1,22 @@
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import {
+	getOrderAmountSats,
+	getOrderItems as readOrderItems,
+	getOrderRecipientPubkey,
+	getOrderReference,
+	getOrderShippingReference,
+} from '@sdk/commerce/orders'
 
-/**
- * Helper functions for extracting data from order events
- */
+export const getOrderId = (orderEvent: NDKEvent): string => getOrderReference(orderEvent) || orderEvent.id
 
-export const getOrderId = (orderEvent: NDKEvent): string => {
-	return orderEvent.tags.find((tag) => tag[0] === 'order')?.[1] || orderEvent.id
-}
+export const getTotalAmount = (orderEvent: NDKEvent): number => parseInt(getOrderAmountSats(orderEvent) || '0')
 
-export const getTotalAmount = (orderEvent: NDKEvent): number => {
-	return parseInt(orderEvent.tags.find((tag) => tag[0] === 'amount')?.[1] || '0')
-}
+export const getOrderItems = (orderEvent: NDKEvent): Array<{ productRef: string; quantity: number }> => readOrderItems(orderEvent)
 
-export const getProductRefs = (orderEvent: NDKEvent): string[] => {
-	return orderEvent.tags.filter((tag) => tag[0] === 'item').map((tag) => tag[1])
-}
+export const getSellerPubkey = (orderEvent: NDKEvent): string => getOrderRecipientPubkey(orderEvent) || ''
 
-export const getOrderItems = (orderEvent: NDKEvent): Array<{ productRef: string; quantity: number }> => {
-	return orderEvent.tags
-		.filter((tag) => tag[0] === 'item')
-		.map((tag) => ({
-			productRef: tag[1],
-			quantity: parseInt(tag[2] || '1', 10),
-		}))
-}
-
-export const getSellerPubkey = (orderEvent: NDKEvent): string => {
-	return orderEvent.tags.find((tag) => tag[0] === 'p')?.[1] || ''
-}
-
-export const getShippingRef = (orderEvent: NDKEvent): string | undefined => {
-	return orderEvent.tags.find((tag) => tag[0] === 'shipping')?.[1]
-}
+export const getShippingRef = (orderEvent: NDKEvent): string | undefined => getOrderShippingReference(orderEvent) ?? undefined
 
 export const makeInvoiceKey = (invoice: PaymentInvoiceData) => {
 	return `${invoice.orderId}:${invoice.recipientPubkey}:${invoice.amount}:${invoice.type}`

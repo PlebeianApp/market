@@ -5,8 +5,8 @@ import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { cn } from '@/lib/utils'
 import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
-import { getOrderManagementActions } from '@sdk/commerce/orders'
+import { getOrderStatus } from '@/queries/orders'
+import { getOrderManagementActions, getOrderRecipientPubkey } from '@sdk/commerce/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { Ban, Check, CheckCircle, Clock, Package, Truck, X } from 'lucide-react'
@@ -38,8 +38,8 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 
 	const status = getOrderStatus(order)
 
-	const buyerPubkey = getBuyerPubkey(order.order)
-	const sellerPubkey = getSellerPubkey(order.order)
+	const buyerPubkey = order.order.pubkey
+	const sellerPubkey = getOrderRecipientPubkey(order.order)
 
 	const isBuyer = userPubkey === buyerPubkey
 	const isSeller = userPubkey === sellerPubkey

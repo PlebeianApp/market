@@ -1094,51 +1094,6 @@ export const getShippingStatus = (order: OrderWithRelatedEvents): ShippingStatus
 	return resolveBuyerShippingStatus(order.latestShipping?.tags) as ShippingStatus | null
 }
 
-/**
- * Get formatted date from event
- */
-export const getEventDate = (event?: NDKEvent): string => {
-	if (!event || !event.created_at) return '-'
-	return new Date(event.created_at * 1000).toLocaleString('de-DE', {
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit',
-		hour: '2-digit',
-		minute: '2-digit',
-	})
-}
-
-/**
- * Get seller pubkey from order
- */
-export const getSellerPubkey = (order: NDKEvent): string | undefined => {
-	const recipientTag = order.tags.find((tag) => tag[0] === 'p')
-	return recipientTag?.[1]
-}
-
-/**
- * Get buyer pubkey from order
- */
-export const getBuyerPubkey = (order: NDKEvent): string | undefined => {
-	return order.pubkey
-}
-
-/**
- * Get order ID from order
- */
-export const getOrderId = (order: NDKEvent): string | undefined => {
-	const orderTag = order.tags.find((tag) => tag[0] === 'order')
-	return orderTag?.[1]
-}
-
-/**
- * Get total amount from order
- */
-export const getOrderAmount = (order: NDKEvent): string | undefined => {
-	const amountTag = order.tags.find((tag) => tag[0] === 'amount')
-	return amountTag?.[1]
-}
-
 function comparePrivateOrderDetailsCandidates(a: SellerPrivateOrderDetailsCandidate, b: SellerPrivateOrderDetailsCandidate): number {
 	const createdAtDiff = (b.event.created_at || 0) - (a.event.created_at || 0)
 	if (createdAtDiff !== 0) return createdAtDiff
@@ -1250,12 +1205,4 @@ function isAddressableRef(value: string, expectedKind: string, expectedPubkey: s
 
 function isHexPubkey(value: string): boolean {
 	return HEX_PUBKEY_RE.test(value)
-}
-
-/**
- * Format a satoshi amount for display
- */
-export const formatSats = (amount?: string): string => {
-	if (!amount) return '-'
-	return `${parseInt(amount).toLocaleString()} sats`
 }
