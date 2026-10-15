@@ -5,8 +5,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { authStore } from '@/lib/stores/auth'
 import { collectionFormActions } from '@/lib/stores/collection'
 
-import { getCollectionId, getCollectionTitle, getCollectionSummary, useCollectionsByPubkey } from '@/queries/collections'
+import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
 import { useDeleteCollectionMutation } from '@/publish/collections'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useState, useMemo } from 'react'
@@ -14,43 +15,7 @@ import { ChevronDown, PlusIcon, StoreIcon, Trash } from 'lucide-react'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
-
-// Component to show basic collection information
-function CollectionBasicInfo({ collection }: { collection: any }) {
-	const summary = getCollectionSummary(collection)
-	const description = collection.content || ''
-	const productCount = collection.tags.filter((tag: any) => tag[0] === 'a').length
-	const headerImage = collection.tags.find((tag: any) => tag[0] === 'image')?.[1]
-
-	return (
-		<div className="p-4 bg-gray-50 border-t">
-			<div className="space-y-3">
-				{headerImage && (
-					<div className="w-full h-32 bg-gray-200 rounded-md overflow-hidden">
-						<Media src={headerImage} alt="Collection header" className="w-full h-full object-cover" />
-					</div>
-				)}
-				{summary && (
-					<div>
-						<p className="text-sm text-gray-600 mb-1">Summary:</p>
-						<p className="text-sm">{summary}</p>
-					</div>
-				)}
-				{description && (
-					<div>
-						<p className="text-sm text-gray-600 mb-1">Description:</p>
-						<p className="text-sm">{description}</p>
-					</div>
-				)}
-				<div>
-					<p className="text-sm text-gray-600">
-						Products: <span className="font-medium">{productCount}</span>
-					</p>
-				</div>
-			</div>
-		</div>
-	)
-}
+import { DashboardCollectionDetails, DashboardCollectionTrigger } from '@ui/components/DashboardCollectionListItem'
 
 function CollectionListItem({
 	collection,
@@ -60,18 +25,14 @@ function CollectionListItem({
 	onDelete,
 	isDeleting,
 }: {
-	collection: any
+	collection: NDKEvent
 	isExpanded: boolean
 	onToggleExpanded: () => void
 	onEdit: () => void
 	onDelete: () => void
 	isDeleting: boolean
 }) {
-	const triggerContent = (
-		<div>
-			<p className="font-semibold">{getCollectionTitle(collection)}</p>
-		</div>
-	)
+	const triggerContent = <DashboardCollectionTrigger collection={collection} />
 
 	const actions = (
 		<>
@@ -114,7 +75,10 @@ function CollectionListItem({
 			isDeleting={isDeleting}
 			icon={<StoreIcon className="h-5 w-5 text-black" />}
 		>
-			<CollectionBasicInfo collection={collection} />
+			<DashboardCollectionDetails
+				collection={collection}
+				renderImage={(url) => <Media src={url} alt="Collection header" className="w-full h-full object-cover" />}
+			/>
 		</DashboardListItem>
 	)
 }

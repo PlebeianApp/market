@@ -20,6 +20,10 @@ export function getCollectionImages(event: CollectionReadEvent | null): string[]
 	return event.tags.filter((tag) => tag[0] === 'image').sort(() => 0)
 }
 
+export function getCollectionProductReferences(event: CollectionReadEvent | null): string[][] {
+	return event?.tags.filter((tag) => tag[0] === 'a' && !!tag[1]) ?? []
+}
+
 export function getCollectionShippingOptions(event: CollectionReadEvent | null): string[][] {
 	return event?.tags.filter((tag) => tag[0] === 'shipping_option') ?? []
 }

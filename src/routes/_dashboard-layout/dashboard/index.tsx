@@ -7,9 +7,9 @@ import { useConversationsList } from '@/queries/messages'
 import { useOrders } from '@/queries/orders'
 import { useProductsByPubkey } from '@/queries/products'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
+import { DashboardOverviewStats } from '@ui/components/DashboardOverviewStats'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/')({
 	component: DashboardInnerComponent,
@@ -25,30 +25,6 @@ function DashboardInnerComponent() {
 	const { data: orders, isLoading: isLoadingOrders } = useOrders()
 	const { data: conversations, isLoading: isLoadingMessages } = useConversationsList()
 
-	// Calculate stats
-	const activeListings =
-		myProducts?.filter((p: NDKEvent) => {
-			const visibility = p.tags.find((t: string[]) => t[0] === 'visibility')?.[1]
-			return visibility !== 'hidden'
-		}).length || 0
-
-	const totalListings = myProducts?.length || 0
-
-	// Buyer = author of order (sent the order)
-	// Seller = recipient of order (tagged with #p)
-	const buyerOrders =
-		orders?.filter((o) => {
-			return o.order.pubkey === userPubkey
-		}) || []
-
-	const sellerOrders =
-		orders?.filter((o) => {
-			const pTag = o.order.tags.find((t) => t[0] === 'p')
-			return pTag?.[1] === userPubkey
-		}) || []
-
-	const unreadMessages = conversations?.length || 0
-
 	const recentOrders = orders?.slice(0, 3) || []
 
 	const isLoading = isLoadingProducts || isLoadingOrders || isLoadingMessages
@@ -61,76 +37,13 @@ function DashboardInnerComponent() {
 				<p className="text-muted-foreground">Here's what's happening with your marketplace</p>
 			</div>
 
-			{/* Stats Grid */}
-			<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">Active Listings</CardTitle>
-						<span className="text-2xl">📦</span>
-					</CardHeader>
-					<CardContent>
-						{isLoading ? (
-							<Skeleton className="h-8 w-20" />
-						) : (
-							<>
-								<div className="text-2xl font-bold">{activeListings}</div>
-								<p className="text-xs text-muted-foreground">{totalListings} total products</p>
-							</>
-						)}
-					</CardContent>
-				</Card>
-
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">Sales</CardTitle>
-						<span className="text-2xl">💰</span>
-					</CardHeader>
-					<CardContent>
-						{isLoading ? (
-							<Skeleton className="h-8 w-20" />
-						) : (
-							<>
-								<div className="text-2xl font-bold">{sellerOrders.length}</div>
-								<p className="text-xs text-muted-foreground">Orders received</p>
-							</>
-						)}
-					</CardContent>
-				</Card>
-
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">Purchases</CardTitle>
-						<span className="text-2xl">🛍️</span>
-					</CardHeader>
-					<CardContent>
-						{isLoading ? (
-							<Skeleton className="h-8 w-20" />
-						) : (
-							<>
-								<div className="text-2xl font-bold">{buyerOrders.length}</div>
-								<p className="text-xs text-muted-foreground">Orders placed</p>
-							</>
-						)}
-					</CardContent>
-				</Card>
-
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">Messages</CardTitle>
-						<span className="text-2xl">✉️</span>
-					</CardHeader>
-					<CardContent>
-						{isLoading ? (
-							<Skeleton className="h-8 w-20" />
-						) : (
-							<>
-								<div className="text-2xl font-bold">{unreadMessages}</div>
-								<p className="text-xs text-muted-foreground">Conversations</p>
-							</>
-						)}
-					</CardContent>
-				</Card>
-			</div>
+			<DashboardOverviewStats
+				products={myProducts ?? []}
+				orders={orders ?? []}
+				userPubkey={userPubkey}
+				conversationCount={conversations?.length ?? 0}
+				isLoading={isLoading}
+			/>
 
 			{/* Quick Actions */}
 			<Card>

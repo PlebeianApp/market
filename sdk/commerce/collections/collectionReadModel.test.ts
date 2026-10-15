@@ -3,6 +3,7 @@ import {
 	getCollectionCoordinates,
 	getCollectionId,
 	getCollectionImages,
+	getCollectionProductReferences,
 	getCollectionShippingOptions,
 	getCollectionSummary,
 	getCollectionTitle,
@@ -16,6 +17,7 @@ describe('collection read model', () => {
 			['title', 'Summer collection'],
 			['summary', 'Warm-weather picks'],
 			['image', 'https://example.test/one.png'],
+			['a', '30402:merchant:product-one'],
 			['shipping_option', '30406:merchant:standard'],
 		],
 	}
@@ -26,6 +28,7 @@ describe('collection read model', () => {
 		expect(getCollectionId(event)).toBe('summer')
 		expect(getCollectionCoordinates(event)).toBe(`30405:${event.pubkey}:summer`)
 		expect(getCollectionImages(event)).toEqual([['image', 'https://example.test/one.png']])
+		expect(getCollectionProductReferences(event)).toEqual([['a', '30402:merchant:product-one']])
 		expect(getCollectionShippingOptions(event)).toEqual([['shipping_option', '30406:merchant:standard']])
 	})
 
@@ -33,6 +36,7 @@ describe('collection read model', () => {
 		expect(getCollectionTitle(null)).toBe('Untitled Collection')
 		expect(getCollectionSummary(null)).toBe('No summary available.')
 		expect(getCollectionImages(null)).toEqual([])
+		expect(getCollectionProductReferences(null)).toEqual([])
 		expect(getCollectionShippingOptions(null)).toEqual([])
 	})
 })

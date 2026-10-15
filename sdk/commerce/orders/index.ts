@@ -13,6 +13,8 @@ export {
 } from './orderEvents'
 export { BUYER_ORDER_STATUSES, BUYER_SHIPPING_STATUSES, resolveBuyerOrderStatus, resolveBuyerShippingStatus } from './orderStatus'
 export type { BuyerOrderStatus, BuyerShippingStatus } from './orderStatus'
+export { getOrderRecipientPubkey } from './orderReadModel'
+export type { OrderReadEvent } from './orderReadModel'
 export { getOrderManagementActions } from './orderManagement'
 export type { OrderManagementActions, OrderManagementRole } from './orderManagement'
 export type {

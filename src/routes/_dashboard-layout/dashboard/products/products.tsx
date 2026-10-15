@@ -7,81 +7,17 @@ import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
 import { productFormActions } from '@/lib/stores/product'
 import { useDeleteProductMutation } from '@/publish/products'
-import {
-	getProductId,
-	getProductImages,
-	getProductPrice,
-	getProductTitle,
-	productQueryOptions,
-	productsByPubkeyQueryOptions,
-} from '@/queries/products'
+import { getProductId, getProductTitle, productQueryOptions, productsByPubkeyQueryOptions } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { PackageIcon, Trash, EyeOff, Clock, Eye } from 'lucide-react'
+import { Trash } from 'lucide-react'
 import { useEffect, useState, useMemo } from 'react'
 import { TooltipButton } from '@/components/shared/TooltipButton'
-
-// Component to show basic product information
-function ProductBasicInfo({ product }: { product: NDKEvent }) {
-	const description = product.content || 'No description'
-	const images = getProductImages(product)
-	const priceTag = getProductPrice(product)
-	const price = priceTag ? `${priceTag[1]} ${priceTag[2]}` : 'Price not set'
-	const visibilityTag = product.tags.find((tag) => tag[0] === 'visibility')
-	const visibility = visibilityTag?.[1] || 'on-sale'
-	const stockTag = product.tags.find((tag) => tag[0] === 'stock')
-	const stock = stockTag?.[1]
-	const queryClient = useQueryClient()
-
-	return (
-		<Link
-			to={`/products/${product.id}`}
-			onClick={() => queryClient.setQueryData(productQueryOptions(product.id).queryKey, product)}
-			className="block bg-gray-50 hover:bg-gray-100 p-4 border-t transition-colors cursor-pointer"
-		>
-			<div className="space-y-3">
-				{images.length > 0 && (
-					<div className="bg-gray-200 rounded-md w-full h-32 overflow-hidden">
-						<Media src={images[0][1]} alt="Product image" className="w-full h-full object-cover" />
-					</div>
-				)}
-				<div>
-					<p className="mb-1 text-gray-600 text-sm">Description:</p>
-					<p className="text-sm">{description}</p>
-				</div>
-				<div className="flex justify-between">
-					<div>
-						<p className="text-gray-600 text-sm">
-							Price: <span className="font-medium">{price}</span>
-						</p>
-					</div>
-					<div>
-						<p className="text-gray-600 text-sm">
-							Visibility:{' '}
-							<span
-								className={`font-medium capitalize ${visibility === 'hidden' ? 'text-gray-500' : visibility === 'pre-order' ? 'text-blue-600' : 'text-green-600'}`}
-							>
-								{visibility}
-							</span>
-						</p>
-					</div>
-				</div>
-				{stock && (
-					<div>
-						<p className="text-gray-600 text-sm">
-							Stock: <span className="font-medium">{stock} in stock</span>
-						</p>
-					</div>
-				)}
-				<p className="text-gray-400 text-xs text-right">Click to view product page →</p>
-			</div>
-		</Link>
-	)
-}
+import { DashboardProductDetails, DashboardProductTrigger } from '@ui/components/DashboardProductListItem'
 
 function ProductListItem({
 	product,
@@ -100,38 +36,12 @@ function ProductListItem({
 	onDelete: () => void
 	isDeleting: boolean
 }) {
-	const visibilityTag = product.tags.find((tag) => tag[0] === 'visibility')
-	const visibility = visibilityTag?.[1] || 'on-sale'
-	const images = getProductImages(product)
-	const thumbnailUrl = images.length > 0 ? images[0][1] : null
-
-	const getVisibilityIcon = () => {
-		switch (visibility) {
-			case 'hidden':
-				return <EyeOff className="w-4 h-4 text-gray-500" />
-			case 'pre-order':
-				return <Clock className="w-4 h-4 text-blue-600" />
-			case 'on-sale':
-				return <Eye className="w-4 h-4 text-green-600" />
-			default:
-				return null
-		}
-	}
-
+	const queryClient = useQueryClient()
 	const triggerContent = (
-		<div className="flex items-center gap-3">
-			{thumbnailUrl ? (
-				<Media src={thumbnailUrl} alt="" className="rounded w-10 h-10 object-cover shrink-0" />
-			) : (
-				<div className="flex justify-center items-center bg-gray-100 rounded w-10 h-10 shrink-0">
-					<PackageIcon className="w-5 h-5 text-gray-400" />
-				</div>
-			)}
-			<div className="flex items-center gap-2 min-w-0">
-				{getVisibilityIcon()}
-				<p className="font-semibold truncate">{getProductTitle(product)}</p>
-			</div>
-		</div>
+		<DashboardProductTrigger
+			product={product}
+			renderImage={(url) => <Media src={url} alt="" className="rounded w-10 h-10 object-cover shrink-0" />}
+		/>
 	)
 
 	const actions = (
@@ -189,7 +99,19 @@ function ProductListItem({
 			isDeleting={isDeleting}
 			icon={false}
 		>
-			<ProductBasicInfo product={product} />
+			<DashboardProductDetails
+				product={product}
+				renderImage={(url, alt) => <Media src={url} alt={alt} className="w-full h-full object-cover" />}
+				renderLink={(children) => (
+					<Link
+						to={`/products/${product.id}`}
+						onClick={() => queryClient.setQueryData(productQueryOptions(product.id).queryKey, product)}
+						className="block cursor-pointer border-t bg-gray-50 p-4 transition-colors hover:bg-gray-100"
+					>
+						{children}
+					</Link>
+				)}
+			/>
 		</DashboardListItem>
 	)
 }
