@@ -9,7 +9,7 @@
  *    `COMPOSITION_SIBLINGS` (nothing smuggled in);
  * 2. every entry on `COMPOSITION_SIBLINGS` is actually used by an implementation file (no stale licence);
  * 3. across **every** file in the directory — tests included — no specifier is an app import or a
- *    framework import (`@/`, `@ui/`, `@platform/`, `react*`) and no relative specifier resolves outside
+ *    framework import (`@/`, `@ui/`, `@apps/`, `react*`) and no relative specifier resolves outside
  *    `sdk/`.
  *
  * **The mutations that turn it red:** add a fourth relative sibling import to an implementation file
@@ -28,7 +28,7 @@ const SDK_ROOT = resolve(HERE, '..', '..', '..') // sdk/core/composition/ts -> s
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts'])
 const TEST_FILE = /\.test\.ts$/
 const IMPORT_SPECIFIER = /\bfrom\s*['"]([^'"]+)['"]|\bimport\s*(?:\(\s*)?['"]([^'"]+)['"]/g
-const FORBIDDEN_MODULES = /^(?:react|react-dom|@tanstack\/|@\/|@ui\/|@platform\/)/
+const FORBIDDEN_MODULES = /^(?:react|react-dom|@tanstack\/|@\/|@ui\/|@apps\/)/
 
 async function specifiers(): Promise<Map<string, string[]>> {
 	const entries = await readdir(HERE, { withFileTypes: true })

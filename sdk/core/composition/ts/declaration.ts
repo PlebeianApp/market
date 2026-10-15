@@ -9,7 +9,7 @@
  * **A declaration is a value, not a call**, for the same reason `WriteBackPolicy` and the store's
  * `EvictionPolicy` are: *what it accepts is read by a test rather than inferred from prose* (`#d4f95d`).
  *
- * **It crosses no boundary.** `sdk/boundary.test.ts` forbids React/`@`/`@ui`/`@platform` imports and any
+ * **It crosses no boundary.** `sdk/boundary.test.ts` forbids React/`@`/`@ui`/`@apps` imports and any
  * import escaping `sdk/`, and a declaration is pure data plus a **citation** of the parser that is the
  * single definition of valid — so a `sdk/commerce` module can import these types (`import type`, erased)
  * without failing that test. That is why the declarations belong to `sdk/commerce`, not to a `src/`

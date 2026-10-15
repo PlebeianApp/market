@@ -108,7 +108,7 @@ PY
 		exit 1
 	fi
 	echo "# ^ no disallowed specifier: the allow-list is ./<module file>, applesauce-core[/…],"
-	echo "#   applesauce-common[/…], nostr-tools[/…], rxjs, bun:test. In particular no @/ @ui/ @platform/"
+	echo "#   applesauce-common[/…], nostr-tools[/…], rxjs, bun:test. In particular no @/ @ui/ @apps/"
 
 	banner "5 · the contract: index.ts against the module MD's front-matter"
 	run grep -nE '^export' "$TS/index.ts"
