@@ -8,12 +8,17 @@
  * a hand-written pool and open no socket. A global `fetch` spy that throws is
  * installed for the duration, so "no network" is asserted rather than assumed.
  *
- * The mutations that turn these red:
+ * The mutations that turn these red (each applied and reverted; the red run is
+ * recorded in the slice's report):
  * - `createInstanceNostrIo` dropping `options.pool` (falling back to the vendor
  *   adapter): the recording pool is never called, `captured` stays empty, and the
  *   fetch spy is no longer the only thing between the test and a socket.
- * - deleting `latestRevisionPerAddress`: the stale revision stops being collapsed
- *   and both revisions come back.
+ * - deleting `latestRevisionPerAddress(admitted)` from the **relay** read: the
+ *   stale revision stops being collapsed and both revisions come back. (Note the
+ *   fixture read needs no such case — its catalog is one address per listing, so
+ *   the collapse is a no-op there and only the unit cases below hold it.)
+ * - inverting the head rule's comparison: the oldest revision wins instead of the
+ *   newest, which breaks both the relay case and the unit case.
  * - passing `admit: null` into `createFixtureProductSource`: the malformed
  *   listing comes back as a row.
  */
