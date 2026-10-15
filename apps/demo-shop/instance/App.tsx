@@ -29,10 +29,13 @@
 
 import * as React from 'react'
 
+import { CartView } from './CartView'
+import { CheckoutEntry } from './CheckoutEntry'
 import { ProductDetail, ProductMissing } from './ProductDetail'
 import { ProductList } from './ProductList'
 import type { ProductDetailView, ProductMissingView } from './productDetailView'
 import type { ProductListView } from './productListView'
+import { CART_PATH, CHECKOUT_PATH, PRODUCTS_PATH } from './routes'
 import { useCart, type CartControl } from './useCart'
 
 /** The shell every route shares. */
@@ -56,9 +59,25 @@ export type DemoShopPageProps =
 	| (DemoShopShellProps & { readonly route: 'products' })
 	| (DemoShopShellProps & { readonly route: 'product'; readonly detail: ProductDetailView })
 	| (DemoShopShellProps & { readonly route: 'product-missing'; readonly missing: ProductMissingView })
+	| (DemoShopShellProps & { readonly route: 'cart' })
+	| (DemoShopShellProps & { readonly route: 'checkout' })
 
-/** The nav's sections. Every route this app serves today is in the one section. */
-type NavSection = 'products'
+/** The nav's sections. One entry per section, and the nav is drawn from the list. */
+type NavSection = 'products' | 'cart' | 'checkout'
+
+/**
+ * The nav's items, declared once.
+ *
+ * Adding a page is adding an entry here, never writing markup — which is what keeps
+ * the bar, the routes and `aria-current` from drifting apart. Every `href` below is
+ * a path some branch of `server.tsx` answers; a link to a route that does not exist
+ * is the defect this list is shaped to avoid.
+ */
+const NAV_ITEMS: readonly { readonly section: NavSection; readonly href: string; readonly label: string }[] = [
+	{ section: 'products', href: PRODUCTS_PATH, label: 'Products' },
+	{ section: 'cart', href: CART_PATH, label: 'Cart' },
+	{ section: 'checkout', href: CHECKOUT_PATH, label: 'Checkout' },
+]
 
 /**
  * The cart's three named states, rendered. A skeleton while the browser is being
@@ -124,9 +143,16 @@ function NavRegion({
 					{instanceName}
 				</span>
 				<nav className="ds-nav-links" aria-label="The pages this app serves">
-					<a className="ds-nav-link" href="/" aria-current={current === 'products' ? 'page' : undefined}>
-						Products
-					</a>
+					{NAV_ITEMS.map((item) => (
+						<a
+							key={item.section}
+							className="ds-nav-link"
+							href={item.href}
+							aria-current={current === item.section ? 'page' : undefined}
+						>
+							{item.label}
+						</a>
+					))}
 				</nav>
 				<div className="ds-nav-right">
 					<CartStatus cart={cart} />
@@ -143,6 +169,15 @@ export function App(props: DemoShopPageProps) {
 	const edgeVerb = sourceKind === 'fixture' ? 'injected fixture source (no network)' : 'relay read via sdk/core/nostr-io'
 	const edgeLine = `edge: ${edgeVerb} · instance ${instanceId}`
 
+	// The section the nav marks. A listing's page and its missing state are part of
+	// the products section, so they mark Products current rather than nothing.
+	const current: NavSection =
+		props.route === 'cart'
+			? 'cart'
+			: props.route === 'checkout'
+				? 'checkout'
+				: 'products'
+
 	// Each route brings its own surface; the shell around it is shared, so two
 	// routes cannot grow two navs.
 	const body =
@@ -150,13 +185,17 @@ export function App(props: DemoShopPageProps) {
 			<ProductDetail detail={props.detail} cart={cart} />
 		) : props.route === 'product-missing' ? (
 			<ProductMissing missing={props.missing} />
+		) : props.route === 'cart' ? (
+			<CartView cart={cart} view={view} />
+		) : props.route === 'checkout' ? (
+			<CheckoutEntry cart={cart} view={view} />
 		) : (
 			<ProductList view={view} />
 		)
 
 	return (
 		<div className="ds-page">
-			<NavRegion instanceName={instanceName} cart={cart} current="products" />
+			<NavRegion instanceName={instanceName} cart={cart} current={current} />
 
 			<main className="ds-shell ds-main">
 				<div className="ds-region region region-instance" aria-label="This instance, and which edge its data came from">

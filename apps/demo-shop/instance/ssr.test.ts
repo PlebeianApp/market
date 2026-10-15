@@ -32,7 +32,7 @@ import { App, type DemoShopPageProps } from './App'
 import { buildCatalogEvents, DEMO_SELLER_PUBKEY } from './catalog'
 import { findProductDetail } from './productDetailView'
 import { buildProductListView } from './productListView'
-import { coordinatesFromProductPath } from './routes'
+import { CART_PATH, CHECKOUT_PATH, PRODUCTS_PATH, coordinatesFromProductPath, isPagePath } from './routes'
 
 const catalog = buildCatalogEvents()
 const view = buildProductListView(catalog)
@@ -120,6 +120,54 @@ describe('a listing’s page carries its own fields', () => {
 		expect(html).toContain('data-testid="add-to-cart"')
 		expect(html).toContain('data-buy-state="off"')
 		expect(html).toMatch(/data-testid="add-to-cart"[^>]*disabled/)
+	})
+})
+
+describe('the browser-owned surfaces ship a skeleton, because the server cannot know the cart', () => {
+	test('the cart page: its own heading is in the bytes, and the cart itself is not', () => {
+		const html = render({ ...shell, route: 'cart' })
+
+		expect(html).toContain('Your cart')
+		expect(html).toContain('data-cart-view="reading"')
+		expect(html).toContain('data-skeleton="1"')
+		// No lines: the server has no cart to render, and it says so rather than
+		// shipping an empty cart that looks like an empty cart someone measured.
+		expect(html).not.toContain('data-testid="cart-lines"')
+		expect(regionsOf(html)).toEqual(['region-cart', 'region-foot', 'region-instance', 'region-nav'])
+	})
+
+	test('the checkout entry: its own heading is in the bytes, and it promises no payment', () => {
+		const html = render({ ...shell, route: 'checkout' })
+
+		expect(html).toContain('Checkout')
+		expect(html).toContain('data-checkout-state="reading"')
+		expect(html).toContain('data-skeleton="1"')
+		expect(html).not.toContain('data-testid="checkout-outcome"')
+		expect(regionsOf(html)).toEqual(['region-checkout', 'region-foot', 'region-instance', 'region-nav'])
+	})
+})
+
+describe('every page link the nav emits resolves to a page route', () => {
+	const html = render({ ...shell, route: 'products' })
+	const navHrefs = [...html.matchAll(/class="ds-nav-link"[^>]*href="([^"]+)"/g)].map((match) => match[1] as string)
+
+	test('the nav is drawn from the one declared list, in order', () => {
+		expect(navHrefs).toEqual([PRODUCTS_PATH, CART_PATH, CHECKOUT_PATH])
+	})
+
+	test('each href is a path some branch of the server answers', () => {
+		for (const href of navHrefs) expect(isPagePath(href)).toBe(true)
+	})
+
+	test('the nav marks the section the route belongs to, and only that one', () => {
+		expect(render({ ...shell, route: 'products' })).toContain(`href="${PRODUCTS_PATH}" aria-current="page"`)
+		expect(render({ ...shell, route: 'cart' })).toContain(`href="${CART_PATH}" aria-current="page"`)
+		expect(render({ ...shell, route: 'checkout' })).toContain(`href="${CHECKOUT_PATH}" aria-current="page"`)
+
+		for (const route of ['products', 'cart', 'checkout'] as const) {
+			const page = render({ ...shell, route })
+			expect(page.match(/aria-current="page"/g)).toHaveLength(1)
+		}
 	})
 })
 

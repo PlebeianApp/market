@@ -14,7 +14,14 @@
  * decides, and a path that is exactly the prefix resolves to no listing.
  */
 
+/** The list path. */
 export const PRODUCTS_PATH = '/'
+
+/** The cart's page. A full page load, like every other route here. */
+export const CART_PATH = '/cart'
+
+/** The checkout entry. The payment itself is not built; this is where it would land. */
+export const CHECKOUT_PATH = '/checkout'
 
 /** Every listing's page lives under this prefix. */
 export const PRODUCT_PATH_PREFIX = '/products/'
@@ -49,4 +56,22 @@ export function apiCoordinatesFromProductPath(pathname: string): string | null {
 	if (!pathname.startsWith(`${API_PRODUCTS_PATH}/`)) return null
 	const coordinates = decodeURIComponent(pathname.slice(API_PRODUCTS_PATH.length + 1))
 	return coordinates.length > 0 ? coordinates : null
+}
+
+/**
+ * Is this path a **page** this app serves?
+ *
+ * Exact for the fixed pages and parsed for a listing's address, because a prefix
+ * check alone answers `/cart` and `/products/<coordinates>` with the list — the
+ * parent-route-swallows-its-child defect. The server and the test that reads the
+ * links the UI emits both ask this one function, so "the nav's hrefs all resolve"
+ * is a claim about the router rather than about a copy of it.
+ */
+export function isPagePath(pathname: string): boolean {
+	return (
+		pathname === PRODUCTS_PATH ||
+		pathname === CART_PATH ||
+		pathname === CHECKOUT_PATH ||
+		coordinatesFromProductPath(pathname) !== null
+	)
 }

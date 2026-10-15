@@ -37,7 +37,7 @@ function ProductRow({ item }: { item: ProductListItem }) {
 		>
 			<div className="ds-row-head">
 				<h3 className="ds-row-title">
-					<a className="ds-row-link" href={productPath(item.coordinates)} data-testid="product-title">
+					<a className="ds-link" href={productPath(item.coordinates)} data-testid="product-title">
 						{item.title}
 					</a>
 				</h3>

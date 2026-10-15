@@ -34,7 +34,13 @@ import { renderToString } from 'react-dom/server'
 import { App, type DemoShopPageProps, type DemoShopShellProps } from './instance/App'
 import { bootInstance, type BootInstanceOptions, type InstanceRuntime } from './instance/boot'
 import { findProductDetail } from './instance/productDetailView'
-import { apiCoordinatesFromProductPath, coordinatesFromProductPath } from './instance/routes'
+import {
+	CART_PATH,
+	CHECKOUT_PATH,
+	apiCoordinatesFromProductPath,
+	coordinatesFromProductPath,
+	isPagePath,
+} from './instance/routes'
 
 const HERE = import.meta.dir
 
@@ -62,6 +68,10 @@ function pageTitle(props: DemoShopPageProps): string {
 			return `${props.detail.item.title} · ${props.instanceName}`
 		case 'product-missing':
 			return `No listing · ${props.instanceName}`
+		case 'cart':
+			return `Cart · ${props.instanceName}`
+		case 'checkout':
+			return `Checkout · ${props.instanceName}`
 		default:
 			return props.instanceName
 	}
@@ -107,6 +117,11 @@ function pageProps(runtime: InstanceRuntime, pathname: string): { props: DemoSho
 		}
 	}
 
+	// The cart and the checkout entry carry no server-side state at all: the cart is
+	// the browser's, so both routes render the skeleton and the browser fills it.
+	if (pathname === CART_PATH) return { props: { ...shell(runtime), route: 'cart' }, status: 200 }
+	if (pathname === CHECKOUT_PATH) return { props: { ...shell(runtime), route: 'checkout' }, status: 200 }
+
 	return { props: { ...shell(runtime), route: 'products' }, status: 200 }
 }
 
@@ -149,7 +164,7 @@ export async function startDemoShop(options: BootInstanceOptions = {}): Promise<
 			const url = new URL(request.url)
 
 			// The page routes. `/` is exact; a product address is one that parses.
-			if (url.pathname === '/' || coordinatesFromProductPath(url.pathname) !== null) {
+			if (isPagePath(url.pathname)) {
 				const { props, status } = pageProps(runtime, url.pathname)
 				return new Response(pageHtml(renderToString(<App {...props} />), props), {
 					status,

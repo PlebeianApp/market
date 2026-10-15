@@ -47,6 +47,15 @@ export interface CartLine {
 	readonly id: string
 	readonly sellerPubkey: string
 	readonly amount: number
+	/**
+	 * The shipping option chosen for this line, or `null` when none has been.
+	 *
+	 * Carried because the SDK persists it (`PersistedCartItem.shippingRef`) and a
+	 * read that dropped it would lose the shopper's own choice. Nothing sets one
+	 * yet: the buy control adds a listing without a shipping selection, which is
+	 * what the checkout entry reports as unresolved.
+	 */
+	readonly shippingMethodId: string | null
 }
 
 export interface Cart {
@@ -93,6 +102,7 @@ export function readCart(storage: CartStorage): Cart {
 			id: parts.id,
 			sellerPubkey: parts.sellerPubkey,
 			amount: item.quantity,
+			shippingMethodId: item.shippingRef ?? null,
 		})
 	}
 
@@ -107,9 +117,20 @@ export function cartCount(cart: Cart): number {
 /**
  * The line a listing becomes when it is put in the cart: the SDK's own
  * `productRef` identity, plus the parts a row needs to render.
+ *
+ * `shippingMethodId` is `null` because the buy control does not ask the shopper to
+ * choose one: the shipping option is shown on the listing's page and not yet
+ * selectable, which the checkout entry reports as an unresolved requirement rather
+ * than quietly defaulting to the first option.
  */
 export function cartLineFrom(item: ProductListItem, amount: number): CartLine {
-	return { productRef: item.coordinates, id: item.id, sellerPubkey: item.sellerPubkey, amount }
+	return {
+		productRef: item.coordinates,
+		id: item.id,
+		sellerPubkey: item.sellerPubkey,
+		amount,
+		shippingMethodId: null,
+	}
 }
 
 /**

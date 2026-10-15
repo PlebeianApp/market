@@ -200,6 +200,8 @@ describe('the layout conventions the style source keeps', () => {
 
 		expect(violations).toEqual([])
 		expect([...seen].sort()).toEqual([
+			'region-cart',
+			'region-checkout',
 			'region-foot',
 			'region-instance',
 			'region-nav',

@@ -374,14 +374,14 @@ a {
 	font-size: 16px;
 }
 
-/* The listing's address, underlined on hover: the row's title is the way in. */
-.ds-row-link {
+/* A link that has to read as a link, everywhere one is needed. */
+.ds-link {
 	text-decoration: underline;
 	text-decoration-color: var(--ds-border-strong);
 	text-underline-offset: 3px;
 }
 
-.ds-row-link:hover {
+.ds-link:hover {
 	text-decoration-color: var(--ds-accent-2);
 }
 

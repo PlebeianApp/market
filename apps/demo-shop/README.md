@@ -24,6 +24,8 @@ TMPDIR=/home/admin_maxime/work/.tmp bun run apps/demo-shop/server.tsx
 | --- | --- |
 | `/` | the product list |
 | `/products/<coordinates>` | one listing's page, with its buy control |
+| `/cart` | the cart, read from this browser |
+| `/checkout` | the checkout entry — the handoff, not a payment |
 | `/api/products` | the list as JSON |
 | `/api/products/<coordinates>` | one listing as JSON, or `404` with its reason |
 | `/api/config` | this instance's public config, no secrets |
@@ -67,6 +69,48 @@ That is also why the nav's count is a **skeleton** in the served bytes: the serv
 cannot know this browser's cart, so it shows the loading state and the browser fills
 it after hydration. "This browser has no reachable cart storage" is its own named
 state, never a `0` nobody measured.
+
+### What the cart shows, and what it refuses to invent
+
+`instance/cartTotals.ts` joins the cart's lines to the read **by their
+coordinates** — the same string the cart's refs are made of — and hands the SDK's
+`aggregateCartDisplayTotals` one input per line. Three things it will not do:
+
+- **It does not add a shipping cost.** The read model hands a listing's
+  `shipping_option` tags as `[ref, amount]` and declares no unit, so the cart passes
+  the aggregation no shipping at all and says so in words rather than in a smaller
+  number.
+- **It does not drop or zero an unpriceable line.** A persisted ref the read cannot
+  answer for is kept with `item: null` and named — a cart that forgives a delisted
+  line silently under-reports what it owes.
+- **It does not print a float.** A currency's subtotal is presented at the most
+  precise tag its own lines carry, because `0.0001 + 0.0002` is
+  `0.00030000000000000003` in binary floating point and that is not a price. The
+  test names that string, so the rounding cannot be removed by accident.
+
+The sats line borrows the SDK's only exported BTC→sats conversion
+(`products/resolvePublishPrice`, an *authoring* function) and says on the page that
+it does. A read-side converter belongs in the SDK; that is reported as a named need
+rather than re-stating `× 100000000` here.
+
+### The checkout entry: the handoff, and nothing else
+
+`/checkout` is where the cart hands off, and `instance/checkoutView.ts` is what it
+resolves — all of it through the SDK's own checkout rules:
+
+- `createCartIntent` builds the **intent** the cart would submit, and the page shows
+  its version, its line count and its refs.
+- `resolveCheckoutDeliveryRequirements` answers whether the lines resolve to a
+  delivery mode. They do not: the buy control does not ask for a shipping method, so
+  every line reports the SDK's own `product:<id>:missing-shipping-method` sentinel
+  and the page lists them. That is a report, not a placeholder — it is what tells the
+  next increment what to build.
+- `findNextActionableInvoiceIndex` is the checkout's progress rule, asked over an
+  **empty** invoice list, and it answers `-1`, which the page renders as "no payment
+  invoice is open".
+
+**The payment is not built and the page says so in its own words.** Nothing on it
+moves money, and no order id exists to print.
 
 ## House style
 
@@ -151,7 +195,9 @@ pool, and a `fetch` spy that throws is installed for the duration (ADR-0005).
 | `instance/routes.ts` | the instance | the app's addresses, spelled once and parsed once |
 | `instance/cartState.ts` | the instance | the browser's cart, through `@sdk/commerce/cart`, over an injected storage port |
 | `instance/useCart.ts` | the instance | the cart's three named page states, and the one write path |
-| `instance/ProductList.tsx`, `ProductDetail.tsx`, `App.tsx` | the instance | presentation, composing `ui/`'s `Badge`, `SelectableBadge`, `cn` |
+| `instance/cartTotals.ts` | the instance | the cart's lines joined to the read, and the SDK's own aggregation over them |
+| `instance/checkoutView.ts` | the instance | what the checkout entry resolves: the intent, the delivery requirements, the invoice progress |
+| `instance/ProductList.tsx`, `ProductDetail.tsx`, `CartView.tsx`, `CheckoutEntry.tsx`, `App.tsx` | the instance | presentation, composing `ui/`'s `Badge`, `SelectableBadge`, `cn` |
 | `instance/boot.ts` | the instance | config → edge → read → view |
 | `server.tsx`, `client.tsx` | the instance | `Bun.serve` + per-route SSR, and the browser hydration entry |
 
@@ -159,9 +205,14 @@ Nobody in `sdk/` or `ui/` was edited to make this work.
 
 ## What this slice does **not** prove
 
-- **No cart view and no checkout.** Adding to the cart works and is persisted in
-  the browser; the surface that *shows* the cart, and the checkout entry, are the
-  next increment. Nothing here touches money.
+- **No payment, and no order.** The cart, the checkout entry and its handoff are
+  built; the payment is the next increment. The checkout entry raises no invoice,
+  settles nothing, and prints no order id.
+- **The cart never asks for a shipping method.** The listing's page shows the
+  shipping options it published and the buy control does not offer them, so every
+  checkout line reports an unresolved delivery requirement. That is deliberate for
+  this increment and it is why the gap is in the page's own words rather than in a
+  default.
 - **The relay edge has never been run against a live relay.** It is composed and
   it is tested through an injected transport, which is a real test of the seam but
   is not a live read. The demo runs on the fixture edge.
@@ -227,3 +278,17 @@ Nobody in `sdk/` or `ui/` was edited to make this work.
    state, and `ProductDetail.tsx` refuses by name rather than quietly adding. A
    cart that could be filled with unavailable listings is a cart whose checkout
    can only fail later.
+9. **The SDK exposes no read-side BTC→sats conversion.** `sdk/commerce/products`
+   exports exactly one, and it is `resolvePublishPrice` — an *authoring* function
+   whose job is to turn a seller's draft price into a tag. The cart's sats line
+   composes it (`instance/cartTotals.ts`, `satsValueOf`) rather than restating
+   `× 100000000`, and says on the page that it does. A `priceToSats` beside the read
+   model's accessors is the missing piece, and it should be the one place a
+   currency's unit is converted.
+10. **`aggregateCartDisplayTotals` sums currency amounts as binary floats.**
+    Measured while writing the cart's own test: two lines tagged at `0.0001` and
+    `0.0002` sum to `0.00030000000000000003`, which `formatProductPrice` prints
+    verbatim. The app therefore rounds each currency subtotal back to the most
+    precise tag its lines carry — a fix at the app's boundary, because the SDK's
+    signature takes `number` and the imprecision is created by the sum, not by the
+    formatting.

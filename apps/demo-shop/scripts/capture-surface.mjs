@@ -94,33 +94,37 @@ await page.goto(url, { waitUntil: 'networkidle' })
  * React has not attached the handler yet — so a capture taken that way reports a
  * working control as dead. This is also why the click sits after the wait rather
  * than before it.
+ *
+ * When the capture is a two-step flow the wait before the click is for the
+ * **control** (`clickSelector`), because `waitSelector` names the surface the flow
+ * *ends* on and waiting for that first is waiting for a page that is not loaded yet.
  */
-await page.waitForSelector(waitSelector, { timeout: 15_000 })
-steps.push(`wait for ${waitSelector}`)
-
 const cartSettled = () =>
 	!document.querySelector('[data-testid="cart-status"][data-cart-state="reading"]')
 
-await page.waitForFunction(cartSettled, { timeout: 15_000 }).catch(() => {
-	consoleErrors.push('timed out waiting for the cart status to leave its reading state')
-})
+const waitFor = async (selector) => {
+	await page.waitForSelector(selector, { timeout: 15_000 })
+	steps.push(`wait for ${selector}`)
+	await page.waitForFunction(cartSettled, { timeout: 15_000 }).catch(() => {
+		consoleErrors.push('timed out waiting for the cart status to leave its reading state')
+	})
+}
 
 if (clickSelector) {
-	await page.waitForSelector(clickSelector, { timeout: 15_000 })
+	await waitFor(clickSelector)
 	await page.click(clickSelector)
 	steps.push(`click ${clickSelector}`)
 	// A click that changes state must be given its effect before it is read: a
 	// value that moves through a render is not there the instant it is clicked.
 	await page.waitForTimeout(400)
+} else {
+	await waitFor(waitSelector)
 }
 
 if (thenUrl) {
 	await page.goto(thenUrl, { waitUntil: 'networkidle' })
 	steps.push(`goto ${thenUrl}`)
-	await page.waitForSelector(waitSelector, { timeout: 15_000 })
-	await page.waitForFunction(cartSettled, { timeout: 15_000 }).catch(() => {
-		consoleErrors.push('timed out waiting for the cart status to leave its reading state')
-	})
+	await waitFor(waitSelector)
 }
 
 const readText = async (testId) => {
