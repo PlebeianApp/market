@@ -30,20 +30,51 @@ import { renderToString } from 'react-dom/server'
 
 import { App, type DemoShopPageProps } from './App'
 import { buildAssumptionRegister } from './assumptions'
-import { buildCatalogEvents, DEMO_SELLER_PUBKEY } from './catalog'
+import type { Cart } from './cartState'
+import { buildCatalogEvents, DEMO_SELLER_PUBKEY, DEMO_SHIPPING_REF } from './catalog'
+import { placeCheckout } from './checkoutView'
+import { PLACED_ORDER_TRUTH } from './OrderDetail'
+import { buildOrderView } from './orderView'
 import { findProductDetail } from './productDetailView'
 import { buildProductListView } from './productListView'
-import { CART_PATH, CHECKOUT_PATH, PRODUCTS_PATH, coordinatesFromProductPath, isPagePath } from './routes'
+import { CART_PATH, CHECKOUT_PATH, PRODUCTS_PATH, coordinatesFromProductPath, isPagePath, orderPath } from './routes'
+import { buildShippingRead } from './shippingSource'
 
 const catalog = buildCatalogEvents()
 const view = buildProductListView(catalog)
+const shipping = buildShippingRead(catalog)
 
 const shell = {
 	instanceName: 'Demo Shop',
 	instanceId: 'demo-shop',
 	sourceKind: 'fixture' as const,
 	view,
+	shipping,
 	assumptions: buildAssumptionRegister({ sourceKind: 'fixture', relayUrls: [], displayCurrency: 'BTC' }),
+}
+
+/** The cart this demo can actually place: one line, its seller's own published shipping ref. */
+const placeableCart: Cart = {
+	lines: [
+		{
+			productRef: `30402:${DEMO_SELLER_PUBKEY}:wool-coat`,
+			id: 'wool-coat',
+			sellerPubkey: DEMO_SELLER_PUBKEY,
+			amount: 2,
+			shippingMethodId: DEMO_SHIPPING_REF,
+		},
+	],
+}
+
+/** Place that cart through the app's own path, so the order under test is a real one. */
+function placeTheDemoOrder() {
+	const attempt = placeCheckout(placeableCart, {
+		items: view.items,
+		servicesByShippingRef: shipping.servicesByShippingRef,
+		createdAtMs: 1_760_000_000_000,
+	})
+	if (attempt.outcome.status !== 'placed') throw new Error(`the demo cart should place: ${attempt.outcome.reason}`)
+	return attempt.outcome.orders[0] as NonNullable<(typeof attempt.outcome.orders)[number]>
 }
 
 function render(props: DemoShopPageProps): string {
@@ -138,14 +169,92 @@ describe('the browser-owned surfaces ship a skeleton, because the server cannot 
 		expect(regionsOf(html)).toEqual(['region-cart', 'region-foot', 'region-instance', 'region-nav'])
 	})
 
-	test('the checkout entry: its own heading is in the bytes, and it promises no payment', () => {
+	test('the checkout entry: its own heading is in the bytes, and the place region promises no payment', () => {
 		const html = render({ ...shell, route: 'checkout' })
 
 		expect(html).toContain('Checkout')
 		expect(html).toContain('data-checkout-state="reading"')
 		expect(html).toContain('data-skeleton="1"')
-		expect(html).not.toContain('data-testid="checkout-outcome"')
+		// The place region is server-rendered — its honesty is in the served bytes, not
+		// something hydration adds — and the control is off until the cart has been read.
+		expect(html).toContain('data-testid="checkout-place-region"')
+		expect(html).toContain('unsigned event template')
+		expect(html).toContain('A placed order is not a paid order.')
+		expect(html).toMatch(/data-testid="checkout-place"[^>]*data-place-state="off"/)
+		// The shipping read this run performed is stated on the page, in its own line.
+		expect(html).toContain(shipping.summaryLine)
 		expect(regionsOf(html)).toEqual(['region-checkout', 'region-foot', 'region-instance', 'region-nav'])
+	})
+})
+
+describe('the order details page is server-rendered, with the order’s own status in the served bytes', () => {
+	const placed = placeTheDemoOrder()
+	const order = buildOrderView(placed, { items: view.items, servicesByShippingRef: shipping.servicesByShippingRef })
+	const html = render({ ...shell, route: 'order', order })
+
+	test('the order id and the status the SDK derived are both in the markup', () => {
+		expect(html).toContain(`data-order-id="${order.orderId}"`)
+		expect(html).toContain('data-testid="order-id"')
+		expect(html).toContain(order.orderId)
+		// The status is the module's derivation over the built event's own tags: the
+		// template writes no `status`, so the resolver answers `pending`.
+		expect(order.status).toBe('pending')
+		expect(html).toContain('data-testid="order-status-badge"')
+		expect(html).toContain('pending')
+	})
+
+	test('it is the order region, and the assumption register is in its bytes too', () => {
+		expect(regionsOf(html)).toEqual(['region-foot', 'region-instance', 'region-nav', 'region-order'])
+		expect(html).toContain('data-testid="assumption-register"')
+		expect(html).toContain(shell.assumptions.summaryLine)
+	})
+
+	test('the three claims are separate, and none of them says this order was paid', () => {
+		expect(html).toContain('data-testid="order-stage-payment-lifecycle"')
+		expect(html).toContain('not-requested — no invoice was raised and no payment has been requested')
+		expect(html).toContain('data-testid="order-stage-shipping-status"')
+		expect(html).toContain('none recorded')
+		expect(html).toContain('data-testid="order-stage-signature"')
+		expect(html).toContain('not signed — this is an unsigned event template; the demo holds no key')
+		expect(html).toContain('data-testid="order-stage-publication"')
+		expect(html).toContain('not-published — nothing was sent to a relay')
+		expect(html).toContain(PLACED_ORDER_TRUTH)
+		// There is no field that could say it was settled: the page has the stage, and
+		// no boolean beside it.
+		expect(html).not.toContain('data-testid="order-paid"')
+		expect(html).not.toContain('"paid":true')
+	})
+
+	test('the order’s own fields are rendered: merchant, amount, the line, and the shipping ref', () => {
+		expect(html).toContain('data-testid="order-merchant"')
+		expect(html).toContain('data-testid="order-amount"')
+		expect(html).toContain('data-testid="order-item"')
+		expect(html).toContain('Merino Wool Coat')
+		expect(html).toContain(DEMO_SHIPPING_REF)
+		expect(html).toContain('standard')
+	})
+
+	test('the event it was built as is readable, so the derivation can be checked against it', () => {
+		expect(html).toContain('data-testid="order-event-kind"')
+		// React separates the literal `kind ` from the number with a comment node.
+		expect(html).toContain('kind <!-- -->16')
+		expect(html).toContain('data-testid="order-event-tag"')
+		expect(html).toContain('subject · order-info')
+		// …and the register that the order status tag is absent travels with it.
+		expect(html).toContain('carries no `status` tag')
+	})
+
+	test('an order address that holds nothing is a surface with its own words', () => {
+		const missing = render({ ...shell, route: 'order-missing', orderId: 'order-00000000' })
+
+		expect(missing).toContain('No order here')
+		expect(missing).toContain('order-00000000')
+		expect(regionsOf(missing)).toEqual(['region-foot', 'region-instance', 'region-nav', 'region-order'])
+	})
+
+	test('the nav marks the checkout section on an order page, and only that one', () => {
+		expect(html).toContain(`href="${CHECKOUT_PATH}" aria-current="page"`)
+		expect(html.match(/aria-current="page"/g)).toHaveLength(1)
 	})
 })
 

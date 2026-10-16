@@ -22,9 +22,13 @@ import { describe, expect, test } from 'bun:test'
 import { DEMO_SELLER_PUBKEY } from './catalog'
 import {
 	API_PRODUCTS_PATH,
+	ORDERS_PATH_PREFIX,
 	PRODUCTS_PATH,
 	apiCoordinatesFromProductPath,
 	coordinatesFromProductPath,
+	isPagePath,
+	orderIdFromOrderPath,
+	orderPath,
 	productPath,
 } from './routes'
 
@@ -71,5 +75,38 @@ describe('the JSON twin takes the same coordinates', () => {
 		expect(apiCoordinatesFromProductPath(API_PRODUCTS_PATH)).toBeNull()
 		expect(apiCoordinatesFromProductPath(`${API_PRODUCTS_PATH}/`)).toBeNull()
 		expect(apiCoordinatesFromProductPath('/api/config')).toBeNull()
+	})
+})
+
+/**
+ * The order address, held to the same contract as a listing's: **the id the checkout
+ * mints is the id the URL carries**, and a prefix is not a child. The router is where a
+ * placed order becomes addressable, so a mismatch here reads as "the order page shows
+ * nothing" for an order the instance actually holds.
+ *
+ * The mutations that turn these red:
+ * - `orderPath` emitting `/order/<id>` (singular): the round trip fails, and the ordering
+ *   page the checkout redirects to is not a page route.
+ * - `orderIdFromOrderPath` matching the bare prefix: `/orders/` answers a page for an
+ *   order nobody named, which is the parent-route-swallows-its-child defect again.
+ */
+describe('a placed order’s address round-trips', () => {
+	test('the path the checkout emits is the path the router parses', () => {
+		expect(orderPath('order-ace933de')).toBe(`${ORDERS_PATH_PREFIX}order-ace933de`)
+		expect(orderIdFromOrderPath(orderPath('order-ace933de'))).toBe('order-ace933de')
+	})
+
+	test('a bare prefix is not an order: a parent route must not swallow its child', () => {
+		expect(orderIdFromOrderPath(ORDERS_PATH_PREFIX)).toBeNull()
+		expect(orderIdFromOrderPath('/orders')).toBeNull()
+		expect(orderIdFromOrderPath('/cart')).toBeNull()
+		expect(orderIdFromOrderPath('/products/' + coordinates)).toBeNull()
+		expect(isPagePath(ORDERS_PATH_PREFIX)).toBe(false)
+		expect(isPagePath('/orders')).toBe(false)
+	})
+
+	test('an order address is a page route, and an id with a colon survives it', () => {
+		expect(isPagePath(orderPath('order-ace933de'))).toBe(true)
+		expect(orderIdFromOrderPath(orderPath('order:1/2'))).toBe('order:1/2')
 	})
 })

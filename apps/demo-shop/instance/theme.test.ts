@@ -205,6 +205,10 @@ describe('the layout conventions the style source keeps', () => {
 			'region-foot',
 			'region-instance',
 			'region-nav',
+			// The order details page's own landmark. An order is placed from the checkout,
+			// and its page is a region of its own rather than a reuse of the checkout's —
+			// the two surfaces say different things (`instance/OrderDetail.tsx`).
+			'region-order',
 			'region-product',
 			'region-products',
 		])

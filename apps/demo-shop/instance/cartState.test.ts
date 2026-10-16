@@ -27,9 +27,18 @@ import { CART_PERSISTENCE_VERSION, type PersistedCartContent } from '@sdk/commer
 import { CART_STORAGE_KEY, cartCount, EMPTY_CART, readCart, splitProductRef, type CartStorage } from './cartState'
 import { DEMO_SELLER_PUBKEY } from './catalog'
 
-/** The whole storage port, in two lines. */
+/**
+ * The whole storage port, in two lines — with a `write` that refuses, because every case
+ * in this file reads: a fake that accepted a write nobody asked for would hide the
+ * difference between a read path and a write path.
+ */
 function storageWith(value: string | null): CartStorage {
-	return { read: () => value }
+	return {
+		read: () => value,
+		write: () => {
+			throw new Error('this fake storage is read-only: no test in this file writes the cart')
+		},
+	}
 }
 
 const ref = (id: string) => `30402:${DEMO_SELLER_PUBKEY}:${id}`

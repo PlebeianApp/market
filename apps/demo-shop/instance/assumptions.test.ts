@@ -31,6 +31,7 @@ import { describe, expect, test } from 'bun:test'
 
 import { CART_CURRENCY_PRECISION } from '@sdk/commerce/cart'
 import { CURRENCY_ASSUMPTIONS } from '@sdk/commerce/currency/assumptions'
+import { ORDER_PLACEMENT_ASSUMPTIONS } from '@sdk/commerce/orders/orderPlacement'
 import { SHIPPING_READ_ASSUMPTIONS } from '@sdk/commerce/shipping/shippingRead'
 
 import {
@@ -38,6 +39,7 @@ import {
 	bitcoinVersusSatsShift,
 	buildAssumptionRegister,
 	CURRENCY_REGISTER_SOURCE,
+	ORDER_PLACEMENT_REGISTER_SOURCE,
 	SHIPPING_REGISTER_SOURCE,
 	UNLABELLED_PRICE_EXAMPLE,
 	type RegisterInput,
@@ -45,6 +47,13 @@ import {
 
 const FIXTURE_RUN: RegisterInput = { sourceKind: 'fixture', relayUrls: [], displayCurrency: 'BTC' }
 const RELAY_RUN: RegisterInput = { sourceKind: 'relay', relayUrls: ['wss://relay.example.test'], displayCurrency: 'BTC' }
+
+/**
+ * The sources that are an SDK module's own register rather than one of the app's own
+ * entries. Three of them now: the currency module, the shipping read, and — with this
+ * increment — the order-placement workflow the checkout leans on.
+ */
+const SDK_REGISTER_SOURCES = new Set([CURRENCY_REGISTER_SOURCE, SHIPPING_REGISTER_SOURCE, ORDER_PLACEMENT_REGISTER_SOURCE])
 
 const register = buildAssumptionRegister(FIXTURE_RUN)
 const byId = new Map(register.entries.map((entry) => [entry.id, entry]))
@@ -87,9 +96,7 @@ describe('every entry is whole, and traceable to the code that leans on it', () 
 	})
 
 	test('the app’s own entries point at a real locus, and only the dependency names a module', () => {
-		const appEntries = register.entries.filter(
-			(entry) => entry.source !== CURRENCY_REGISTER_SOURCE && entry.source !== SHIPPING_REGISTER_SOURCE,
-		)
+		const appEntries = register.entries.filter((entry) => !SDK_REGISTER_SOURCES.has(entry.source))
 		const namedByFile = appEntries.filter((entry) => entry.source.includes('apps/demo-shop/instance/'))
 
 		// Five of the six are leaned on by a file in this app, so a falsified
@@ -168,13 +175,34 @@ describe('the SDK registers are carried verbatim, not restated here', () => {
 		})
 	})
 
-	test('the register is the two modules plus the app’s own six, and nothing else', () => {
-		const appEntries = register.entries.filter(
-			(entry) => entry.source !== CURRENCY_REGISTER_SOURCE && entry.source !== SHIPPING_REGISTER_SOURCE,
+	test('every order-placement assumption is on the register, as the module wrote it', () => {
+		expect(register.entries.filter((entry) => entry.source === ORDER_PLACEMENT_REGISTER_SOURCE)).toHaveLength(
+			ORDER_PLACEMENT_ASSUMPTIONS.length,
 		)
 
+		ORDER_PLACEMENT_ASSUMPTIONS.forEach((assumption, index) => {
+			const entry = byId.get(`order-placement-${index + 1}`)
+			expect(entry?.statement).toBe(assumption.assumption)
+			expect(entry?.falsifiedBy).toBe(assumption.falsifiedBy)
+		})
+
+		// The entry that carries the increment's own claim is on the page verbatim: a
+		// placed order is `pending` and has begun no payment lifecycle.
+		const placed = byId.get('order-placement-3')
+		expect(placed?.statement).toContain('pending')
+		expect(placed?.statement).toContain('not-requested')
+	})
+
+	test('the register is the three modules plus the app’s own six, and nothing else', () => {
+		const appEntries = register.entries.filter((entry) => !SDK_REGISTER_SOURCES.has(entry.source))
+
 		expect(appEntries).toHaveLength(6)
-		expect(register.entries).toHaveLength(CURRENCY_ASSUMPTIONS.length + SHIPPING_READ_ASSUMPTIONS.length + 6)
+		expect(register.entries).toHaveLength(
+			CURRENCY_ASSUMPTIONS.length + SHIPPING_READ_ASSUMPTIONS.length + ORDER_PLACEMENT_ASSUMPTIONS.length + 6,
+		)
+		// The count the page renders is that same number, so a dropped register is
+		// visible on the page and not only here.
+		expect(register.summaryLine).toContain(`${register.entries.length} assumptions`)
 	})
 })
 
