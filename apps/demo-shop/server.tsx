@@ -284,15 +284,31 @@ export interface StartedDemoShop {
 	placedOrders: PlacedOrderStore
 }
 
-export async function startDemoShop(options: BootInstanceOptions = {}): Promise<StartedDemoShop> {
+/**
+ * What the host may be told about the socket, as well as about the instance itself.
+ *
+ * These exist so a caller — a test, in practice — can bind an **ephemeral port on loopback**
+ * (`port: 0`) for one run without writing `process.env` first: mutating the environment to
+ * configure one server would leak into every other server and every other module in the
+ * process. The environment is still the operator's way in
+ * (`DEMO_SHOP_PORT` / `DEMO_SHOP_HOST`); this is the caller's.
+ */
+export interface StartDemoShopOptions extends BootInstanceOptions {
+	/** The port to bind. `0` binds an ephemeral one. Defaults to `DEMO_SHOP_PORT`, then 3400. */
+	readonly port?: number
+	/** The address to bind. Defaults to `DEMO_SHOP_HOST`, then `127.0.0.1` — loopback, never a wildcard. */
+	readonly hostname?: string
+}
+
+export async function startDemoShop(options: StartDemoShopOptions = {}): Promise<StartedDemoShop> {
 	const runtime = await bootInstance(options)
 	const clientJs = await bundleClient()
 	const stylesheet = Bun.file(join(HERE, 'styles.css'))
 	const placedOrders = instancePlacedOrders()
 
 	const server = Bun.serve({
-		port: Number(process.env.DEMO_SHOP_PORT ?? DEFAULT_PORT),
-		hostname: process.env.DEMO_SHOP_HOST ?? '127.0.0.1',
+		port: options.port ?? Number(process.env.DEMO_SHOP_PORT ?? DEFAULT_PORT),
+		hostname: options.hostname ?? process.env.DEMO_SHOP_HOST ?? '127.0.0.1',
 
 		async fetch(request) {
 			const url = new URL(request.url)
