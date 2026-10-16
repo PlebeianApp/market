@@ -8,7 +8,11 @@
  * 2. It picks the route and renders **that** route's props to HTML with
  *    `react-dom/server`, so the **HTTP response itself carries the product titles
  *    and prices** rather than an empty shell that only looks right once a browser
- *    runs. A listing's page carries its own title in the document too.
+ *    runs. A listing's page carries its own title in the document too. The same
+ *    response carries the instance's **assumption register** in its footer — every
+ *    assumption the running instance is operating under, each with what would
+ *    falsify it (`instance/assumptions.ts`) — so the register is readable from the
+ *    served bytes alone.
  * 3. It serves the browser bundle, which hydrates the same markup with the same
  *    props (`window.__DEMO_SHOP__`) — including which route it is, so the client
  *    renders the tree the server rendered and no surface is painted by another
@@ -32,6 +36,7 @@ import { join } from 'node:path'
 import { renderToString } from 'react-dom/server'
 
 import { App, type DemoShopPageProps, type DemoShopShellProps } from './instance/App'
+import { buildAssumptionRegister, type AssumptionRegister } from './instance/assumptions'
 import { bootInstance, type BootInstanceOptions, type InstanceRuntime } from './instance/boot'
 import { findProductDetail } from './instance/productDetailView'
 import {
@@ -95,12 +100,29 @@ function pageHtml(body: string, props: DemoShopPageProps): string {
 `
 }
 
+/**
+ * The assumptions the running instance is operating under.
+ *
+ * Built from the runtime's own facts — the edge it took, the relays it was
+ * configured with, the currency it falls back to — so the register cannot claim an
+ * edge this run did not take. `instance/assumptions.ts` composes it from the two
+ * registers the SDK modules export and from the app's own six.
+ */
+function assumptionRegister(runtime: InstanceRuntime): AssumptionRegister {
+	return buildAssumptionRegister({
+		sourceKind: runtime.sourceKind,
+		relayUrls: runtime.config.relayUrls,
+		displayCurrency: runtime.config.displayCurrency,
+	})
+}
+
 function shell(runtime: InstanceRuntime): DemoShopShellProps {
 	return {
 		instanceName: runtime.config.displayName,
 		instanceId: runtime.config.instanceId,
 		sourceKind: runtime.sourceKind,
 		view: runtime.view,
+		assumptions: assumptionRegister(runtime),
 	}
 }
 
@@ -193,6 +215,13 @@ export async function startDemoShop(options: BootInstanceOptions = {}): Promise<
 						displayCurrency: runtime.config.displayCurrency,
 						relayUrls: runtime.config.relayUrls,
 					})
+
+				/**
+				 * The JSON twin of the register the page's footer renders, so a probe can
+				 * read the same register the page carries without parsing HTML.
+				 */
+				case '/api/assumptions':
+					return Response.json(assumptionRegister(runtime))
 
 				case '/health':
 					return Response.json({ ok: true, sourceKind: runtime.sourceKind, loadedAtMs: runtime.loadedAtMs })

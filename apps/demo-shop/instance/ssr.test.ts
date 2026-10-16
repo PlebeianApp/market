@@ -29,6 +29,7 @@ import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 
 import { App, type DemoShopPageProps } from './App'
+import { buildAssumptionRegister } from './assumptions'
 import { buildCatalogEvents, DEMO_SELLER_PUBKEY } from './catalog'
 import { findProductDetail } from './productDetailView'
 import { buildProductListView } from './productListView'
@@ -42,6 +43,7 @@ const shell = {
 	instanceId: 'demo-shop',
 	sourceKind: 'fixture' as const,
 	view,
+	assumptions: buildAssumptionRegister({ sourceKind: 'fixture', relayUrls: [], displayCurrency: 'BTC' }),
 }
 
 function render(props: DemoShopPageProps): string {
@@ -144,6 +146,63 @@ describe('the browser-owned surfaces ship a skeleton, because the server cannot 
 		expect(html).toContain('data-skeleton="1"')
 		expect(html).not.toContain('data-testid="checkout-outcome"')
 		expect(regionsOf(html)).toEqual(['region-checkout', 'region-foot', 'region-instance', 'region-nav'])
+	})
+})
+
+describe('the assumption register is in the served bytes, not added later', () => {
+	const routes = ['products', 'cart', 'checkout'] as const
+
+	test('every route carries the register, with its heading and its count', () => {
+		for (const route of routes) {
+			const html = render({ ...shell, route })
+			expect(html).toContain('data-testid="assumption-register"')
+			expect(html).toContain('Assumptions this instance is running under')
+			expect(html).toContain(shell.assumptions.summaryLine)
+		}
+	})
+
+	test('the register is rendered once per page, and carries every entry', () => {
+		const html = render({ ...shell, route: 'products' })
+		const entries = html.match(/data-testid="assumption-entry"/g) ?? []
+
+		expect(entries).toHaveLength(shell.assumptions.entries.length)
+		for (const entry of shell.assumptions.entries) {
+			// The id travels in the markup, so a missing entry is named by its id
+			// rather than only counted.
+			expect(html).toContain(`data-assumption-id="${entry.id}"`)
+		}
+	})
+
+	test('the entries that are the app’s own are readable on the page, with their falsifiers', () => {
+		const html = render({ ...shell, route: 'products' })
+
+		for (const id of [
+			'app-listing-edge',
+			'app-no-live-relay-read-performed',
+			'app-catalog-authored-in-btc',
+			'app-unlabelled-price-is-refused',
+			'app-cvm-rate-is-a-dependency',
+		]) {
+			expect(html).toContain(`data-assumption-id="${id}"`)
+		}
+
+		// The instance's own edge, as words a reader can quote.
+		expect(html).toContain('an injected fixture, not a live relay read')
+		expect(html).toContain('No live relay read has ever been performed by this demo')
+		// …and the falsifier travels beside the statement, not in a comment.
+		expect(html).toContain('falsified by')
+	})
+
+	test('the register never claims the edge this run did not take', () => {
+		const relayRegister = buildAssumptionRegister({
+			sourceKind: 'relay',
+			relayUrls: ['wss://relay.example.test'],
+			displayCurrency: 'BTC',
+		})
+		const html = render({ ...shell, route: 'products', sourceKind: 'relay' as const, assumptions: relayRegister })
+
+		expect(html).toContain('came from a live relay read')
+		expect(html).not.toContain('an injected fixture, not a live relay read')
 	})
 })
 

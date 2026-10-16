@@ -7,22 +7,26 @@
  * 1. **The instance is clean.** Every listing this instance ships is admitted by
  *    the parser its own surfaces apply, so nothing on the page is something the
  *    repository would reject. The mutation that turns this red: add a listing to
- *    `DEMO_LISTINGS` with a `SATS` price, or with a 4-letter currency, or drop
- *    its `price` tag.
+ *    `DEMO_LISTINGS` with a 4-letter currency, or drop its `price` tag.
  *
- * 2. **The SDK is not clean, and this case pins where.** This is a *known-defect*
- *    case, not an aspiration: it asserts the disagreement that exists today, with
- *    its locus. If someone reconciles the two definitions, this case fails and
- *    that failure is the signal to delete it — which is exactly why the assertion
- *    is written against the *locus* (`['tags', 2]`) and not just against `false`.
+ * 2. **The notation the two sides now agree on is pinned here.** This case used to
+ *    be a *known defect*: `productPriceResolution.ts` resolved a sats-denominated
+ *    price to `currency: 'SATS'`, `productListingWorkflow.ts` wrote that verbatim
+ *    into `['price', amount, currency]`, and `src/lib/schemas/common.ts`'s
+ *    `iso4217Currency` is `/^[A-Z]{3}$/` — four letters cannot match, so the SDK's
+ *    write side emitted a price tag its own cited parser refused.
  *
- * The disagreement, verified: `sdk/commerce/products/productPriceResolution.ts`
- * resolves a sats-denominated price to `currency: 'SATS'`, and
- * `productListingWorkflow.ts` writes that verbatim into `['price', amount,
- * currency]`. `src/lib/schemas/common.ts`'s `iso4217Currency` is
- * `/^[A-Z]{3}$/` — four letters cannot match. So the SDK's write side emits a
- * price tag that the parser its own `validationDeclaration` names as the kind's
- * single definition of valid cannot read.
+ *    `commerce/money-truth` (M3, "one currency notation — emit SAT, accept both")
+ *    reconciled it on the SDK side: `products/currencyNotation.ts#normalizeCurrency`
+ *    emits the three-letter `SAT` and still accepts `SATS`, `sat` and `sats` on
+ *    read, so an already-published four-letter listing keeps resolving. The
+ *    disagreement this file used to assert **no longer exists on the merged line**,
+ *    which is why the assertions below are the opposite of the ones it carried:
+ *    that is the change, and it is asserted rather than deleted.
+ *
+ *    What still holds, and is the arm worth keeping: the parser's rule itself is
+ *    unchanged, so a four-letter spelling that reaches the parser **unnormalised**
+ *    is still refused — on the price tag, at `['tags', 2]`.
  */
 
 import { describe, expect, test } from 'bun:test'
@@ -76,29 +80,43 @@ describe('the instance catalog is admitted by the repository kind-30402 parser',
 	})
 })
 
-describe('KNOWN DEFECT — the SDK emits a price currency the parser rejects', () => {
-	test('SATS is the SDK’s own price currency and is not an admitted one', () => {
-		// The parser's rule, on its own:
+describe('the merged notation — the SDK emits SAT, and the parser admits it', () => {
+	test('SATS is a four-letter spelling the parser refuses, and the SDK no longer emits it', () => {
+		// The parser's rule, on its own — unchanged by the reconciliation:
 		expect(iso4217Currency.safeParse('SATS').success).toBe(false)
 		expect(iso4217Currency.safeParse('BTC').success).toBe(true)
+		// …and the three-letter spelling the SDK emits, which the rule admits:
+		expect(iso4217Currency.safeParse('SAT').success).toBe(true)
 
-		// …and what the SDK writes into the price tag:
+		// …and what the SDK now writes into the price tag for a SATS-denominated
+		// input: the two sides' notation, reconciled.
 		const event = asPublished(satsListing, 'coat')
-		expect(event.tags[2]).toEqual(['price', '1200', 'SATS'])
+		expect(event.tags[2]).toEqual(['price', '1200', 'SAT'])
 	})
 
-	test('the rejection lands on the price tag, and an admitted currency clears it', () => {
+	test('a SATS-authored listing is admitted, because the normaliser makes it a SAT tag', () => {
 		const satsEvent = asPublished(satsListing, 'coat')
-		const satsResult = ProductListingSchema.safeParse(satsEvent)
-		expect(satsResult.success).toBe(false)
-		if (satsResult.success) return
-		// The locus, not just the verdict: tags[2] is the price tag.
-		expect(satsResult.error.issues[0]?.path).toEqual(['tags', 2])
 
-		// The same listing, same everything, with a three-letter currency:
-		const btcEvent = asPublished({ ...satsListing, price: '0.000012', currency: 'BTC' }, 'coat')
-		expect(ProductListingSchema.safeParse(btcEvent).success).toBe(true)
-		expect(admitProductListing(btcEvent)).not.toBeNull()
+		// The opposite of what this case asserted before the merge: the SDK's
+		// write side no longer emits a tag its own cited parser refuses.
+		expect(ProductListingSchema.safeParse(satsEvent).success).toBe(true)
+		expect(admitProductListing(satsEvent)).not.toBeNull()
+	})
+
+	test('the four-letter spelling is still refused when it reaches the parser unnormalised', () => {
+		const event = asPublished(satsListing, 'coat')
+		const unnormalised = {
+			...event,
+			tags: event.tags.map((tag) => (tag[0] === 'price' ? ['price', '1200', 'SATS'] : tag)),
+		}
+		const result = ProductListingSchema.safeParse(unnormalised)
+
+		expect(result.success).toBe(false)
+		if (result.success) return
+		// The locus, not just the verdict: tags[2] is the price tag — which is why
+		// the normalisation has to happen on the write side, before the tag exists.
+		expect(result.error.issues[0]?.path).toEqual(['tags', 2])
+		expect(admitProductListing(unnormalised)).toBeNull()
 	})
 
 	test('admission rejects a listing with no price tag rather than inventing one', () => {

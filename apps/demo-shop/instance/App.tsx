@@ -25,10 +25,18 @@
  * storage — so the served bytes carry a **skeleton** (`data-skeleton="1"`,
  * `.sk`) where the count goes, and the browser fills it after hydration. Nothing
  * here guesses at the number.
+ *
+ * THE FOOTER CARRIES THE ASSUMPTION REGISTER. Every assumption the running
+ * instance is operating under — the app's own, plus the two registers the SDK
+ * modules export as values — is rendered inside the footer region by
+ * `AssumptionRegisterPanel`, each entry naming what would falsify it. It is part
+ * of this component tree, so it is in the **served HTML**, not a comment and not
+ * something hydration adds.
  */
 
 import * as React from 'react'
 
+import type { AssumptionEntry, AssumptionRegister } from './assumptions'
 import { CartView } from './CartView'
 import { CheckoutEntry } from './CheckoutEntry'
 import { ProductDetail, ProductMissing } from './ProductDetail'
@@ -45,6 +53,19 @@ export interface DemoShopShellProps {
 	readonly sourceKind: 'fixture' | 'relay'
 	/** The listing read, which every surface resolves against. */
 	readonly view: ProductListView
+	/**
+	 * The assumptions the running instance is operating under, composed once by the
+	 * server (`instance/assumptions.ts`) and carried in the props the browser
+	 * hydrates from.
+	 *
+	 * It travels as data rather than being imported by this component on purpose:
+	 * the register is a property of *the running instance* — which edge it took,
+	 * which relays it was configured with, which currency it falls back to — and
+	 * those facts exist on the server. Importing the SDK registers into the browser
+	 * bundle would give the client a register it cannot know is the one the server
+	 * rendered.
+	 */
+	readonly assumptions: AssumptionRegister
 }
 
 /**
@@ -162,8 +183,58 @@ function NavRegion({
 	)
 }
 
+/**
+ * The footer's assumption register, rendered.
+ *
+ * This is the maintainer's requirement made visible: every assumption the running
+ * instance is operating under, each with what would falsify it, **in the document
+ * the server sends** — the panel is part of `App`, so it is in the HTTP response
+ * itself and a bare `curl` shows it. It is not a comment, and it does not wait for
+ * hydration.
+ *
+ * The panel deliberately does **not** claim a new `region-*` name. The region
+ * landmarks are the seven the page already declares, and `theme.test.ts` pins that
+ * set; the register is content *inside* the footer region, titled by its own
+ * heading, which is what a reader addresses it by.
+ */
+function AssumptionRegisterPanel({ register }: { register: AssumptionRegister }) {
+	return (
+		<section className="ds-assumptions" aria-labelledby="ds-assumptions-heading" data-testid="assumption-register">
+			<h2 className="ds-assumptions-heading" id="ds-assumptions-heading">
+				Assumptions this instance is running under
+			</h2>
+			<p className="ds-assumptions-summary" data-testid="assumption-summary">
+				{register.summaryLine}
+			</p>
+			<ol className="ds-assumption-list">
+				{register.entries.map((entry: AssumptionEntry) => (
+					<li
+						className="ds-assumption"
+						key={entry.id}
+						data-testid="assumption-entry"
+						data-assumption-id={entry.id}
+						data-assumption-source={entry.source}
+					>
+						<p className="ds-assumption-statement" data-testid="assumption-statement">
+							{entry.statement}
+						</p>
+						<p className="ds-assumption-falsifier" data-testid="assumption-falsifier">
+							<span className="ds-assumption-label">falsified by</span>
+							<span className="ds-assumption-value">{entry.falsifiedBy}</span>
+						</p>
+						<p className="ds-assumption-origin">
+							<span className="ds-assumption-label">assumed by</span>
+							<code className="ds-assumption-value">{entry.source}</code>
+						</p>
+					</li>
+				))}
+			</ol>
+		</section>
+	)
+}
+
 export function App(props: DemoShopPageProps) {
-	const { instanceName, instanceId, sourceKind, view } = props
+	const { instanceName, instanceId, sourceKind, view, assumptions } = props
 	const cart = useCart()
 
 	const edgeVerb = sourceKind === 'fixture' ? 'injected fixture source (no network)' : 'relay read via sdk/core/nostr-io'
@@ -207,11 +278,12 @@ export function App(props: DemoShopPageProps) {
 				{body}
 			</main>
 
-			<footer className="ds-shell ds-region region region-foot ds-foot" aria-label="What this page composes">
+			<footer className="ds-shell ds-region region region-foot ds-foot" aria-label="What this page composes, and the assumptions it runs under">
 				<p>
 					app: <span data-testid="composition-path">apps/demo-shop</span> · composes{' '}
 					<span>@sdk/commerce/&#123;products,discovery,cart&#125;</span> and <span>@ui</span>
 				</p>
+				<AssumptionRegisterPanel register={assumptions} />
 			</footer>
 		</div>
 	)

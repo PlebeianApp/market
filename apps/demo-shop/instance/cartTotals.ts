@@ -85,10 +85,11 @@ export function scaleAmount(amount: string, factor: number): string | null {
 /**
  * The sats value of a tagged price, through the SDK's own conversion.
  *
- * `resolvePublishPrice` is the SDK's authoring-side resolver and answers `SATS`
- * for a `BTC`-tagged amount; a listing already denominated in `SATS` passes
- * through unchanged. Any other currency answers `null` — there is no rate here and
- * inventing one would put a number on the page that nothing converted.
+ * `resolvePublishPrice` is the SDK's authoring-side resolver and answers the
+ * three-letter `SAT` for a `BTC`-tagged amount; a listing already denominated in
+ * the satoshi notation passes through unchanged. Any other currency answers `null`
+ * — there is no rate here and inventing one would put a number on the page that
+ * nothing converted.
  *
  * The answer is rounded to whole sats, which is what a satoshi is: the smallest
  * unit has no fractional part, and a total assembled from unrounded floats can

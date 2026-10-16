@@ -29,6 +29,7 @@ TMPDIR=/home/admin_maxime/work/.tmp bun run apps/demo-shop/server.tsx
 | `/api/products` | the list as JSON |
 | `/api/products/<coordinates>` | one listing as JSON, or `404` with its reason |
 | `/api/config` | this instance's public config, no secrets |
+| `/api/assumptions` | the assumption register the footer renders, as JSON |
 | `/health` | liveness, with the edge it read and when |
 
 `<coordinates>` is the listing's **own addressable identity** —
@@ -111,6 +112,44 @@ resolves — all of it through the SDK's own checkout rules:
 
 **The payment is not built and the page says so in its own words.** Nothing on it
 moves money, and no order id exists to print.
+
+### The assumption register, on the page
+
+Every assumption the running instance is operating under is rendered in the
+footer, each entry naming **what would falsify it** — so the page states what it
+is taking for granted rather than leaving it to a comment. It is part of the
+component tree, so it is **in the served bytes**: `curl http://127.0.0.1:3400/`
+shows it, and it is not applied after hydration.
+
+`instance/assumptions.ts` composes it from three places and is the only place that
+does:
+
+- **the registers the SDK modules already export as values** —
+  `CURRENCY_ASSUMPTIONS` (`sdk/commerce/currency/assumptions.ts`, 7 entries) and
+  `SHIPPING_READ_ASSUMPTIONS` (`sdk/commerce/shipping/shippingRead.ts`, 5 entries).
+  They are **imported, never copied**, so a module's own register and what the page
+  says about it cannot drift apart. They are imported from their own files rather
+  than their barrels on purpose: the currency barrel re-exports the ContextVM
+  transport, and data *about* a dependency should not pull the dependency in.
+- **the app's own six**, which the app is the one assuming: the edge these listings
+  came from, the fact that no live relay read has ever been performed here, why the
+  catalog is authored in `BTC`, that an unlabelled price is refused rather than
+  defaulted to `SAT`, that the oracle-sourced rate is a dependency rather than a
+  fact about the world, and that the cart's total excludes shipping because the read
+  model carries no unit for it.
+
+The figures in the entries are **derived, not typed**: the mispricing factor an
+unlabelled price would incur comes from the precisions the money rule declares
+(`sdk/commerce/cart/money.ts`: `BTC` 8, `SAT` 0), and the notation claim quotes the
+SDK's own normaliser (`normalizeCurrency('') → "missing-currency"`) rather than
+restating its behaviour. `instance/assumptions.test.ts` holds the register's
+completeness (every entry whole, ids unique, the required entries present by id,
+the SDK registers verbatim) and `instance/ssr.test.ts` holds that it reaches the
+served bytes on every route — including the arm that a `relay` run never claims the
+fixture edge.
+
+`/api/assumptions` is the register's JSON twin, so a probe can read it without
+parsing HTML.
 
 ## House style
 
@@ -197,6 +236,7 @@ pool, and a `fetch` spy that throws is installed for the duration (ADR-0005).
 | `instance/useCart.ts` | the instance | the cart's three named page states, and the one write path |
 | `instance/cartTotals.ts` | the instance | the cart's lines joined to the read, and the SDK's own aggregation over them |
 | `instance/checkoutView.ts` | the instance | what the checkout entry resolves: the intent, the delivery requirements, the invoice progress |
+| `instance/assumptions.ts` | the instance | the register: the two SDK registers plus the app's own six, composed as one value the footer renders |
 | `instance/ProductList.tsx`, `ProductDetail.tsx`, `CartView.tsx`, `CheckoutEntry.tsx`, `App.tsx` | the instance | presentation, composing `ui/`'s `Badge`, `SelectableBadge`, `cn` |
 | `instance/boot.ts` | the instance | config → edge → read → view |
 | `server.tsx`, `client.tsx` | the instance | `Bun.serve` + per-route SSR, and the browser hydration entry |

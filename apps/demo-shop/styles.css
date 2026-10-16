@@ -719,6 +719,90 @@ a {
 	margin: 0;
 }
 
+/* ── the assumption register ───────────────────────────────────────────────
+   Every assumption the running instance is operating under, in the footer where
+   a reader meets it. It is a panel rather than a paragraph because each entry
+   carries its own falsifier: a statement and the measurement that would refute it
+   are two lines that must not be read as one. It introduces no new `region-*`
+   landmark — it is content inside `region-foot` — and it takes the sheet's one
+   radius and its one spacing unit, like every other surface here. */
+
+.ds-assumptions {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ds-3);
+	margin: 0;
+	padding: var(--ds-4);
+	background: var(--ds-surface-2);
+	border: 1px solid var(--ds-border);
+	border-radius: var(--ds-r);
+	color: var(--ds-fg);
+	font-size: 13.5px;
+}
+
+.ds-assumptions-heading {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 800;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+}
+
+.ds-assumptions-summary {
+	margin: 0;
+	color: var(--ds-muted);
+}
+
+.ds-assumption-list {
+	display: grid;
+	gap: var(--ds-3);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ds-assumption {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ds-1);
+	padding: var(--ds-3);
+	background: var(--ds-surface);
+	border: 1px solid var(--ds-border);
+	border-radius: var(--ds-r);
+}
+
+.ds-assumption-statement {
+	margin: 0;
+}
+
+.ds-assumption-falsifier,
+.ds-assumption-origin {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ds-1);
+	margin: 0;
+	color: var(--ds-muted);
+	font-size: 12.5px;
+}
+
+.ds-assumption-label {
+	flex: none;
+	color: var(--ds-warn);
+	font-family: var(--ds-mono);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.ds-assumption-value {
+	overflow-wrap: anywhere;
+}
+
+.ds-assumption-origin .ds-assumption-value {
+	font-family: var(--ds-mono);
+}
+
 /* ── ui/ components, themed through the attributes they publish ───────────── */
 
 [data-slot='badge'] {

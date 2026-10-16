@@ -47,7 +47,7 @@ const waitSelector = waitSelectorArg ?? '[data-testid]'
 await mkdir(outDir, { recursive: true })
 
 /** The selectors whose computed style a styling change has to move. */
-const PROBE = ['body', '.ds-region', '.ds-row', '.ds-detail', '.ds-cart', '.ds-btn', '[data-slot="badge"]', '.ds-cart-status']
+const PROBE = ['body', '.ds-region', '.ds-row', '.ds-detail', '.ds-cart', '.ds-btn', '[data-slot="badge"]', '.ds-cart-status', '.ds-assumption']
 
 /** The page's own text, per named element, so a reader can quote it. */
 const READ_TESTS = [
@@ -74,6 +74,11 @@ const READ_TESTS = [
 	'checkout-delivery',
 	'checkout-outcome',
 	'composition-path',
+	'assumption-register',
+	'assumption-summary',
+	'assumption-entry',
+	'assumption-statement',
+	'assumption-falsifier',
 ]
 
 const browser = await chromium.launch()

@@ -10,12 +10,16 @@
  * **Why the prices here are denominated in `BTC`.** Every event below is run
  * through the repository's kind-30402 parser (`instance/productAdmission.ts`)
  * before it can become a row, and that parser requires the `price` tag's
- * currency to match `/^[A-Z]{3}$/`. The SDK's own price resolution emits `SATS`
- * (`products/productPriceResolution.ts` returns `currency: 'SATS'`), which the
- * parser rejects — so a `SATS`-denominated listing cannot be rendered by this
- * instance at all. That disagreement is a verified defect, pinned by
- * `instance/parserAgreement.test.ts`; this catalog chooses an admitted currency
- * rather than weakening the parser or special-casing it away.
+ * currency to match `/^[A-Z]{3}$/`. At the time this catalog was authored the
+ * SDK's own price resolution emitted the four-letter `SATS`
+ * (`products/productPriceResolution.ts`), which that rule rejects — so a
+ * `SATS`-denominated listing could not be rendered by this instance at all.
+ * `commerce/money-truth` (M3) reconciled the notation on the SDK side
+ * (`products/currencyNotation.ts#normalizeCurrency` emits the three-letter
+ * `SAT` and still accepts `SATS`, `sat` and `sats` on read), so the two sides now
+ * agree; the catalog stays `BTC` because nothing about this instance's data needs
+ * to move for a notation fix, and `instance/parserAgreement.test.ts` pins both the
+ * agreement and the four-letter spelling the parser still refuses.
  *
  * The two fields the SDK deliberately does not invent are supplied by the host,
  * because issuing them is a host responsibility: the seller `pubkey` and
