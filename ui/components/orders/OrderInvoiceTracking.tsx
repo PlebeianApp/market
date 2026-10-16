@@ -1,28 +1,47 @@
-import { Badge } from '@ui/primitives/badge'
-import { Button } from '@ui/primitives/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@ui/primitives/card'
-import { Progress } from '@ui/primitives/progress'
-import { QRCode } from '@ui/primitives/qr-code'
-import type { InvoiceData, OrderInvoiceSet } from '@/lib/utils/orderUtils'
-import { copyToClipboard } from '@/lib/utils'
+import { Badge } from '../../primitives/badge'
+import { Button } from '../../primitives/button'
+import { Card, CardContent, CardHeader, CardTitle } from '../../primitives/card'
+import { Progress } from '../../primitives/progress'
+import { QRCode } from '../../primitives/qr-code'
 import { formatDistance } from 'date-fns'
 import { AlertTriangle, Check, Clock, Copy, RefreshCw, Users, Zap } from 'lucide-react'
 import { useState } from 'react'
-import { toast } from 'sonner'
+
+export interface InvoiceData {
+	id: string
+	orderId: string
+	sellerPubkey: string
+	amountSats: number
+	status: 'pending' | 'paid' | 'expired' | 'failed'
+	bolt11?: string
+	createdAt: number
+	expiresAt?: number
+	type: 'merchant' | 'v4v'
+}
+
+export interface OrderInvoiceSet {
+	orderId: string
+	invoices: InvoiceData[]
+	totalAmount: number
+	merchantAmount: number
+	v4vAmount: number
+	status: 'pending' | 'partial' | 'complete' | 'failed'
+}
 
 interface OrderInvoiceTrackingProps {
 	invoiceSet: OrderInvoiceSet
 	onInvoiceStatusUpdate?: (invoiceId: string, status: InvoiceData['status']) => void
 	onRefresh?: () => void
 	onReattemptPayment?: (invoiceId: string, sellerPubkey: string, amountSats: number) => void
+	onCopyInvoice: (bolt11: string) => Promise<void> | void
 	showQRCodes?: boolean
 }
 
 export function OrderInvoiceTracking({
 	invoiceSet,
-	onInvoiceStatusUpdate,
 	onRefresh,
 	onReattemptPayment,
+	onCopyInvoice,
 	showQRCodes = true,
 }: OrderInvoiceTrackingProps) {
 	const [copySuccess, setCopySuccess] = useState<string | null>(null)
@@ -38,9 +57,8 @@ export function OrderInvoiceTracking({
 	const amountPaid = paidInvoices.reduce((sum, inv) => sum + inv.amountSats, 0)
 
 	const handleCopyInvoice = async (bolt11: string, invoiceId: string) => {
-		await copyToClipboard(bolt11)
+		await onCopyInvoice(bolt11)
 		setCopySuccess(invoiceId)
-		toast.success('Invoice copied to clipboard')
 		setTimeout(() => setCopySuccess(null), 2000)
 	}
 

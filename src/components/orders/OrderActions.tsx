@@ -1,20 +1,12 @@
-import { Button } from '@ui/primitives/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@ui/primitives/tooltip'
 import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
-import { cn } from '@/lib/utils'
 import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getOrderStatus } from '@/queries/orders'
 import { getOrderManagementActions, getOrderRecipientPubkey } from '@sdk/commerce/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
-import { useBreakpoint } from '@/hooks/useBreakpoint'
-import { Ban, Check, CheckCircle, Clock, Package, Truck, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Input } from '@ui/primitives/input'
-import { Label } from '@ui/primitives/label'
-import { Textarea } from '@ui/primitives/textarea'
+import { OrderActionsView } from '@ui/components/orders/OrderActionsView'
 import { StockUpdateDialog } from './StockUpdateDialog'
 
 interface OrderActionsProps {
@@ -24,25 +16,13 @@ interface OrderActionsProps {
 }
 
 export function OrderActions({ order, userPubkey, className = '' }: OrderActionsProps) {
-	const [cancelReason, setCancelReason] = useState('')
-	const [isCancelOpen, setIsCancelOpen] = useState(false)
-
-	const [trackingNumber, setTrackingNumber] = useState('')
-	const [isShippingOpen, setIsShippingOpen] = useState(false)
-
 	const [isStockUpdateOpen, setIsStockUpdateOpen] = useState(false)
-	const [isPaymentConfirmOpen, setIsPaymentConfirmOpen] = useState(false)
-
 	const updateOrderStatus = useUpdateOrderStatusMutation()
 	const updateShippingStatus = useUpdateShippingStatusMutation()
 
 	const status = getOrderStatus(order)
-
-	const buyerPubkey = order.order.pubkey
-	const sellerPubkey = getOrderRecipientPubkey(order.order)
-
-	const isBuyer = userPubkey === buyerPubkey
-	const isSeller = userPubkey === sellerPubkey
+	const isBuyer = userPubkey === order.order.pubkey
+	const isSeller = userPubkey === getOrderRecipientPubkey(order.order)
 
 	const hasBeenShipped = order.shippingUpdates.some((update) => update.tags.find((tag) => tag[0] === 'status')?.[1] === 'shipped')
 	const actions = getOrderManagementActions({
@@ -50,214 +30,47 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 		orderStatus: status,
 		shippingStatus: hasBeenShipped ? 'shipped' : null,
 	})
-	const { canCancel, canConfirm, canProcess, canShip, canReceive } = actions
 
-	const handleStatusUpdate = (newStatus: string, reason?: string, tracking?: string) => {
+	const handleStatusUpdate = (newStatus: string, reason?: string) => {
 		const orderEventId = order.order.id
 		if (!orderEventId) {
 			toast.error('Order ID not found')
 			return
 		}
-
-		updateOrderStatus.mutate({
-			orderEventId,
-			status: newStatus as any,
-			reason,
-			tracking,
-		})
+		updateOrderStatus.mutate({ orderEventId, status: newStatus as any, reason })
 	}
 
-	const handleConfirmOrder = () => {
-		handleStatusUpdate(ORDER_STATUS.CONFIRMED)
-		setIsPaymentConfirmOpen(false)
-	}
-
-	const handleCancel = () => {
-		handleStatusUpdate(ORDER_STATUS.CANCELLED, cancelReason)
-		setIsCancelOpen(false)
-		setCancelReason('')
-	}
-
-	const handleShipped = () => {
+	const handleShipped = (trackingUrl: string) => {
 		const orderEventId = order.order.id
 		if (!orderEventId) {
 			toast.error('Order ID not found')
 			return
 		}
-
 		updateShippingStatus.mutate({
 			orderEventId,
 			status: SHIPPING_STATUS.SHIPPED,
-			tracking: trackingNumber,
+			tracking: trackingUrl,
 			reason: 'Order has been shipped',
 		})
-
-		setIsShippingOpen(false)
-		setTrackingNumber('')
 		setIsStockUpdateOpen(true)
 	}
 
-	if (!isBuyer && !isSeller) {
-		return null
-	}
+	if (!isBuyer && !isSeller) return null
 
 	return (
-		<div className={cn('space-y-3 w-full mx-2', className)}>
-			{/* Primary Action Button */}
-			{(canCancel || canConfirm || canProcess || canShip || canReceive) && (
-				<div className="flex flex-wrap gap-2">
-					{canCancel && (
-						<Button
-							variant="outline"
-							onClick={() => setIsCancelOpen(true)}
-							disabled={updateOrderStatus.isPending}
-							className="w-full sm:w-auto"
-						>
-							<X className="w-4 h-4 mr-2" /> Cancel Order
-						</Button>
-					)}
-
-					{canConfirm && (
-						<Button onClick={() => setIsPaymentConfirmOpen(true)} disabled={updateOrderStatus.isPending} className="w-full sm:w-auto">
-							<Check className="w-4 h-4 mr-2" /> Confirm Payment Received
-						</Button>
-					)}
-
-					{canProcess && (
-						<Button
-							onClick={() => handleStatusUpdate(ORDER_STATUS.PROCESSING)}
-							disabled={updateOrderStatus.isPending}
-							className="w-full sm:w-auto"
-						>
-							<Package className="w-4 h-4 mr-2" /> Process Order
-						</Button>
-					)}
-
-					{canShip && (
-						<Button onClick={() => setIsShippingOpen(true)} disabled={updateShippingStatus.isPending} className="w-full sm:w-auto">
-							<Truck className="w-4 h-4 mr-2" /> Mark As Shipped
-						</Button>
-					)}
-
-					{canReceive && (
-						<Button
-							onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)}
-							disabled={updateOrderStatus.isPending}
-							className="w-full sm:w-auto"
-						>
-							<CheckCircle className="w-4 h-4 mr-2" /> I've Received This Item
-						</Button>
-					)}
-				</div>
-			)}
-
-			{/* Final State Indicators */}
-			{!canCancel && !canConfirm && !canProcess && !canShip && !canReceive && (
-				<div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-					{status === ORDER_STATUS.COMPLETED ? (
-						<>
-							<CheckCircle className="w-4 h-4 text-green-600" />
-							<span>Order completed</span>
-						</>
-					) : status === ORDER_STATUS.CANCELLED ? (
-						<>
-							<Ban className="w-4 h-4 text-red-600" />
-							<span>Order cancelled</span>
-						</>
-					) : (
-						<>
-							<Clock className="w-4 h-4 text-yellow-600" />
-							<span>Awaiting action from other party</span>
-						</>
-					)}
-				</div>
-			)}
-
-			{/* Payment Confirmation Dialog */}
-			<Dialog open={isPaymentConfirmOpen} onOpenChange={setIsPaymentConfirmOpen}>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>Confirm Payment Received</DialogTitle>
-						<DialogDescription>Please verify that you have received payment before confirming this order.</DialogDescription>
-					</DialogHeader>
-					<div className="space-y-2 py-4">
-						<p className="text-sm text-gray-600">
-							By clicking confirm, you acknowledge the funds have been received and you will now process the order.
-						</p>
-					</div>
-					<DialogFooter>
-						<Button variant="outline" onClick={() => setIsPaymentConfirmOpen(false)}>
-							Cancel
-						</Button>
-						<Button onClick={handleConfirmOrder}>Confirm Payment</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
-
-			{/* Shipping Dialog */}
-			<Dialog open={isShippingOpen} onOpenChange={setIsShippingOpen}>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>Mark Order As Shipped</DialogTitle>
-						<DialogDescription>Add tracking information if available</DialogDescription>
-					</DialogHeader>
-					<div className="space-y-4 py-4">
-						<div>
-							<Label htmlFor="tracking">Tracking URL (Optional)</Label>
-							<Input
-								id="tracking"
-								value={trackingNumber}
-								onChange={(e) => setTrackingNumber(e.target.value)}
-								placeholder="https://carrier.com/track/..."
-							/>
-						</div>
-					</div>
-					<DialogFooter>
-						<Button variant="outline" onClick={() => setIsShippingOpen(false)}>
-							Cancel
-						</Button>
-						<Button onClick={handleShipped}>Mark As Shipped</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
-
-			{/* Cancel Dialog */}
-			<Dialog open={isCancelOpen} onOpenChange={setIsCancelOpen}>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>Cancel This Order</DialogTitle>
-						<DialogDescription>This cannot be undone. Please confirm you want to proceed.</DialogDescription>
-					</DialogHeader>
-					<div className="space-y-4 py-4">
-						<Label htmlFor="reason">Cancellation Reason (Optional)</Label>
-						<Textarea
-							id="reason"
-							value={cancelReason}
-							onChange={(e) => setCancelReason(e.target.value)}
-							placeholder="Why are you cancelling?"
-							rows={3}
-						/>
-					</div>
-					<DialogFooter>
-						<Button variant="outline" onClick={() => setIsCancelOpen(false)}>
-							Cancel
-						</Button>
-						<Button variant="destructive" onClick={handleCancel}>
-							Yes, Cancel Order
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
-
-			{/* Stock Update Dialog - only for product orders */}
-			{
-				<StockUpdateDialog
-					open={isStockUpdateOpen}
-					onOpenChange={setIsStockUpdateOpen}
-					order={order}
-					onComplete={() => {}} // No-op: no additional actions needed.
-				/>
-			}
-		</div>
+		<OrderActionsView
+			actions={actions}
+			status={status}
+			isUpdatingStatus={updateOrderStatus.isPending}
+			isUpdatingShipping={updateShippingStatus.isPending}
+			onConfirm={() => handleStatusUpdate(ORDER_STATUS.CONFIRMED)}
+			onProcess={() => handleStatusUpdate(ORDER_STATUS.PROCESSING)}
+			onReceive={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)}
+			onCancel={(reason) => handleStatusUpdate(ORDER_STATUS.CANCELLED, reason)}
+			onShip={handleShipped}
+			className={className}
+		>
+			<StockUpdateDialog open={isStockUpdateOpen} onOpenChange={setIsStockUpdateOpen} order={order} onComplete={() => {}} />
+		</OrderActionsView>
 	)
 }

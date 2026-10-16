@@ -1,6 +1,14 @@
 import { ProductCard } from '@/components/ProductCard'
 import { PaymentDialog } from '@/components/checkout/PaymentDialog'
-import { Card, CardContent, CardHeader, CardTitle } from '@ui/primitives/card'
+import {
+	OrderBuyerCardView,
+	OrderDetailLayoutView,
+	OrderMissingView,
+	OrderNotFoundView,
+	OrderPaymentDetailsCardView,
+	OrderProductsCardView,
+	OrderTimelineView,
+} from '@ui/components/orders/OrderDetailLayout'
 import { getAuctionClaimPublicMarkerFields } from '@/lib/auctions/privateAuctionClaimMessage'
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
@@ -21,7 +29,7 @@ import { fetchV4VShares } from '@/queries/v4v'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
-import { CreditCard, MessageSquare, Package, Receipt, Truck } from 'lucide-react'
+import { MessageSquare, Package, Receipt, Truck, CreditCard } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { OrderActions } from './OrderActions'
@@ -69,15 +77,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const [dialogInvoices, setDialogInvoices] = useState<PaymentInvoiceData[]>([])
 
 	if (!order) {
-		return (
-			<div className="container mx-auto px-4 py-8">
-				<Card>
-					<CardContent className="p-8 text-center">
-						<p className="text-gray-500">Order not found</p>
-					</CardContent>
-				</Card>
-			</div>
-		)
+		return <OrderMissingView />
 	}
 
 	// Parse order data
@@ -234,12 +234,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	}
 
 	if (!order.order) {
-		return (
-			<div className="text-center py-8">
-				<h2 className="text-xl font-semibold text-gray-900">Order not found</h2>
-				<p className="text-gray-600 mt-2">The requested order could not be found.</p>
-			</div>
-		)
+		return <OrderNotFoundView />
 	}
 
 	// Timeline events
@@ -280,183 +275,127 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const headerSubText = `${orderItems.reduce((total, item) => total + item.quantity, 0)} items`
 
 	return (
-		<div className="container mx-auto px-4 py-4">
-			<div className="space-y-6">
-				<OrderDetailHeader
-					title={headerTitle}
-					subText={headerSubText}
-					totalSats={totalAmount}
-					createdAt={orderEvent.created_at}
-					status={{
-						label: statusLabel,
-						iconName,
-						headerBgColor,
-						badgeBgColor: statusBadgeBgColor,
-						explanation: statusExplanation,
-					}}
-					actions={<OrderActions order={order} userPubkey={user?.pubkey || ''} />}
+		<OrderDetailLayoutView
+			dialogs={
+				<PaymentDialog
+					open={paymentDialogOpen}
+					onOpenChange={setPaymentDialogOpen}
+					invoices={dialogInvoices}
+					currentIndex={selectedInvoiceIndex}
+					onPaymentComplete={onPaymentComplete}
+					onPaymentFailed={onPaymentFailed}
+					title={`Pay for Order #${orderId.substring(0, 8)}...`}
+					showNavigation={dialogInvoices.length > 1}
+					nwcEnabled={true}
 				/>
-
-				{/* Buyer Information Card */}
-				<Card>
-					<CardHeader>
-						<CardTitle>Buyer</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<UserCard pubkey={buyerPubkey} size="md" subtitle="nip-05" />
-					</CardContent>
-				</Card>
-
-				{canViewLegacyBuyerContact && deliveryContact && <OrderBuyerContactCard deliveryContact={deliveryContact} />}
-
-				{isOrderSeller && auctionClaimFields && (
-					<PrivateAuctionClaimCard
-						isLoading={privateAuctionClaimQuery.isLoading}
-						claim={privateAuctionClaimPayload}
-						unavailableMessage={privateAuctionClaimUnavailableMessage(
-							privateAuctionClaimResult?.status,
-							privateAuctionClaimResult?.status === 'unavailable' ? privateAuctionClaimResult.reason : undefined,
-						)}
-					/>
-				)}
-				<PrivateOrderDetailsCard order={order} currentUserPubkey={user?.pubkey} showUnavailable={shouldShowPrivateDetailsUnavailable} />
-
-				{/* Products */}
-				{products.length > 0 && (
-					<Card>
-						<CardHeader>
-							<CardTitle>{'Products'}</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="grid grid-cols-1 gap-4">
-								{products.map((product) => {
-									const lookupId = getProductId(product) || product.id
-									const quantity = quantityMap.get(lookupId) || quantityMap.get(product.id) || 1
-
-									return (
-										<div key={product.id} className="p-4 border rounded-lg">
-											{
-												<div>
-													<ProductCard product={product} />
-													<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-														<span className="text-sm text-gray-500">Quantity</span>
-														<span className="text-lg font-semibold">{quantity}</span>
-													</div>
-												</div>
-											}
-										</div>
-									)
-								})}
-							</div>
-						</CardContent>
-					</Card>
-				)}
-
-				{/* Shipping Information */}
-				{(shippingInfo || shippingAddress) && (
-					<OrderShippingCard
-						mode={isPickupService ? 'pickup' : isDigitalService ? 'digital' : 'shipping'}
-						shippingInfo={shippingInfo}
-						pickupAddress={pickupAddress}
-						deliveryAddress={shippingAddress ? <DeliveryAddressDisplay shippingAddress={shippingAddress} /> : undefined}
-						tracking={
-							<TrackingInfoDisplay
-								trackingNumber={order.latestShipping?.tags.find((tag) => tag[0] === 'tracking')?.[1]}
-								carrier={order.latestShipping?.tags.find((tag) => tag[0] === 'carrier')?.[1]}
-								shippingStatus={order.latestShipping?.tags.find((tag) => tag[0] === 'status')?.[1]}
-							/>
-						}
-					/>
-				)}
-
-				{/* --- PAYMENT SECTION --- */}
-				{
-					/* For Products: Show Invoice Logic */
-					<>
-						{totalInvoices > 0 && (
-							<Card>
-								<CardHeader className="p-0">
-									<div className="bg-gray-50 p-4 rounded-t-xl">
-										<div className="flex items-start gap-2">
-											<CreditCard className="w-5 h-5" />
-											<div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
-												<CardTitle>Payment Details</CardTitle>
-												<span className="text-muted-foreground">({totalInvoices} invoices)</span>
-											</div>
-										</div>
-										<div className="my-3 border-b border-gray-300 sm:hidden" />
-										<PaymentSummary enrichedInvoices={enrichedInvoices} />
-									</div>
-								</CardHeader>
-								<CardContent className="space-y-4 pt-4">
-									{isBuyer && incompleteInvoices.length > 0 && (
-										<IncompleteInvoicesBanner
-											count={incompleteInvoices.length}
-											onRefresh={() => {
-												toast.info('Refreshing payment status for all incomplete invoices...')
-											}}
-										/>
-									)}
-
-									<PaymentProgressBar paidCount={paidInvoices.length} totalCount={totalInvoices} progressPercent={paymentProgress} />
-
-									<div className="grid gap-3">
-										{enrichedInvoices.map((invoice, index) => (
-											<InvoiceCard
-												key={invoice.id}
-												invoice={invoice}
-												index={index}
-												totalInvoices={enrichedInvoices.length}
-												isBuyer={isBuyer}
-												isGenerating={generatingInvoices.has(invoice.id)}
-												onPay={(inv) => openPaymentDialog([inv])}
-												onGenerateNew={handleGenerateNewInvoice}
-											/>
-										))}
-									</div>
-
-									{sellerV4VShares.length > 0 && <V4VRecipientsCard shares={sellerV4VShares} />}
-								</CardContent>
-							</Card>
-						)}
-
-						{totalInvoices === 0 && <NoPaymentRequestsCard isBuyer={isBuyer} />}
-					</>
-				}
-
-				{/* Order Timeline */}
-				{allEvents.length > 0 && (
-					<div>
-						<h2 className="text-xl font-bold mb-4">Order Timeline</h2>
-						<div className="space-y-4">
-							{allEvents.map(({ event, type, title, icon }, index) => (
-								<TimelineEventCard
-									key={event.id}
-									event={event}
-									type={type}
-									title={title}
-									icon={icon}
-									timelineIndex={allEvents.length - index}
-									onCopyPreimage={(preimage) => copyToClipboard(preimage)}
-								/>
-							))}
-						</div>
-					</div>
-				)}
-			</div>
-
-			{/* Payment Dialog */}
-			<PaymentDialog
-				open={paymentDialogOpen}
-				onOpenChange={setPaymentDialogOpen}
-				invoices={dialogInvoices}
-				currentIndex={selectedInvoiceIndex}
-				onPaymentComplete={onPaymentComplete}
-				onPaymentFailed={onPaymentFailed}
-				title={`Pay for Order #${orderId.substring(0, 8)}...`}
-				showNavigation={dialogInvoices.length > 1}
-				nwcEnabled={true}
+			}
+		>
+			<OrderDetailHeader
+				title={headerTitle}
+				subText={headerSubText}
+				totalSats={totalAmount}
+				createdAt={orderEvent.created_at}
+				status={{
+					label: statusLabel,
+					iconName,
+					headerBgColor,
+					badgeBgColor: statusBadgeBgColor,
+					explanation: statusExplanation,
+				}}
+				actions={<OrderActions order={order} userPubkey={user?.pubkey || ''} />}
 			/>
-		</div>
+
+			<OrderBuyerCardView userCard={<UserCard pubkey={buyerPubkey} size="md" subtitle="nip-05" />} />
+
+			{canViewLegacyBuyerContact && deliveryContact && <OrderBuyerContactCard deliveryContact={deliveryContact} />}
+
+			{isOrderSeller && auctionClaimFields && (
+				<PrivateAuctionClaimCard
+					isLoading={privateAuctionClaimQuery.isLoading}
+					claim={privateAuctionClaimPayload}
+					unavailableMessage={privateAuctionClaimUnavailableMessage(
+						privateAuctionClaimResult?.status,
+						privateAuctionClaimResult?.status === 'unavailable' ? privateAuctionClaimResult.reason : undefined,
+					)}
+				/>
+			)}
+			<PrivateOrderDetailsCard order={order} currentUserPubkey={user?.pubkey} showUnavailable={shouldShowPrivateDetailsUnavailable} />
+
+			<OrderProductsCardView
+				items={products.map((product) => {
+					const lookupId = getProductId(product) || product.id
+					return {
+						id: product.id,
+						product: <ProductCard product={product} />,
+						quantity: quantityMap.get(lookupId) || quantityMap.get(product.id) || 1,
+					}
+				})}
+			/>
+
+			{(shippingInfo || shippingAddress) && (
+				<OrderShippingCard
+					mode={isPickupService ? 'pickup' : isDigitalService ? 'digital' : 'shipping'}
+					shippingInfo={shippingInfo}
+					pickupAddress={pickupAddress}
+					deliveryAddress={shippingAddress ? <DeliveryAddressDisplay shippingAddress={shippingAddress} /> : undefined}
+					tracking={
+						<TrackingInfoDisplay
+							trackingNumber={order.latestShipping?.tags.find((tag) => tag[0] === 'tracking')?.[1]}
+							carrier={order.latestShipping?.tags.find((tag) => tag[0] === 'carrier')?.[1]}
+							shippingStatus={order.latestShipping?.tags.find((tag) => tag[0] === 'status')?.[1]}
+						/>
+					}
+				/>
+			)}
+
+			{totalInvoices > 0 ? (
+				<OrderPaymentDetailsCardView
+					totalInvoices={totalInvoices}
+					summary={<PaymentSummary enrichedInvoices={enrichedInvoices} />}
+					banner={
+						isBuyer && incompleteInvoices.length > 0 ? (
+							<IncompleteInvoicesBanner
+								count={incompleteInvoices.length}
+								onRefresh={() => {
+									toast.info('Refreshing payment status for all incomplete invoices...')
+								}}
+							/>
+						) : undefined
+					}
+					progress={<PaymentProgressBar paidCount={paidInvoices.length} totalCount={totalInvoices} progressPercent={paymentProgress} />}
+					invoices={enrichedInvoices.map((invoice, index) => (
+						<InvoiceCard
+							key={invoice.id}
+							invoice={invoice}
+							index={index}
+							totalInvoices={enrichedInvoices.length}
+							isBuyer={isBuyer}
+							isGenerating={generatingInvoices.has(invoice.id)}
+							onPay={(inv) => openPaymentDialog([inv])}
+							onGenerateNew={handleGenerateNewInvoice}
+						/>
+					))}
+					footer={sellerV4VShares.length > 0 ? <V4VRecipientsCard shares={sellerV4VShares} /> : undefined}
+				/>
+			) : (
+				<NoPaymentRequestsCard isBuyer={isBuyer} />
+			)}
+
+			{allEvents.length > 0 && (
+				<OrderTimelineView>
+					{allEvents.map(({ event, type, title, icon }, index) => (
+						<TimelineEventCard
+							key={event.id}
+							event={event}
+							type={type}
+							title={title}
+							icon={icon}
+							timelineIndex={allEvents.length - index}
+							onCopyPreimage={(preimage) => copyToClipboard(preimage)}
+						/>
+					))}
+				</OrderTimelineView>
+			)}
+		</OrderDetailLayoutView>
 	)
 }
