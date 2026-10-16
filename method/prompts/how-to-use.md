@@ -8,11 +8,11 @@
 
 For a normal change, use three separate conversations:
 
-| Role | Job | Can edit? |
-| --- | --- | --- |
-| **Architect (A0)** | Understands the problem and writes a small work order | No |
-| **Builder (A1)** | Makes only the approved change | Yes, if explicitly allowed |
-| **Red Team A (A2)** | Tries to find mistakes in the finished change | No |
+| Role                | Job                                                   | Can edit?                  |
+| ------------------- | ----------------------------------------------------- | -------------------------- |
+| **Architect (A0)**  | Understands the problem and writes a small work order | No                         |
+| **Builder (A1)**    | Makes only the approved change                        | Yes, if explicitly allowed |
+| **Red Team A (A2)** | Tries to find mistakes in the finished change         | No                         |
 
 For payments, keys, identity, migrations, production servers, or cryptography, also use **Red Team B (A3)** and a **Final Reviewer (A4)**.
 
@@ -108,28 +108,28 @@ Do not edit or repair the code.
 
 Use the verdict like this:
 
-| Verdict | Meaning |
-| --- | --- |
-| `FREEZE` | Ready for human review |
-| `FREEZE_WITH_MINOR_NOTES` | Usually ready; read the notes |
-| `MICRO_HARDEN` | Architect defines one small repair; Builder performs it |
-| `BLOCK` | Stop; do not merge or deploy |
-| `ARCHITECTURE_CONTRADICTION` | Maintainers must resolve the design first |
+| Verdict                      | Meaning                                                 |
+| ---------------------------- | ------------------------------------------------------- |
+| `FREEZE`                     | Ready for human review                                  |
+| `FREEZE_WITH_MINOR_NOTES`    | Usually ready; read the notes                           |
+| `MICRO_HARDEN`               | Architect defines one small repair; Builder performs it |
+| `BLOCK`                      | Stop; do not merge or deploy                            |
+| `ARCHITECTURE_CONTRADICTION` | Maintainers must resolve the design first               |
 
 After a repair, review the new candidate again. High-risk work also gets Red Team B and the blind Final Reviewer.
 
 ## 7. Activate only the specialist rules you need
 
-| Work involves… | Activate… |
-| --- | --- |
-| Events, relays, signers, messaging | **Nostr** |
+| Work involves…                        | Activate…                        |
+| ------------------------------------- | -------------------------------- |
+| Events, relays, signers, messaging    | **Nostr**                        |
 | Invoices, wallets, proofs, settlement | **Bitcoin/Lightning/Cashu/Coco** |
-| Offers, orders, shipping, reviews | **Open Markets** |
-| Mesh networking, discovery, gateways | **FIPS** |
-| Servers, DNS, CI/CD, deployment | **DevOps** |
-| Models, prompts, automated decisions | **AI/ML** |
-| Remote pages, components, publishing | **Napplets/nsites/CMS** |
-| Dependencies, licenses, self-hosting | **FOSS/freedom-tech** |
+| Offers, orders, shipping, reviews     | **Open Markets**                 |
+| Mesh networking, discovery, gateways  | **FIPS**                         |
+| Servers, DNS, CI/CD, deployment       | **DevOps**                       |
+| Models, prompts, automated decisions  | **AI/ML**                        |
+| Remote pages, components, publishing  | **Napplets/nsites/CMS**          |
+| Dependencies, licenses, self-hosting  | **FOSS/freedom-tech**            |
 
 Do not activate every overlay for every task.
 
@@ -138,4 +138,3 @@ Do not activate every overlay for every task.
 You decide whether to commit, push, merge, release, deploy, or use real funds. No LLM verdict replaces that decision.
 
 Remember: **describe → architect → approve packet → build → review → repair if needed → human decision.**
-

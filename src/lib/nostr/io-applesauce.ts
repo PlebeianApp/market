@@ -23,6 +23,9 @@ function getPool(): RelayPool {
 	return pool
 }
 
+/** The shared pool, for platform adapters that wrap it; callers must not close it. */
+export const getApplesauceRelayPool = getPool
+
 /** Resolve target relays: explicit override wins, else mirror NDK's configured relays. */
 function relayUrls(override?: string[]): string[] {
 	if (override && override.length > 0) return override
