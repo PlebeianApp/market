@@ -23,6 +23,9 @@ export const CART_PATH = '/cart'
 /** The checkout entry. It places an order here; the payment itself is not built. */
 export const CHECKOUT_PATH = '/checkout'
 
+/** The order index: every order this instance holds, listed once. */
+export const ORDERS_INDEX_PATH = '/orders'
+
 /** Every placed order's page lives under this prefix. */
 export const ORDERS_PATH_PREFIX = '/orders/'
 
@@ -97,6 +100,7 @@ export function isPagePath(pathname: string): boolean {
 		pathname === PRODUCTS_PATH ||
 		pathname === CART_PATH ||
 		pathname === CHECKOUT_PATH ||
+		pathname === ORDERS_INDEX_PATH ||
 		coordinatesFromProductPath(pathname) !== null ||
 		orderIdFromOrderPath(pathname) !== null
 	)

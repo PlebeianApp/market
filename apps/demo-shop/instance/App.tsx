@@ -41,6 +41,7 @@ import { CartView } from './CartView'
 import { CheckoutEntry } from './CheckoutEntry'
 import type { CheckoutSubmission } from './checkoutView'
 import { OrderDetail, OrderMissing } from './OrderDetail'
+import { OrderList } from './OrderList'
 import type { OrderView } from './orderView'
 import { ProductDetail, ProductMissing } from './ProductDetail'
 import { ProductList } from './ProductList'
@@ -106,6 +107,7 @@ export type DemoShopPageProps =
 	  })
 	| (DemoShopShellProps & { readonly route: 'order'; readonly order: OrderView })
 	| (DemoShopShellProps & { readonly route: 'order-missing'; readonly orderId: string })
+	| (DemoShopShellProps & { readonly route: 'orders'; readonly orders: readonly OrderView[] })
 
 /** The nav's sections. One entry per section, and the nav is drawn from the list. */
 type NavSection = 'products' | 'cart' | 'checkout'
@@ -271,7 +273,7 @@ export function App(props: DemoShopPageProps) {
 	const current: NavSection =
 		props.route === 'cart'
 			? 'cart'
-			: props.route === 'checkout' || props.route === 'order' || props.route === 'order-missing'
+			: props.route === 'checkout' || props.route === 'order' || props.route === 'order-missing' || props.route === 'orders'
 				? 'checkout'
 				: 'products'
 
@@ -290,6 +292,8 @@ export function App(props: DemoShopPageProps) {
 			<OrderDetail order={props.order} />
 		) : props.route === 'order-missing' ? (
 			<OrderMissing orderId={props.orderId} />
+		) : props.route === 'orders' ? (
+			<OrderList orders={props.orders} />
 		) : (
 			<ProductList view={view} />
 		)

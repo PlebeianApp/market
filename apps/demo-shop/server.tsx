@@ -60,6 +60,7 @@ import { findProductDetail } from './instance/productDetailView'
 import {
 	CART_PATH,
 	CHECKOUT_PATH,
+	ORDERS_INDEX_PATH,
 	apiCoordinatesFromProductPath,
 	coordinatesFromProductPath,
 	isPagePath,
@@ -101,6 +102,8 @@ function pageTitle(props: DemoShopPageProps): string {
 			return `Order ${props.order.orderId} · ${props.instanceName}`
 		case 'order-missing':
 			return `No order · ${props.instanceName}`
+		case 'orders':
+			return `Orders · ${props.instanceName}`
 		default:
 			return props.instanceName
 	}
@@ -188,6 +191,22 @@ function pageProps(
 			servicesByShippingRef: runtime.shipping.servicesByShippingRef,
 		})
 		return { props: { ...shell(runtime), route: 'order', order }, status: 200 }
+	}
+
+	// The order index is the list of every order this instance holds.
+	if (pathname === ORDERS_INDEX_PATH) {
+		const orders = store
+			.ids()
+			.map((id) => {
+				const placed = store.find(id)
+				if (placed === null) return null
+				return buildOrderView(placed, {
+					items: runtime.view.items,
+					servicesByShippingRef: runtime.shipping.servicesByShippingRef,
+				})
+			})
+			.filter((order): order is NonNullable<typeof order> => order !== null)
+		return { props: { ...shell(runtime), route: 'orders', orders }, status: 200 }
 	}
 
 	// The cart and the checkout entry carry no server-side state at all: the cart is the

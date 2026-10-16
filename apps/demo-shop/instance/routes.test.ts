@@ -97,12 +97,12 @@ describe('a placed order’s address round-trips', () => {
 	})
 
 	test('a bare prefix is not an order: a parent route must not swallow its child', () => {
-		expect(orderIdFromOrderPath(ORDERS_PATH_PREFIX)).toBeNull()
-		expect(orderIdFromOrderPath('/orders')).toBeNull()
-		expect(orderIdFromOrderPath('/cart')).toBeNull()
-		expect(orderIdFromOrderPath('/products/' + coordinates)).toBeNull()
-		expect(isPagePath(ORDERS_PATH_PREFIX)).toBe(false)
-		expect(isPagePath('/orders')).toBe(false)
+				expect(orderIdFromOrderPath(ORDERS_PATH_PREFIX)).toBeNull()
+				expect(orderIdFromOrderPath('/orders')).toBeNull()
+				expect(orderIdFromOrderPath('/cart')).toBeNull()
+				expect(orderIdFromOrderPath('/products/' + coordinates)).toBeNull()
+				expect(isPagePath(ORDERS_PATH_PREFIX)).toBe(false)
+				expect(isPagePath('/orders')).toBe(true)
 	})
 
 	test('an order address is a page route, and an id with a colon survives it', () => {
