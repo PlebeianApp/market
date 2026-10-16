@@ -6,7 +6,7 @@ replacement for it.
 
 **This file declares no statements and cites no identities.** It is a record, not a spec: the spec is
 `../signer.md`, and a statement written here would be a second place for the same decision. Statement identities
-are the hash of the line that declares them and this file is not their home; where this pass reworked the *body*
+are the hash of the line that declares them and this file is not their home; where this pass reworked the _body_
 of a statement rather than its declaring line, "How the spec was amended" below says so.
 
 ## What is here
@@ -55,7 +55,7 @@ bash signer/evidence/probe.sh            # the independent probe, when its direc
   against the members of the `SignerSession` interface, the spec's `exports` against the entry point's value
   exports (**25** after this pass — `PortError` is new), and the spec's `types` against its type exports
   (**28** — `SessionVaultCode` is new). Nothing in the check routine reads the front-matter contract block, so
-  these diffs *are* the check on it — and each one breaks if a declared name is not delivered or a delivered name
+  these diffs _are_ the check on it — and each one breaks if a declared name is not delivered or a delivered name
   is not declared.
 - **inventory** — the file list in `signer/ts/ts.md` diffed against the directory itself → 0 (the same names).
   This pass added no file to `signer/ts/`: the new cases live in the five existing test files.
@@ -65,7 +65,7 @@ bash signer/evidence/probe.sh            # the independent probe, when its direc
   first pass (the table admitted an edge the document did not list, and the document omitted one the code
   needs), which is why the check exists and why it is also a mutation target.
 - **the routine** — `cd <assembly> && python3 core/checks/check.py --root .` → `modules 6 · statements 191 ·
-  distinct identities 191 · 0 hard finding(s), 0 note(s)`, exit 0. The statement count includes the 21 the
+distinct identities 191 · 0 hard finding(s), 0 note(s)`, exit 0. The statement count includes the 21 the
   spec declares and **0 from this file** — which is what "nothing is declared outside the module's spec"
   means. It moves when any markdown in the assembly moves.
 - **the specimen** — `git -C market rev-parse HEAD` → `56258b55e2805895c941eb879f7a3ea1308bc0c5`, and
@@ -84,16 +84,16 @@ bash signer/evidence/probe.sh            # the independent probe, when its direc
 - **the harness defect this pass found in its own evidence** — one of the 16 rows did not measure what it
   claimed. Mutation 4 (I4, the extension lane) ran `bun test -t "<case name>"` with the name verbatim, and
   `bun`'s filter is a **regular expression**: the case name contains `(fail closed)`, the parens were read as
-  grouping, no case matched, and the resulting non-zero exit — *`error: regex … matched 0 tests`* — was scored
+  grouping, no case matched, and the resulting non-zero exit — _`error: regex … matched 0 tests`_ — was scored
   as "the named case failed", with the same non-zero exit printed beside the line that says `0 = green again`.
   That is the defect class this script exists to catch, sitting in its own output. Fixed in `falsify.py`: the
   name is escaped before it reaches the runner, and a check that matched no case, or that is not green again
   on the restored file, is counted as a **failure** rather than as a falsified invariant. Re-run: the row is
   now genuinely falsified — the case fails under the mutation (its own assertion diff, `"nip44": false →
-  true`) and passes on the restored tree — and all 16 rows carry a failing named check, a restored sha256 and
+true`) and passes on the restored tree — and all 16 rows carry a failing named check, a restored sha256 and
   a green re-run. Both halves were measured directly: an unescaped name still reports `matched 0 tests`, an
   escaped one runs the case, and a deliberately nonexistent name is reported as `FALSIFICATION FAILED (the
-  check never ran)`.
+check never ran)`.
 - **the independent probe** — A2's probes re-run, unmodified, from outside the module: the from-scratch consumer
   **18 checks, 18 pass** (17/1 before, its single failure being B1); the documented unapproved-QR path leaves
   **0 subscriptions open** after the failure and 0 after `endSession()` (1 and 1 before); the cross-measurement
@@ -107,66 +107,66 @@ bash signer/evidence/probe.sh            # the independent probe, when its direc
   measure: A6's verdict still says "untyped" while the statuses it prints now read `rejected: PortError: …` (the
   typing is asserted by the module case the M7 mutation breaks), and A9's verdict still names the two
   assertions of the case it was written about, which now assert the envelope's properties instead (the m3 fix,
-  measured by the plaintext-persist mutation). The probe's *measurements* — the counts, the statuses, the URIs
+  measured by the plaintext-persist mutation). The probe's _measurements_ — the counts, the statuses, the URIs
   handed to the sink — are the repair's result; its prose about them is not.
 
 ## What each finding became, and what measures it
 
 - **B1 · the allow-list was bypassable through `currentSigner()`** — the intersection of the signer's schemes and
-  the composer's allow-list is now applied where a capability is *handed out* (`capability.ts`), not only where
-  the capability set is reported; the identity binding is carried over unchanged. *Measured by*: the case named
+  the composer's allow-list is now applied where a capability is _handed out_ (`capability.ts`), not only where
+  the capability set is reported; the identity binding is carried over unchanged. _Measured by_: the case named
   for the handed-out capability (mutation I4 · B1 breaks it), the consumer probe's check that returned the wrong
   answer before, and the two reads now asserted equal.
 - **B2 · a failed lane was never cleaned up, and its record could not be cleared** — the failure path runs the
   lane's teardown, scoped to the attempt that armed it; `endSession()` reaches teardown from every state,
   including `locked` and `failed`; `detachSigner()` no longer moves a session with no capability attached; and
-  the persisted record is cleared by `endSession()` wherever the session got stuck. *Measured by*: the
+  the persisted record is cleared by `endSession()` wherever the session got stuck. _Measured by_: the
   REQ-subscription count around the documented unapproved-QR path (1 after the timeout and 1 after `endSession()`
   before; 0 and 0 now), the case that ends a `locked` session and then a `failed` one and reads the storage
   port, and mutations B2 and B2 · M6.
 - **M1 · the record was written before the identity was resolved** — the reference's order is restored: identity
-  resolved, session active, then the record. *Measured by*: the case whose remote answers `connect` and then
+  resolved, session active, then the record. _Measured by_: the case whose remote answers `connect` and then
   disappears, which asserts the storage port is empty afterwards (mutation I5 · M1), and the probe's A4.
 - **M2 · the connect URI left the module before the clock was checked** — both ports are required at the top of
   the client-initiated case, before the client is built and before anything reaches the caller's sink.
-  *Measured by*: the case that asserts the sink was never called (mutation M2) and the probe's A5 (`URIs handed
-  to the sink: []`).
+  _Measured by_: the case that asserts the sink was never called (mutation M2) and the probe's A5 (`URIs handed
+to the sink: []`).
 - **M3 · `signerKind` and `identityAssertion` were declared settings nothing read** — `signerKind` is now a
   **pin** that refuses another lane with a typed error, and `identityAssertion` is gone from the settings
   surface, because I3 is an obligation and a knob whose only assignable value is `true` is noise in a contract.
-  *Measured by*: the pin case (mutation M3) and the probe's A10, which stops on the refusal.
+  _Measured by_: the pin case (mutation M3) and the probe's A10, which stops on the refusal.
 - **M4, M5 · the carrier map and the disclosed deviation** — the carrier map now reads `createSignerSession(deps)`
-  and names the two bags; the deviation paragraph quotes the spec line it actually deviates from. *Measured by*:
+  and names the two bags; the deviation paragraph quotes the spec line it actually deviates from. _Measured by_:
   reading both statements against `ts/index.ts` and `session.ts`.
 - **M6 · the transition table was in three places and agreed with none** — one table, 23 edges, stated in the
   spec, drawn in §7 and enforced by `ALLOWED`; two edges removed (one no operation needed, one never performed)
-  and one added because the code needs it. *Measured by* `transitions.py`: three-way diff, exit 0 (mutation M6).
+  and one added because the code needs it. _Measured by_ `transitions.py`: three-way diff, exit 0 (mutation M6).
 - **M7 · a failing port produced an untyped rejection** — every call into a host port is guarded, so a store that
   throws, a passphrase source that rejects, a relay transport that refuses and a clock that misbehaves all
   arrive as `PortError` carrying the host's own message; a refusal that is already a typed `SignerError` passes
-  through with its own code. *Measured by*: the case over a store that throws on read and one that throws on
+  through with its own code. _Measured by_: the case over a store that throws on read and one that throws on
   write (mutation M7), and the probe's A6, which now reads `rejected: PortError: …`.
 - **M8 · six vault rules shared one type and one code** — each fail-closed rule carries its own `code`,
   enumerated as `SessionVaultCode`, so "wrong passphrase, let them retry" and "the plaintext session was
-  discarded, send them to login" are different values rather than different sentences. *Measured by*: the case
+  discarded, send them to login" are different values rather than different sentences. _Measured by_: the case
   that drives seven rules and asserts the seven codes, and the session-level case that asserts the two codes a
   login surface must distinguish.
 - **M9 · the contract named library types** — the protocol nouns (`EventTemplate`, `NostrEvent`, `SignedEvent`)
   are declared structurally by the module rather than borrowed, and the one remaining ecosystem-bound type is
-  **named in the spec as an exception**, with the rule a second implementation follows. *Measured by*: the entry
+  **named in the spec as an exception**, with the rule a second implementation follows. _Measured by_: the entry
   point's type exports, which no longer import a library, and the amended statement.
-- **N1 · a lane still in flight could re-activate an ended session** — *not reported by the red team*. Every
+- **N1 · a lane still in flight could re-activate an ended session** — _not reported by the red team_. Every
   operation that can be in flight takes an attempt identity; `endSession()` abandons the attempts in flight; an
   attach from an abandoned attempt is refused with a typed error; and the abandoned lane still releases what it
-  opened, without touching a newer attempt's teardown. *Measured by*: the case that ends a session mid-lane and
+  opened, without touching a newer attempt's teardown. _Measured by_: the case that ends a session mid-lane and
   asserts the session stays idle, that the lane's rejection is typed, and that the subscription count is 0
   (mutation N1).
 - **m1 · a host clock whose `clearTimeout` throws turned a completed RPC into a hang** — the deadline is disarmed
-  around the settle, so a port fault cannot discard a result that has already arrived. *Measured by* the probe's
+  around the settle, so a port fault cannot discard a result that has already arrived. _Measured by_ the probe's
   A7, which read `HUNG` before and reads `settled` after.
 - **m3 · a case named for the vault asserted two things a bech32 token cannot satisfy** — it now asserts
   properties a plaintext persist cannot satisfy: the stored value does not start with `nbunksec`, it parses as
-  JSON, and it carries exactly the envelope's keys. *Measured by* the plaintext-persist mutation: the case fails
+  JSON, and it carries exactly the envelope's keys. _Measured by_ the plaintext-persist mutation: the case fails
   on it now, and did not before.
 
 ## What is not verified here
@@ -208,10 +208,10 @@ A repair that leaves a gap unnamed invites the next finding, so the gaps are nam
   secret anyway (measured by the red team). Renaming them would not make them discriminate; the mutation suite
   names the one case that does, and this line exists so the next reader does not read them as four.
 - **`isMatchingConnectSecret` remains exported and called by nothing.** The harvest is faithful and the helper is
-  the seam a UI delegates to; it is *not* counted as I1 coverage, because the client-initiated flow's enforcement
+  the seam a UI delegates to; it is _not_ counted as I1 coverage, because the client-initiated flow's enforcement
   is the library's predicate behind the strict-bind wrapper.
 - **The harness keeps its ArrayBuffer cast for WebCrypto buffers.** It is a TypeScript-version friction in a
-  *test* harness, not a contract problem, and the contract's `CryptoPort` does not force it.
+  _test_ harness, not a contract problem, and the contract's `CryptoPort` does not force it.
 - **A host's port error text is observed.** The module wraps a failing port as `PortError` and keeps the host's
   message, which reaches a snapshot's `reason`. The port documentation now states that and asks a host adapter
   not to interpolate secret material into its own error text; enforcing that is not possible from inside a port.

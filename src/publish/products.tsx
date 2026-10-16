@@ -1,11 +1,13 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import {
 	buildSellerProductEventData,
+	deleteProductListingWorkflow,
 	normalizeProductShippingSelections,
-	validateSellerProductForPublish,
+	publishProductListingWorkflow,
 	type SellerProductListingInput,
 	type SellerProductPublishValidationIssue,
 } from '@sdk/commerce/products'
+import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
 import { productKeys } from '@/queries/queryKeyFactory'
 import { markProductAsDeleted } from '@/queries/products'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -62,15 +64,16 @@ export const createProductEvent = (
  * Publishes a new product
  */
 export const publishProduct = async (formData: ProductFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	const validation = validateSellerProductForPublish(formData)
-	if (!validation.ok) throw new Error(productPublishIssueMessage(validation.issue))
+	return publishProductForm(formData, signer, ndk)
+}
 
-	const event = createProductEvent(formData, signer, ndk)
+const createProductId = () => `product_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 
-	await event.sign(signer)
-	await ndkActions.publishEvent(event)
-
-	return event.id
+async function publishProductForm(formData: ProductFormData, signer: NDKSigner, ndk: NDK, productDTag?: string): Promise<string> {
+	const context = await createNdkPublishContext(ndk, signer)
+	const outcome = await publishProductListingWorkflow({ ...context, createProductId }, formData, productDTag)
+	if (!outcome.ok) throw new Error(productPublishIssueMessage(outcome.issue))
+	return outcome.event.id
 }
 
 /**
@@ -85,16 +88,7 @@ export const updateProduct = async (
 	if (!productDTag) {
 		throw new Error('Product d tag is required for updates')
 	}
-	const validation = validateSellerProductForPublish(formData)
-	if (!validation.ok) throw new Error(productPublishIssueMessage(validation.issue))
-
-	// Create event with the same d tag to update the existing product
-	const event = createProductEvent(formData, signer, ndk, productDTag)
-
-	await event.sign(signer)
-	await ndkActions.publishEvent(event)
-
-	return event.id
+	return publishProductForm(formData, signer, ndk, productDTag)
 }
 
 /**
@@ -102,18 +96,7 @@ export const updateProduct = async (
  */
 export const deleteProduct = async (productDTag: string, signer: NDKSigner, ndk: NDK): Promise<boolean> => {
 	try {
-		// Create a deletion event (kind 5)
-		const deleteEvent = new NDKEvent(ndk)
-		deleteEvent.kind = 5
-		deleteEvent.content = 'Product deleted'
-
-		// Reference the product to delete
-		const pubkey = await signer.user().then((user) => user.pubkey)
-		deleteEvent.tags = [['a', `30402:${pubkey}:${productDTag}`]]
-
-		await deleteEvent.sign(signer)
-		await ndkActions.publishEvent(deleteEvent)
-
+		await deleteProductListingWorkflow(await createNdkPublishContext(ndk, signer), productDTag)
 		return true
 	} catch (error) {
 		console.error('Error deleting product:', error)

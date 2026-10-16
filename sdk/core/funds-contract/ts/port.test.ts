@@ -27,14 +27,7 @@ const operations: FundsOperations = ['obtain', 'submit', 'reconcile']
 const passive: FundsOperations = ['obtain', 'reconcile']
 const rungs: FundsRung[] = ['attested', 'witnessed-settled', 'unresolved', 'abandoned']
 const authorityKinds: FundsAuthorityKind[] = ['local', 'remote-and-observable']
-const witnessKinds: FundsWitnessKind[] = [
-	'preimage',
-	'zap_receipt',
-	'mint_quote_state',
-	'lnurl_verify',
-	'seller_attestation',
-	'ack',
-]
+const witnessKinds: FundsWitnessKind[] = ['preimage', 'zap_receipt', 'mint_quote_state', 'lnurl_verify', 'seller_attestation', 'ack']
 const steps: FundsStep[] = [...operations]
 
 const intent: FundsIntent = { wrapperId: 'w', legId: 'l', method: 'bolt11', amountSat: 1000 }
@@ -94,9 +87,7 @@ test('an authority kind is local or remote-and-observable and nothing else', () 
 })
 
 test('the witness kinds separate the cryptographic from the declared', () => {
-	const cryptographic = witnessKinds.filter(
-		(k) => k === 'preimage' || k === 'zap_receipt' || k === 'mint_quote_state',
-	)
+	const cryptographic = witnessKinds.filter((k) => k === 'preimage' || k === 'zap_receipt' || k === 'mint_quote_state')
 	expect(cryptographic).toHaveLength(3)
 	expect(witnessKinds).toHaveLength(6)
 })

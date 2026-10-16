@@ -1,12 +1,13 @@
 import { getEventAddress } from '@/lib/nostr/eventLike'
 import { type Comment } from '@/queries/comments'
+import { isAddressableKind } from 'nostr-tools/kinds'
 import { ndkActions } from '@/lib/stores/ndk'
 import { commentKeys } from '@/queries/queryKeyFactory'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { isAddressableKind } from 'nostr-tools/kinds'
-import { createCommentTemplate } from '@sdk/commerce/messaging'
+import { publishCommentWorkflow } from '@sdk/commerce/messaging'
+import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
 
 interface PublishCommentParams {
 	content: string
@@ -23,38 +24,21 @@ export const publishComment = async ({ content, targetEvent, parentComment }: Pu
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!ndk.signer) throw new Error('No signer available')
 
-	const user = await ndk.signer.user()
-	if (!user) throw new Error('No active user')
-
 	const connectedRelays = ndk.pool?.connectedRelays() || []
 	if (connectedRelays.length === 0) {
 		throw new Error('No connected relays. Please check your relay connections and try again.')
 	}
 
-	// Build the event through SDK rules, then sign and publish at the app boundary.
-	const template = createCommentTemplate({
-		content,
-		targetEvent,
-		parentComment: parentComment ? { id: parentComment.id, authorPubkey: parentComment.authorPubkey } : undefined,
-		createdAt: Math.floor(Date.now() / 1000),
-	})
-
-	const commentEvent = new NDKEvent(ndk)
-	commentEvent.kind = template.kind
-	commentEvent.content = template.content
-	commentEvent.created_at = template.created_at
-	commentEvent.tags = template.tags
-	commentEvent.pubkey = user.pubkey
-
 	try {
-		await commentEvent.sign(ndk.signer)
-		const publishedRelays = await commentEvent.publish()
-
-		if (publishedRelays.size === 0) {
-			throw new Error('Comment was not published to any relays.')
-		}
-
-		return commentEvent
+		const context = await createNdkPublishContext(ndk, ndk.signer, async (event) => {
+			const publishedRelays = await event.publish()
+			if (publishedRelays.size === 0) throw new Error('Comment was not published to any relays.')
+		})
+		return await publishCommentWorkflow(context, {
+			content,
+			targetEvent,
+			parentComment: parentComment ? { id: parentComment.id, authorPubkey: parentComment.authorPubkey } : undefined,
+		})
 	} catch (error) {
 		console.error('Error publishing comment:', error)
 		throw error

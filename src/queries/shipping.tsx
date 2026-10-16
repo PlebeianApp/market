@@ -1,4 +1,4 @@
-import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, SHIPPING_STATUS } from '@/lib/schemas/order'
+import { SHIPPING_STATUS } from '@/lib/schemas/order'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
 import { isValidHexKey } from '@/lib/utils'
@@ -8,6 +8,8 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { orderKeys, shippingKeys } from './queryKeyFactory'
+import { publishShippingStatusUpdateWorkflow } from '@sdk/commerce/orders'
+import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
 
 // Re-export shippingKeys for use in other files
 export { shippingKeys }
@@ -257,65 +259,18 @@ export const updateShippingStatus = async (params: ShippingUpdateParams): Promis
 	const signer = ndkActions.getSigner()
 	if (!signer) throw new Error('No active user')
 
-	// Fetch the original order to get the counterparty pubkey
-	const originalOrder = await ndk.fetchEvent({
-		ids: [params.orderEventId],
-	})
-
-	if (!originalOrder) throw new Error('Original order not found')
-
-	// Extract the original order ID from the order tag
-	const originalOrderIdTag = originalOrder.tags.find((tag) => tag[0] === 'order')
-	const originalOrderId = originalOrderIdTag?.[1]
-
-	// Determine the recipient based on who's sending the update
-	// If current user is the buyer, send to seller (recipient in original order)
-	// If current user is the seller, send to buyer (author of original order)
-	const currentUserPubkey = ndk.activeUser?.pubkey
-	let recipientPubkey: string
-
-	if (currentUserPubkey === originalOrder.pubkey) {
-		// Current user is the buyer, send to seller
-		const recipientTag = originalOrder.tags.find((tag) => tag[0] === 'p')
-		recipientPubkey = recipientTag?.[1] || ''
-	} else {
-		// Current user is the seller, send to buyer
-		recipientPubkey = originalOrder.pubkey
-	}
-
-	if (!recipientPubkey) throw new Error('Recipient pubkey not found')
-
-	// Create the shipping update event
-	const event = new NDKEvent(ndk)
-	event.kind = ORDER_PROCESS_KIND
-	event.content = params.reason || `Shipping status updated to ${params.status}`
-	event.tags = [
-		['p', recipientPubkey],
-		['subject', 'shipping-info'],
-		['type', ORDER_MESSAGE_TYPE.SHIPPING_UPDATE], // Type 4 for shipping updates
-		['order', originalOrderId || params.orderEventId], // Use the original order ID when available
-		['status', params.status],
-	]
-
-	// Add optional tracking information if provided
-	if (params.tracking) {
-		event.tags.push(['tracking', params.tracking])
-	}
-
-	// Add optional carrier information if provided
-	if (params.carrier) {
-		event.tags.push(['carrier', params.carrier])
-	}
-
-	// Add optional ETA information if provided
-	if (params.eta) {
-		event.tags.push(['eta', params.eta.toString()])
-	}
-
-	// Sign and publish the event
-	await event.sign(signer)
-	await ndkActions.publishEvent(event)
-
+	const context = await createNdkPublishContext(ndk, signer)
+	const event = await publishShippingStatusUpdateWorkflow(
+		{ ...context, loadOrder: (id) => ndk.fetchEvent({ ids: [id] }) },
+		{
+			orderEventId: params.orderEventId,
+			status: params.status,
+			reason: params.reason,
+			tracking: params.tracking,
+			carrier: params.carrier,
+			eta: params.eta,
+		},
+	)
 	return event.id
 }
 

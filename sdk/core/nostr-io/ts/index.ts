@@ -159,7 +159,11 @@ class Seam implements NostrIo {
 		const capReached = new Subject<void>()
 		let bounded = source.pipe(takeUntil(capReached))
 		if (opts.deadlineMs !== undefined) {
-			const deadline = timer(opts.deadlineMs).pipe(tap(() => { timedOut = true }))
+			const deadline = timer(opts.deadlineMs).pipe(
+				tap(() => {
+					timedOut = true
+				}),
+			)
 			bounded = bounded.pipe(takeUntil(deadline))
 		}
 
@@ -298,9 +302,7 @@ class Seam implements NostrIo {
 			const byUrl = new Map(acks.map((ack) => [relayIdentity(ack.url), ack] as const))
 			complete = relays.map((url): RelayAck => {
 				const ack = byUrl.get(relayIdentity(url))
-				return ack
-					? { ...ack, url }
-					: { url, accepted: false, reason: 'rejected', message: 'no acknowledgement from this relay' }
+				return ack ? { ...ack, url } : { url, accepted: false, reason: 'rejected', message: 'no acknowledgement from this relay' }
 			})
 		} catch (error) {
 			return refuse(error)

@@ -8,20 +8,8 @@
  * and a second refund set that must be refused.
  */
 import { expect, test } from 'bun:test'
-import {
-	FundsDuplicateRefundError,
-	FundsRegistrationError,
-	MemorySetStore,
-	PayAggregator,
-	deriveSetState,
-} from './index'
-import type {
-	AggregatorOptions,
-	AggregatorWrapper,
-	LegEntry,
-	LegIntent,
-	SetIntent,
-} from './index'
+import { FundsDuplicateRefundError, FundsRegistrationError, MemorySetStore, PayAggregator, deriveSetState } from './index'
+import type { AggregatorOptions, AggregatorWrapper, LegEntry, LegIntent, SetIntent } from './index'
 import type { FundsHandle, WrapperRegistration } from '../../funds-contract/ts/index'
 
 /** The injected self-contained witness check: only a `ok:<hash>` reference validates against the hash. */
@@ -105,11 +93,7 @@ const handle = (over: Partial<FundsHandle> = {}): FundsHandle =>
 // ── the conservation rule, as a pure derivation ────────────────────────────────────────────────────────────
 
 test('a set cannot be complete while one of its legs is untrusted', () => {
-	const legs = [
-		settled({ legId: 'a' }),
-		settled({ legId: 'b' }),
-		settled({ legId: 'c', untrusted: true }),
-	]
+	const legs = [settled({ legId: 'a' }), settled({ legId: 'b' }), settled({ legId: 'c', untrusted: true })]
 	// every leg reports itself settled and each within its band, yet the untrusted leg is excluded entirely
 	const state = deriveSetState(legs, 300, 2)
 	expect(state).not.toBe('complete')
@@ -118,7 +102,11 @@ test('a set cannot be complete while one of its legs is untrusted', () => {
 
 test('a fully settled set inside the aggregate band is complete', () => {
 	// three legs, each within its per-leg tolerance of 2, residual +1, aggregate band 3 x 2 = 6
-	const legs = [settled({ legId: 'a', observedAmountSat: 100 }), settled({ legId: 'b', observedAmountSat: 100 }), settled({ legId: 'c', observedAmountSat: 101 })]
+	const legs = [
+		settled({ legId: 'a', observedAmountSat: 100 }),
+		settled({ legId: 'b', observedAmountSat: 100 }),
+		settled({ legId: 'c', observedAmountSat: 101 }),
+	]
 	expect(deriveSetState(legs, 300, 2)).toBe('complete')
 })
 

@@ -21,21 +21,21 @@
  *
  *   bun run visuals/webui/run.ts [--port <n>] [--host <h>]
  */
-import { dirname, resolve, relative } from "node:path";
-import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
+import { dirname, resolve, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { existsSync } from 'node:fs'
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_PORT = 4329;
-const DEFAULT_HOST = "127.0.0.1";
+const HERE = dirname(fileURLToPath(import.meta.url))
+const DEFAULT_PORT = 4329
+const DEFAULT_HOST = '127.0.0.1'
 
 function flag(argv: string[], name: string, def: string): string {
-  const i = argv.indexOf(name);
-  return i >= 0 && argv[i + 1] ? argv[i + 1] : def;
+	const i = argv.indexOf(name)
+	return i >= 0 && argv[i + 1] ? argv[i + 1] : def
 }
 
 function help(): void {
-  console.log(`wallet webui — the payment state machine, laid out to be driven, served locally on port ${DEFAULT_PORT}
+	console.log(`wallet webui — the payment state machine, laid out to be driven, served locally on port ${DEFAULT_PORT}
 
   bun run visuals/webui/run.ts [--port <n>] [--host <h>]
 
@@ -47,43 +47,43 @@ The page is a MODEL of the wallet's semantics: the port's three operations, the 
 vocabulary, the purchase and refund machines, the set-record derivation, the conservation band
 and the acceptance gate, with a console to drive the derived set state. No live node, mint or
 wallet is involved; this program reads no state and calls nothing out.
-Skill:  ${resolve(HERE, "SKILL.md")}`);
+Skill:  ${resolve(HERE, 'SKILL.md')}`)
 }
 
 async function main(): Promise<void> {
-  const argv = process.argv.slice(2);
-  if (argv.includes("--help") || argv.includes("-h")) {
-    help();
-    process.exit(0);
-  }
+	const argv = process.argv.slice(2)
+	if (argv.includes('--help') || argv.includes('-h')) {
+		help()
+		process.exit(0)
+	}
 
-  const port = Number(flag(argv, "--port", String(DEFAULT_PORT)));
-  const host = flag(argv, "--host", DEFAULT_HOST);
+	const port = Number(flag(argv, '--port', String(DEFAULT_PORT)))
+	const host = flag(argv, '--host', DEFAULT_HOST)
 
-  const server = Bun.serve({
-    port,
-    hostname: host,
-    fetch(req) {
-      let path: string;
-      try {
-        path = decodeURIComponent(new URL(req.url).pathname);
-      } catch {
-        return new Response("bad path", { status: 400 });
-      }
-      const rel = path === "/" ? "index.html" : path.replace(/^\//, "");
-      const target = resolve(HERE, rel);
-      if (relative(HERE, target).startsWith("..") || !existsSync(target)) {
-        return new Response("not found", { status: 404 });
-      }
-      return new Response(Bun.file(target), {
-        headers: { "cache-control": "no-store" },
-      });
-    },
-  });
+	const server = Bun.serve({
+		port,
+		hostname: host,
+		fetch(req) {
+			let path: string
+			try {
+				path = decodeURIComponent(new URL(req.url).pathname)
+			} catch {
+				return new Response('bad path', { status: 400 })
+			}
+			const rel = path === '/' ? 'index.html' : path.replace(/^\//, '')
+			const target = resolve(HERE, rel)
+			if (relative(HERE, target).startsWith('..') || !existsSync(target)) {
+				return new Response('not found', { status: 404 })
+			}
+			return new Response(Bun.file(target), {
+				headers: { 'cache-control': 'no-store' },
+			})
+		},
+	})
 
-  console.log(`wallet webui — http://${host}:${server.port}/  (a model; no live node, mint or wallet)`);
+	console.log(`wallet webui — http://${host}:${server.port}/  (a model; no live node, mint or wallet)`)
 }
 
 if (import.meta.main) {
-  await main();
+	await main()
 }

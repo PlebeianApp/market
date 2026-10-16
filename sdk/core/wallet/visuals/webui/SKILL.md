@@ -24,8 +24,8 @@ Ten sections and a console:
 - **The port** — the three operations (`obtain`, `submit`, `reconcile`) and which a rail may
   omit: a passive leg declares `obtain` and `reconcile` and omits `submit`; a rail that declares
   `submit` must also declare `reconcile`.
-- **The rung vocabulary** — the progress markers and the four proof rungs, with the *cryptographic*
-  witness kinds (which may settle) distinguished from the *declared* kinds (which reach only
+- **The rung vocabulary** — the progress markers and the four proof rungs, with the _cryptographic_
+  witness kinds (which may settle) distinguished from the _declared_ kinds (which reach only
   `attested`).
 - **The set record** — how a leg's witness becomes a rung and a set of rungs becomes a state,
   including the exclusion that stops an untrusted leg counting.
@@ -60,8 +60,8 @@ What the page **must not be quoted for**:
   nothing on the page depends on a relay, a mint or a wallet. Every rule is transcribed from the
   modules' semantics; the console re-implements the aggregator's `deriveSetState` in the browser and
   holds no record.
-- **The gate's honest limit is shown, not hidden.** The acceptance gate enforces the *shape* of a
-  registration, never its *conduct*: a well-formed declaration that lies is accepted, and the
+- **The gate's honest limit is shown, not hidden.** The acceptance gate enforces the _shape_ of a
+  registration, never its _conduct_: a well-formed declaration that lies is accepted, and the
   behavioural enforcement is the conformance suite, not the gate.
 - **A declared witness reaches only a weaker rung.** A declared kind — even the payee's own word —
   moves a leg no further than `attested`. And **a passive leg cannot be witnessed by the app**: a

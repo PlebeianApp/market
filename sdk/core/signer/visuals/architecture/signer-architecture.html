@@ -1,132 +1,1303 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>signer &mdash; architecture</title>
-  <!-- the only external reference on this page; the page renders and reads fine without it -->
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace;
-      background: #020617; min-height: 100vh; padding: 2rem; color: #fff;
-    }
-    .container { max-width: 1300px; margin: 0 auto; }
-    .header { margin-bottom: 2rem; }
-    .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
-    .pulse-dot { width: 12px; height: 12px; background: #34d399; border-radius: 50%; animation: pulse 2s infinite; flex: none; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-    h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em; }
-    .subtitle { color: #94a3b8; font-size: 0.875rem; margin-left: 1.75rem; line-height: 1.7; max-width: 75rem; }
-    .subtitle code { color: #e2e8f0; font-size: 0.8125rem; }
-    .diagram-container { background: rgba(15, 23, 42, 0.5); border-radius: 1rem; border: 1px solid #1e293b; padding: 1.5rem; overflow-x: auto; }
-    svg { width: 100%; min-width: 1100px; display: block; height: auto; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin-top: 2rem; }
-    .card { background: rgba(15, 23, 42, 0.5); border-radius: 0.75rem; border: 1px solid #1e293b; padding: 1.25rem; }
-    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
-    .card-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-    .card-dot.cyan { background: #22d3ee; } .card-dot.emerald { background: #34d399; }
-    .card-dot.violet { background: #a78bfa; } .card-dot.rose { background: #fb7185; }
-    .card-dot.amber { background: #fbbf24; } .card-dot.slate { background: #94a3b8; }
-    .card h3 { font-size: 0.875rem; font-weight: 600; }
-    .card ul { list-style: none; color: #94a3b8; font-size: 0.75rem; line-height: 1.7; }
-    .card li { margin-bottom: 0.375rem; padding-left: 1rem; text-indent: -1rem; }
-    .card .tag { color: #e2e8f0; }
-    .footer { text-align: center; margin-top: 1.5rem; color: #475569; font-size: 0.75rem; line-height: 1.8; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div class="header-row">
-        <div class="pulse-dot"></div>
-        <h1>signer &mdash; architecture</h1>
-      </div>
-      <p class="subtitle">
-        The module owns no environment. Everything it needs from the outside arrives through four injected ports
-        &mdash; storage, transport, clock, crypto &mdash; and it never touches the browser, the relay, the
-        extension or the OS keychain. That is measured, not claimed: zero occurrences of
-        <code>localStorage</code>, <code>sessionStorage</code>, <code>indexedDB</code>, <code>window.</code>,
-        <code>document.</code>, <code>navigator.</code>, React, <code>@nostr-dev-kit</code> or the app's
-        <code>@/</code> alias anywhere in <code>signer/ts/*.ts</code>.
-      </p>
-    </div>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>signer &mdash; architecture</title>
+		<!-- the only external reference on this page; the page renders and reads fine without it -->
+		<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+			body {
+				font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+				background: #020617;
+				min-height: 100vh;
+				padding: 2rem;
+				color: #fff;
+			}
+			.container {
+				max-width: 1300px;
+				margin: 0 auto;
+			}
+			.header {
+				margin-bottom: 2rem;
+			}
+			.header-row {
+				display: flex;
+				align-items: center;
+				gap: 1rem;
+				margin-bottom: 0.5rem;
+			}
+			.pulse-dot {
+				width: 12px;
+				height: 12px;
+				background: #34d399;
+				border-radius: 50%;
+				animation: pulse 2s infinite;
+				flex: none;
+			}
+			@keyframes pulse {
+				0%,
+				100% {
+					opacity: 1;
+				}
+				50% {
+					opacity: 0.35;
+				}
+			}
+			h1 {
+				font-size: 1.5rem;
+				font-weight: 700;
+				letter-spacing: -0.025em;
+			}
+			.subtitle {
+				color: #94a3b8;
+				font-size: 0.875rem;
+				margin-left: 1.75rem;
+				line-height: 1.7;
+				max-width: 75rem;
+			}
+			.subtitle code {
+				color: #e2e8f0;
+				font-size: 0.8125rem;
+			}
+			.diagram-container {
+				background: rgba(15, 23, 42, 0.5);
+				border-radius: 1rem;
+				border: 1px solid #1e293b;
+				padding: 1.5rem;
+				overflow-x: auto;
+			}
+			svg {
+				width: 100%;
+				min-width: 1100px;
+				display: block;
+				height: auto;
+			}
+			.cards {
+				display: grid;
+				grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+				gap: 1rem;
+				margin-top: 2rem;
+			}
+			.card {
+				background: rgba(15, 23, 42, 0.5);
+				border-radius: 0.75rem;
+				border: 1px solid #1e293b;
+				padding: 1.25rem;
+			}
+			.card-header {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+				margin-bottom: 0.75rem;
+			}
+			.card-dot {
+				width: 8px;
+				height: 8px;
+				border-radius: 50%;
+				flex: none;
+			}
+			.card-dot.cyan {
+				background: #22d3ee;
+			}
+			.card-dot.emerald {
+				background: #34d399;
+			}
+			.card-dot.violet {
+				background: #a78bfa;
+			}
+			.card-dot.rose {
+				background: #fb7185;
+			}
+			.card-dot.amber {
+				background: #fbbf24;
+			}
+			.card-dot.slate {
+				background: #94a3b8;
+			}
+			.card h3 {
+				font-size: 0.875rem;
+				font-weight: 600;
+			}
+			.card ul {
+				list-style: none;
+				color: #94a3b8;
+				font-size: 0.75rem;
+				line-height: 1.7;
+			}
+			.card li {
+				margin-bottom: 0.375rem;
+				padding-left: 1rem;
+				text-indent: -1rem;
+			}
+			.card .tag {
+				color: #e2e8f0;
+			}
+			.footer {
+				text-align: center;
+				margin-top: 1.5rem;
+				color: #475569;
+				font-size: 0.75rem;
+				line-height: 1.8;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="header">
+				<div class="header-row">
+					<div class="pulse-dot"></div>
+					<h1>signer &mdash; architecture</h1>
+				</div>
+				<p class="subtitle">
+					The module owns no environment. Everything it needs from the outside arrives through four injected ports &mdash; storage,
+					transport, clock, crypto &mdash; and it never touches the browser, the relay, the extension or the OS keychain. That is measured,
+					not claimed: zero occurrences of
+					<code>localStorage</code>, <code>sessionStorage</code>, <code>indexedDB</code>, <code>window.</code>, <code>document.</code>,
+					<code>navigator.</code>, React, <code>@nostr-dev-kit</code> or the app's <code>@/</code> alias anywhere in
+					<code>signer/ts/*.ts</code>.
+				</p>
+			</div>
 
-    <div class="diagram-container">
-      <svg viewBox="0 0 1240 1330" role="img" aria-labelledby="dia-title dia-desc" font-family="'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace">
-        <title id="dia-title">signer — architecture</title>
-        <desc id="dia-desc">Five bands, top to bottom: the outside world; the consumer's side, which does not exist
-        yet; the four injected ports, the only door in; the module interior; and what it guarantees and does not
-        ship. The legend sits below the lowest boundary.</desc>
-  <defs>
-  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
-  </pattern>
-  <marker id="arrow-slate" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-    <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
-  </marker>
-  <marker id="arrow-rose" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-    <polygon points="0 0, 10 3.5, 0 7" fill="#fb7185"/>
-  </marker>
-</defs>
-  <rect width="100%" height="100%" fill="url(#grid)"/>
-  <!-- arrows are drawn before the component boxes, so they render behind them -->
-  <g id="arrows"><line class="arrow" x1="26" y1="138" x2="38" y2="150" stroke="#fb7185" stroke-width="1.5"/><line class="arrow" x1="38" y1="138" x2="26" y2="150" stroke="#fb7185" stroke-width="1.5"/><line class="arrow" x1="148" y1="126" x2="465" y2="190" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)"/><line class="arrow" x1="384" y1="126" x2="520" y2="190" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)"/><line class="arrow" x1="612" y1="126" x2="1040" y2="192" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)"/><line class="arrow" x1="856" y1="126" x2="175" y2="190" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)"/><line class="arrow" x1="1020" y1="126" x2="755" y2="190" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)"/><line class="arrow" x1="1110" y1="126" x2="1045" y2="190" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)"/><line class="arrow" x1="175" y1="380" x2="175" y2="477" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-slate)"/><line class="arrow" x1="465" y1="380" x2="465" y2="477" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-slate)"/><line class="arrow" x1="755" y1="380" x2="755" y2="477" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-slate)"/><line class="arrow" x1="1045" y1="380" x2="1045" y2="477" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-slate)"/><line class="arrow" x1="175" y1="550" x2="175" y2="605" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrow-rose)"/><line class="arrow" x1="465" y1="550" x2="465" y2="605" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrow-rose)"/><line class="arrow" x1="755" y1="550" x2="755" y2="605" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrow-rose)"/><line class="arrow" x1="1045" y1="550" x2="1045" y2="605" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrow-rose)"/><line class="arrow" x1="32" y1="600" x2="32" y2="152" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="4,4"/></g>
-  <g id="boundaries"><rect class="boundary" x="25" y="40" width="1190" height="100" rx="12" fill="rgba(30, 41, 59, 0.15)" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="8,4"/><rect class="boundary" x="25" y="170" width="1190" height="260" rx="12" fill="rgba(251, 191, 36, 0.04)" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="8,4"/><rect class="boundary" x="25" y="450" width="1190" height="132" rx="12" fill="rgba(136, 19, 55, 0.06)" stroke="#fb7185" stroke-width="1.2" stroke-dasharray="4,4"/><rect class="boundary" x="25" y="610" width="1190" height="402" rx="12" fill="rgba(6, 78, 59, 0.10)" stroke="#34d399" stroke-width="1.2" stroke-dasharray="1,0"/><rect class="boundary" x="25" y="1040" width="620" height="180" rx="12" fill="rgba(136, 19, 55, 0.06)" stroke="#fb7185" stroke-width="1.2" stroke-dasharray="4,4"/><rect class="boundary" x="670" y="1040" width="545" height="180" rx="12" fill="rgba(251, 191, 36, 0.04)" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="8,4"/></g>
-  <g id="boxes"><rect class="comp-bg" x="40" y="70" width="216" height="52" rx="6" fill="#0f172a"/><rect class="comp ext" x="40" y="70" width="216" height="52" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/><rect class="comp-bg" x="276" y="70" width="216" height="52" rx="6" fill="#0f172a"/><rect class="comp ext" x="276" y="70" width="216" height="52" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/><rect class="comp-bg" x="512" y="70" width="216" height="52" rx="6" fill="#0f172a"/><rect class="comp ext" x="512" y="70" width="216" height="52" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/><rect class="comp-bg" x="748" y="70" width="216" height="52" rx="6" fill="#0f172a"/><rect class="comp ext" x="748" y="70" width="216" height="52" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/><rect class="comp-bg" x="984" y="70" width="216" height="52" rx="6" fill="#0f172a"/><rect class="comp ext" x="984" y="70" width="216" height="52" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/><rect class="comp-bg" x="350" y="196" width="540" height="76" rx="6" fill="#0f172a"/><rect class="comp front" x="350" y="196" width="540" height="76" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="5,4"/><rect class="comp-bg" x="910" y="196" width="270" height="76" rx="6" fill="#0f172a"/><rect class="comp front" x="910" y="196" width="270" height="76" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="5,4"/><rect class="comp-bg" x="40" y="300" width="270" height="76" rx="6" fill="#0f172a"/><rect class="comp front" x="40" y="300" width="270" height="76" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="5,4"/><rect class="comp-bg" x="330" y="300" width="270" height="76" rx="6" fill="#0f172a"/><rect class="comp front" x="330" y="300" width="270" height="76" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="5,4"/><rect class="comp-bg" x="620" y="300" width="270" height="76" rx="6" fill="#0f172a"/><rect class="comp front" x="620" y="300" width="270" height="76" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="5,4"/><rect class="comp-bg" x="910" y="300" width="270" height="76" rx="6" fill="#0f172a"/><rect class="comp front" x="910" y="300" width="270" height="76" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="5,4"/><rect class="comp-bg" x="120" y="482" width="250" height="64" rx="6" fill="#0f172a"/><rect class="comp sec" x="120" y="482" width="250" height="64" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/><rect class="comp-bg" x="395" y="482" width="250" height="64" rx="6" fill="#0f172a"/><rect class="comp sec" x="395" y="482" width="250" height="64" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/><rect class="comp-bg" x="670" y="482" width="250" height="64" rx="6" fill="#0f172a"/><rect class="comp sec" x="670" y="482" width="250" height="64" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/><rect class="comp-bg" x="945" y="482" width="250" height="64" rx="6" fill="#0f172a"/><rect class="comp sec" x="945" y="482" width="250" height="64" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/><rect class="comp-bg" x="40" y="668" width="1160" height="64" rx="6" fill="#0f172a"/><rect class="comp back" x="40" y="668" width="1160" height="64" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/><rect class="comp-bg" x="40" y="756" width="275" height="96" rx="6" fill="#0f172a"/><rect class="comp back" x="40" y="756" width="275" height="96" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/><rect class="comp-bg" x="330" y="756" width="275" height="96" rx="6" fill="#0f172a"/><rect class="comp back" x="330" y="756" width="275" height="96" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/><rect class="comp-bg" x="620" y="756" width="275" height="96" rx="6" fill="#0f172a"/><rect class="comp db" x="620" y="756" width="275" height="96" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/><rect class="comp-bg" x="910" y="756" width="275" height="96" rx="6" fill="#0f172a"/><rect class="comp sec" x="910" y="756" width="275" height="96" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/><rect class="comp-bg" x="40" y="876" width="380" height="96" rx="6" fill="#0f172a"/><rect class="comp back" x="40" y="876" width="380" height="96" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/><rect class="comp-bg" x="435" y="876" width="380" height="96" rx="6" fill="#0f172a"/><rect class="comp back" x="435" y="876" width="380" height="96" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/><rect class="comp-bg" x="830" y="876" width="370" height="96" rx="6" fill="#0f172a"/><rect class="comp back" x="830" y="876" width="370" height="96" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/><rect class="comp-bg" x="37" y="1080" width="110" height="120" rx="6" fill="#0f172a"/><rect class="comp sec" x="37" y="1080" width="110" height="120" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/><rect class="comp-bg" x="158" y="1080" width="110" height="120" rx="6" fill="#0f172a"/><rect class="comp sec" x="158" y="1080" width="110" height="120" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/><rect class="comp-bg" x="279" y="1080" width="110" height="120" rx="6" fill="#0f172a"/><rect class="comp sec" x="279" y="1080" width="110" height="120" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/><rect class="comp-bg" x="400" y="1080" width="110" height="120" rx="6" fill="#0f172a"/><rect class="comp sec" x="400" y="1080" width="110" height="120" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/><rect class="comp-bg" x="521" y="1080" width="110" height="120" rx="6" fill="#0f172a"/><rect class="comp sec" x="521" y="1080" width="110" height="120" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/><rect class="comp-bg" x="682" y="1080" width="120" height="120" rx="6" fill="#0f172a"/><rect class="comp notyet" x="682" y="1080" width="120" height="120" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,4"/><rect class="comp-bg" x="813" y="1080" width="120" height="120" rx="6" fill="#0f172a"/><rect class="comp notyet" x="813" y="1080" width="120" height="120" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,4"/><rect class="comp-bg" x="944" y="1080" width="120" height="120" rx="6" fill="#0f172a"/><rect class="comp notyet" x="944" y="1080" width="120" height="120" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,4"/><rect class="comp-bg" x="1075" y="1080" width="120" height="120" rx="6" fill="#0f172a"/><rect class="comp notyet" x="1075" y="1080" width="120" height="120" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,4"/></g>
-  <g id="labels"><text class="t-boundary" x="39" y="60" fill="#cbd5e1" font-size="10" font-weight="600" text-anchor="start">1  ·  the outside world  —  none of this is reachable from inside the module</text><text class="t-in-box" x="148" y="88" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">the relay</text><text class="t-in-box" x="148" y="102" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">wss://…  never contacted</text><text class="t-in-box" x="148" y="114" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">by this module</text><text class="t-in-box" x="384" y="88" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">a remote signer / bunker</text><text class="t-in-box" x="384" y="102" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">the far side of the NIP-46</text><text class="t-in-box" x="384" y="114" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">conversation</text><text class="t-in-box" x="620" y="88" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">a browser extension</text><text class="t-in-box" x="620" y="102" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">NIP-07.  reaches the module</text><text class="t-in-box" x="620" y="114" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">only as an injected argument</text><text class="t-in-box" x="856" y="88" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">the OS keychain / browser store</text><text class="t-in-box" x="856" y="102" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">where a session record may</text><text class="t-in-box" x="856" y="114" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">sit, encrypted at rest</text><text class="t-in-box" x="1092" y="88" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">the host itself</text><text class="t-in-box" x="1092" y="102" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">its timers, its WebCrypto,</text><text class="t-in-box" x="1092" y="114" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">its relay layer</text><text class="t-boundary" x="39" y="190" fill="#fbbf24" font-size="10" font-weight="600" text-anchor="start">2  ·  the consumer's side  —  nothing in this band exists yet</text><text class="t-in-box" x="620" y="216" fill="#ffffff" font-size="10.5" font-weight="600" text-anchor="middle">the future consumer — DOES NOT EXIST YET</text><text class="t-in-box" x="620" y="234" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">A marketplace app, or a CLI that builds a signer from a key with no session.</text><text class="t-in-box" x="620" y="248" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">Nothing imports this module. The market's 90 .sign( call sites are the checklist</text><text class="t-in-box" x="620" y="262" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">waiting for whoever wires it — and this build does not wire it.</text><text class="t-in-box" x="1045" y="216" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">passed in as arguments</text><text class="t-in-box" x="1045" y="234" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">the NIP-07 extension object,</text><text class="t-in-box" x="1045" y="248" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">the passphrase source. Never a</text><text class="t-in-box" x="1045" y="262" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">global, never a lookup.</text><text class="t-in-box" x="175" y="320" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">the storage adapter</text><text class="t-in-box" x="175" y="338" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">the host's key/value store:</text><text class="t-in-box" x="175" y="352" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">browser store, a file, a</text><text class="t-in-box" x="175" y="366" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">device keystore or nothing</text><text class="t-in-box" x="465" y="320" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">the transport adapter</text><text class="t-in-box" x="465" y="338" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">the host's relay layer: a pool,</text><text class="t-in-box" x="465" y="352" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">a websocket, a subscription</text><text class="t-in-box" x="465" y="366" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">source and a publish call</text><text class="t-in-box" x="755" y="320" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">the clock adapter</text><text class="t-in-box" x="755" y="338" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">the host's timers, so that a</text><text class="t-in-box" x="755" y="352" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">deadline is drivable in a</text><text class="t-in-box" x="755" y="366" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">test and in a real host</text><text class="t-in-box" x="1045" y="320" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">the crypto adapter</text><text class="t-in-box" x="1045" y="338" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">the host's WebCrypto:</text><text class="t-in-box" x="1045" y="352" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">randomness, PBKDF2-SHA256,</text><text class="t-in-box" x="1045" y="366" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">AES-GCM-256</text><text class="t-free" x="40" y="404" fill="#fbbf24" font-size="7.5" font-weight="400" text-anchor="start">None of these four adapters exists in this build: the module ships no host implementation of any port.</text><text class="t-boundary" x="39" y="470" fill="#fb7185" font-size="10" font-weight="600" text-anchor="start">3  ·  the ports  —  the only door in:  everything environmental arrives here, and nothing else</text><text class="t-in-box" x="245" y="502" fill="#ffffff" font-size="11" font-weight="600" text-anchor="middle">StoragePort</text><text class="t-in-box" x="245" y="519" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">getItem · setItem · removeItem</text><text class="t-in-box" x="245" y="532" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">the encrypted record lives here</text><text class="t-in-box" x="520" y="502" fill="#ffffff" font-size="11" font-weight="600" text-anchor="middle">TransportPort</text><text class="t-in-box" x="520" y="519" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">subscription(relays, filters)</text><text class="t-in-box" x="520" y="532" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">publish(relays, event)</text><text class="t-in-box" x="795" y="502" fill="#ffffff" font-size="11" font-weight="600" text-anchor="middle">ClockPort</text><text class="t-in-box" x="795" y="519" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">setTimeout · clearTimeout</text><text class="t-in-box" x="795" y="532" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">every deadline comes from it</text><text class="t-in-box" x="1070" y="502" fill="#ffffff" font-size="11" font-weight="600" text-anchor="middle">CryptoPort</text><text class="t-in-box" x="1070" y="519" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">randomBytes · pbkdf2Sha256</text><text class="t-in-box" x="1070" y="532" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">aesGcmEncrypt/Decrypt · utf8</text><text class="t-free" x="40" y="558" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="start">+ the same seam carries two more injected values as plain arguments: the NIP-07 extension object, and the passphrase source.</text><text class="t-boundary" x="39" y="630" fill="#34d399" font-size="10" font-weight="600" text-anchor="start">4  ·  inside the module  —  it owns no environment</text><text class="t-free" x="40" y="655" fill="#34d399" font-size="7.5" font-weight="400" text-anchor="start">isolation, measured over all 15 .ts files in signer/ts:  0 ×  localStorage · sessionStorage · indexedDB · window. · document. · navigator. · React · @nostr-dev-kit · @/</text><text class="t-in-box" x="620" y="690" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">index.ts  —  the public entry: the contract's surface</text><text class="t-in-box" x="620" y="708" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">createSignerSession(deps) · createSignerFromKey(material) · the 13 operations · the 13 typed refusals</text><text class="t-in-box" x="620" y="722" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">24 value exports (13 typed refusals + the 5 record constants) · 27 type exports — nothing else</text><text class="t-in-box" x="177.5" y="778" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">session.ts  —  the session lifecycle</text><text class="t-in-box" x="177.5" y="797" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">8 states: idle · connecting · awaiting_user</text><text class="t-in-box" x="177.5" y="811" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">active · locked · restoring · closing · failed</text><text class="t-in-box" x="177.5" y="825" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">refused: active without a resolved identity</text><text class="t-in-box" x="177.5" y="839" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">refused: a second capability while one is attached</text><text class="t-in-box" x="467.5" y="778" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">capability.ts  —  the capability policy</text><text class="t-in-box" x="467.5" y="797" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">the identity is learned only through getPublicKey()</text><text class="t-in-box" x="467.5" y="811" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">every event is re-verified and its pubkey compared</text><text class="t-in-box" x="467.5" y="825" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">nip04/nip44 offered only if the signer has it AND</text><text class="t-in-box" x="467.5" y="839" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">the composer's allow-list permits it — else refuse</text><text class="t-in-box" x="757.5" y="778" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">vault.ts  —  the encrypted record</text><text class="t-in-box" x="757.5" y="797" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">PBKDF2-SHA256 600k → AES-GCM-256 envelope</text><text class="t-in-box" x="757.5" y="811" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">no session is ever stored in the clear, ever</text><text class="t-in-box" x="757.5" y="825" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">floor: 100k iterations accepted, below that refused</text><text class="t-in-box" x="757.5" y="839" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">a legacy plaintext record: migrate once, or re-login</text><text class="t-in-box" x="1047.5" y="778" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">errors.ts  —  the typed refusals</text><text class="t-in-box" x="1047.5" y="797" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">13 typed refusals over one base SignerError</text><text class="t-in-box" x="1047.5" y="811" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">no bare strings, no silent fallback anywhere</text><text class="t-in-box" x="1047.5" y="825" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">e.g. TransportRequiredError · ClockRequiredError</text><text class="t-in-box" x="1047.5" y="839" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">CapabilityUnavailableError · IdentityMismatchError</text><text class="t-in-box" x="230" y="898" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">lanes.ts  —  the five ways in</text><text class="t-in-box" x="230" y="917" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">extension (NIP-07, injected) · nsec · ncryptsec (NIP-49)</text><text class="t-in-box" x="230" y="931" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">bunker:// · nostrconnect:// — both need transport + clock</text><text class="t-in-box" x="230" y="945" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">an ncryptsec signer that is locked rejects fast, never hangs</text><text class="t-in-box" x="230" y="959" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">the extension is an argument: the module reads no window.*</text><text class="t-in-box" x="625" y="898" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">nip46.ts  —  the NIP-46 lanes</text><text class="t-in-box" x="625" y="917" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">strict bind: a bare 'ack' is dropped, the secret must match (I1)</text><text class="t-in-box" x="625" y="931" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">the remote signer's key stays separate from the identity (I2)</text><text class="t-in-box" x="625" y="945" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">every RPC is bounded by the injected clock: 30s RPC, 5min connect</text><text class="t-in-box" x="1015" y="898" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">uri.ts  —  the connect URI</text><text class="t-in-box" x="1015" y="917" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">the secret travels in secret=, never in token=</text><text class="t-in-box" x="1015" y="931" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">a legacy token-only URI is refused</text><text class="t-in-box" x="1015" y="945" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">the URI goes to the caller's own callback</text><text class="t-in-box" x="1015" y="959" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">it carries the secret, so it never enters a snapshot</text><text class="t-boundary" x="39" y="1060" fill="#fb7185" font-size="10" font-weight="600" text-anchor="start">5  ·  what it guarantees — the five invariants</text><text class="t-in-box" x="92" y="1100" fill="#ffffff" font-size="9" font-weight="600" text-anchor="middle">I1</text><text class="t-in-box" x="92" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">the connect secret is</text><text class="t-in-box" x="92" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">validated before any</text><text class="t-in-box" x="92" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">binding: a bare 'ack'</text><text class="t-in-box" x="92" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">never binds a remote</text><text class="t-in-box" x="213" y="1100" fill="#ffffff" font-size="9" font-weight="600" text-anchor="middle">I2</text><text class="t-in-box" x="213" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">the remote signer's</text><text class="t-in-box" x="213" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">key is not the user.</text><text class="t-in-box" x="213" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">the identity is read</text><text class="t-in-box" x="213" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">only through</text><text class="t-in-box" x="213" y="1174" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">getPublicKey()</text><text class="t-in-box" x="334" y="1100" fill="#ffffff" font-size="9" font-weight="600" text-anchor="middle">I3</text><text class="t-in-box" x="334" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">a signed event must</text><text class="t-in-box" x="334" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">verify AND belong to</text><text class="t-in-box" x="334" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">the resolved identity,</text><text class="t-in-box" x="334" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">or it fails closed</text><text class="t-in-box" x="455" y="1100" fill="#ffffff" font-size="9" font-weight="600" text-anchor="middle">I4</text><text class="t-in-box" x="455" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">NIP-44 is only ever</text><text class="t-in-box" x="455" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">what the signer has</text><text class="t-in-box" x="455" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">and the allow-list</text><text class="t-in-box" x="455" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">permits — never</text><text class="t-in-box" x="455" y="1174" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">synthesised locally</text><text class="t-in-box" x="576" y="1100" fill="#ffffff" font-size="9" font-weight="600" text-anchor="middle">I5</text><text class="t-in-box" x="576" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">no session secret</text><text class="t-in-box" x="576" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">is ever silently</text><text class="t-in-box" x="576" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">plaintext: encrypted</text><text class="t-in-box" x="576" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">at rest, migrated or</text><text class="t-in-box" x="576" y="1174" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">an intentional login</text><text class="t-boundary" x="684" y="1060" fill="#fbbf24" font-size="10" font-weight="600" text-anchor="start">5b  ·  what it does NOT ship, yet</text><text class="t-in-box" x="742" y="1100" fill="#ffffff" font-size="8" font-weight="600" text-anchor="middle">no host adapters</text><text class="t-in-box" x="742" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">no storage, relay, clock</text><text class="t-in-box" x="742" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">or crypto adapter ships</text><text class="t-in-box" x="742" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">here — only the module's</text><text class="t-in-box" x="742" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">own test harness has any</text><text class="t-in-box" x="873" y="1100" fill="#ffffff" font-size="8" font-weight="600" text-anchor="middle">no relay contacted</text><text class="t-in-box" x="873" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">NIP-46 runs against an</text><text class="t-in-box" x="873" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">in-process remote-signer</text><text class="t-in-box" x="873" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">emulator: a real relay</text><text class="t-in-box" x="873" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">was never opened</text><text class="t-in-box" x="1004" y="1100" fill="#ffffff" font-size="8" font-weight="600" text-anchor="middle">one implementation</text><text class="t-in-box" x="1004" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">no Rust, Flutter or</text><text class="t-in-box" x="1004" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">Angular version has met</text><text class="t-in-box" x="1004" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">this spec — and nothing</text><text class="t-in-box" x="1004" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">proves it is portable</text><text class="t-in-box" x="1135" y="1100" fill="#ffffff" font-size="8" font-weight="600" text-anchor="middle">no consumer</text><text class="t-in-box" x="1135" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">nothing imports this</text><text class="t-in-box" x="1135" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">module; the market's own</text><text class="t-in-box" x="1135" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">signer code is untouched</text><text class="t-in-box" x="1135" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">and this build left it so</text><text class="t-legend" x="40" y="1258" fill="#ffffff" font-size="10" font-weight="600" text-anchor="start">Legend</text><text class="t-legend" x="64" y="1270" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">the consumer's side — adapters, the future consumer</text><text class="t-legend" x="364" y="1270" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">the module's own code</text><text class="t-legend" x="664" y="1270" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">the encrypted record at rest</text><text class="t-legend" x="964" y="1270" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">fail-closed: the door, the refusals, the guarantees</text><text class="t-legend" x="64" y="1300" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">the outside world — never reached by the module</text><text class="t-legend" x="364" y="1300" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">solid = a call the module makes / an implementation</text><text class="t-legend" x="664" y="1300" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">rose dashed = a fail-closed refusal path</text><text class="t-legend" x="964" y="1300" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">amber dashed = declared, not yet exercised</text></g>
-  <g id="legend"><rect class="legend-swatch" x="40" y="1262" width="16" height="10" rx="2" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1"/><rect class="legend-swatch" x="340" y="1262" width="16" height="10" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1"/><rect class="legend-swatch" x="640" y="1262" width="16" height="10" rx="2" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1"/><rect class="legend-swatch" x="940" y="1262" width="16" height="10" rx="2" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1"/><rect class="legend-swatch" x="40" y="1292" width="16" height="10" rx="2" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1"/><line class="legend-swatch" x1="340" y1="1297" x2="356" y2="1297" stroke="#94a3b8" stroke-width="1.5"/><line class="legend-swatch" x1="640" y1="1297" x2="656" y2="1297" stroke="#fb7185" stroke-width="1.5"/><rect class="legend-swatch" x="940" y="1292" width="16" height="10" rx="2" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="3,3"/></g>
-  <g id="arrow-labels"><text class="t-arrow" x="182" y="424" fill="#22d3ee" font-size="7" text-anchor="start">implements</text><text class="t-arrow" x="472" y="424" fill="#22d3ee" font-size="7" text-anchor="start">implements</text><text class="t-arrow" x="762" y="424" fill="#22d3ee" font-size="7" text-anchor="start">implements</text><text class="t-arrow" x="1052" y="424" fill="#22d3ee" font-size="7" text-anchor="start">implements</text><text class="t-arrow" x="1056" y="578" fill="#fb7185" font-size="7" text-anchor="start">the module calls it</text><text class="t-arrow" x="36" y="602" fill="#fb7185" font-size="7.5" text-anchor="start">✕  the module never reaches the outside world</text><text class="t-arrow" x="620" y="190" fill="#94a3b8" font-size="7.5" text-anchor="start">the outside world stops at the consumer's territory</text></g>
-      </svg>
-    </div>
+			<div class="diagram-container">
+				<svg
+					viewBox="0 0 1240 1330"
+					role="img"
+					aria-labelledby="dia-title dia-desc"
+					font-family="'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace"
+				>
+					<title id="dia-title">signer — architecture</title>
+					<desc id="dia-desc">
+						Five bands, top to bottom: the outside world; the consumer's side, which does not exist yet; the four injected ports, the only
+						door in; the module interior; and what it guarantees and does not ship. The legend sits below the lowest boundary.
+					</desc>
+					<defs>
+						<pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+							<path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5" />
+						</pattern>
+						<marker id="arrow-slate" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+							<polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+						</marker>
+						<marker id="arrow-rose" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+							<polygon points="0 0, 10 3.5, 0 7" fill="#fb7185" />
+						</marker>
+					</defs>
+					<rect width="100%" height="100%" fill="url(#grid)" />
+					<!-- arrows are drawn before the component boxes, so they render behind them -->
+					<g id="arrows">
+						<line class="arrow" x1="26" y1="138" x2="38" y2="150" stroke="#fb7185" stroke-width="1.5" />
+						<line class="arrow" x1="38" y1="138" x2="26" y2="150" stroke="#fb7185" stroke-width="1.5" />
+						<line class="arrow" x1="148" y1="126" x2="465" y2="190" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)" />
+						<line class="arrow" x1="384" y1="126" x2="520" y2="190" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)" />
+						<line class="arrow" x1="612" y1="126" x2="1040" y2="192" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)" />
+						<line class="arrow" x1="856" y1="126" x2="175" y2="190" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)" />
+						<line class="arrow" x1="1020" y1="126" x2="755" y2="190" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)" />
+						<line class="arrow" x1="1110" y1="126" x2="1045" y2="190" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)" />
+						<line class="arrow" x1="175" y1="380" x2="175" y2="477" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-slate)" />
+						<line class="arrow" x1="465" y1="380" x2="465" y2="477" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-slate)" />
+						<line class="arrow" x1="755" y1="380" x2="755" y2="477" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-slate)" />
+						<line class="arrow" x1="1045" y1="380" x2="1045" y2="477" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-slate)" />
+						<line class="arrow" x1="175" y1="550" x2="175" y2="605" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrow-rose)" />
+						<line class="arrow" x1="465" y1="550" x2="465" y2="605" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrow-rose)" />
+						<line class="arrow" x1="755" y1="550" x2="755" y2="605" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrow-rose)" />
+						<line class="arrow" x1="1045" y1="550" x2="1045" y2="605" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrow-rose)" />
+						<line class="arrow" x1="32" y1="600" x2="32" y2="152" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="4,4" />
+					</g>
+					<g id="boundaries">
+						<rect
+							class="boundary"
+							x="25"
+							y="40"
+							width="1190"
+							height="100"
+							rx="12"
+							fill="rgba(30, 41, 59, 0.15)"
+							stroke="#94a3b8"
+							stroke-width="1.2"
+							stroke-dasharray="8,4"
+						/>
+						<rect
+							class="boundary"
+							x="25"
+							y="170"
+							width="1190"
+							height="260"
+							rx="12"
+							fill="rgba(251, 191, 36, 0.04)"
+							stroke="#fbbf24"
+							stroke-width="1.2"
+							stroke-dasharray="8,4"
+						/>
+						<rect
+							class="boundary"
+							x="25"
+							y="450"
+							width="1190"
+							height="132"
+							rx="12"
+							fill="rgba(136, 19, 55, 0.06)"
+							stroke="#fb7185"
+							stroke-width="1.2"
+							stroke-dasharray="4,4"
+						/>
+						<rect
+							class="boundary"
+							x="25"
+							y="610"
+							width="1190"
+							height="402"
+							rx="12"
+							fill="rgba(6, 78, 59, 0.10)"
+							stroke="#34d399"
+							stroke-width="1.2"
+							stroke-dasharray="1,0"
+						/>
+						<rect
+							class="boundary"
+							x="25"
+							y="1040"
+							width="620"
+							height="180"
+							rx="12"
+							fill="rgba(136, 19, 55, 0.06)"
+							stroke="#fb7185"
+							stroke-width="1.2"
+							stroke-dasharray="4,4"
+						/>
+						<rect
+							class="boundary"
+							x="670"
+							y="1040"
+							width="545"
+							height="180"
+							rx="12"
+							fill="rgba(251, 191, 36, 0.04)"
+							stroke="#fbbf24"
+							stroke-width="1.2"
+							stroke-dasharray="8,4"
+						/>
+					</g>
+					<g id="boxes">
+						<rect class="comp-bg" x="40" y="70" width="216" height="52" rx="6" fill="#0f172a" />
+						<rect
+							class="comp ext"
+							x="40"
+							y="70"
+							width="216"
+							height="52"
+							rx="6"
+							fill="rgba(30, 41, 59, 0.5)"
+							stroke="#94a3b8"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="276" y="70" width="216" height="52" rx="6" fill="#0f172a" />
+						<rect
+							class="comp ext"
+							x="276"
+							y="70"
+							width="216"
+							height="52"
+							rx="6"
+							fill="rgba(30, 41, 59, 0.5)"
+							stroke="#94a3b8"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="512" y="70" width="216" height="52" rx="6" fill="#0f172a" />
+						<rect
+							class="comp ext"
+							x="512"
+							y="70"
+							width="216"
+							height="52"
+							rx="6"
+							fill="rgba(30, 41, 59, 0.5)"
+							stroke="#94a3b8"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="748" y="70" width="216" height="52" rx="6" fill="#0f172a" />
+						<rect
+							class="comp ext"
+							x="748"
+							y="70"
+							width="216"
+							height="52"
+							rx="6"
+							fill="rgba(30, 41, 59, 0.5)"
+							stroke="#94a3b8"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="984" y="70" width="216" height="52" rx="6" fill="#0f172a" />
+						<rect
+							class="comp ext"
+							x="984"
+							y="70"
+							width="216"
+							height="52"
+							rx="6"
+							fill="rgba(30, 41, 59, 0.5)"
+							stroke="#94a3b8"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="350" y="196" width="540" height="76" rx="6" fill="#0f172a" />
+						<rect
+							class="comp front"
+							x="350"
+							y="196"
+							width="540"
+							height="76"
+							rx="6"
+							fill="rgba(8, 51, 68, 0.4)"
+							stroke="#22d3ee"
+							stroke-width="1.5"
+							stroke-dasharray="5,4"
+						/>
+						<rect class="comp-bg" x="910" y="196" width="270" height="76" rx="6" fill="#0f172a" />
+						<rect
+							class="comp front"
+							x="910"
+							y="196"
+							width="270"
+							height="76"
+							rx="6"
+							fill="rgba(8, 51, 68, 0.4)"
+							stroke="#22d3ee"
+							stroke-width="1.5"
+							stroke-dasharray="5,4"
+						/>
+						<rect class="comp-bg" x="40" y="300" width="270" height="76" rx="6" fill="#0f172a" />
+						<rect
+							class="comp front"
+							x="40"
+							y="300"
+							width="270"
+							height="76"
+							rx="6"
+							fill="rgba(8, 51, 68, 0.4)"
+							stroke="#22d3ee"
+							stroke-width="1.5"
+							stroke-dasharray="5,4"
+						/>
+						<rect class="comp-bg" x="330" y="300" width="270" height="76" rx="6" fill="#0f172a" />
+						<rect
+							class="comp front"
+							x="330"
+							y="300"
+							width="270"
+							height="76"
+							rx="6"
+							fill="rgba(8, 51, 68, 0.4)"
+							stroke="#22d3ee"
+							stroke-width="1.5"
+							stroke-dasharray="5,4"
+						/>
+						<rect class="comp-bg" x="620" y="300" width="270" height="76" rx="6" fill="#0f172a" />
+						<rect
+							class="comp front"
+							x="620"
+							y="300"
+							width="270"
+							height="76"
+							rx="6"
+							fill="rgba(8, 51, 68, 0.4)"
+							stroke="#22d3ee"
+							stroke-width="1.5"
+							stroke-dasharray="5,4"
+						/>
+						<rect class="comp-bg" x="910" y="300" width="270" height="76" rx="6" fill="#0f172a" />
+						<rect
+							class="comp front"
+							x="910"
+							y="300"
+							width="270"
+							height="76"
+							rx="6"
+							fill="rgba(8, 51, 68, 0.4)"
+							stroke="#22d3ee"
+							stroke-width="1.5"
+							stroke-dasharray="5,4"
+						/>
+						<rect class="comp-bg" x="120" y="482" width="250" height="64" rx="6" fill="#0f172a" />
+						<rect
+							class="comp sec"
+							x="120"
+							y="482"
+							width="250"
+							height="64"
+							rx="6"
+							fill="rgba(136, 19, 55, 0.4)"
+							stroke="#fb7185"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="395" y="482" width="250" height="64" rx="6" fill="#0f172a" />
+						<rect
+							class="comp sec"
+							x="395"
+							y="482"
+							width="250"
+							height="64"
+							rx="6"
+							fill="rgba(136, 19, 55, 0.4)"
+							stroke="#fb7185"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="670" y="482" width="250" height="64" rx="6" fill="#0f172a" />
+						<rect
+							class="comp sec"
+							x="670"
+							y="482"
+							width="250"
+							height="64"
+							rx="6"
+							fill="rgba(136, 19, 55, 0.4)"
+							stroke="#fb7185"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="945" y="482" width="250" height="64" rx="6" fill="#0f172a" />
+						<rect
+							class="comp sec"
+							x="945"
+							y="482"
+							width="250"
+							height="64"
+							rx="6"
+							fill="rgba(136, 19, 55, 0.4)"
+							stroke="#fb7185"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="40" y="668" width="1160" height="64" rx="6" fill="#0f172a" />
+						<rect
+							class="comp back"
+							x="40"
+							y="668"
+							width="1160"
+							height="64"
+							rx="6"
+							fill="rgba(6, 78, 59, 0.4)"
+							stroke="#34d399"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="40" y="756" width="275" height="96" rx="6" fill="#0f172a" />
+						<rect
+							class="comp back"
+							x="40"
+							y="756"
+							width="275"
+							height="96"
+							rx="6"
+							fill="rgba(6, 78, 59, 0.4)"
+							stroke="#34d399"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="330" y="756" width="275" height="96" rx="6" fill="#0f172a" />
+						<rect
+							class="comp back"
+							x="330"
+							y="756"
+							width="275"
+							height="96"
+							rx="6"
+							fill="rgba(6, 78, 59, 0.4)"
+							stroke="#34d399"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="620" y="756" width="275" height="96" rx="6" fill="#0f172a" />
+						<rect
+							class="comp db"
+							x="620"
+							y="756"
+							width="275"
+							height="96"
+							rx="6"
+							fill="rgba(76, 29, 149, 0.4)"
+							stroke="#a78bfa"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="910" y="756" width="275" height="96" rx="6" fill="#0f172a" />
+						<rect
+							class="comp sec"
+							x="910"
+							y="756"
+							width="275"
+							height="96"
+							rx="6"
+							fill="rgba(136, 19, 55, 0.4)"
+							stroke="#fb7185"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="40" y="876" width="380" height="96" rx="6" fill="#0f172a" />
+						<rect
+							class="comp back"
+							x="40"
+							y="876"
+							width="380"
+							height="96"
+							rx="6"
+							fill="rgba(6, 78, 59, 0.4)"
+							stroke="#34d399"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="435" y="876" width="380" height="96" rx="6" fill="#0f172a" />
+						<rect
+							class="comp back"
+							x="435"
+							y="876"
+							width="380"
+							height="96"
+							rx="6"
+							fill="rgba(6, 78, 59, 0.4)"
+							stroke="#34d399"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="830" y="876" width="370" height="96" rx="6" fill="#0f172a" />
+						<rect
+							class="comp back"
+							x="830"
+							y="876"
+							width="370"
+							height="96"
+							rx="6"
+							fill="rgba(6, 78, 59, 0.4)"
+							stroke="#34d399"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="37" y="1080" width="110" height="120" rx="6" fill="#0f172a" />
+						<rect
+							class="comp sec"
+							x="37"
+							y="1080"
+							width="110"
+							height="120"
+							rx="6"
+							fill="rgba(136, 19, 55, 0.4)"
+							stroke="#fb7185"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="158" y="1080" width="110" height="120" rx="6" fill="#0f172a" />
+						<rect
+							class="comp sec"
+							x="158"
+							y="1080"
+							width="110"
+							height="120"
+							rx="6"
+							fill="rgba(136, 19, 55, 0.4)"
+							stroke="#fb7185"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="279" y="1080" width="110" height="120" rx="6" fill="#0f172a" />
+						<rect
+							class="comp sec"
+							x="279"
+							y="1080"
+							width="110"
+							height="120"
+							rx="6"
+							fill="rgba(136, 19, 55, 0.4)"
+							stroke="#fb7185"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="400" y="1080" width="110" height="120" rx="6" fill="#0f172a" />
+						<rect
+							class="comp sec"
+							x="400"
+							y="1080"
+							width="110"
+							height="120"
+							rx="6"
+							fill="rgba(136, 19, 55, 0.4)"
+							stroke="#fb7185"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="521" y="1080" width="110" height="120" rx="6" fill="#0f172a" />
+						<rect
+							class="comp sec"
+							x="521"
+							y="1080"
+							width="110"
+							height="120"
+							rx="6"
+							fill="rgba(136, 19, 55, 0.4)"
+							stroke="#fb7185"
+							stroke-width="1.5"
+						/>
+						<rect class="comp-bg" x="682" y="1080" width="120" height="120" rx="6" fill="#0f172a" />
+						<rect
+							class="comp notyet"
+							x="682"
+							y="1080"
+							width="120"
+							height="120"
+							rx="6"
+							fill="rgba(120, 53, 15, 0.3)"
+							stroke="#fbbf24"
+							stroke-width="1.5"
+							stroke-dasharray="5,4"
+						/>
+						<rect class="comp-bg" x="813" y="1080" width="120" height="120" rx="6" fill="#0f172a" />
+						<rect
+							class="comp notyet"
+							x="813"
+							y="1080"
+							width="120"
+							height="120"
+							rx="6"
+							fill="rgba(120, 53, 15, 0.3)"
+							stroke="#fbbf24"
+							stroke-width="1.5"
+							stroke-dasharray="5,4"
+						/>
+						<rect class="comp-bg" x="944" y="1080" width="120" height="120" rx="6" fill="#0f172a" />
+						<rect
+							class="comp notyet"
+							x="944"
+							y="1080"
+							width="120"
+							height="120"
+							rx="6"
+							fill="rgba(120, 53, 15, 0.3)"
+							stroke="#fbbf24"
+							stroke-width="1.5"
+							stroke-dasharray="5,4"
+						/>
+						<rect class="comp-bg" x="1075" y="1080" width="120" height="120" rx="6" fill="#0f172a" />
+						<rect
+							class="comp notyet"
+							x="1075"
+							y="1080"
+							width="120"
+							height="120"
+							rx="6"
+							fill="rgba(120, 53, 15, 0.3)"
+							stroke="#fbbf24"
+							stroke-width="1.5"
+							stroke-dasharray="5,4"
+						/>
+					</g>
+					<g id="labels">
+						<text class="t-boundary" x="39" y="60" fill="#cbd5e1" font-size="10" font-weight="600" text-anchor="start">
+							1 · the outside world — none of this is reachable from inside the module
+						</text>
+						<text class="t-in-box" x="148" y="88" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">the relay</text>
+						<text class="t-in-box" x="148" y="102" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">
+							wss://… never contacted
+						</text>
+						<text class="t-in-box" x="148" y="114" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">
+							by this module
+						</text>
+						<text class="t-in-box" x="384" y="88" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							a remote signer / bunker
+						</text>
+						<text class="t-in-box" x="384" y="102" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">
+							the far side of the NIP-46
+						</text>
+						<text class="t-in-box" x="384" y="114" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">conversation</text>
+						<text class="t-in-box" x="620" y="88" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							a browser extension
+						</text>
+						<text class="t-in-box" x="620" y="102" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">
+							NIP-07. reaches the module
+						</text>
+						<text class="t-in-box" x="620" y="114" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">
+							only as an injected argument
+						</text>
+						<text class="t-in-box" x="856" y="88" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							the OS keychain / browser store
+						</text>
+						<text class="t-in-box" x="856" y="102" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">
+							where a session record may
+						</text>
+						<text class="t-in-box" x="856" y="114" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">
+							sit, encrypted at rest
+						</text>
+						<text class="t-in-box" x="1092" y="88" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							the host itself
+						</text>
+						<text class="t-in-box" x="1092" y="102" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">
+							its timers, its WebCrypto,
+						</text>
+						<text class="t-in-box" x="1092" y="114" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="middle">
+							its relay layer
+						</text>
+						<text class="t-boundary" x="39" y="190" fill="#fbbf24" font-size="10" font-weight="600" text-anchor="start">
+							2 · the consumer's side — nothing in this band exists yet
+						</text>
+						<text class="t-in-box" x="620" y="216" fill="#ffffff" font-size="10.5" font-weight="600" text-anchor="middle">
+							the future consumer — DOES NOT EXIST YET
+						</text>
+						<text class="t-in-box" x="620" y="234" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							A marketplace app, or a CLI that builds a signer from a key with no session.
+						</text>
+						<text class="t-in-box" x="620" y="248" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							Nothing imports this module. The market's 90 .sign( call sites are the checklist
+						</text>
+						<text class="t-in-box" x="620" y="262" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							waiting for whoever wires it — and this build does not wire it.
+						</text>
+						<text class="t-in-box" x="1045" y="216" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							passed in as arguments
+						</text>
+						<text class="t-in-box" x="1045" y="234" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							the NIP-07 extension object,
+						</text>
+						<text class="t-in-box" x="1045" y="248" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							the passphrase source. Never a
+						</text>
+						<text class="t-in-box" x="1045" y="262" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							global, never a lookup.
+						</text>
+						<text class="t-in-box" x="175" y="320" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							the storage adapter
+						</text>
+						<text class="t-in-box" x="175" y="338" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							the host's key/value store:
+						</text>
+						<text class="t-in-box" x="175" y="352" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							browser store, a file, a
+						</text>
+						<text class="t-in-box" x="175" y="366" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							device keystore or nothing
+						</text>
+						<text class="t-in-box" x="465" y="320" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							the transport adapter
+						</text>
+						<text class="t-in-box" x="465" y="338" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							the host's relay layer: a pool,
+						</text>
+						<text class="t-in-box" x="465" y="352" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							a websocket, a subscription
+						</text>
+						<text class="t-in-box" x="465" y="366" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							source and a publish call
+						</text>
+						<text class="t-in-box" x="755" y="320" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							the clock adapter
+						</text>
+						<text class="t-in-box" x="755" y="338" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							the host's timers, so that a
+						</text>
+						<text class="t-in-box" x="755" y="352" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							deadline is drivable in a
+						</text>
+						<text class="t-in-box" x="755" y="366" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							test and in a real host
+						</text>
+						<text class="t-in-box" x="1045" y="320" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							the crypto adapter
+						</text>
+						<text class="t-in-box" x="1045" y="338" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							the host's WebCrypto:
+						</text>
+						<text class="t-in-box" x="1045" y="352" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							randomness, PBKDF2-SHA256,
+						</text>
+						<text class="t-in-box" x="1045" y="366" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">AES-GCM-256</text>
+						<text class="t-free" x="40" y="404" fill="#fbbf24" font-size="7.5" font-weight="400" text-anchor="start">
+							None of these four adapters exists in this build: the module ships no host implementation of any port.
+						</text>
+						<text class="t-boundary" x="39" y="470" fill="#fb7185" font-size="10" font-weight="600" text-anchor="start">
+							3 · the ports — the only door in: everything environmental arrives here, and nothing else
+						</text>
+						<text class="t-in-box" x="245" y="502" fill="#ffffff" font-size="11" font-weight="600" text-anchor="middle">StoragePort</text>
+						<text class="t-in-box" x="245" y="519" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							getItem · setItem · removeItem
+						</text>
+						<text class="t-in-box" x="245" y="532" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							the encrypted record lives here
+						</text>
+						<text class="t-in-box" x="520" y="502" fill="#ffffff" font-size="11" font-weight="600" text-anchor="middle">TransportPort</text>
+						<text class="t-in-box" x="520" y="519" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							subscription(relays, filters)
+						</text>
+						<text class="t-in-box" x="520" y="532" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							publish(relays, event)
+						</text>
+						<text class="t-in-box" x="795" y="502" fill="#ffffff" font-size="11" font-weight="600" text-anchor="middle">ClockPort</text>
+						<text class="t-in-box" x="795" y="519" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							setTimeout · clearTimeout
+						</text>
+						<text class="t-in-box" x="795" y="532" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							every deadline comes from it
+						</text>
+						<text class="t-in-box" x="1070" y="502" fill="#ffffff" font-size="11" font-weight="600" text-anchor="middle">CryptoPort</text>
+						<text class="t-in-box" x="1070" y="519" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							randomBytes · pbkdf2Sha256
+						</text>
+						<text class="t-in-box" x="1070" y="532" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							aesGcmEncrypt/Decrypt · utf8
+						</text>
+						<text class="t-free" x="40" y="558" fill="#94a3b8" font-size="7.5" font-weight="400" text-anchor="start">
+							+ the same seam carries two more injected values as plain arguments: the NIP-07 extension object, and the passphrase source.
+						</text>
+						<text class="t-boundary" x="39" y="630" fill="#34d399" font-size="10" font-weight="600" text-anchor="start">
+							4 · inside the module — it owns no environment
+						</text>
+						<text class="t-free" x="40" y="655" fill="#34d399" font-size="7.5" font-weight="400" text-anchor="start">
+							isolation, measured over all 15 .ts files in signer/ts: 0 × localStorage · sessionStorage · indexedDB · window. · document. ·
+							navigator. · React · @nostr-dev-kit · @/
+						</text>
+						<text class="t-in-box" x="620" y="690" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							index.ts — the public entry: the contract's surface
+						</text>
+						<text class="t-in-box" x="620" y="708" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							createSignerSession(deps) · createSignerFromKey(material) · the 13 operations · the 13 typed refusals
+						</text>
+						<text class="t-in-box" x="620" y="722" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							24 value exports (13 typed refusals + the 5 record constants) · 27 type exports — nothing else
+						</text>
+						<text class="t-in-box" x="177.5" y="778" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							session.ts — the session lifecycle
+						</text>
+						<text class="t-in-box" x="177.5" y="797" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							8 states: idle · connecting · awaiting_user
+						</text>
+						<text class="t-in-box" x="177.5" y="811" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							active · locked · restoring · closing · failed
+						</text>
+						<text class="t-in-box" x="177.5" y="825" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							refused: active without a resolved identity
+						</text>
+						<text class="t-in-box" x="177.5" y="839" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							refused: a second capability while one is attached
+						</text>
+						<text class="t-in-box" x="467.5" y="778" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							capability.ts — the capability policy
+						</text>
+						<text class="t-in-box" x="467.5" y="797" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							the identity is learned only through getPublicKey()
+						</text>
+						<text class="t-in-box" x="467.5" y="811" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							every event is re-verified and its pubkey compared
+						</text>
+						<text class="t-in-box" x="467.5" y="825" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							nip04/nip44 offered only if the signer has it AND
+						</text>
+						<text class="t-in-box" x="467.5" y="839" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							the composer's allow-list permits it — else refuse
+						</text>
+						<text class="t-in-box" x="757.5" y="778" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							vault.ts — the encrypted record
+						</text>
+						<text class="t-in-box" x="757.5" y="797" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							PBKDF2-SHA256 600k → AES-GCM-256 envelope
+						</text>
+						<text class="t-in-box" x="757.5" y="811" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							no session is ever stored in the clear, ever
+						</text>
+						<text class="t-in-box" x="757.5" y="825" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							floor: 100k iterations accepted, below that refused
+						</text>
+						<text class="t-in-box" x="757.5" y="839" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							a legacy plaintext record: migrate once, or re-login
+						</text>
+						<text class="t-in-box" x="1047.5" y="778" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							errors.ts — the typed refusals
+						</text>
+						<text class="t-in-box" x="1047.5" y="797" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							13 typed refusals over one base SignerError
+						</text>
+						<text class="t-in-box" x="1047.5" y="811" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							no bare strings, no silent fallback anywhere
+						</text>
+						<text class="t-in-box" x="1047.5" y="825" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							e.g. TransportRequiredError · ClockRequiredError
+						</text>
+						<text class="t-in-box" x="1047.5" y="839" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							CapabilityUnavailableError · IdentityMismatchError
+						</text>
+						<text class="t-in-box" x="230" y="898" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							lanes.ts — the five ways in
+						</text>
+						<text class="t-in-box" x="230" y="917" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							extension (NIP-07, injected) · nsec · ncryptsec (NIP-49)
+						</text>
+						<text class="t-in-box" x="230" y="931" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							bunker:// · nostrconnect:// — both need transport + clock
+						</text>
+						<text class="t-in-box" x="230" y="945" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							an ncryptsec signer that is locked rejects fast, never hangs
+						</text>
+						<text class="t-in-box" x="230" y="959" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							the extension is an argument: the module reads no window.*
+						</text>
+						<text class="t-in-box" x="625" y="898" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							nip46.ts — the NIP-46 lanes
+						</text>
+						<text class="t-in-box" x="625" y="917" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							strict bind: a bare 'ack' is dropped, the secret must match (I1)
+						</text>
+						<text class="t-in-box" x="625" y="931" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							the remote signer's key stays separate from the identity (I2)
+						</text>
+						<text class="t-in-box" x="625" y="945" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							every RPC is bounded by the injected clock: 30s RPC, 5min connect
+						</text>
+						<text class="t-in-box" x="1015" y="898" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">
+							uri.ts — the connect URI
+						</text>
+						<text class="t-in-box" x="1015" y="917" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							the secret travels in secret=, never in token=
+						</text>
+						<text class="t-in-box" x="1015" y="931" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							a legacy token-only URI is refused
+						</text>
+						<text class="t-in-box" x="1015" y="945" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							the URI goes to the caller's own callback
+						</text>
+						<text class="t-in-box" x="1015" y="959" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="middle">
+							it carries the secret, so it never enters a snapshot
+						</text>
+						<text class="t-boundary" x="39" y="1060" fill="#fb7185" font-size="10" font-weight="600" text-anchor="start">
+							5 · what it guarantees — the five invariants
+						</text>
+						<text class="t-in-box" x="92" y="1100" fill="#ffffff" font-size="9" font-weight="600" text-anchor="middle">I1</text>
+						<text class="t-in-box" x="92" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							the connect secret is
+						</text>
+						<text class="t-in-box" x="92" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							validated before any
+						</text>
+						<text class="t-in-box" x="92" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							binding: a bare 'ack'
+						</text>
+						<text class="t-in-box" x="92" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							never binds a remote
+						</text>
+						<text class="t-in-box" x="213" y="1100" fill="#ffffff" font-size="9" font-weight="600" text-anchor="middle">I2</text>
+						<text class="t-in-box" x="213" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							the remote signer's
+						</text>
+						<text class="t-in-box" x="213" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							key is not the user.
+						</text>
+						<text class="t-in-box" x="213" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							the identity is read
+						</text>
+						<text class="t-in-box" x="213" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">only through</text>
+						<text class="t-in-box" x="213" y="1174" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							getPublicKey()
+						</text>
+						<text class="t-in-box" x="334" y="1100" fill="#ffffff" font-size="9" font-weight="600" text-anchor="middle">I3</text>
+						<text class="t-in-box" x="334" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							a signed event must
+						</text>
+						<text class="t-in-box" x="334" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							verify AND belong to
+						</text>
+						<text class="t-in-box" x="334" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							the resolved identity,
+						</text>
+						<text class="t-in-box" x="334" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							or it fails closed
+						</text>
+						<text class="t-in-box" x="455" y="1100" fill="#ffffff" font-size="9" font-weight="600" text-anchor="middle">I4</text>
+						<text class="t-in-box" x="455" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							NIP-44 is only ever
+						</text>
+						<text class="t-in-box" x="455" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							what the signer has
+						</text>
+						<text class="t-in-box" x="455" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							and the allow-list
+						</text>
+						<text class="t-in-box" x="455" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							permits — never
+						</text>
+						<text class="t-in-box" x="455" y="1174" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							synthesised locally
+						</text>
+						<text class="t-in-box" x="576" y="1100" fill="#ffffff" font-size="9" font-weight="600" text-anchor="middle">I5</text>
+						<text class="t-in-box" x="576" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							no session secret
+						</text>
+						<text class="t-in-box" x="576" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							is ever silently
+						</text>
+						<text class="t-in-box" x="576" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							plaintext: encrypted
+						</text>
+						<text class="t-in-box" x="576" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							at rest, migrated or
+						</text>
+						<text class="t-in-box" x="576" y="1174" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							an intentional login
+						</text>
+						<text class="t-boundary" x="684" y="1060" fill="#fbbf24" font-size="10" font-weight="600" text-anchor="start">
+							5b · what it does NOT ship, yet
+						</text>
+						<text class="t-in-box" x="742" y="1100" fill="#ffffff" font-size="8" font-weight="600" text-anchor="middle">
+							no host adapters
+						</text>
+						<text class="t-in-box" x="742" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							no storage, relay, clock
+						</text>
+						<text class="t-in-box" x="742" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							or crypto adapter ships
+						</text>
+						<text class="t-in-box" x="742" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							here — only the module's
+						</text>
+						<text class="t-in-box" x="742" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							own test harness has any
+						</text>
+						<text class="t-in-box" x="873" y="1100" fill="#ffffff" font-size="8" font-weight="600" text-anchor="middle">
+							no relay contacted
+						</text>
+						<text class="t-in-box" x="873" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							NIP-46 runs against an
+						</text>
+						<text class="t-in-box" x="873" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							in-process remote-signer
+						</text>
+						<text class="t-in-box" x="873" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							emulator: a real relay
+						</text>
+						<text class="t-in-box" x="873" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							was never opened
+						</text>
+						<text class="t-in-box" x="1004" y="1100" fill="#ffffff" font-size="8" font-weight="600" text-anchor="middle">
+							one implementation
+						</text>
+						<text class="t-in-box" x="1004" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							no Rust, Flutter or
+						</text>
+						<text class="t-in-box" x="1004" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							Angular version has met
+						</text>
+						<text class="t-in-box" x="1004" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							this spec — and nothing
+						</text>
+						<text class="t-in-box" x="1004" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							proves it is portable
+						</text>
+						<text class="t-in-box" x="1135" y="1100" fill="#ffffff" font-size="8" font-weight="600" text-anchor="middle">no consumer</text>
+						<text class="t-in-box" x="1135" y="1118" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							nothing imports this
+						</text>
+						<text class="t-in-box" x="1135" y="1132" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							module; the market's own
+						</text>
+						<text class="t-in-box" x="1135" y="1146" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							signer code is untouched
+						</text>
+						<text class="t-in-box" x="1135" y="1160" fill="#94a3b8" font-size="7" font-weight="400" text-anchor="middle">
+							and this build left it so
+						</text>
+						<text class="t-legend" x="40" y="1258" fill="#ffffff" font-size="10" font-weight="600" text-anchor="start">Legend</text>
+						<text class="t-legend" x="64" y="1270" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">
+							the consumer's side — adapters, the future consumer
+						</text>
+						<text class="t-legend" x="364" y="1270" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">
+							the module's own code
+						</text>
+						<text class="t-legend" x="664" y="1270" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">
+							the encrypted record at rest
+						</text>
+						<text class="t-legend" x="964" y="1270" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">
+							fail-closed: the door, the refusals, the guarantees
+						</text>
+						<text class="t-legend" x="64" y="1300" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">
+							the outside world — never reached by the module
+						</text>
+						<text class="t-legend" x="364" y="1300" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">
+							solid = a call the module makes / an implementation
+						</text>
+						<text class="t-legend" x="664" y="1300" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">
+							rose dashed = a fail-closed refusal path
+						</text>
+						<text class="t-legend" x="964" y="1300" fill="#94a3b8" font-size="8" font-weight="400" text-anchor="start">
+							amber dashed = declared, not yet exercised
+						</text>
+					</g>
+					<g id="legend">
+						<rect
+							class="legend-swatch"
+							x="40"
+							y="1262"
+							width="16"
+							height="10"
+							rx="2"
+							fill="rgba(8, 51, 68, 0.4)"
+							stroke="#22d3ee"
+							stroke-width="1"
+						/>
+						<rect
+							class="legend-swatch"
+							x="340"
+							y="1262"
+							width="16"
+							height="10"
+							rx="2"
+							fill="rgba(6, 78, 59, 0.4)"
+							stroke="#34d399"
+							stroke-width="1"
+						/>
+						<rect
+							class="legend-swatch"
+							x="640"
+							y="1262"
+							width="16"
+							height="10"
+							rx="2"
+							fill="rgba(76, 29, 149, 0.4)"
+							stroke="#a78bfa"
+							stroke-width="1"
+						/>
+						<rect
+							class="legend-swatch"
+							x="940"
+							y="1262"
+							width="16"
+							height="10"
+							rx="2"
+							fill="rgba(136, 19, 55, 0.4)"
+							stroke="#fb7185"
+							stroke-width="1"
+						/>
+						<rect
+							class="legend-swatch"
+							x="40"
+							y="1292"
+							width="16"
+							height="10"
+							rx="2"
+							fill="rgba(30, 41, 59, 0.5)"
+							stroke="#94a3b8"
+							stroke-width="1"
+						/>
+						<line class="legend-swatch" x1="340" y1="1297" x2="356" y2="1297" stroke="#94a3b8" stroke-width="1.5" />
+						<line class="legend-swatch" x1="640" y1="1297" x2="656" y2="1297" stroke="#fb7185" stroke-width="1.5" />
+						<rect
+							class="legend-swatch"
+							x="940"
+							y="1292"
+							width="16"
+							height="10"
+							rx="2"
+							fill="rgba(120, 53, 15, 0.3)"
+							stroke="#fbbf24"
+							stroke-width="1"
+							stroke-dasharray="3,3"
+						/>
+					</g>
+					<g id="arrow-labels">
+						<text class="t-arrow" x="182" y="424" fill="#22d3ee" font-size="7" text-anchor="start">implements</text>
+						<text class="t-arrow" x="472" y="424" fill="#22d3ee" font-size="7" text-anchor="start">implements</text>
+						<text class="t-arrow" x="762" y="424" fill="#22d3ee" font-size="7" text-anchor="start">implements</text>
+						<text class="t-arrow" x="1052" y="424" fill="#22d3ee" font-size="7" text-anchor="start">implements</text>
+						<text class="t-arrow" x="1056" y="578" fill="#fb7185" font-size="7" text-anchor="start">the module calls it</text>
+						<text class="t-arrow" x="36" y="602" fill="#fb7185" font-size="7.5" text-anchor="start">
+							✕ the module never reaches the outside world
+						</text>
+						<text class="t-arrow" x="620" y="190" fill="#94a3b8" font-size="7.5" text-anchor="start">
+							the outside world stops at the consumer's territory
+						</text>
+					</g>
+				</svg>
+			</div>
 
-    <div class="cards">
-      <div class="card">
-        <div class="card-header"><div class="card-dot emerald"></div><h3>What the module owns</h3></div>
-        <ul>
-          <li>&bull; <span class="tag">The contract:</span> thirteen session operations and one session-less entry, as plain values and typed errors</li>
-          <li>&bull; <span class="tag">The lanes:</span> extension (NIP-07), nsec, ncryptsec (NIP-49), bunker:// and nostrconnect:// (NIP-46)</li>
-          <li>&bull; <span class="tag">The state machine:</span> eight states, allowed transitions only, never active without a resolved identity</li>
-          <li>&bull; <span class="tag">The capability policy:</span> nip04/nip44 present only when the signer has them <em>and</em> the composer allows them</li>
-          <li>&bull; <span class="tag">The record's format and its floor:</span> PBKDF2-SHA256 600k &rarr; AES-GCM-256, 100k accepted when unlocking</li>
-          <li>&bull; <span class="tag">The refusal vocabulary:</span> thirteen typed refusals over one base error, one per fail-closed path</li>
-          <li>&bull; Its own dependency declaration, compiler configuration and test invocation &mdash; 9 implementation files, 1,997 lines</li>
-        </ul>
-      </div>
+			<div class="cards">
+				<div class="card">
+					<div class="card-header">
+						<div class="card-dot emerald"></div>
+						<h3>What the module owns</h3>
+					</div>
+					<ul>
+						<li>
+							&bull; <span class="tag">The contract:</span> thirteen session operations and one session-less entry, as plain values and
+							typed errors
+						</li>
+						<li>
+							&bull; <span class="tag">The lanes:</span> extension (NIP-07), nsec, ncryptsec (NIP-49), bunker:// and nostrconnect://
+							(NIP-46)
+						</li>
+						<li>
+							&bull; <span class="tag">The state machine:</span> eight states, allowed transitions only, never active without a resolved
+							identity
+						</li>
+						<li>
+							&bull; <span class="tag">The capability policy:</span> nip04/nip44 present only when the signer has them <em>and</em> the
+							composer allows them
+						</li>
+						<li>
+							&bull; <span class="tag">The record's format and its floor:</span> PBKDF2-SHA256 600k &rarr; AES-GCM-256, 100k accepted when
+							unlocking
+						</li>
+						<li>
+							&bull; <span class="tag">The refusal vocabulary:</span> thirteen typed refusals over one base error, one per fail-closed path
+						</li>
+						<li>
+							&bull; Its own dependency declaration, compiler configuration and test invocation &mdash; 9 implementation files, 1,997 lines
+						</li>
+					</ul>
+				</div>
 
-      <div class="card">
-        <div class="card-header"><div class="card-dot rose"></div><h3>What it refuses to own</h3></div>
-        <ul>
-          <li>&bull; <span class="tag">No framework:</span> no component library, no store library, no hook used as an interface</li>
-          <li>&bull; <span class="tag">No host storage or runtime:</span> no browser key/value store, no IndexedDB, no browser global, no file path, no host timer, no host crypto call</li>
-          <li>&bull; <span class="tag">No relay I/O and no relay policy:</span> no relay URLs, no kind filters, no publish semantics</li>
-          <li>&bull; <span class="tag">No host alias:</span> every import is module-relative or a declared dependency</li>
-          <li>&bull; <span class="tag">No UI copy, no product questions, no marketplace event kinds</span> &mdash; the signer does not know what it signs</li>
-          <li>&bull; <span class="tag">No raw private key on the public surface</span>, except the explicit construct-on-key entry</li>
-          <li>&bull; <span class="tag">No environment at all.</span> Storage, transport, timers and crypto primitives are ports; the extension is an argument, not a global</li>
-        </ul>
-      </div>
+				<div class="card">
+					<div class="card-header">
+						<div class="card-dot rose"></div>
+						<h3>What it refuses to own</h3>
+					</div>
+					<ul>
+						<li>&bull; <span class="tag">No framework:</span> no component library, no store library, no hook used as an interface</li>
+						<li>
+							&bull; <span class="tag">No host storage or runtime:</span> no browser key/value store, no IndexedDB, no browser global, no
+							file path, no host timer, no host crypto call
+						</li>
+						<li>&bull; <span class="tag">No relay I/O and no relay policy:</span> no relay URLs, no kind filters, no publish semantics</li>
+						<li>&bull; <span class="tag">No host alias:</span> every import is module-relative or a declared dependency</li>
+						<li>
+							&bull; <span class="tag">No UI copy, no product questions, no marketplace event kinds</span> &mdash; the signer does not know
+							what it signs
+						</li>
+						<li>&bull; <span class="tag">No raw private key on the public surface</span>, except the explicit construct-on-key entry</li>
+						<li>
+							&bull; <span class="tag">No environment at all.</span> Storage, transport, timers and crypto primitives are ports; the
+							extension is an argument, not a global
+						</li>
+					</ul>
+				</div>
 
-      <div class="card">
-        <div class="card-header"><div class="card-dot amber"></div><h3>What is proven &mdash; and what is not</h3></div>
-        <ul>
-          <li>&bull; <span class="tag">Proven:</span> 79 test cases in 5 files, all green; the module's own typecheck clean</li>
-          <li>&bull; <span class="tag">Proven:</span> the isolation greps at 0 &mdash; no host storage, no browser global, no framework, no host alias</li>
-          <li>&bull; <span class="tag">Proven:</span> 7 mutations, one per claimed invariant, each making its <em>named</em> test fail, each restored byte-for-byte and proved by hash</li>
-          <li>&bull; <span class="tag">Specified, not exercised:</span> no relay was ever contacted &mdash; the NIP-46 lanes run against an in-process remote-signer emulator</li>
-          <li>&bull; <span class="tag">Specified, not exercised:</span> no consumer, no host adapter, no second implementation</li>
-          <li>&bull; <span class="tag">Judged, not measured:</span> that the record format matches the market's existing records &mdash; no such record was available to read here</li>
-          <li>&bull; <span class="tag">So:</span> a first implementation with a hypothetical consumer. Nothing here proves the contract is usable by a real composer</li>
-        </ul>
-      </div>
-    </div>
+				<div class="card">
+					<div class="card-header">
+						<div class="card-dot amber"></div>
+						<h3>What is proven &mdash; and what is not</h3>
+					</div>
+					<ul>
+						<li>&bull; <span class="tag">Proven:</span> 79 test cases in 5 files, all green; the module's own typecheck clean</li>
+						<li>
+							&bull; <span class="tag">Proven:</span> the isolation greps at 0 &mdash; no host storage, no browser global, no framework, no
+							host alias
+						</li>
+						<li>
+							&bull; <span class="tag">Proven:</span> 7 mutations, one per claimed invariant, each making its <em>named</em> test fail, each
+							restored byte-for-byte and proved by hash
+						</li>
+						<li>
+							&bull; <span class="tag">Specified, not exercised:</span> no relay was ever contacted &mdash; the NIP-46 lanes run against an
+							in-process remote-signer emulator
+						</li>
+						<li>&bull; <span class="tag">Specified, not exercised:</span> no consumer, no host adapter, no second implementation</li>
+						<li>
+							&bull; <span class="tag">Judged, not measured:</span> that the record format matches the market's existing records &mdash; no
+							such record was available to read here
+						</li>
+						<li>
+							&bull; <span class="tag">So:</span> a first implementation with a hypothetical consumer. Nothing here proves the contract is
+							usable by a real composer
+						</li>
+					</ul>
+				</div>
+			</div>
 
-    <p class="footer">
-      signer &middot; first implementation (TypeScript, signer/ts/) &middot; spec signer/signer.md &middot;
-      79 tests in 5 files &middot; harvested from PlebeianApp/market@4bc7f8c0<br>
-      No relay contacted &middot; no host adapter shipped &middot; one implementation only &middot; nothing imports this module
-    </p>
-  </div>
-</body>
+			<p class="footer">
+				signer &middot; first implementation (TypeScript, signer/ts/) &middot; spec signer/signer.md &middot; 79 tests in 5 files &middot;
+				harvested from PlebeianApp/market@4bc7f8c0<br />
+				No relay contacted &middot; no host adapter shipped &middot; one implementation only &middot; nothing imports this module
+			</p>
+		</div>
+	</body>
 </html>

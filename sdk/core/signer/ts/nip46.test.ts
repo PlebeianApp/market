@@ -25,35 +25,22 @@ import {
 	settle,
 	userTemplate,
 } from './harness'
-import {
-	connectBunkerSigner,
-	createNostrConnectClient,
-	rehydrateNostrConnectSession,
-	withRpcTimeout,
-} from './nip46'
+import { connectBunkerSigner, createNostrConnectClient, rehydrateNostrConnectSession, withRpcTimeout } from './nip46'
 
 describe('the injected environment', () => {
 	test('a NIP-46 lane without an injected transport refuses instead of reaching for a host default', async () => {
 		const clock = manualClock()
 
-		expect(() => createNostrConnectClient({ relays: [RELAY], clientKeyHex: CLIENT_SK })).toThrow(
-			TransportRequiredError,
-		)
+		expect(() => createNostrConnectClient({ relays: [RELAY], clientKeyHex: CLIENT_SK })).toThrow(TransportRequiredError)
 		await expect(connectBunkerSigner(bunkerUrl(), { clock })).rejects.toThrow(/injected transport/i)
-		await expect(rehydrateNostrConnectSession(makeNbunksec(), { clock })).rejects.toThrow(
-			/injected transport/i,
-		)
+		await expect(rehydrateNostrConnectSession(makeNbunksec(), { clock })).rejects.toThrow(/injected transport/i)
 	})
 
 	test('a NIP-46 lane without an injected clock refuses instead of reaching for a global timer', async () => {
 		const transport = bunkerTransport({ expectSecret: BUNKER_SECRET })
 
-		await expect(connectBunkerSigner(bunkerUrl(), { transport: transport.pool })).rejects.toThrow(
-			ClockRequiredError,
-		)
-		await expect(
-			rehydrateNostrConnectSession(makeNbunksec(), { transport: transport.pool }),
-		).rejects.toThrow(/injected clock/i)
+		await expect(connectBunkerSigner(bunkerUrl(), { transport: transport.pool })).rejects.toThrow(ClockRequiredError)
+		await expect(rehydrateNostrConnectSession(makeNbunksec(), { transport: transport.pool })).rejects.toThrow(/injected clock/i)
 	})
 
 	test('rehydrate resolves the user identity through the real connect RPC, not the client key', async () => {
@@ -92,9 +79,7 @@ describe('the deadline wrapper', () => {
 
 	test('does not swallow an underlying rejection', async () => {
 		const clock = manualClock()
-		await expect(
-			withRpcTimeout(clock, 'connect', Promise.reject(new Error('bunker refused')), 10_000),
-		).rejects.toThrow('bunker refused')
+		await expect(withRpcTimeout(clock, 'connect', Promise.reject(new Error('bunker refused')), 10_000)).rejects.toThrow('bunker refused')
 	})
 })
 

@@ -191,9 +191,7 @@ class Session implements SignerSession {
 	private transition(next: SessionState, reason?: string): void {
 		if (next === this.state) return
 		if (!ALLOWED[this.state].includes(next)) {
-			throw new InvalidTransitionError(
-				`Refused: ${this.state} → ${next}${reason ? ` (${reason})` : ''}`,
-			)
+			throw new InvalidTransitionError(`Refused: ${this.state} → ${next}${reason ? ` (${reason})` : ''}`)
 		}
 		this.state = next
 		this.reason = next === 'failed' ? reason : undefined
@@ -258,10 +256,7 @@ class Session implements SignerSession {
 	private async passphrase(): Promise<string | undefined> {
 		const source = this.settings.sessionAtRest?.passphrase ?? this.ports.passphrase
 		if (source === undefined) return undefined
-		const value =
-			typeof source === 'function'
-				? await this.guard('passphrase', 'the passphrase source', () => source())
-				: source
+		const value = typeof source === 'function' ? await this.guard('passphrase', 'the passphrase source', () => source()) : source
 		return value && value.length > 0 ? value : undefined
 	}
 
@@ -316,15 +311,9 @@ class Session implements SignerSession {
 	// -- attach / activate ---------------------------------------------------
 
 	/** The one place a capability becomes the session's: bound, identity resolved first (I2). */
-	private async activate(
-		capability: SignerCapability,
-		lane: LaneKind | undefined,
-		attempt?: number,
-	): Promise<SessionSnapshot> {
+	private async activate(capability: SignerCapability, lane: LaneKind | undefined, attempt?: number): Promise<SessionSnapshot> {
 		if (attempt !== undefined && attempt !== this.attempt) {
-			throw new InvalidTransitionError(
-				`Refused: the ${lane ?? 'attached'} attempt was abandoned before it could activate the session`,
-			)
+			throw new InvalidTransitionError(`Refused: the ${lane ?? 'attached'} attempt was abandoned before it could activate the session`)
 		}
 		if (this.capability) throw new SessionAttachedError()
 		if (!isSignerCapability(capability)) {
@@ -336,9 +325,7 @@ class Session implements SignerSession {
 			pubkey = await bound.getPublicKey()
 		} catch (cause) {
 			throw new IdentityUnresolvedError(
-				`The ${lane ?? 'attached'} lane did not resolve an identity: ${
-					cause instanceof Error ? cause.message : String(cause)
-				}`,
+				`The ${lane ?? 'attached'} lane did not resolve an identity: ${cause instanceof Error ? cause.message : String(cause)}`,
 			)
 		}
 		if (!ALLOWED[this.state].includes('active')) {
@@ -460,9 +447,7 @@ class Session implements SignerSession {
 				}
 				case 'nostrconnect': {
 					if (!input.onAuthUrl) {
-						throw new LaneUnavailableError(
-							'The nostrconnect lane needs a sink for the connect URI (it carries the secret)',
-						)
+						throw new LaneUnavailableError('The nostrconnect lane needs a sink for the connect URI (it carries the secret)')
 					}
 					// Both ports are required before anything is built — in particular
 					// before the URI reaches the caller's sink. The URI carries the
@@ -618,9 +603,7 @@ class Session implements SignerSession {
 		if (!deps) return
 		const passphrase = await this.passphrase()
 		if (!passphrase) return
-		await this.guard('storage', 'saveVaultedSession', () =>
-			vault.saveVaultedSession(nbunksec, passphrase, this.wrapOptions(), deps),
-		)
+		await this.guard('storage', 'saveVaultedSession', () => vault.saveVaultedSession(nbunksec, passphrase, this.wrapOptions(), deps))
 		this.record = 'vaulted'
 		// Persisting happens after the session is active, so the record kind is
 		// announced: an observer that saw `active` must be able to see that the

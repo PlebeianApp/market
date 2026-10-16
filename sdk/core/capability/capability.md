@@ -5,7 +5,7 @@ schema: architecture
 applies: core@0.1
 inherits: []
 implements:
-  - "#32b372"
+  - '#32b372'
 opt-out: []
 test-support:
   - ts/*.test.ts
@@ -52,7 +52,7 @@ source:
 
 # capability — the one place an interface binds to a runtime id
 
-**The problem this module removes.** A capability is asked for by id at run time, but its *interface*
+**The problem this module removes.** A capability is asked for by id at run time, but its _interface_
 only exists at compile time. If each call site performs its own cast, the binding between the two lives
 at every call site and is wrong wherever a cast is careless. This module exists so the binding happens
 **once**: a module declares a token beside the interface it names, and a consumer asks for the token and
@@ -64,7 +64,7 @@ receives `C` — never `unknown`, and never through a cast of its own.
   about it, and the app must not learn a plugin's name, only the id a token was minted with.
 - **`CapabilityToken<C>`** — the runtime id **and** the interface it satisfies. It carries a phantom
   marker in `C` that is never read at run time and never present in a value: it exists so that two tokens
-  with the same id but a different interface are different *types*, which is what makes the token
+  with the same id but a different interface are different _types_, which is what makes the token
   genuinely bind its interface rather than merely name it.
 - **`capabilityToken<C>(id, name)`** — mint a token. This is the **single cast the model permits**, and
   the declaring module supplies the type parameter, so the binding holds by construction.

@@ -4,9 +4,9 @@ kind: module
 schema: architecture
 applies: core@0.1
 inherits: [platform-core]
-implements: ["#9f5778"]
+implements: ['#9f5778']
 opt-out: []
-test-support: ["ts/harness.ts", "ts/*.test.ts"]
+test-support: ['ts/harness.ts', 'ts/*.test.ts']
 levels:
   objective: present
   technical-spec: present — the seam contract, the adopted pool request shape, the observable outcomes, the injected relay policy and the stop conditions
@@ -16,18 +16,39 @@ contract:
   entry: ts/index.ts
   operations: [connect, query, subscribe, publish, count, close]
   exports: [createNostrIo, toUpstreamPool, RelaySeamError, MAX_EVENTS_PER_READ]
-  types: [Event, FilterIn, RelayUrl, RelaySet, RelayReason, RelayStatus, NostrRequest, UpstreamPool, QueryOptions, WireResult, SubscribeOptions, Subscription, Unsub, RelayAck, PublishOutcome, CountResult, RelayPolicy, NostrIoOptions, NostrIo]
+  types:
+    [
+      Event,
+      FilterIn,
+      RelayUrl,
+      RelaySet,
+      RelayReason,
+      RelayStatus,
+      NostrRequest,
+      UpstreamPool,
+      QueryOptions,
+      WireResult,
+      SubscribeOptions,
+      Subscription,
+      Unsub,
+      RelayAck,
+      PublishOutcome,
+      CountResult,
+      RelayPolicy,
+      NostrIoOptions,
+      NostrIo,
+    ]
 implementations:
-  - id: ts                       # the selector a composition names
+  - id: ts # the selector a composition names
     lang: typescript
-    dir: ts                      # relative to the module directory
+    dir: ts # relative to the module directory
     entry: ts/index.ts
-    package: null                # consumed as a directory, not shipped as a package
-    install: [bun, install]      # every action is a token array, never a shell string
+    package: null # consumed as a directory, not shipped as a package
+    install: [bun, install] # every action is a token array, never a shell string
     build: []
     test: [bun, test]
     typecheck: [bun, run, typecheck]
-    needs: []                    # CODE dependencies (module names), not `inherits`
+    needs: [] # CODE dependencies (module names), not `inherits`
 access:
   group: m_nostr-io
   read: [self]
@@ -92,7 +113,7 @@ One statement per behaviour, each a line of its own with its content-hash identi
 - `#7bf6f6` — The evidence obligations are stated as criteria: the store-free case, the second-backend case (the same conformance suite over another pool adapter), and one case per path this spec covers, asserted by call order on a recording pool rather than by timing.
 - `#bbfa5c` — What is genuinely ours is named in one line, because a module whose library already owns the seam would be a wrapper: the specified contract, the store-free guarantee, the reason and outcome mapping, the injected relay policy, and the multi-backend proof — the vendor supplies sockets, not the contract.
 - `#3820a9` — The module holds no global state and no singleton pool: two composers may run two seams in one process without sharing a socket, a subscription or a relay set.
-- `#0a568f` — It is not the relay *host's* module either: a relay host satisfies the same contract from inside the wire, and the difference between the two is configuration rather than code.
+- `#0a568f` — It is not the relay _host's_ module either: a relay host satisfies the same contract from inside the wire, and the difference between the two is configuration rather than code.
 - `#751387` — A single read retains at most a **stated ceiling** of 10 000 events, declared as an inspectable value rather than a number buried in a branch: at the ceiling the seam stops reading and reports `eose: false`, because the wire's boundary was not reached.
 - `#e5dbdb` — `deadlineMs` is a **wall-clock budget on the whole read** rather than an inactivity gap: a wire that keeps emitting without ever reaching EOSE is stopped by it just the same, and a read it stops reports `eose: false` like any other read that did not reach the boundary.
 - `#fdc27c` — The wire count over a target set is the **sum** of the targeted relays' own indices, reported `approximate` whenever any relay answered approximately, and a relay that refuses or times out its own `COUNT` refuses the whole operation rather than being silently omitted from the sum.
@@ -121,7 +142,7 @@ the wire actually did. The statements above are unchanged, and each amended one 
 answered here rather than rewritten — a repair that edits a declaring line renames an identity that this run's
 reviews, its increment order and its evidence already cite (`#c9ece3`).
 
-### `#5ecac1` — a refusal is a value *on the channel the operation has*, and every failure path is typed
+### `#5ecac1` — a refusal is a value _on the channel the operation has_, and every failure path is typed
 
 The sentence stands and is now **total**, which is what the reviews found it was not. Four things are added.
 **(a) Where a refusal lands.** The operations with a promise carry refusals in the answer they already return:
@@ -200,7 +221,7 @@ one-second linear backoff, no resubscribe after a clean `CLOSED`, a relay-scoped
 event timeout, a thirty-second publish timeout and keep-alive, and a twenty-second EOSE ping timeout. A version
 bump may move those numbers; nothing in this spec claims one of them as a guarantee, and a host that needs its
 own numbers configures its own pool, because the pool is injected. The seam's part of the same sentence is that
-a *refusal* arriving from any of that is a value (`#5ecac1`) and that the read's bounds are its own.
+a _refusal_ arriving from any of that is a value (`#5ecac1`) and that the read's bounds are its own.
 
 **And what `connect` actually does.** The operation reports the health of the relay set as the pool observes it,
 read under the URL the pool files a relay by (its normalised form) rather than the spelling the policy used — so
@@ -222,7 +243,7 @@ explains the move.
 ### `#752c02` — what a wire count over a set is, and why the sum is over relays
 
 The statement above stands — the contract requires the approximation flag rather than the accuracy — and the
-reading of *what the count over a set is* was never stated, which is the gap `#fdc27c` fills (D2). The
+reading of _what the count over a set is_ was never stated, which is the gap `#fdc27c` fills (D2). The
 rule is the **sum** of the targeted relays' own indices, `approximate` whenever any one of them answered
 approximately, and a relay that refuses or times out its own `COUNT` refuses the whole operation rather than
 being quietly dropped from the sum. It is stated because the vendor's record is **per relay**: the group's count
@@ -237,7 +258,7 @@ conformance backends by the case that tests the non-completing COUNT stream.
 
 The convention was fanned out to this module (`runs/2026-10-02-content-addressing/FANOUT.md`). Rule 4 minted
 the statements the code needed and this spec had not stated: a declaration carried no statement narrow enough
-to require it, and a rule that means *exactly one implementation* now carries the `[1:1]` marker so the count
+to require it, and a rule that means _exactly one implementation_ now carries the `[1:1]` marker so the count
 is testable rather than prose. No declaring line above is edited; these are additions only.
 
 - `#499675` — The pool files a relay under its own normalised URL and the seam compares relay identities under **exactly one** normalising predicate `[1:1]`: health, the publish-ack match and a read's per-relay boundary count all use it, and it is never applied to the spelling the host gave.
@@ -317,15 +338,15 @@ Nothing below is delivered by this run: the run writes the spec. Each row names 
 it, and every increment named here is one of this reframing run's (`runs/2026-09-29-reframing/order.md` §1) —
 never a wish.
 
-| spec surface | increment | what exists instead, today |
-| --- | --- | --- |
-| `ts/` — the seam over `applesauce-relay` 6.2.1, its own install root and its own compiler configuration | **I1 — this run's first increment** | nothing: this document |
-| the store-free case (a recording, throwing pool), the import allow-list with its expected hits, the second-backend case | **I1**, as that increment's acceptance surface | nothing: §"Evidence obligations" is the criterion, unexecuted |
-| the reason and outcome mapping, the idempotent cancellation case, the call-order cases per path | **I1** | nothing |
-| **not** delivered here, and named so nobody reports it: the local-first ordering, the merge, the write-back policy and `complete` | **I2 — `event-access`** | they belong to a different module by `#120968` |
-| **not** delivered here: the store's local truth, its endpoint and its head rule | **I3 — the `event-store` shrink** | the store is built (`#75322f`, re-scoped 2026-09-29) and owns them |
-| **not** delivered here: content validation | **I4 — `validation`**, spec only | a separate module, its own document |
-| **not** delivered here: NIP-77 negentropy sync, NIP-42 flows beyond the pool's own handshake, outbox or relay-selection policy, a durable log of relay health | named, later or out | the module may not own relay policy (`#9f5778`) and this increment does not add one |
+| spec surface                                                                                                                                                  | increment                                      | what exists instead, today                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `ts/` — the seam over `applesauce-relay` 6.2.1, its own install root and its own compiler configuration                                                       | **I1 — this run's first increment**            | nothing: this document                                                              |
+| the store-free case (a recording, throwing pool), the import allow-list with its expected hits, the second-backend case                                       | **I1**, as that increment's acceptance surface | nothing: §"Evidence obligations" is the criterion, unexecuted                       |
+| the reason and outcome mapping, the idempotent cancellation case, the call-order cases per path                                                               | **I1**                                         | nothing                                                                             |
+| **not** delivered here, and named so nobody reports it: the local-first ordering, the merge, the write-back policy and `complete`                             | **I2 — `event-access`**                        | they belong to a different module by `#120968`                                      |
+| **not** delivered here: the store's local truth, its endpoint and its head rule                                                                               | **I3 — the `event-store` shrink**              | the store is built (`#75322f`, re-scoped 2026-09-29) and owns them                  |
+| **not** delivered here: content validation                                                                                                                    | **I4 — `validation`**, spec only               | a separate module, its own document                                                 |
+| **not** delivered here: NIP-77 negentropy sync, NIP-42 flows beyond the pool's own handshake, outbox or relay-selection policy, a durable log of relay health | named, later or out                            | the module may not own relay policy (`#9f5778`) and this increment does not add one |
 
 ## Evidence obligations, as criteria
 
@@ -344,7 +365,7 @@ will be judged against these sentences and not against a summary of them.
 4. **One case per path.** `query`, `subscribe`, `publish` and `count` each get their own case, and the ordering
    claims that exist anywhere in this document are asserted **by call order on the recording pool**, never by
    timing.
-5. **The socket-primitive grep, with its expected hits stated.** The seam is *allowed* to name socket primitives,
+5. **The socket-primitive grep, with its expected hits stated.** The seam is _allowed_ to name socket primitives,
    because it is the module that owns the wire — so a bare zero would be a false criterion and is not stated
    here. What it may not do is own relay policy: the case is the injected policy being read at every call site
    that targets a relay.
@@ -355,7 +376,7 @@ implementation — that red half is `evidence/04-before-the-repair.txt`, and eac
 own in `evidence/02-invariant-falsification.txt`.
 
 6. **The refusal paths, per path and per backend.** A relay refusal that arrives **mid-read** resolves the read
-   with what arrived and `eose: false`, the refusal as a value on `failures`, and the *same* scripted wire
+   with what arrived and `eose: false`, the refusal as a value on `failures`, and the _same_ scripted wire
    produces the same outcome object over the vendor adapter and over the hand-written pool; a relay's own
    NIP-01 prefix (`rate-limited:`, `auth-required:`) reaches the vocabulary on both paths; a pool whose own
    `events`, `eose` or `failures` stream dies reaches the caller as a typed refusal and never as a library
@@ -402,7 +423,7 @@ matter above.
    carries the wire count, states that the composition's `count` is the local one, and does **not** make the two
    one operation. Whether the composition's `count` should ever consult the wire is `event-access`'s decision,
    and `event-access` says no (`M14`: counting never fetches).
-2. **The vendor's composition layer is not the shape this seam is in** — it is a layer *above* a pool, and its
+2. **The vendor's composition layer is not the shape this seam is in** — it is a layer _above_ a pool, and its
    own write-back is a caller-side operator applied by 4 of 11 loader modules (`research/05-applesauce-precedent.md`
    §4, MEASURED there). That is the reason `event-access` exists, and the reason this spec does not adopt
    `applesauce-loaders` as a contract anywhere.

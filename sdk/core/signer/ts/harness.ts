@@ -92,13 +92,7 @@ export function manualClock(): ClockPort & { advance(): void; pending(): number 
 export const webCryptoPort: CryptoPort = {
 	randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)),
 	async pbkdf2Sha256(passphrase, salt, iterations) {
-		const material = await crypto.subtle.importKey(
-			'raw',
-			bytes(new TextEncoder().encode(passphrase)),
-			'PBKDF2',
-			false,
-			['deriveKey'],
-		)
+		const material = await crypto.subtle.importKey('raw', bytes(new TextEncoder().encode(passphrase)), 'PBKDF2', false, ['deriveKey'])
 		return await crypto.subtle.deriveKey(
 			{ name: 'PBKDF2', hash: 'SHA-256', salt: bytes(salt), iterations },
 			material,
@@ -108,19 +102,11 @@ export const webCryptoPort: CryptoPort = {
 		)
 	},
 	async aesGcmEncrypt(key, iv, plaintext) {
-		const ct = await crypto.subtle.encrypt(
-			{ name: 'AES-GCM', iv: bytes(iv) },
-			key as CryptoKey,
-			bytes(plaintext),
-		)
+		const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: bytes(iv) }, key as CryptoKey, bytes(plaintext))
 		return new Uint8Array(ct)
 	},
 	async aesGcmDecrypt(key, iv, ciphertext) {
-		const pt = await crypto.subtle.decrypt(
-			{ name: 'AES-GCM', iv: bytes(iv) },
-			key as CryptoKey,
-			bytes(ciphertext),
-		)
+		const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes(iv) }, key as CryptoKey, bytes(ciphertext))
 		return new Uint8Array(pt)
 	},
 	utf8Encode: (text) => new TextEncoder().encode(text),
@@ -204,9 +190,7 @@ export function bunkerTransport(options: BunkerEmulatorOptions = {}) {
 					result = getPublicKey(hexToBytes(userSk))
 					break
 				case 'sign_event': {
-					const template = (
-						typeof request.params[0] === 'string' ? JSON.parse(request.params[0]) : request.params[0]
-					) as EventTemplate
+					const template = (typeof request.params[0] === 'string' ? JSON.parse(request.params[0]) : request.params[0]) as EventTemplate
 					result = JSON.stringify(finalizeEvent(template, hexToBytes(userSk)))
 					break
 				}

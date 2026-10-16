@@ -3,7 +3,8 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { liveActivityKeys } from '@/queries/queryKeyFactory'
-import { createLiveChatMessageTemplate } from '@sdk/commerce/messaging'
+import { publishLiveChatMessageWorkflow } from '@sdk/commerce/messaging'
+import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
 
 interface PublishLiveChatMessageParams {
 	liveActivityCoord: string
@@ -15,35 +16,14 @@ export const publishLiveChatMessage = async ({ liveActivityCoord, content }: Pub
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!ndk.signer) throw new Error('No signer available')
 
-	const user = await ndk.signer.user()
-	if (!user) throw new Error('No active user')
-
 	const connectedRelays = ndk.pool?.connectedRelays() || []
 	if (connectedRelays.length === 0) {
 		throw new Error('No connected relays')
 	}
 
 	const relayHint = connectedRelays[0]?.url ?? ''
-
-	// Build the event through SDK rules, then sign and publish at the app boundary.
-	const template = createLiveChatMessageTemplate({
-		liveActivityCoord,
-		content,
-		relayHint,
-		createdAt: Math.floor(Date.now() / 1000),
-	})
-
-	const event = new NDKEvent(ndk)
-	event.kind = template.kind
-	event.content = template.content
-	event.created_at = template.created_at
-	event.tags = template.tags
-	event.pubkey = user.pubkey
-
-	await event.sign(ndk.signer)
-	await ndkActions.publishEvent(event)
-
-	return event
+	const context = await createNdkPublishContext(ndk, ndk.signer)
+	return publishLiveChatMessageWorkflow(context, { liveActivityCoord, content, relayHint })
 }
 
 export const usePublishLiveChatMessageMutation = () => {

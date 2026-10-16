@@ -41,11 +41,7 @@ const isTerminalLeg = (leg: LegEntry): boolean => isSettledLeg(leg) || leg.rung 
  * `N x toleranceSat`; a fully settled set inside the band is `complete`, and beyond it the signed residual
  * gives `short-settled` (below) or `over-settled` (above), never `abandoned`.
  */
-export function deriveSetState(
-	legs: readonly LegEntry[],
-	frozenTotal: number,
-	toleranceSat: number,
-): SetRecord['state'] {
+export function deriveSetState(legs: readonly LegEntry[], frozenTotal: number, toleranceSat: number): SetRecord['state'] {
 	if (legs.length === 0) return 'unfinished'
 	const allSettled = legs.every(isSettledLeg)
 	const allTerminal = legs.every(isTerminalLeg)
@@ -118,10 +114,7 @@ export class PayAggregator {
 	 * `#16a79e` partition — the conservation partition: the aggregate is derived from the parts, and the merchant's
 	 * share is the residual by construction, so there is one number and it cannot drift.
 	 */
-	partition(
-		totalSat: number,
-		legs: readonly { readonly legId: string; readonly frozenShare: number }[],
-	): LegPartition {
+	partition(totalSat: number, legs: readonly { readonly legId: string; readonly frozenShare: number }[]): LegPartition {
 		const shares = legs.map((leg) => ({ legId: leg.legId, frozenShare: leg.frozenShare }))
 		const merchantShare = totalSat - shares.reduce((total, share) => total + share.frozenShare, 0)
 		return { frozenTotal: totalSat, shares, merchantShare }
@@ -255,9 +248,7 @@ export class PayAggregator {
 
 	private openLeg(leg: LegIntent, now: number): LegEntry {
 		const deadline =
-			leg.authorityKind === 'remote-and-observable' && leg.reconcileDeadlineMs !== undefined
-				? now + leg.reconcileDeadlineMs
-				: undefined
+			leg.authorityKind === 'remote-and-observable' && leg.reconcileDeadlineMs !== undefined ? now + leg.reconcileDeadlineMs : undefined
 		return {
 			wrapperId: leg.wrapperId,
 			legId: leg.legId,
@@ -273,19 +264,12 @@ export class PayAggregator {
 		}
 	}
 
-	private applyHandle(
-		leg: LegEntry,
-		handle: FundsHandle | null,
-		now: number,
-		onMismatch: () => void,
-	): LegEntry {
+	private applyHandle(leg: LegEntry, handle: FundsHandle | null, now: number, onMismatch: () => void): LegEntry {
 		if (!handle) return this.window(leg, now)
 		const witness: FundsWitness | undefined = handle.witness
 		if (handle.rung === 'witnessed-settled') {
 			const settles =
-				witness !== undefined &&
-				isCryptographic(witness.kind) &&
-				this.options.verifier.verify(leg.expectedPaymentHash, witness)
+				witness !== undefined && isCryptographic(witness.kind) && this.options.verifier.verify(leg.expectedPaymentHash, witness)
 			if (settles && witness) {
 				return {
 					...leg,

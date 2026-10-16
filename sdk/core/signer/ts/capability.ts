@@ -14,13 +14,7 @@
 import { verifyEvent } from 'nostr-tools/pure'
 
 import { IdentityMismatchError, IdentityUnresolvedError } from './errors'
-import type {
-	EncryptionScheme,
-	NipEncryptionCapability,
-	SignedEvent,
-	SignerCapabilities,
-	SignerCapability,
-} from './types'
+import type { EncryptionScheme, NipEncryptionCapability, SignedEvent, SignerCapabilities, SignerCapability } from './types'
 
 const HEX_PUBKEY = /^[0-9a-f]{64}$/i
 
@@ -140,14 +134,10 @@ export function bindIdentity(capability: SignerCapability): SignerCapability {
 				throw new IdentityMismatchError('The signer returned something that is not a signed event')
 			}
 			if (signed.pubkey.toLowerCase() !== identity) {
-				throw new IdentityMismatchError(
-					'The signer returned an event for a different pubkey than the authenticated identity',
-				)
+				throw new IdentityMismatchError('The signer returned an event for a different pubkey than the authenticated identity')
 			}
 			if (!verifyEvent(signed)) {
-				throw new IdentityMismatchError(
-					'The signer returned an event whose signature does not verify against the identity',
-				)
+				throw new IdentityMismatchError('The signer returned an event whose signature does not verify against the identity')
 			}
 			return signed
 		},

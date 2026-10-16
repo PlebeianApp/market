@@ -1,5 +1,6 @@
 import type { EventPublishContext } from '../../core/ports/eventPublish'
 import type { SignedEventLike } from '../../core/ports/signer'
+import { deleteAddressableEvent, signAndPublish } from '../../core/publishing'
 import { createShippingReference } from './shippingReadModel'
 import {
 	buildShippingOptionEventData,
@@ -28,24 +29,15 @@ export async function publishShippingOptionWorkflow<SignedEvent extends SignedEv
 	if (!prepared.ok) return prepared
 
 	const dTag = shippingDTag || context.createShippingId()
-	const data = buildShippingOptionEventData(prepared.form, dTag)
-	const event = await context.signer.sign({ kind: data.kind, content: data.content, tags: data.tags, created_at: context.now() })
-	await context.publish(event)
+	const event = await signAndPublish(context, buildShippingOptionEventData(prepared.form, dTag))
 
 	return { ok: true, event, shippingDTag: dTag, shippingRef: createShippingReference(context.authorPubkey, dTag) }
 }
 
 /** Publishes a NIP-09 deletion for the author's shipping option. Relays may still serve the old event. */
-export async function deleteShippingOptionWorkflow<SignedEvent extends SignedEventLike>(
+export function deleteShippingOptionWorkflow<SignedEvent extends SignedEventLike>(
 	context: EventPublishContext<SignedEvent>,
 	shippingDTag: string,
 ): Promise<SignedEvent> {
-	const event = await context.signer.sign({
-		kind: 5,
-		content: 'Shipping option deleted',
-		tags: [['a', `${SHIPPING_OPTION_KIND}:${context.authorPubkey}:${shippingDTag}`]],
-		created_at: context.now(),
-	})
-	await context.publish(event)
-	return event
+	return deleteAddressableEvent(context, SHIPPING_OPTION_KIND, shippingDTag, 'Shipping option deleted')
 }

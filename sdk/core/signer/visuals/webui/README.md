@@ -11,7 +11,7 @@ verification commit that followed, and are quoted here so nobody has to diff the
 
 - **79 tests / 222 expectations** → **90 tests / 268 expectations**, 5 files, still 0 failures.
 - **seven deliberate mutations** → **16**, one per finding the repair fixed, including one that is a command
-  rather than a case. The page's warning that *one of the seven rows does not hold up* was true and is now
+  rather than a case. The page's warning that _one of the seven rows does not hold up_ was true and is now
   closed: the row's command matched no test because `bun test -t` is a regex and the case name contained
   `(fail closed)`; `evidence/falsify.py` now escapes the name and counts a check that never ran as a failure.
 - **record-format compatibility "judged, not measured"** → **measured**, both directions against the reference
@@ -37,12 +37,12 @@ motion library is vendored in `vendor/` beside the page and referenced by a rela
 
 ## What is in this folder
 
-| file | what it is |
-| --- | --- |
-| `index.html` | the page. One file, ~121 KB, everything inline except the two vendored scripts. |
-| `vendor/gsap.min.js` | GSAP 3.12.5, vendored so scroll motion never depends on a CDN (72 KB). |
-| `vendor/ScrollTrigger.min.js` | GSAP's ScrollTrigger plugin, same reasoning (43 KB). |
-| `README.md` | this file. |
+| file                          | what it is                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| `index.html`                  | the page. One file, ~121 KB, everything inline except the two vendored scripts. |
+| `vendor/gsap.min.js`          | GSAP 3.12.5, vendored so scroll motion never depends on a CDN (72 KB).          |
+| `vendor/ScrollTrigger.min.js` | GSAP's ScrollTrigger plugin, same reasoning (43 KB).                            |
+| `README.md`                   | this file.                                                                      |
 
 ## What the page contains
 
@@ -62,14 +62,14 @@ motion library is vendored in `vendor/` beside the page and referenced by a rela
 
 Run text-first through a real browser (Chrome DevTools Protocol), over the file itself:
 
-| check | result |
-| --- | --- |
-| structure | 9 chapters, 9 table-of-contents links all resolving, 10 inline SVGs (all 10 with a `<title>`), 9 spine sections, 30 reveal elements, 0 dead anchors, 0 remote asset references |
-| SVG fit | 0 text elements running outside their own viewBox at any width |
-| motion | page scrolled in 14 steps to the bottom; all **30 / 30** reveal elements at computed `opacity: 1` (min 1.0), 0 still hidden; the 4 looping dash connectors measured with a changing `stroke-dashoffset` |
-| reduced motion | with `prefers-reduced-motion: reduce` emulated: all 30 reveals at `opacity: 1` **without scrolling**, and **0** scroll triggers created |
-| no-JS safety | no CSS rule anywhere sets a reveal element below `opacity: 1`, so with scripts off the page renders fully visible |
-| layout | `document.documentElement.scrollWidth <= window.innerWidth` at **360, 390, 430, 1440** px (and 1024/1280) |
+| check          | result                                                                                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| structure      | 9 chapters, 9 table-of-contents links all resolving, 10 inline SVGs (all 10 with a `<title>`), 9 spine sections, 30 reveal elements, 0 dead anchors, 0 remote asset references                          |
+| SVG fit        | 0 text elements running outside their own viewBox at any width                                                                                                                                          |
+| motion         | page scrolled in 14 steps to the bottom; all **30 / 30** reveal elements at computed `opacity: 1` (min 1.0), 0 still hidden; the 4 looping dash connectors measured with a changing `stroke-dashoffset` |
+| reduced motion | with `prefers-reduced-motion: reduce` emulated: all 30 reveals at `opacity: 1` **without scrolling**, and **0** scroll triggers created                                                                 |
+| no-JS safety   | no CSS rule anywhere sets a reveal element below `opacity: 1`, so with scripts off the page renders fully visible                                                                                       |
+| layout         | `document.documentElement.scrollWidth <= window.innerWidth` at **360, 390, 430, 1440** px (and 1024/1280)                                                                                               |
 
 ## Where the facts in it come from
 
@@ -89,7 +89,7 @@ Run text-first through a real browser (Chrome DevTools Protocol), over the file 
    the recorded run's test-name filter matched no test, so the row shows a non-zero exit rather than a failing
    assertion. That was true of the un-regenerated page at `b24c3f1`, which states “7 applied, 0 falsification
    failures”; the recorded output itself did not support the seventh row. Today's `signer/evidence/record.md`
-   reports **16 mutations, 0 falsification failures** and records the row as found and fixed (see *Status* above).
+   reports **16 mutations, 0 falsification failures** and records the row as found and fixed (see _Status_ above).
    The page says so in chapters 6 and 8.
 2. **Chapter 9 lists what this page invented** — every plain-language gloss, the grouping of the thirteen
    operations, the drawing of the state machine, and the wording “0 reported failures”. It is there so a wrong word

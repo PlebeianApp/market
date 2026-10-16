@@ -19,6 +19,8 @@ export { filterAndSortOrderListings, ORDER_LISTING_SORTS } from './orderListing'
 export type { OrderListingEntry, OrderListingSort, OrderListingStatusFilter } from './orderListing'
 export type { OrderReadEvent } from './orderReadModel'
 export { getOrderManagementActions } from './orderManagement'
+export { publishOrderStatusUpdateWorkflow, publishShippingStatusUpdateWorkflow, resolveOrderCounterparty } from './orderUpdatePublish'
+export type { OrderEventRecord, OrderStatusUpdateInput, OrderUpdateContext, ShippingStatusUpdateInput } from './orderUpdatePublish'
 export type { OrderManagementActions, OrderManagementRole } from './orderManagement'
 export type {
 	BuyerOrderItem,

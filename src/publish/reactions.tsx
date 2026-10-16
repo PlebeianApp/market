@@ -1,14 +1,11 @@
-import { getEventAddress } from '@/lib/nostr/eventLike'
 import { ndkActions } from '@/lib/stores/ndk'
 import { reactionKeys } from '@/queries/queryKeyFactory'
 import type { Reaction } from '@/queries/reactions'
-import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { isAddressableKind } from 'nostr-tools/kinds'
 import { toast } from 'sonner'
-
-// NIP-25 Reaction kind
-const REACTION_KIND = 7
+import { publishReactionDeletionWorkflow, publishReactionWorkflow } from '@sdk/commerce/messaging'
+import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
 
 interface PublishReactionParams {
 	emoji: string
@@ -31,54 +28,17 @@ export const publishReaction = async ({ emoji, event }: PublishReactionParams): 
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!ndk.signer) throw new Error('No signer available')
 
-	const user = await ndk.signer.user()
-	if (!user) throw new Error('No active user')
-
 	const connectedRelays = ndk.pool?.connectedRelays() || []
 	if (connectedRelays.length === 0) {
 		throw new Error('No connected relays. Please check your relay connections and try again.')
 	}
 
-	// Create NIP-25 reaction event
-	const reactionEvent = new NDKEvent(ndk)
-	reactionEvent.kind = REACTION_KIND
-	reactionEvent.content = emoji
-	reactionEvent.created_at = Math.floor(Date.now() / 1000)
-	reactionEvent.pubkey = user.pubkey
-
-	// Build tags according to NIP-25 specification
-	const tags: string[][] = []
-
-	if (isAddressableKind(event.kind)) {
-		const address = getEventAddress(event)
-		// Add 'a' tag with coordinates (kind:pubkey:d-tag)
-		const aTag = ['a', address]
-		tags.push(aTag)
-	} else {
-		// Add 'e' tag with target event id
-		const eTag = ['e', event.id]
-		tags.push(eTag)
-	}
-
-	// Add 'p' tag with target event author pubkey
-	const pTag = ['p', event.pubkey]
-	tags.push(pTag)
-
-	// Add 'k' tag with the kind of the target event
-	const kTag = ['k', event.kind.toString()]
-	tags.push(kTag)
-
-	reactionEvent.tags = tags
-
 	try {
-		await reactionEvent.sign(ndk.signer)
-		const publishedRelays = await reactionEvent.publish()
-
-		if (publishedRelays.size === 0) {
-			throw new Error('Reaction was not published to any relays.')
-		}
-
-		return reactionEvent
+		const context = await createNdkPublishContext(ndk, ndk.signer, async (reactionEvent) => {
+			const publishedRelays = await reactionEvent.publish()
+			if (publishedRelays.size === 0) throw new Error('Reaction was not published to any relays.')
+		})
+		return await publishReactionWorkflow(context, { content: emoji, targetEvent: event })
 	} catch (error) {
 		console.error('Error publishing reaction:', error)
 		throw error
@@ -98,38 +58,15 @@ export const publishDeletionEvent = async ({ reactionEvent }: PublishDeletionPar
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!ndk.signer) throw new Error('No signer available')
 
-	const user = await ndk.signer.user()
-	if (!user) throw new Error('No active user')
-
-	// Create deletion event (kind 5)
-	const deletionEvent = new NDKEvent(ndk)
-	deletionEvent.kind = 5
-	deletionEvent.content = `Removed reaction: ${reactionEvent.emoji}`
-	deletionEvent.created_at = Math.floor(Date.now() / 1000)
-	deletionEvent.pubkey = user.pubkey
-
-	// Build tags according to NIP-09 deletion request format
-	const tags: string[][] = []
-
-	// Add 'e' tag with the reaction event id (the reaction event itself)
-	const eTag = ['e', reactionEvent.id]
-	tags.push(eTag)
-
-	// Add 'p' tag with the reaction event author pubkey
-	const pTag = ['p', reactionEvent.authorPubkey]
-	tags.push(pTag)
-
-	// Add 'k' tag with the kind of the reaction event
-	const kTag = ['k', REACTION_KIND.toString()]
-	tags.push(kTag)
-
-	deletionEvent.tags = tags
-
 	try {
-		await deletionEvent.sign(ndk.signer)
-		await deletionEvent.publish()
-
-		return deletionEvent
+		const context = await createNdkPublishContext(ndk, ndk.signer, async (deletionEvent) => {
+			await deletionEvent.publish()
+		})
+		return await publishReactionDeletionWorkflow(context, {
+			reactionId: reactionEvent.id,
+			reactionAuthorPubkey: reactionEvent.authorPubkey,
+			emoji: reactionEvent.emoji,
+		})
 	} catch (error) {
 		console.error('Error publishing deletion event:', error)
 		throw error

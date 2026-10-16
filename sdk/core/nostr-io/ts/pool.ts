@@ -74,7 +74,10 @@ export function uniqueRelays(relays: readonly RelayUrl[]): RelayUrl[] {
 export function normalizeRelayUrl(url: RelayUrl): string {
 	const parsed = new URL(url)
 	parsed.pathname = parsed.pathname.replace(/\/+/g, '/')
-	if ((parsed.port === '80' && (parsed.protocol === 'ws:' || parsed.protocol === 'http:')) || (parsed.port === '443' && (parsed.protocol === 'wss:' || parsed.protocol === 'https:'))) {
+	if (
+		(parsed.port === '80' && (parsed.protocol === 'ws:' || parsed.protocol === 'http:')) ||
+		(parsed.port === '443' && (parsed.protocol === 'wss:' || parsed.protocol === 'https:'))
+	) {
 		parsed.port = ''
 	}
 	return parsed.toString()

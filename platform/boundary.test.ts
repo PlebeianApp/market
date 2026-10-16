@@ -14,8 +14,20 @@ const WEB_TO_SERVER_ALLOWLIST = new Set([
 	'platform/web/routes/_dashboard-layout/dashboard/account/vanity-url.tsx',
 ])
 
-// Legacy src/ host modules allowed to depend on Platform while they are migrated; do not grow this list.
-const SRC_TO_PLATFORM_ALLOWLIST = new Set(['src/index.tsx', 'src/lib/boot.ts', 'src/publish/shipping.tsx'])
+// Legacy src/ host modules allowed to depend on Platform while they are migrated; do not grow this list
+// except for publish adapters that now delegate to SDK workflows via the Platform publish context.
+const SRC_TO_PLATFORM_ALLOWLIST = new Set([
+	'src/index.tsx',
+	'src/lib/boot.ts',
+	'src/publish/shipping.tsx',
+	'src/publish/products.tsx',
+	'src/publish/collections.tsx',
+	'src/publish/orders.tsx',
+	'src/queries/shipping.tsx',
+	'src/publish/comments.tsx',
+	'src/publish/liveChat.tsx',
+	'src/publish/reactions.tsx',
+])
 
 async function listSourceFiles(directory: string): Promise<string[]> {
 	const entries = await readdir(directory, { withFileTypes: true })

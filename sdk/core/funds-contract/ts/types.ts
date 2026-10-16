@@ -48,13 +48,7 @@ export type FundsRung = 'attested' | 'witnessed-settled' | 'unresolved' | 'aband
  * from a local mint) may settle a leg; declared kinds (`lnurl_verify`, `seller_attestation`, `ack`)
  * are a reporter's word and may move a leg no further than `attested`.
  */
-export type FundsWitnessKind =
-	| 'preimage'
-	| 'zap_receipt'
-	| 'mint_quote_state'
-	| 'lnurl_verify'
-	| 'seller_attestation'
-	| 'ack'
+export type FundsWitnessKind = 'preimage' | 'zap_receipt' | 'mint_quote_state' | 'lnurl_verify' | 'seller_attestation' | 'ack'
 
 /**
  * `#d16b28` FundsIntent — what opens a leg. The rail's own parameters only: the contract

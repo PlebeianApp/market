@@ -101,7 +101,7 @@ handle. Those two are the whole table; a rail adds a method value, never an auth
 An **authority** is the party that can hold or move value and is the arbiter of the state of its leg. A
 **witness** is the artifact that closes a leg, and it must be **independent of the party who benefits from
 "settled"**: the silent failure of a money design is the party who took the money declaring the money
-arrived, so a seller-side or provider-side attestation is a beneficiary's own word — a *declared* witness — and
+arrived, so a seller-side or provider-side attestation is a beneficiary's own word — a _declared_ witness — and
 never a settlement. An authority may be a party (the payee's node is, by protocol, the only party that knows
 an invoice settled); the witness that closes the leg is a separate thing, and the beneficiary may never be it.
 
@@ -221,9 +221,9 @@ to close anything silently.
 
 A leg reaches the non-settlement terminal `abandoned` **only where no witness exists and none can still
 arrive** — never by the mere elapse of a clock. A leg whose witness might still arrive stays `unresolved`: a
-window that has not yet elapsed, and an observation that *failed*, each leave the leg `unresolved`, because
+window that has not yet elapsed, and an observation that _failed_, each leave the leg `unresolved`, because
 the artifact could still be reported — so the terminal is **never a back door out of `unresolved` for a leg
-whose witness might still arrive**. The terminal is **terminal**: it is write-once and *not reversible*, so a
+whose witness might still arrive**. The terminal is **terminal**: it is write-once and _not reversible_, so a
 later observation never lowers it and never reopens it to a settlement. And it is **not a settlement**: a leg
 at `abandoned` carries no witness and remains unwitnessed, and time alone never writes `witnessed-settled`
 (`#6f9f08`). Which window a rail's leg uses, and what counts as an observation that failed for that rail, is
@@ -246,7 +246,7 @@ call the wrapper makes at settle time — depends on that authority's reconcilia
 composing app **must leave its authority's own reconcilers enabled** — its proof-state watcher, its quote
 watcher and its settlement processor — **or supply an equivalent**, and **with them disabled a leg cannot
 settle and must not be reported as settled**. The obligation is stated here because this contract owns what a
-composing app must supply; *which* reconcilers a given authority actually has is the wrapper's to name, and
+composing app must supply; _which_ reconcilers a given authority actually has is the wrapper's to name, and
 the wrapper is where the check lives: a wrapper that reads a settle out of the authority's own record must
 refuse it when the reconcilers are off, so the requirement is a condition on the read rather than a promise
 about the app's diligence.

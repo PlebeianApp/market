@@ -4,8 +4,14 @@ import { collectionsKeys } from '@/queries/queryKeyFactory'
 import { markCollectionAsDeleted } from '@/queries/collections'
 import { toast } from 'sonner'
 import { ndkActions } from '@/lib/stores/ndk'
-import { buildCollectionEventData, COLLECTION_EVENT_KIND } from '@sdk/commerce/collections'
+import {
+	buildCollectionEventData,
+	COLLECTION_EVENT_KIND,
+	deleteCollectionWorkflow,
+	publishCollectionWorkflow,
+} from '@sdk/commerce/collections'
 import type { CollectionShippingInput } from '@sdk/commerce/collections'
+import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
 import { createClientTag } from './nip89'
 
 export interface CollectionFormData {
@@ -46,18 +52,25 @@ export const createCollectionEvent = (
 	return event
 }
 
+const toCollectionInput = (formData: CollectionFormData) => ({
+	name: formData.name,
+	summary: formData.summary,
+	description: formData.description,
+	headerImageUrl: formData.headerImageUrl,
+	products: formData.products,
+	shippings: formData.shippings,
+})
+
+const createCollectionId = () => crypto.randomUUID()
+
 /**
  * Publishes a new collection
  */
 export const publishCollection = async (formData: CollectionFormData, signer: NDKSigner, ndk: NDK): Promise<string | null> => {
 	try {
-		const event = createCollectionEvent(formData, signer, ndk)
-		await event.sign(signer)
-		await ndkActions.publishEvent(event)
-
-		// Return the collection ID
-		const dTag = event.tags.find((tag) => tag[0] === 'd')
-		return dTag?.[1] || null
+		const context = await createNdkPublishContext(ndk, signer)
+		const outcome = await publishCollectionWorkflow({ ...context, createCollectionId }, toCollectionInput(formData))
+		return outcome.collectionId
 	} catch (error) {
 		console.error('Error publishing collection:', error)
 		throw error
@@ -74,10 +87,8 @@ export const updateCollection = async (
 	ndk: NDK,
 ): Promise<string | null> => {
 	try {
-		const event = createCollectionEvent(formData, signer, ndk, collectionId)
-		await event.sign(signer)
-		await ndkActions.publishEvent(event)
-
+		const context = await createNdkPublishContext(ndk, signer)
+		await publishCollectionWorkflow({ ...context, createCollectionId }, toCollectionInput(formData), collectionId)
 		return collectionId
 	} catch (error) {
 		console.error('Error updating collection:', error)
@@ -90,18 +101,7 @@ export const updateCollection = async (
  */
 export const deleteCollection = async (collectionId: string, signer: NDKSigner, ndk: NDK): Promise<boolean> => {
 	try {
-		// Create a deletion event (kind 5)
-		const deleteEvent = new NDKEvent(ndk)
-		deleteEvent.kind = 5
-		deleteEvent.content = 'Collection deleted'
-
-		// Reference the collection to delete
-		const pubkey = await signer.user().then((user) => user.pubkey)
-		deleteEvent.tags = [['a', `30405:${pubkey}:${collectionId}`]]
-
-		await deleteEvent.sign(signer)
-		await ndkActions.publishEvent(deleteEvent)
-
+		await deleteCollectionWorkflow(await createNdkPublishContext(ndk, signer), collectionId)
 		return true
 	} catch (error) {
 		console.error('Error deleting collection:', error)

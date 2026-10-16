@@ -165,11 +165,7 @@ export class SessionVaultError extends SignerError {
 export class PortError extends SignerError {
 	constructor(port: string, operation: string, options?: { cause?: unknown }) {
 		const detail = options?.cause instanceof Error ? options.cause.message : undefined
-		super(
-			'port_failed',
-			`The host ${port} port failed during ${operation}${detail ? `: ${detail}` : ''}`,
-			options,
-		)
+		super('port_failed', `The host ${port} port failed during ${operation}${detail ? `: ${detail}` : ''}`, options)
 		this.name = 'PortError'
 	}
 }
@@ -187,10 +183,7 @@ export class PasswordSignerLockedError extends SignerError {
 /** #179fde — Nip46RpcTimeoutError: a NIP-46 RPC exceeded the injected per-RPC deadline. */
 export class Nip46RpcTimeoutError extends SignerError {
 	constructor(lane: string, timeoutMs: number) {
-		super(
-			'nip46_rpc_timeout',
-			`NIP-46 ${lane} request timed out after ${timeoutMs}ms — reconnect your signer and try again`,
-		)
+		super('nip46_rpc_timeout', `NIP-46 ${lane} request timed out after ${timeoutMs}ms — reconnect your signer and try again`)
 		this.name = 'Nip46RpcTimeoutError'
 	}
 }
