@@ -1,0 +1,28 @@
+/**
+ * The token layer — the one place colour values exist (see `CONTRACT.md` §2 and `MODULARIZATION.md` §3).
+ *
+ * A build either inlines this file into the artifact (stand-alone, for a napplet) or leaves it external
+ * and lets the host override it (web app, CMS). Component modules contain **no colour literals**; they
+ * consume `var(--pb-*)` only, so the values exist exactly once in the whole system.
+ *
+ * Alignment review drift D-3: the prototype had these values in `browse-ui/`, duplicated by every host.
+ */
+
+:where(:root, .pb-scope) {
+	--pb-background: #0b0b0f;
+	--pb-foreground: #f4f4f5;
+	--pb-primary: #f7931a;
+	--pb-muted: #a1a1aa;
+	--pb-border: #27272a;
+	--pb-surface: #141419;
+	--pb-danger: #f87171;
+	--pb-warning: #fbbf24;
+}
+
+/**
+ * `TOKEN_FLOOR` (`src/index.ts`) and the values above are two encodings of one fact.
+ *
+ * Two encodings are acceptable only because both are machine-readable and a check can fail
+ * the pair when they disagree — the same coherence rule the maintainer set for component argument
+ * sources (2026-09-22). `__tests__/tokens.test.ts` is that check.
+ */

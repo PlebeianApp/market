@@ -1,0 +1,13 @@
+{
+	"name": "@plebeian/product",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "The product module: NIP-99 listing validation and filter construction. No UI, no network.",
+	"main": "./src/index.ts",
+	"types": "./src/index.ts",
+	"dependencies": {
+		"@plebeian/contract": "0.1.0",
+		"zod": "^4.4.3"
+	}
+}
