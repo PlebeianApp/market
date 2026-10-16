@@ -15,6 +15,17 @@ export { BUYER_ORDER_STATUSES, BUYER_SHIPPING_STATUSES, resolveBuyerOrderStatus,
 export type { BuyerOrderStatus, BuyerShippingStatus } from './orderStatus'
 export { getOrderManagementActions } from './orderManagement'
 export type { OrderManagementActions, OrderManagementRole } from './orderManagement'
+export { ORDER_PLACEMENT_ASSUMPTIONS, PLACED_ORDER_PAYMENT_LIFECYCLE, parseCartProductRef, placeBuyerOrdersFromCartIntent } from './orderPlacement'
+export type {
+	BuyerOrderSellerTerms,
+	CartOrderPlacementInput,
+	CartOrderPlacementOutcome,
+	CartOrderPlacementRefusal,
+	CartOrderPlacementRefusalReason,
+	OrderPlacementAssumption,
+	PlacedBuyerOrder,
+	PlacedOrderPaymentLifecycle,
+} from './orderPlacement'
 export type {
 	BuyerOrderItem,
 	BuyerOrderTemplateInput,
