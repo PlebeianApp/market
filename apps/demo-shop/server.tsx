@@ -303,6 +303,22 @@ export async function startDemoShop(options: BootInstanceOptions = {}): Promise<
 				return handlePlacement(request, runtime, placedOrders)
 			}
 
+			// Every other address is a **read**. A POST to one is not "not found" — the
+			// address exists and the *method* does not — and answering it with the page
+			// would be the instance pretending it placed something it did not.
+			if (request.method !== 'GET' && request.method !== 'HEAD') {
+				return new Response(
+					`this instance reads (\`GET\`) everything here; the one address that also places an order is a \`POST\` to ${CHECKOUT_PATH}\n`,
+					{
+						status: 405,
+						headers: {
+							allow: url.pathname === CHECKOUT_PATH ? 'GET, HEAD, POST' : 'GET, HEAD',
+							'content-type': 'text/plain; charset=utf-8',
+						},
+					},
+				)
+			}
+
 			// The page routes. `/` is exact; a product address and an order address are ones
 			// that parse.
 			if (isPagePath(url.pathname)) {

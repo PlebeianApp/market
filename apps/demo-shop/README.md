@@ -208,6 +208,11 @@ follows from it.
 **The payment is still not built, and neither page implies it is.** The checkout raises
 no invoice and settles nothing; the order's lifecycle says `not-requested`.
 
+**Every other address is a read.** `POST /checkout` is the one method-changing route
+this app serves; a `POST` anywhere else answers `405` with an `allow` header rather than
+rendering the page, because a read-only address that answers a write is an instance
+pretending something happened.
+
 ### The assumption register, on the page
 
 Every assumption the running instance is operating under is rendered in the
