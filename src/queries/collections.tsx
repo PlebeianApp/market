@@ -7,7 +7,6 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { collectionKeys, collectionsKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
-import { FEATURED_ITEMS_CONFIG } from '@/lib/schemas/featured'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 import {
 	getNextCommunityQueryFixtureStep,
@@ -15,70 +14,16 @@ import {
 	normalizeCommunityArrayFixture,
 	resolveCommunityQueryFixtureStep,
 } from '@/lib/tests/communityQueryFixtures'
-
-// --- DELETED COLLECTIONS TRACKING ---
-// Track deleted collection d-tags with deletion timestamps to filter them from relay responses.
-// Per NIP-09, deletions only apply to events older than the deletion event.
-// If a new event with the same d-tag is published after the deletion, it should be visible.
-// Persisted to localStorage so deletions survive page reloads.
-
-const DELETED_COLLECTIONS_STORAGE_KEY = 'plebeian_deleted_collection_ids'
-
-// Map of d-tag -> deletion timestamp (unix seconds)
-const loadDeletedCollectionIds = (): Map<string, number> => {
-	try {
-		const stored = localStorage.getItem(DELETED_COLLECTIONS_STORAGE_KEY)
-		if (stored) {
-			const parsed = JSON.parse(stored)
-			// Handle legacy format (array of strings) - migrate to new format
-			if (Array.isArray(parsed)) {
-				const now = Math.floor(Date.now() / 1000)
-				return new Map(parsed.map((dTag: string) => [dTag, now]))
-			}
-			// New format: object with d-tag keys and timestamp values
-			if (typeof parsed === 'object' && parsed !== null) {
-				return new Map(Object.entries(parsed))
-			}
-		}
-	} catch (e) {
-		console.error('Failed to load deleted collection IDs from localStorage:', e)
-	}
-	return new Map()
-}
-
-const saveDeletedCollectionIds = (ids: Map<string, number>) => {
-	try {
-		localStorage.setItem(DELETED_COLLECTIONS_STORAGE_KEY, JSON.stringify(Object.fromEntries(ids)))
-	} catch (e) {
-		console.error('Failed to save deleted collection IDs to localStorage:', e)
-	}
-}
-
-const deletedCollectionIds = loadDeletedCollectionIds()
-
-export const markCollectionAsDeleted = (dTag: string, deletionTimestamp?: number) => {
-	// Use provided timestamp or current time
-	const timestamp = deletionTimestamp ?? Math.floor(Date.now() / 1000)
-	deletedCollectionIds.set(dTag, timestamp)
-	saveDeletedCollectionIds(deletedCollectionIds)
-}
-
-export const isCollectionDeleted = (dTag: string, eventCreatedAt?: number) => {
-	const deletionTimestamp = deletedCollectionIds.get(dTag)
-	if (deletionTimestamp === undefined) return false
-	// If no event timestamp provided, assume deleted
-	if (eventCreatedAt === undefined) return true
-	// Per NIP-09: deletion only applies to events older than the deletion
-	return eventCreatedAt < deletionTimestamp
-}
-
-const filterDeletedCollections = (events: NDKEvent[]): NDKEvent[] => {
-	return events.filter((event) => {
-		const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
-		if (!dTag) return true
-		return !isCollectionDeleted(dTag, event.created_at)
-	})
-}
+import {
+	getCollectionCoordinates as getCollectionCoordinatesFromSdk,
+	getCollectionId as getCollectionIdFromSdk,
+	getCollectionImages as getCollectionImagesFromSdk,
+	getCollectionShippingOptions as getCollectionShippingOptionsFromSdk,
+	getCollectionSummary as getCollectionSummaryFromSdk,
+	getCollectionTitle as getCollectionTitleFromSdk,
+	readCollectionsWorkflow,
+} from '@sdk/commerce/collections'
+import { createNdkReadContext } from '@platform/web/ndkReadContext'
 
 // --- DATA FETCHING FUNCTIONS ---
 /**
@@ -99,23 +44,7 @@ export const fetchCollections = async () => {
 		return []
 	}
 
-	const filter: NDKFilter = {
-		kinds: [30405 as NDKKind], // Product listings in Nostr
-		limit: 50,
-	}
-
-	// Use timeout helper to prevent hanging if relays don't respond
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 10000 })
-	const allEvents = Array.from(events)
-
-	// Filter out blacklisted collections and authors, then filter out locally-deleted collections
-	const filteredEvents = filterDeletedCollections(filterBlacklistedEvents(allEvents))
-
-	// Filter out system collections (featured products list)
-	return filteredEvents.filter((event) => {
-		const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
-		return dTag !== FEATURED_ITEMS_CONFIG.PRODUCTS.dTag
-	})
+	return filterBlacklistedEvents(await readCollectionsWorkflow(createNdkReadContext(10000), { limit: 50 }))
 }
 /**
  * Fetches all collections from a specific pubkey
@@ -133,25 +62,7 @@ export const fetchCollectionsByPubkey = async (pubkey: string) => {
 	// trips NDK's strict filter validation. Reject before constructing it.
 	if (!isValidHexKey(pubkey)) return []
 
-	const filter: NDKFilter = {
-		kinds: [30405 as NDKKind], // Collections
-		authors: [pubkey],
-		limit: 50,
-	}
-
-	// Use timeout helper to prevent hanging if relays don't respond
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 10000 })
-	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-
-	// Filter out blacklisted collections (author check not needed since we're querying by author)
-	// Then filter out locally-deleted collections
-	const filteredEvents = filterDeletedCollections(filterBlacklistedEvents(allEvents))
-
-	// Filter out system collections (featured products list)
-	return filteredEvents.filter((event) => {
-		const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
-		return dTag !== FEATURED_ITEMS_CONFIG.PRODUCTS.dTag
-	})
+	return filterBlacklistedEvents(await readCollectionsWorkflow(createNdkReadContext(10000), { author: pubkey, limit: 50 }))
 }
 
 /**
@@ -247,31 +158,23 @@ export const fetchCollectionById = async (id: string): Promise<NDKEvent | null> 
 /**
  * Gets the collection title from an event
  */
-export const getCollectionTitle = (event: NDKEvent | null): z.infer<typeof CollectionTitleTagSchema>[1] =>
-	event?.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Collection'
+export const getCollectionTitle = (event: NDKEvent | null): z.infer<typeof CollectionTitleTagSchema>[1] => getCollectionTitleFromSdk(event)
 
 /**
  * Get the collection summary from an event
  */
 export const getCollectionSummary = (event: NDKEvent | null): z.infer<typeof CollectionSummaryTagSchema>[1] =>
-	event?.tags.find((t) => t[0] === 'summary')?.[1] || 'No summary available.'
+	getCollectionSummaryFromSdk(event)
 
 /**
  * Gets the collection ID from an event
  */
 export const getCollectionId = (event: NDKEvent): string => {
-	const dTag = event.tags.find((tag) => tag[0] === 'd')
-	return dTag?.[1] || ''
+	return getCollectionIdFromSdk(event)
 }
 
 export const getCollectionImages = (event: NDKEvent | null): z.infer<typeof CollectionImageTagSchema>[] => {
-	if (!event) return []
-	return event.tags
-		.filter((t) => t[0] === 'image')
-		.map((t) => t as z.infer<typeof CollectionImageTagSchema>)
-		.sort((a, b) => {
-			return 0
-		})
+	return getCollectionImagesFromSdk(event) as z.infer<typeof CollectionImageTagSchema>[]
 }
 
 /**
@@ -280,16 +183,14 @@ export const getCollectionImages = (event: NDKEvent | null): z.infer<typeof Coll
  * @returns An array of shipping option tuples with format [tag, shipping_reference, extra_cost?]
  */
 export const getCollectionShippingOptions = (event: NDKEvent | null): Array<string[]> => {
-	if (!event) return []
-	return event.tags.filter((t) => t[0] === 'shipping_option')
+	return getCollectionShippingOptionsFromSdk(event)
 }
 
 /**
  * Creates collection coordinates string
  */
 export const getCollectionCoordinates = (event: NDKEvent): string => {
-	const id = getCollectionId(event)
-	return `30405:${event.pubkey}:${id}`
+	return getCollectionCoordinatesFromSdk(event)
 }
 
 // --- REACT QUERY OPTIONS ---

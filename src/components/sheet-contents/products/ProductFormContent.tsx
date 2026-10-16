@@ -1,7 +1,7 @@
-import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@ui/primitives/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
 import { ndkActions } from '@/lib/stores/ndk'
-import { productFormActions, productFormStore, type ProductFormState, type ProductFormTab } from '@/lib/stores/product'
+import { productFormActions, productFormStore, type ProductFormTab } from '@/lib/stores/product'
 
 // Expose store/actions to e2e tests for deterministic state control
 // Only in test environments to avoid leaking internals in production
@@ -11,8 +11,14 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'test') {
 }
 import { uiActions } from '@/lib/stores/ui'
 import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
-import { resolvePublishPrice } from '@/lib/utils/productPriceResolution'
-import type { ProductWorkflowResolution } from '@/lib/workflow/productWorkflowResolver'
+import {
+	getAdjacentSellerProductTab,
+	getFirstBlockingSellerProductTab,
+	getSellerProductFormValidationIssues,
+	getSellerProductTabValidationIssues,
+	SELLER_PRODUCT_FORM_TAB_ORDER as PRODUCT_FORM_TAB_ORDER,
+	type ProductWorkflowResolution,
+} from '@sdk/commerce/products'
 import { useForm } from '@tanstack/react-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -22,8 +28,6 @@ import { toast } from 'sonner'
 import { NameTab } from './NameTab'
 import { CategoryTab, DetailTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
 
-const PRODUCT_FORM_TAB_ORDER: ProductFormTab[] = ['name', 'detail', 'spec', 'category', 'images', 'shipping']
-
 const PRODUCT_FORM_TAB_LABELS: Record<ProductFormTab, string> = {
 	name: 'Name',
 	detail: 'Detail',
@@ -31,78 +35,6 @@ const PRODUCT_FORM_TAB_LABELS: Record<ProductFormTab, string> = {
 	category: 'Category',
 	images: 'Images',
 	shipping: 'Shipping',
-}
-
-type ProductFormWorkflowState = Pick<
-	ProductFormState,
-	| 'name'
-	| 'description'
-	| 'price'
-	| 'fiatPrice'
-	| 'quantity'
-	| 'currency'
-	| 'currencyMode'
-	| 'bitcoinUnit'
-	| 'mainCategory'
-	| 'images'
-	| 'shippings'
->
-
-function isValidNumberString(value: string): boolean {
-	return value.trim().length > 0 && !isNaN(Number(value))
-}
-
-function getTabValidationIssues(state: ProductFormWorkflowState, tab: ProductFormTab): string[] {
-	switch (tab) {
-		case 'name': {
-			const issues: string[] = []
-			if (state.name.trim().length === 0) issues.push('Product name is required')
-			if (state.description.trim().length === 0) issues.push('Description is required')
-			return issues
-		}
-		case 'detail': {
-			const issues: string[] = []
-			// Currency-mode aware price validation: fiat-fixed publishing uses
-			// the explicit fiat value (the sats price may still be unresolved
-			// while exchange rates are unavailable), while sats-fixed
-			// publishing fails closed until the sats price is resolved.
-			if (resolvePublishPrice(state).status !== 'ok') issues.push('Valid product price is required')
-			if (!isValidNumberString(state.quantity)) issues.push('Valid product quantity is required')
-			return issues
-		}
-		case 'category':
-			return state.mainCategory ? [] : ['Main category is required']
-		case 'images':
-			return state.images.length > 0 ? [] : ['At least one image is required']
-		case 'shipping':
-			return state.shippings.some((shipping) => !!shipping.shippingRef) ? [] : ['At least one shipping option is required']
-		case 'spec':
-			return []
-	}
-}
-
-function getFormValidationIssues(state: ProductFormWorkflowState): string[] {
-	return PRODUCT_FORM_TAB_ORDER.flatMap((tab) => getTabValidationIssues(state, tab))
-}
-
-function getFirstBlockingTab(state: ProductFormWorkflowState, targetTab: ProductFormTab): ProductFormTab | null {
-	const targetIndex = PRODUCT_FORM_TAB_ORDER.indexOf(targetTab)
-
-	if (targetIndex <= 0) return null
-
-	for (const tab of PRODUCT_FORM_TAB_ORDER.slice(0, targetIndex)) {
-		if (getTabValidationIssues(state, tab).length > 0) {
-			return tab
-		}
-	}
-
-	return null
-}
-
-function getAdjacentTab(currentTab: ProductFormTab, direction: 'next' | 'previous'): ProductFormTab | null {
-	const currentIndex = PRODUCT_FORM_TAB_ORDER.indexOf(currentTab)
-	const offset = direction === 'next' ? 1 : -1
-	return PRODUCT_FORM_TAB_ORDER[currentIndex + offset] ?? null
 }
 
 export function ProductFormContent({
@@ -134,14 +66,16 @@ export function ProductFormContent({
 
 	const validationIssuesByTab = useMemo(
 		() =>
-			Object.fromEntries(PRODUCT_FORM_TAB_ORDER.map((tab) => [tab, getTabValidationIssues(formState, tab)])) as Record<
-				ProductFormTab,
-				string[]
-			>,
+			Object.fromEntries(
+				(['name', 'detail', 'spec', 'category', 'images', 'shipping'] as const).map((tab) => [
+					tab,
+					getSellerProductTabValidationIssues(formState, tab),
+				]),
+			) as Record<ProductFormTab, string[]>,
 		[formState],
 	)
 	const currentTabValidationIssues = validationIssuesByTab[activeTab]
-	const formValidationIssues = useMemo(() => getFormValidationIssues(formState), [formState])
+	const formValidationIssues = useMemo(() => getSellerProductFormValidationIssues(formState), [formState])
 
 	// Check for persisted draft on mount (for drafts from previous sessions)
 	const checkForPersistedDraft = useCallback(async () => {
@@ -285,7 +219,7 @@ export function ProductFormContent({
 				return
 			}
 
-			const blockingTab = getFirstBlockingTab(formState, targetTab)
+			const blockingTab = getFirstBlockingSellerProductTab(formState, targetTab)
 			if (blockingTab) {
 				toast.error(`Complete ${PRODUCT_FORM_TAB_LABELS[blockingTab]} before moving to ${PRODUCT_FORM_TAB_LABELS[targetTab]}`)
 				return
@@ -299,14 +233,14 @@ export function ProductFormContent({
 	const handleNext = useCallback(() => {
 		if (currentTabValidationIssues.length > 0) return
 
-		const nextTab = getAdjacentTab(activeTab, 'next')
+		const nextTab = getAdjacentSellerProductTab(activeTab, 'next')
 		if (nextTab) {
 			productFormActions.setActiveTab(nextTab)
 		}
 	}, [activeTab, currentTabValidationIssues])
 
 	const handleBack = useCallback(() => {
-		const previousTab = getAdjacentTab(activeTab, 'previous')
+		const previousTab = getAdjacentSellerProductTab(activeTab, 'previous')
 		if (previousTab) {
 			productFormActions.setActiveTab(previousTab)
 		}
@@ -321,12 +255,12 @@ export function ProductFormContent({
 			const targetIndex = PRODUCT_FORM_TAB_ORDER.indexOf(targetTab)
 			if (targetIndex <= currentIndex) return false
 
-			return getFirstBlockingTab(formState, targetTab) !== null
+			return getFirstBlockingSellerProductTab(formState, targetTab) !== null
 		},
 		[activeTab, editingProductId, formState],
 	)
 
-	const previousTab = getAdjacentTab(activeTab, 'previous')
+	const previousTab = getAdjacentSellerProductTab(activeTab, 'previous')
 	const isCurrentTabBlocked = currentTabValidationIssues.length > 0
 	const footerValidationIssues = activeTab === 'shipping' || editingProductId ? formValidationIssues : currentTabValidationIssues
 

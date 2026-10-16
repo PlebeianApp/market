@@ -4,36 +4,33 @@ import { NDKWoT } from '@nostr-dev-kit/wot'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { validateProfileIdentifier } from '@/lib/utils/profileValidation'
 import { isValidHexKey } from '@/lib/utils'
+import {
+	emptyZapCapabilityInfo,
+	getNormalizedProfileDisplayName as sdkGetNormalizedProfileDisplayName,
+	getNormalizedProfileNip05 as sdkGetNormalizedProfileNip05,
+	getNormalizedProfilePicture as sdkGetNormalizedProfilePicture,
+	isNpubIdentifier,
+	normalizeOptionalPubkey,
+	normalizeOptionalString,
+	summarizeZapMethods,
+	type ZapCapabilityInfo,
+} from '@sdk/core/profile'
 import { profileKeys } from './queryKeyFactory'
 
-export function normalizeOptionalString(value: unknown): string | null {
-	if (typeof value !== 'string') {
-		return null
-	}
-
-	const trimmed = value.trim()
-	return trimmed.length > 0 ? trimmed : null
-}
+export { normalizeOptionalPubkey, normalizeOptionalString }
+export type { ZapCapabilityInfo }
+export type { ZapMethod } from '@sdk/core/profile'
 
 export function getNormalizedProfileDisplayName(profile: Partial<NDKUserProfile> | null | undefined): string | null {
-	return normalizeOptionalString(profile?.displayName) ?? normalizeOptionalString(profile?.name)
+	return sdkGetNormalizedProfileDisplayName(profile)
 }
 
 export function getNormalizedProfileNip05(profile: Partial<NDKUserProfile> | null | undefined): string | null {
-	return normalizeOptionalString(profile?.nip05)
+	return sdkGetNormalizedProfileNip05(profile)
 }
 
 export function getNormalizedProfilePicture(profile: Partial<NDKUserProfile> | null | undefined): string {
-	return normalizeOptionalString(profile?.picture) ?? ''
-}
-
-export function normalizeOptionalPubkey(identifier: string | undefined): string | undefined {
-	if (typeof identifier !== 'string') {
-		return undefined
-	}
-
-	const trimmed = identifier.trim()
-	return trimmed.length > 0 ? trimmed : undefined
+	return sdkGetNormalizedProfilePicture(profile)
 }
 
 export const fetchProfileByNpub = async (npub: string): Promise<NDKUserProfile | null> => {
@@ -222,18 +219,9 @@ export const useZapCapability = (event: NDKEvent | NDKUser) => {
 	})
 }
 
-export type ZapMethod = 'nip57' | 'nip61'
-
-export interface ZapCapabilityInfo {
-	canReceiveZaps: boolean
-	methods: ZapMethod[]
-	hasLightning: boolean // nip57 - traditional Lightning zaps
-	hasCashu: boolean // nip61 - Cashu/Nutzaps
-}
-
 export const checkZapCapabilityByNpub = async (npub: string): Promise<boolean> => {
 	// Guard against empty or invalid npub
-	if (!npub || !npub.startsWith('npub')) {
+	if (!isNpubIdentifier(npub)) {
 		return false
 	}
 
@@ -255,15 +243,10 @@ export const checkZapCapabilityByNpub = async (npub: string): Promise<boolean> =
 }
 
 export const getZapCapabilityInfo = async (npub: string): Promise<ZapCapabilityInfo> => {
-	const defaultResult: ZapCapabilityInfo = {
-		canReceiveZaps: false,
-		methods: [],
-		hasLightning: false,
-		hasCashu: false,
-	}
+	const defaultResult = emptyZapCapabilityInfo()
 
 	// Guard against empty or invalid npub
-	if (!npub || !npub.startsWith('npub')) {
+	if (!isNpubIdentifier(npub)) {
 		return defaultResult
 	}
 
@@ -277,23 +260,7 @@ export const getZapCapabilityInfo = async (npub: string): Promise<ZapCapabilityI
 
 		// Get zap info
 		const zapInfo = await user.getZapInfo()
-
-		const methods: ZapMethod[] = []
-		let hasLightning = false
-		let hasCashu = false
-
-		zapInfo.forEach((_, method) => {
-			methods.push(method as ZapMethod)
-			if (method === 'nip57') hasLightning = true
-			if (method === 'nip61') hasCashu = true
-		})
-
-		return {
-			canReceiveZaps: zapInfo.size > 0,
-			methods,
-			hasLightning,
-			hasCashu,
-		}
+		return summarizeZapMethods(zapInfo.keys())
 	} catch (error) {
 		console.error('Error getting zap capability info:', error)
 		return defaultResult
@@ -304,13 +271,13 @@ export const zapCapabilityByNpubQueryOptions = (npub: string) =>
 	queryOptions({
 		queryKey: profileKeys.zapCapability(npub),
 		queryFn: () => checkZapCapabilityByNpub(npub),
-		enabled: !!npub && npub.startsWith('npub'),
+		enabled: isNpubIdentifier(npub),
 	})
 
 export const useZapCapabilityByNpub = (npub: string) => {
 	return useQuery({
 		...zapCapabilityByNpubQueryOptions(npub),
-		enabled: !!npub && npub.startsWith('npub'),
+		enabled: isNpubIdentifier(npub),
 		select: (data) => data,
 	})
 }
@@ -319,13 +286,13 @@ export const zapCapabilityInfoQueryOptions = (npub: string) =>
 	queryOptions({
 		queryKey: [...profileKeys.zapCapability(npub), 'info'],
 		queryFn: () => getZapCapabilityInfo(npub),
-		enabled: !!npub && npub.startsWith('npub'),
+		enabled: isNpubIdentifier(npub),
 	})
 
 export const useZapCapabilityInfo = (npub: string) => {
 	return useQuery({
 		...zapCapabilityInfoQueryOptions(npub),
-		enabled: !!npub && npub.startsWith('npub'),
+		enabled: isNpubIdentifier(npub),
 	})
 }
 

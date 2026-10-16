@@ -1,5 +1,5 @@
 import { publishCollection, updateCollection, type CollectionFormData } from '@/publish/collections'
-import { getCollectionShippingOptions, getCollectionSummary } from '@/queries/collections'
+import { createCollectionEditDraft, addProductToCollectionSelection, removeProductFromCollectionSelection } from '@sdk/commerce/collections'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import type NDK from '@nostr-dev-kit/ndk'
 import type { NDKSigner, NDKEvent } from '@nostr-dev-kit/ndk'
@@ -80,34 +80,12 @@ export const collectionFormActions = {
 	 * Load collection for editing from an NDKEvent
 	 */
 	loadCollectionForEdit: (event: NDKEvent) => {
-		const titleTag = event.tags.find((tag) => tag[0] === 'title')
-		const summaryTag = getCollectionSummary(event)
-		const imageTag = event.tags.find((tag) => tag[0] === 'image')
-		const dTag = event.tags.find((tag) => tag[0] === 'd')
-		const productTags = event.tags.filter((tag) => tag[0] === 'a')
-		const shippingTags = getCollectionShippingOptions(event)
-
-		// Convert shipping tags to collection shipping form
-		const shippingOptions: CollectionShippingForm[] = shippingTags.map((tag) => {
-			return {
-				shipping: {
-					id: tag[1], // The shipping reference
-					name: `Shipping Option (${tag[1].split(':')[2] || 'unknown'})`, // Extract ID from reference for display
-				},
-				extraCost: tag[2] || '',
-			}
-		})
+		const draft = createCollectionEditDraft(event)
 
 		collectionFormStore.setState(() => ({
 			...DEFAULT_COLLECTION_FORM_STATE,
 			isEditing: true,
-			editingCollectionId: dTag?.[1] || '',
-			name: titleTag?.[1] || '',
-			summary: summaryTag || '',
-			description: event.content || '',
-			headerImageUrl: imageTag?.[1] || '',
-			selectedProducts: productTags.map((tag) => tag[1]),
-			shippings: shippingOptions,
+			...draft,
 		}))
 	},
 
@@ -117,7 +95,7 @@ export const collectionFormActions = {
 	addProduct: (productCoordinates: string) => {
 		collectionFormStore.setState((state) => ({
 			...state,
-			selectedProducts: [...state.selectedProducts, productCoordinates],
+			selectedProducts: addProductToCollectionSelection(state.selectedProducts, productCoordinates),
 		}))
 	},
 
@@ -127,7 +105,7 @@ export const collectionFormActions = {
 	removeProduct: (productCoordinates: string) => {
 		collectionFormStore.setState((state) => ({
 			...state,
-			selectedProducts: state.selectedProducts.filter((p) => p !== productCoordinates),
+			selectedProducts: removeProductFromCollectionSelection(state.selectedProducts, productCoordinates),
 		}))
 	},
 

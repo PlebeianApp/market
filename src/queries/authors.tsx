@@ -1,49 +1,29 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { authorKeys } from './queryKeyFactory'
 import { queryOptions } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
 import { isValidHexKey } from '@/lib/utils'
+import { buildProfileMetadataFilter, parseNostrAuthor, pickLatestEvent } from '@sdk/core/profile'
 
-export type NostrAuthor = {
-	id: string
-	name?: string
-	about?: string
-	picture?: string
-	nip05?: string
-}
-
-const transformEvent = (event: NDKEvent): NostrAuthor => ({
-	id: event.pubkey,
-	name: event.tags.find((t) => t[0] === 'name')?.[1] || JSON.parse(event.content)?.name,
-	about: JSON.parse(event.content)?.about,
-	picture: JSON.parse(event.content)?.picture,
-	nip05: JSON.parse(event.content)?.nip05,
-})
+export type { NostrAuthor } from '@sdk/core/profile'
 
 export const fetchAuthor = async (pubkey: string) => {
 	// Reject an invalid pubkey before constructing the filter — a malformed
 	// value in { authors: [...] } trips NDK's strict filter validation.
 	if (!isValidHexKey(pubkey)) throw new Error('Author pubkey is required')
 
-	const filter: NDKFilter = {
-		kinds: [0], // kind 0 is metadata
-		authors: [pubkey],
-	}
+	const filter = buildProfileMetadataFilter(pubkey)
 
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	const events = await ndk.fetchEvents(filter)
-	const eventArray = Array.from(events)
+	const latestEvent = pickLatestEvent(events)
 
-	if (eventArray.length === 0) {
+	if (!latestEvent) {
 		throw new Error('Author not found')
 	}
 
-	// Get the most recent metadata event
-	const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
-	return transformEvent(latestEvent)
+	return parseNostrAuthor(latestEvent)
 }
 
 export const authorQueryOptions = (pubkey: string) =>

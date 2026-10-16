@@ -24,77 +24,52 @@ import { filterBlacklistedEvents, filterBlacklistedPubkeys } from '@/lib/utils/b
 import { excludeTestLabeledEvents } from '@/queries/testLabels'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { isValidHexKey } from '@/lib/utils'
+import { createNdkReadContext } from '@platform/web/ndkReadContext'
+import {
+	excludeDeletedProducts,
+	isProductInStock as isProductInStockFromSdk,
+	isProductListed,
+	readProductListWorkflow,
+	type ProductListingVisibility,
+} from '@sdk/commerce/discovery'
+import {
+	getProductCategories as getProductCategoriesFromSdk,
+	getProductCollection as getProductCollectionFromSdk,
+	getProductContentWarning as getProductContentWarningFromSdk,
+	getProductCoordinates as getProductCoordinatesFromSdk,
+	getProductCreatedAt as getProductCreatedAtFromSdk,
+	getProductDescription as getProductDescriptionFromSdk,
+	getProductDimensions as getProductDimensionsFromSdk,
+	getProductId as getProductIdFromSdk,
+	getProductImages as getProductImagesFromSdk,
+	getProductLocation as getProductLocationFromSdk,
+	getProductPrice as getProductPriceFromSdk,
+	getProductPubkey as getProductPubkeyFromSdk,
+	getProductShippingOptions as getProductShippingOptionsFromSdk,
+	getProductSpecs as getProductSpecsFromSdk,
+	getProductStock as getProductStockFromSdk,
+	getProductSummary as getProductSummaryFromSdk,
+	getProductTitle as getProductTitleFromSdk,
+	getProductType as getProductTypeFromSdk,
+	getProductVisibility as getProductVisibilityFromSdk,
+	getProductWeight as getProductWeightFromSdk,
+	isNSFWProduct as isNSFWProductFromSdk,
+} from '@sdk/commerce/discovery'
 
 // Re-export productKeys for use in other query files
 export { productKeys }
 
-// --- DELETED PRODUCTS TRACKING ---
-// Track deleted product d-tags with deletion timestamps to filter them from relay responses.
-// Per NIP-09, deletions only apply to events older than the deletion event.
-// If a new event with the same d-tag is published after the deletion, it should be visible.
-// Persisted to localStorage so deletions survive page reloads.
-
-const DELETED_PRODUCTS_STORAGE_KEY = 'plebeian_deleted_product_ids'
-const hasLocalStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
-
-// Map of d-tag -> deletion timestamp (unix seconds)
-const loadDeletedProductIds = (): Map<string, number> => {
-	if (!hasLocalStorage()) return new Map()
-
-	try {
-		const stored = localStorage.getItem(DELETED_PRODUCTS_STORAGE_KEY)
-		if (stored) {
-			const parsed = JSON.parse(stored)
-			// Handle legacy format (array of strings) - migrate to new format
-			if (Array.isArray(parsed)) {
-				const now = Math.floor(Date.now() / 1000)
-				return new Map(parsed.map((dTag: string) => [dTag, now]))
-			}
-			// New format: object with d-tag keys and timestamp values
-			if (typeof parsed === 'object' && parsed !== null) {
-				return new Map(Object.entries(parsed))
-			}
-		}
-	} catch (e) {
-		console.error('Failed to load deleted product IDs from localStorage:', e)
-	}
-	return new Map()
-}
-
-const saveDeletedProductIds = (ids: Map<string, number>) => {
-	if (!hasLocalStorage()) return
-
-	try {
-		localStorage.setItem(DELETED_PRODUCTS_STORAGE_KEY, JSON.stringify(Object.fromEntries(ids)))
-	} catch (e) {
-		console.error('Failed to save deleted product IDs to localStorage:', e)
-	}
-}
-
-const deletedProductIds = loadDeletedProductIds()
-
-export const markProductAsDeleted = (dTag: string, deletionTimestamp?: number) => {
-	// Use provided timestamp or current time
-	const timestamp = deletionTimestamp ?? Math.floor(Date.now() / 1000)
-	deletedProductIds.set(dTag, timestamp)
-	saveDeletedProductIds(deletedProductIds)
-}
-
-export const isProductDeleted = (dTag: string, eventCreatedAt?: number) => {
-	const deletionTimestamp = deletedProductIds.get(dTag)
-	if (deletionTimestamp === undefined) return false
-	// If no event timestamp provided, assume deleted
-	if (eventCreatedAt === undefined) return true
-	// Per NIP-09: deletion only applies to events older than the deletion
-	return eventCreatedAt < deletionTimestamp
-}
-
-const filterDeletedProducts = (events: NDKEvent[]): NDKEvent[] => {
-	return events.filter((event) => {
-		const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
-		if (!dTag) return true
-		return !isProductDeleted(dTag, event.created_at)
-	})
+// Deleted and superseded listings are dropped by the shared event store (NIP-09, author-only).
+const listProducts = async (
+	query: { limit: number; tag?: string; until?: number; author?: string },
+	visibility: ProductListingVisibility,
+	options: { excludeTestLabeled: boolean },
+): Promise<NDKEvent[]> => {
+	const events = await readProductListWorkflow(createNdkReadContext(), query)
+	const notBlacklisted = filterBlacklistedEvents(events)
+	// ADR-0009: test labels are filtered beside the delete and blacklist checks
+	const visible = options.excludeTestLabeled ? await excludeTestLabeledEvents(notBlacklisted) : notBlacklisted
+	return visible.filter((event) => isProductListed(event, visibility))
 }
 
 // Helper to check if an ID looks like a Nostr event ID (64-hex characters)
@@ -107,19 +82,7 @@ export const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
  * @returns true if the product is in stock
  */
 export const isProductInStock = (event: NDKEvent): boolean => {
-	const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
-	const visibility = visibilityTag?.[1] || 'on-sale'
-
-	// Pre-order items are always considered "in stock" for display purposes
-	if (visibility === 'pre-order') return true
-
-	const stockTag = event.tags.find((t) => t[0] === 'stock')
-	// No stock tag means out of stock (matching ProductCard behavior)
-	if (!stockTag) return false
-
-	const stockValue = parseInt(stockTag[1], 10)
-	// Stock must be a valid number > 0
-	return !isNaN(stockValue) && stockValue > 0
+	return isProductInStockFromSdk(event)
 }
 
 // --- DATA FETCHING FUNCTIONS ---
@@ -138,33 +101,7 @@ export const fetchProducts = async (limit: number = 500, tag?: string, includeHi
 		return []
 	}
 
-	const filter: NDKFilter = {
-		kinds: [30402], // Product listings in Nostr
-		limit,
-		...(tag && { '#t': [tag] }), // Add tag filter if provided
-	}
-
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
-	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-
-	// Filter out blacklisted products and authors, then filter out locally-deleted products
-	const filteredEvents = filterDeletedProducts(filterBlacklistedEvents(allEvents))
-
-	// Filter out test-labeled items (ADR-0009: runs beside the delete and blacklist checks)
-	const nonTestLabeledEvents = await excludeTestLabeledEvents(filteredEvents)
-
-	// Filter out hidden products unless explicitly included
-	if (includeHidden) {
-		return nonTestLabeledEvents
-	}
-
-	return nonTestLabeledEvents.filter((event) => {
-		const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
-		const visibility = visibilityTag?.[1] || 'on-sale' // Default to on-sale if not specified
-		if (visibility === 'hidden') return false
-		// Filter out out-of-stock products from card views
-		return isProductInStock(event)
-	})
+	return listProducts({ limit, tag }, includeHidden ? 'all' : 'purchasable', { excludeTestLabeled: true })
 }
 
 /**
@@ -182,32 +119,7 @@ export const fetchProductsPaginated = async (limit: number = 20, until?: number,
 		return []
 	}
 
-	const filter: NDKFilter = {
-		kinds: [30402], // Product listings in Nostr
-		limit,
-		...(until && { until }),
-		...(tag && { '#t': [tag] }), // Add tag filter if provided
-	}
-
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
-	const allEvents = Array.from(events).sort((a, b) => b.created_at! - a.created_at!)
-
-	// Filter out blacklisted products and authors, then filter out locally-deleted products
-	const filteredEvents = filterDeletedProducts(filterBlacklistedEvents(allEvents))
-
-	// Filter out test-labeled items (ADR-0009: runs beside the delete and blacklist checks)
-	const nonTestLabeledEvents = await excludeTestLabeledEvents(filteredEvents)
-
-	// Filter out hidden products unless explicitly included
-	if (includeHidden) {
-		return nonTestLabeledEvents
-	}
-
-	return nonTestLabeledEvents.filter((event) => {
-		const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
-		const visibility = visibilityTag?.[1] || 'on-sale' // Default to on-sale if not specified
-		return visibility !== 'hidden'
-	})
+	return listProducts({ limit, until, tag }, includeHidden ? 'all' : 'not-hidden', { excludeTestLabeled: true })
 }
 
 /**
@@ -258,31 +170,8 @@ export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boole
 		return []
 	}
 
-	const filter: NDKFilter = {
-		kinds: [30402],
-		authors: [pubkey],
-		limit,
-	}
-
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
-	const allEvents = Array.from(events)
-
-	// Filter out blacklisted products (author check not needed since we're querying by author)
-	// Then filter out locally-deleted products
-	const filteredEvents = filterDeletedProducts(filterBlacklistedEvents(allEvents))
-
-	// Filter out hidden products unless explicitly included
-	if (includeHidden) {
-		return filteredEvents
-	}
-
-	return filteredEvents.filter((event) => {
-		const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
-		const visibility = visibilityTag?.[1] || 'on-sale' // Default to on-sale if not specified
-		if (visibility === 'hidden') return false
-		// Filter out out-of-stock products from public views
-		return isProductInStock(event)
-	})
+	// Owner views pass includeHidden and keep test-labeled items visible.
+	return listProducts({ limit, author: pubkey }, includeHidden ? 'all' : 'purchasable', { excludeTestLabeled: false })
 }
 
 export const fetchProductByATag = async (pubkey: string, dTag: string) => {
@@ -448,11 +337,10 @@ export const fetchProductsByCollection = async (collectionEvent: NDKEvent): Prom
 	const results = await Promise.all(productPromises)
 	const allProducts = results.filter((event) => event !== null) as NDKEvent[]
 
-	// Filter out blacklisted products and authors, then filter out locally-deleted products
-	const filteredProducts = filterDeletedProducts(filterBlacklistedEvents(allProducts))
+	const notDeleted = await excludeDeletedProducts(createNdkReadContext(), filterBlacklistedEvents(allProducts))
 
 	// Filter out test-labeled items (ADR-0009: runs beside the delete and blacklist checks)
-	const nonTestLabeledProducts = await excludeTestLabeledEvents(filteredProducts)
+	const nonTestLabeledProducts = await excludeTestLabeledEvents(notDeleted)
 
 	// Filter out out-of-stock products from collection views
 	return nonTestLabeledProducts.filter(isProductInStock)
@@ -489,8 +377,7 @@ export const productsByCollectionQueryOptions = (collectionEvent: NDKEvent | nul
  * @returns The product ID string
  */
 export const getProductId = (event: NDKEvent | null): string => {
-	const dTag = event?.tags.find((t) => t[0] === 'd')
-	return dTag?.[1] || ''
+	return getProductIdFromSdk(event)
 }
 
 /**
@@ -499,8 +386,7 @@ export const getProductId = (event: NDKEvent | null): string => {
  * @returns The product coordinates string
  */
 export const getProductCoordinates = (event: NDKEvent): string => {
-	const id = getProductId(event)
-	return `30402:${event.pubkey}:${id}`
+	return getProductCoordinatesFromSdk(event)
 }
 
 /**
@@ -508,23 +394,21 @@ export const getProductCoordinates = (event: NDKEvent): string => {
  * @param event The product event or null
  * @returns The product title string
  */
-export const getProductTitle = (event: NDKEvent | null): z.infer<typeof ProductTitleTagSchema>[1] =>
-	event?.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Product'
+export const getProductTitle = (event: NDKEvent | null): z.infer<typeof ProductTitleTagSchema>[1] => getProductTitleFromSdk(event)
 
 /**
  * Gets the product description from a product event
  * @param event The product event or null
  * @returns The product description string
  */
-export const getProductDescription = (event: NDKEvent | null): string => event?.content || ''
+export const getProductDescription = (event: NDKEvent | null): string => getProductDescriptionFromSdk(event)
 
 /**
  * Gets the product summary from a product event
  * @param event The product event or null
  * @returns The product summary string
  */
-export const getProductSummary = (event: NDKEvent | null): z.infer<typeof ProductSummaryTagSchema>[1] =>
-	event?.tags.find((t) => t[0] === 'summary')?.[1] || ''
+export const getProductSummary = (event: NDKEvent | null): z.infer<typeof ProductSummaryTagSchema>[1] => getProductSummaryFromSdk(event)
 
 /**
  * Gets the price tag from a product event
@@ -536,12 +420,7 @@ export const getProductSummary = (event: NDKEvent | null): z.infer<typeof Produc
  * - [3]: frequency (optional string)
  */
 export const getProductPrice = (event: NDKEvent | null): z.infer<typeof ProductPriceTagSchema> | undefined => {
-	if (!event) return undefined
-	const priceTag = event.tags.find((t) => t[0] === 'price')
-	if (!priceTag) return undefined
-
-	// Return the tuple directly to match the schema
-	return priceTag as z.infer<typeof ProductPriceTagSchema>
+	return getProductPriceFromSdk(event) as z.infer<typeof ProductPriceTagSchema> | undefined
 }
 
 /**
@@ -554,17 +433,7 @@ export const getProductPrice = (event: NDKEvent | null): z.infer<typeof ProductP
  * - [3]: order (optional string - numeric)
  */
 export const getProductImages = (event: NDKEvent | null): z.infer<typeof ProductImageTagSchema>[] => {
-	if (!event) return []
-	return event.tags
-		.filter((t) => t[0] === 'image')
-		.map((t) => t as z.infer<typeof ProductImageTagSchema>)
-		.sort((a, b) => {
-			// Sort by order if available
-			if (a[3] && b[3]) {
-				return parseInt(a[3]) - parseInt(b[3])
-			}
-			return 0
-		})
+	return getProductImagesFromSdk(event) as z.infer<typeof ProductImageTagSchema>[]
 }
 
 /**
@@ -576,8 +445,7 @@ export const getProductImages = (event: NDKEvent | null): z.infer<typeof Product
  * - [2]: value (string)
  */
 export const getProductSpecs = (event: NDKEvent | null): z.infer<typeof ProductSpecTagSchema>[] => {
-	if (!event) return []
-	return event.tags.filter((t) => t[0] === 'spec').map((t) => t as z.infer<typeof ProductSpecTagSchema>)
+	return getProductSpecsFromSdk(event) as z.infer<typeof ProductSpecTagSchema>[]
 }
 
 /**
@@ -589,11 +457,7 @@ export const getProductSpecs = (event: NDKEvent | null): z.infer<typeof ProductS
  * - [2]: physicalType ('digital' | 'physical')
  */
 export const getProductType = (event: NDKEvent | null): z.infer<typeof ProductTypeTagSchema> | undefined => {
-	if (!event) return undefined
-	const typeTag = event.tags.find((t) => t[0] === 'type')
-	if (!typeTag) return undefined
-
-	return typeTag as z.infer<typeof ProductTypeTagSchema>
+	return getProductTypeFromSdk(event) as z.infer<typeof ProductTypeTagSchema> | undefined
 }
 
 /**
@@ -604,9 +468,7 @@ export const getProductType = (event: NDKEvent | null): z.infer<typeof ProductTy
  * - [1]: visibility ('hidden' | 'on-sale' | 'pre-order')
  */
 export const getProductVisibility = (event: NDKEvent | null): z.infer<typeof ProductVisibilityTagSchema> | undefined => {
-	if (!event) return undefined
-	const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
-	return visibilityTag ? (visibilityTag as z.infer<typeof ProductVisibilityTagSchema>) : undefined
+	return getProductVisibilityFromSdk(event) as z.infer<typeof ProductVisibilityTagSchema> | undefined
 }
 
 /**
@@ -617,9 +479,7 @@ export const getProductVisibility = (event: NDKEvent | null): z.infer<typeof Pro
  * - [1]: stock (string - numeric)
  */
 export const getProductStock = (event: NDKEvent | null): z.infer<typeof ProductStockTagSchema> | undefined => {
-	if (!event) return undefined
-	const stockTag = event.tags.find((t) => t[0] === 'stock')
-	return stockTag ? (stockTag as z.infer<typeof ProductStockTagSchema>) : undefined
+	return getProductStockFromSdk(event) as z.infer<typeof ProductStockTagSchema> | undefined
 }
 
 /**
@@ -631,11 +491,7 @@ export const getProductStock = (event: NDKEvent | null): z.infer<typeof ProductS
  * - [2]: unit (string)
  */
 export const getProductWeight = (event: NDKEvent | null): z.infer<typeof ProductWeightTagSchema> | undefined => {
-	if (!event) return undefined
-	const weightTag = event.tags.find((t) => t[0] === 'weight')
-	if (!weightTag) return undefined
-
-	return weightTag as z.infer<typeof ProductWeightTagSchema>
+	return getProductWeightFromSdk(event) as z.infer<typeof ProductWeightTagSchema> | undefined
 }
 
 /**
@@ -647,11 +503,7 @@ export const getProductWeight = (event: NDKEvent | null): z.infer<typeof Product
  * - [2]: unit (string)
  */
 export const getProductDimensions = (event: NDKEvent | null): z.infer<typeof ProductDimensionsTagSchema> | undefined => {
-	if (!event) return undefined
-	const dimensionsTag = event.tags.find((t) => t[0] === 'dim')
-	if (!dimensionsTag) return undefined
-
-	return dimensionsTag as z.infer<typeof ProductDimensionsTagSchema>
+	return getProductDimensionsFromSdk(event) as z.infer<typeof ProductDimensionsTagSchema> | undefined
 }
 
 /**
@@ -660,8 +512,7 @@ export const getProductDimensions = (event: NDKEvent | null): z.infer<typeof Pro
  * @returns An array of shipping option tuples with format [tag, shipping_reference, extra_cost?]
  */
 export const getProductShippingOptions = (event: NDKEvent | null): Array<string[]> => {
-	if (!event) return []
-	return event.tags.filter((t) => t[0] === 'shipping_option')
+	return getProductShippingOptionsFromSdk(event)
 }
 
 /**
@@ -670,9 +521,7 @@ export const getProductShippingOptions = (event: NDKEvent | null): Array<string[
  * @returns The collection reference string or null
  */
 export const getProductCollection = (event: NDKEvent | null): string | null => {
-	if (!event) return null
-	const collectionTag = event.tags.find((t) => t[0] === 'collection')
-	return collectionTag?.[1] || null
+	return getProductCollectionFromSdk(event)
 }
 
 /**
@@ -681,8 +530,7 @@ export const getProductCollection = (event: NDKEvent | null): string | null => {
  * @returns An array of category tuples
  */
 export const getProductCategories = (event: NDKEvent | null): z.infer<typeof ProductCategoryTagSchema>[] => {
-	if (!event) return []
-	return event.tags.filter((t) => t[0] === 't').map((t) => t as z.infer<typeof ProductCategoryTagSchema>)
+	return getProductCategoriesFromSdk(event) as z.infer<typeof ProductCategoryTagSchema>[]
 }
 
 /**
@@ -690,21 +538,21 @@ export const getProductCategories = (event: NDKEvent | null): z.infer<typeof Pro
  * @param event The product event or null
  * @returns The creation timestamp (number)
  */
-export const getProductCreatedAt = (event: NDKEvent | null): number => event?.created_at || 0
+export const getProductCreatedAt = (event: NDKEvent | null): number => getProductCreatedAtFromSdk(event)
 
 /**
  * Gets the pubkey from a product event
  * @param event The product event or null
  * @returns The pubkey (string)
  */
-export const getProductPubkey = (event: NDKEvent | null): string => event?.pubkey || ''
+export const getProductPubkey = (event: NDKEvent | null): string => getProductPubkeyFromSdk(event)
 
 /**
  * Gets the location for product from the event tags
  * @param event The product event or null
  * @returns The location in string format or empty string
  */
-export const getProductLocation = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'location')?.[1] || ''
+export const getProductLocation = (event: NDKEvent | null): string => getProductLocationFromSdk(event)
 
 /**
  * Gets the content warning tag from a product event
@@ -712,9 +560,7 @@ export const getProductLocation = (event: NDKEvent | null): string => event?.tag
  * @returns The content warning tuple or undefined
  */
 export const getProductContentWarning = (event: NDKEvent | null): z.infer<typeof ProductContentWarningTagSchema> | undefined => {
-	if (!event) return undefined
-	const contentWarningTag = event.tags.find((t) => t[0] === 'content-warning')
-	return contentWarningTag ? (contentWarningTag as z.infer<typeof ProductContentWarningTagSchema>) : undefined
+	return getProductContentWarningFromSdk(event) as z.infer<typeof ProductContentWarningTagSchema> | undefined
 }
 
 /**
@@ -723,9 +569,7 @@ export const getProductContentWarning = (event: NDKEvent | null): z.infer<typeof
  * @returns true if the product is marked as NSFW
  */
 export const isNSFWProduct = (event: NDKEvent | null): boolean => {
-	if (!event) return false
-	const contentWarning = getProductContentWarning(event)
-	return contentWarning?.[1] === 'nsfw'
+	return isNSFWProductFromSdk(event)
 }
 
 /**
@@ -1033,7 +877,7 @@ export const fetchProductsBySearch = async (query: string, limit: number = 20) =
 		const fetchPromise = ndk
 			.fetchEvents(filter)
 			.then((events) => filterBlacklistedEvents(Array.from(events)))
-			.then((events) => filterDeletedProducts(events)) // Filter out locally-deleted products
+			.then((events) => excludeDeletedProducts(createNdkReadContext(), events))
 			.then((events) => excludeTestLabeledEvents(events)) // Filter out test-labeled items (ADR-0009)
 			.then((events) => events.filter(isProductInStock)) // Filter out out-of-stock products
 			.catch((err) => {
@@ -1173,15 +1017,15 @@ export const fetchProductsBySearchWithSellers = async (
 	return nonTestLabeledResults.slice(0, limit)
 }
 
-/** React Query options for searching products by text (includes seller name search) */
+/** React Query options for searching products by text. */
 export const productsSearchQueryOptions = (query: string, limit: number = 20) =>
 	queryOptions({
 		queryKey: [...productKeys.all, 'search', query, limit],
-		queryFn: () => fetchProductsBySearchWithSellers(query, limit),
+		queryFn: () => fetchProductsBySearch(query, limit),
 		enabled: !!query?.trim(),
 	})
 
-/** Hook to search products by text (includes seller name search) */
+/** Hook to search products by matching product text. */
 export const useProductSearch = (query: string, options?: { enabled?: boolean; limit?: number }) => {
 	return useQuery({
 		...productsSearchQueryOptions(query, options?.limit ?? 20),

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
 import { authStore } from '@/lib/stores/auth'
+import { createBuyerChatTemplate } from '@sdk/commerce/orders'
 import { useStore } from '@tanstack/react-store'
 import { NDKEvent, type NDKUser, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { messageKeys } from './queryKeyFactory'
@@ -228,13 +229,8 @@ export async function sendChatMessage(recipientPubkey: string, content: string, 
 		return undefined
 	}
 
-	const event = new NDKEvent(ndk)
-	event.kind = 14
-	event.content = content
-	event.tags = [['p', recipientPubkey]]
-	if (subject) {
-		event.tags.push(['subject', subject])
-	}
+	const template = createBuyerChatTemplate({ recipientPubkey, content, subject, createdAt: Math.floor(Date.now() / 1000) })
+	const event = new NDKEvent(ndk, template)
 
 	try {
 		await event.sign() // Attempt to use ndk.signer implicitly

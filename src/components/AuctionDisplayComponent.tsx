@@ -1,7 +1,7 @@
 import { AuctionCountdown } from '@/components/AuctionCountdown'
-import { Media } from '@/components/Media'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { Media } from '@ui/components/Media'
+import { Button } from '@ui/primitives/button'
+import { Card } from '@ui/primitives/card'
 import { getCoordsFromATag } from '@/lib/utils/coords'
 import {
 	auctionByATagQueryOptions,

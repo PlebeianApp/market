@@ -23,8 +23,8 @@
  */
 
 import { useMemo } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@ui/primitives/dialog'
+import { Button } from '@ui/primitives/button'
 import { Loader2, Check, AlertCircle } from 'lucide-react'
 import { useAuctionVerdicts } from '@/queries/auctions'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'

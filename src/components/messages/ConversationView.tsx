@@ -1,6 +1,5 @@
 import { ChatMessageBubble } from '@/components/messages/ChatMessageBubble'
 import { MessageInput } from '@/components/messages/MessageInput'
-import { Button } from '@/components/ui/button'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
 import { sendChatMessage, useConversationMessages } from '@/queries/messages'
@@ -8,9 +7,9 @@ import { messageKeys } from '@/queries/queryKeyFactory'
 import { useProfileName } from '@/queries/profiles'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
-import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { ConversationViewLayout } from '@ui/components/messages/MessagingViews'
 
 interface ConversationViewProps {
 	/** The pubkey of the other user in the conversation */
@@ -86,40 +85,18 @@ export function ConversationView({ otherUserPubkey, onTitleChange }: Conversatio
 	}
 
 	return (
-		<div className="flex flex-col h-full">
-			{/* Messages Area */}
-			<div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-				{isLoading && (
-					<div className="flex justify-center items-center h-full">
-						<Loader2 className="w-8 h-8 animate-spin text-primary" />
-						<p className="ml-2">Loading messages...</p>
-					</div>
-				)}
-				{error && (
-					<div className="text-center text-destructive">
-						<p>Error loading messages: {error.message}</p>
-						<Button onClick={() => refetch()} className="mt-2">
-							Try Again
-						</Button>
-					</div>
-				)}
-				{!isLoading && !error && messages && messages.length === 0 && (
-					<div className="text-center text-muted-foreground pt-10">
-						<p>No messages yet. Start the conversation!</p>
-					</div>
-				)}
-				{!isLoading &&
-					!error &&
-					messages?.map((event) => <ChatMessageBubble key={event.id} event={event} isCurrentUser={event.pubkey === currentUser?.pubkey} />)}
-				<div ref={messagesEndRef} />
-			</div>
-
-			{/* Input Area */}
-			{otherUserPubkey && (
-				<div className="flex-shrink-0 border-t bg-background">
-					<MessageInput onSendMessage={handleSendMessage} isSending={isSending} />
-				</div>
-			)}
-		</div>
+		<ConversationViewLayout
+			isLoading={isLoading}
+			errorMessage={error ? error.message : null}
+			onRetry={() => refetch()}
+			isEmpty={!!messages && messages.length === 0}
+			messages={messages?.map((event) => (
+				<ChatMessageBubble key={event.id} event={event} isCurrentUser={event.pubkey === currentUser?.pubkey} />
+			))}
+			endRef={(node) => {
+				messagesEndRef.current = node
+			}}
+			input={otherUserPubkey ? <MessageInput onSendMessage={handleSendMessage} isSending={isSending} /> : null}
+		/>
 	)
 }

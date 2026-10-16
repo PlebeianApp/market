@@ -1,5 +1,5 @@
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { Button } from '@ui/primitives/button'
+import { Card } from '@ui/primitives/card'
 import { AvatarUser } from '@/components/AvatarUser'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'

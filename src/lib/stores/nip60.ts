@@ -16,6 +16,7 @@ import {
 	toCompressedAuctionP2pkPubkey,
 } from '@/lib/auctionP2pk'
 import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
+import { executeAuctionBidReclaimWorkflow, planAuctionBidReclaimTiming } from '@sdk/commerce/auctions'
 import { getAuctionHdAccountFromWalletKeys } from '@/lib/auctionHd'
 import {
 	CashuMint,
@@ -2784,9 +2785,9 @@ export const nip60Actions = {
 		const auctionContext = resolveAuctionBidPendingContext(pendingToken)
 		const now = Math.floor(Date.now() / 1000)
 		const reclaimReadyAt = getAuctionReclaimReadyAt(pendingToken.token, auctionContext?.locktime)
-		if (reclaimReadyAt > now) {
-			const waitSeconds = reclaimReadyAt - now
-			throw new Error(`Bid refund opens in ${formatReclaimWaitSeconds(waitSeconds)}`)
+		const reclaimPlan = planAuctionBidReclaimTiming({ tokenId, readyAt: reclaimReadyAt, now })
+		if (reclaimPlan.status === 'waiting') {
+			throw new Error(`Bid refund opens in ${formatReclaimWaitSeconds(reclaimPlan.waitSeconds)}`)
 		}
 
 		// Look up the refund privkey from three sources in order of
@@ -2847,13 +2848,24 @@ export const nip60Actions = {
 		}
 
 		try {
-			if (refundPrivkey) {
-				await receiveTokenWithPrivkey(wallet, pendingToken.token, refundPrivkey, pendingToken.mintUrl)
-			} else {
-				// Non-auction pending token (e.g. a regular sendEcash token
-				// the recipient hasn't claimed). Best-effort unsigned receive.
-				await receiveTokenIntoWallet(wallet, pendingToken.token)
+			const reclaimOutcome = await executeAuctionBidReclaimWorkflow(
+				{ tokenId, readyAt: reclaimReadyAt, now },
+				{
+					reclaim: async () => {
+						if (refundPrivkey) {
+							await receiveTokenWithPrivkey(wallet, pendingToken.token, refundPrivkey, pendingToken.mintUrl)
+						} else {
+							// Non-auction pending token (e.g. a regular sendEcash token
+							// the recipient hasn't claimed). Best-effort unsigned receive.
+							await receiveTokenIntoWallet(wallet, pendingToken.token)
+						}
+					},
+				},
+			)
+			if (reclaimOutcome.status === 'waiting') {
+				throw new Error(`Bid refund opens in ${formatReclaimWaitSeconds(reclaimOutcome.waitSeconds)}`)
 			}
+			if (reclaimOutcome.status === 'failed') throw reclaimOutcome.cause
 
 			// Mark reclaimed so auto-reclaim won't retry it.
 			const pendingTokens = nip60Store.state.pendingTokens.map((t) =>

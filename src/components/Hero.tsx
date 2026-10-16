@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Pattern } from './pattern'
+import { Pattern } from '@ui/components/Pattern'
 
 interface HeroProps {
 	children: ReactNode

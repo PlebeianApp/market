@@ -1,5 +1,5 @@
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@ui/primitives/button'
+import { Badge } from '@ui/primitives/badge'
 import type { NDKRelay } from '@nostr-dev-kit/ndk'
 import { NDKRelayStatus } from '@nostr-dev-kit/ndk'
 import { Trash2, Wifi, WifiOff, Globe } from 'lucide-react'

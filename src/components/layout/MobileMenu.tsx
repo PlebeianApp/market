@@ -1,5 +1,5 @@
 import { CurrencyDropdown } from '@/components/CurrencyDropdown'
-import { Pattern } from '@/components/pattern'
+import { Pattern } from '@ui/components/Pattern'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import { cn } from '@/lib/utils'

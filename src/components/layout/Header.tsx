@@ -1,9 +1,9 @@
 import { CurrencyDropdown } from '@/components/CurrencyDropdown'
 import { MobileMenu } from '@/components/layout/MobileMenu'
 import { ProductSearch } from '@/components/ProductSearch'
-import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Button } from '@ui/primitives/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@ui/primitives/popover'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ui/primitives/tooltip'
 import { Nip60Wallet } from '@/feature/wallet/components/Nip60Wallet'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { authActions, authStore } from '@/lib/stores/auth'
@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils'
 import { useProfile } from '@/queries/profiles'
 import { BugReportModal } from '../BugReportModal'
 import { ConnectionStatusPill } from '../ConnectionStatusPill'
-import { TooltipButton } from '../shared/TooltipButton'
+import { TooltipButton } from '@ui/components/TooltipButton'
 
 const LoginButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>((props, ref) => {
 	return (

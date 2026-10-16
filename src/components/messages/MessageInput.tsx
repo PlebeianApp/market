@@ -1,9 +1,6 @@
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
-import { Send } from 'lucide-react'
-import { useState } from 'react'
+import { MessageInputView } from '@ui/components/messages/MessagingViews'
 
 interface MessageInputProps {
 	onSendMessage: (content: string) => Promise<void>
@@ -11,45 +8,6 @@ interface MessageInputProps {
 }
 
 export function MessageInput({ onSendMessage, isSending }: MessageInputProps) {
-	const [message, setMessage] = useState('')
 	const { user } = useStore(authStore)
-	const isLoggedIn = !!user
-
-	const handleSend = async () => {
-		if (message.trim() === '') return
-		await onSendMessage(message.trim())
-		setMessage('') // Clear input after sending
-	}
-
-	const handleKeyPress = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-		if (event.key === 'Enter' && !event.shiftKey) {
-			event.preventDefault() // Prevent newline on Enter
-			handleSend()
-		}
-	}
-
-	return (
-		<div className="flex-wrap items-center gap-2 p-4 border-t bg-background sticky bottom-0">
-			<div className="relative w-full">
-				<Textarea
-					value={message}
-					onChange={(e) => setMessage(e.target.value)}
-					onKeyPress={handleKeyPress}
-					placeholder={isLoggedIn ? 'Type your message...' : 'Log in to send messages'}
-					className="w-full flex-grow resize-none p-2 pr-12 border rounded-lg focus:ring-2 focus:ring-primary"
-					rows={1}
-					disabled={isSending || !isLoggedIn}
-				/>
-				<Button
-					onClick={handleSend}
-					disabled={isSending || !isLoggedIn || message.trim() === ''}
-					size="icon"
-					className="absolute right-2.5 top-1/2 -translate-y-1/2 h-7 w-7"
-				>
-					<Send className="w-4 h-4" />
-					<span className="sr-only">Send message</span>
-				</Button>
-			</div>
-		</div>
-	)
+	return <MessageInputView onSendMessage={onSendMessage} isSending={isSending} isLoggedIn={!!user} />
 }

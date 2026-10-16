@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { startAuctionValidator } from '../../server/auction-validator'
+import { startAuctionValidator } from '@platform/server/auction-validator'
 
 describe('auction validator startup policy resolution', () => {
 	test('returns and reuses one resolved spam policy object', async () => {

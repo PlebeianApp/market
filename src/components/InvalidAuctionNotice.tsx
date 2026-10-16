@@ -1,5 +1,5 @@
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@ui/primitives/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { inspectAuctionAdmission, type AuctionAdmission } from '@/lib/schemas/auction/auctionAdmission'
 import { AlertTriangle, Ban } from 'lucide-react'

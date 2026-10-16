@@ -1,7 +1,7 @@
 import { useStore } from '@tanstack/react-store'
 import { useMemo } from 'react'
 import { ndkActions, ndkStore, type ConnectionHealth } from '@/lib/stores/ndk'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ui/primitives/tooltip'
 import { cn } from '@/lib/utils'
 
 /**

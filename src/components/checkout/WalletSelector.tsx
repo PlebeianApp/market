@@ -1,6 +1,6 @@
 import { PAYMENT_DETAILS_METHOD } from '@/lib/constants'
 import type { PaymentDetail } from '@/queries/payment'
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { WalletSelectorView } from '@ui/components/checkout/PaymentViews'
 
 export interface WalletOption extends PaymentDetail {
 	displayName: string
@@ -54,23 +54,12 @@ export function WalletSelector({ wallets, selectedWalletId, onSelect, className 
 	}
 
 	return (
-		<div className={`space-y-2 ${className}`}>
-			<label className="text-sm font-medium text-gray-700">{sellerName ? `${sellerName}'s Wallet` : 'Payment Wallet'}</label>
-			<Select onValueChange={onSelect} value={selectedWalletId || undefined}>
-				<SelectTrigger className="w-full">
-					<SelectValue placeholder="Select payment wallet" />
-				</SelectTrigger>
-				<SelectContent>
-					<SelectGroup>
-						<SelectLabel>Available Wallets</SelectLabel>
-						{wallets.map((wallet) => (
-							<SelectItem key={wallet.id} value={wallet.id}>
-								{getWalletDisplayName(wallet)}
-							</SelectItem>
-						))}
-					</SelectGroup>
-				</SelectContent>
-			</Select>
-		</div>
+		<WalletSelectorView
+			wallets={wallets.map((wallet) => ({ id: wallet.id, label: getWalletDisplayName(wallet) }))}
+			selectedWalletId={selectedWalletId}
+			onSelect={onSelect}
+			className={className}
+			sellerName={sellerName}
+		/>
 	)
 }

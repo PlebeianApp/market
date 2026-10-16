@@ -1,13 +1,12 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { walletActions } from '@/lib/stores/wallet'
-import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { walletKeys } from './queryKeyFactory'
+import { USER_NWC_WALLET_LIST_KIND, USER_NWC_WALLET_LIST_LABEL } from '@sdk/commerce/payments'
 
-// Constants for User's NWC Wallet List event
-export const USER_NWC_WALLET_LIST_KIND = NDKKind.AppSpecificData // Using a common kind, distinguished by label
-export const USER_NWC_WALLET_LIST_LABEL = 'market_user_nwc_wallets'
+export { USER_NWC_WALLET_LIST_KIND, USER_NWC_WALLET_LIST_LABEL }
 
 // Using the Wallet interface from the local store for now.
 // If it diverges, we might need a separate UserNwcWallet interface here.

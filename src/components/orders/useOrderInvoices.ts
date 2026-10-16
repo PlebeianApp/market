@@ -10,13 +10,9 @@ import { useQueryClient } from '@tanstack/react-query'
 import { orderKeys } from '@/queries/queryKeyFactory'
 import { extractPaymentMethods, getOrderId, getSellerPubkey, isPaymentCompleted, makeInvoiceKey } from './orderDetailHelpers'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
+import type { InvoiceWithSource } from '@sdk/commerce/orders/orderDetail'
 
-type InvoiceSource = 'request' | 'both'
-
-export type InvoiceWithSource = PaymentInvoiceData & {
-	source: InvoiceSource
-	localCopies: PaymentInvoiceData[]
-}
+export type { InvoiceWithSource } from '@sdk/commerce/orders/orderDetail'
 
 interface UseOrderInvoicesParams {
 	order: OrderWithRelatedEvents

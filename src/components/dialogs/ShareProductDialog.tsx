@@ -1,13 +1,9 @@
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Textarea } from '@/components/ui/textarea'
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
-import { Check, Copy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import type { ShareNoteInput } from '@sdk/commerce/messaging'
+import { ShareProductDialogView } from '@ui/components/ShareProductDialogView'
 
 interface ShareProductDialogProps {
 	open: boolean
@@ -15,9 +11,11 @@ interface ShareProductDialogProps {
 	productId: string
 	pubkey: string
 	title: string
+	/** Signs and publishes the share note; wired by the caller to the publish layer. */
+	onPost: (input: ShareNoteInput) => Promise<unknown>
 }
 
-export function ShareProductDialog({ open, onOpenChange, productId, pubkey, title }: ShareProductDialogProps) {
+export function ShareProductDialog({ open, onOpenChange, productId, pubkey, title, onPost }: ShareProductDialogProps) {
 	const { isAuthenticated } = useStore(authStore)
 	const [shareText, setShareText] = useState('')
 	const [isPosting, setIsPosting] = useState(false)
@@ -59,41 +57,7 @@ ${productUrl}
 
 		setIsPosting(true)
 		try {
-			const ndk = ndkActions.getNDK()
-			if (!ndk) {
-				throw new Error('NDK not initialized')
-			}
-
-			// Check if we have a signer
-			if (!ndk.signer) {
-				throw new Error('No signer available. Please log in with a signing method.')
-			}
-
-			// Create kind 1 event (text note)
-			const event = new NDKEvent(ndk)
-			event.kind = 1
-			event.content = shareText
-
-			// Add tags for the product reference and discoverability
-			event.tags = [
-				['a', `30402:${pubkey}:${productId}`], // Reference to the product event (kind:pubkey:d-tag)
-				['r', productUrl], // Reference to the product URL
-				['t', 'plebeian'], // Hashtag for discoverability
-			]
-
-			// Sign the event with timeout
-			const signPromise = event.sign()
-			const signTimeoutPromise = new Promise((_, reject) =>
-				setTimeout(() => reject(new Error('Sign timeout - signer not responding')), 30000),
-			)
-			await Promise.race([signPromise, signTimeoutPromise])
-
-			// Publish with timeout
-			const publishPromise = ndkActions.publishEvent(event)
-			const publishTimeoutPromise = new Promise((_, reject) =>
-				setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000),
-			)
-			await Promise.race([publishPromise, publishTimeoutPromise])
+			await onPost({ content: shareText, coordinate: `30402:${pubkey}:${productId}`, url: productUrl })
 
 			toast.success('Posted to Nostr successfully!')
 			onOpenChange(false)
@@ -107,50 +71,16 @@ ${productUrl}
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="bg-white max-w-[calc(100%-2rem)] sm:max-w-[40em] max-h-[90vh] overflow-x-hidden overflow-y-auto">
-				<DialogHeader>
-					<DialogTitle>Share Product</DialogTitle>
-					<DialogDescription id="share-dialog-description">Share this product with others or post it to your Nostr feed.</DialogDescription>
-				</DialogHeader>
-
-				<div className="space-y-6 py-4 overflow-x-hidden">
-					{isAuthenticated && (
-						<div className="space-y-2">
-							<label htmlFor="share-text" className="font-medium text-gray-700 text-sm">
-								Content to post to Nostr
-							</label>
-							<Textarea
-								id="share-text"
-								aria-describedby="share-dialog-description"
-								value={shareText}
-								onChange={(e) => setShareText(e.target.value)}
-								rows={8}
-								className="w-full overflow-wrap-anywhere break-words whitespace-pre-wrap resize-none"
-								placeholder="Write something about this product..."
-							/>
-						</div>
-					)}
-
-					<div className="flex flex-wrap gap-2">
-						<Button variant="outline" onClick={handleCopyUrl} className="shrink-0">
-							{isCopied ? <Check className="mr-2 w-4 h-4" /> : <Copy className="mr-2 w-4 h-4" />}
-							{isCopied ? 'Copied!' : 'Copy URL'}
-						</Button>
-
-						{isAuthenticated && (
-							<Button
-								onClick={handlePostToNostr}
-								disabled={isPosting || !shareText.trim()}
-								className="flex flex-1 justify-center items-center gap-2"
-							>
-								<span className="w-4 h-4 i-send-message" />
-								{isPosting ? 'Posting...' : 'Post to Nostr'}
-							</Button>
-						)}
-					</div>
-				</div>
-			</DialogContent>
-		</Dialog>
+		<ShareProductDialogView
+			open={open}
+			onOpenChange={onOpenChange}
+			canPost={isAuthenticated}
+			shareText={shareText}
+			onShareTextChange={setShareText}
+			isCopied={isCopied}
+			isPosting={isPosting}
+			onCopyUrl={handleCopyUrl}
+			onPost={handlePostToNostr}
+		/>
 	)
 }

@@ -1,11 +1,11 @@
-import { Button } from '@/components/ui/button'
+import { Button } from '@ui/primitives/button'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from '@ui/primitives/dropdown-menu'
 import type { EntityPermissions } from '@/hooks/useEntityPermissions'
 import { Ban, Edit, FlaskConical, MoreVertical, Star, StarOff } from 'lucide-react'
 

@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 
+@source '../ui';
+
 @plugin "tailwindcss-animate";
 
 @font-face {

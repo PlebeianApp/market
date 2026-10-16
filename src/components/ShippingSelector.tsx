@@ -1,6 +1,6 @@
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions } from '@/lib/stores/cart'
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { Loader2 } from 'lucide-react'
 import { useShippingOptionsByPubkey, getShippingInfo, createShippingReference } from '@/queries/shipping'
 import { getProductPubkey, productQueryOptions } from '@/queries/products'

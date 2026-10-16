@@ -1,139 +1,60 @@
-import { submitAppSettings } from '@/lib/appSettings'
 import { ndkActions } from '@/lib/stores/ndk'
 import { fetchBlacklistSettings } from '@/queries/blacklist'
 import { configKeys } from '@/queries/queryKeyFactory'
-import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
+import type { NDKSigner } from '@/lib/nostr/ndk-events'
+import { addListItem, publishBlacklistWorkflow, removeListItem, type BlacklistData } from '@sdk/commerce/curation'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { createAppSettingsPublishContext, curationIssueMessage, resolveListOwner, type NdkClient as NDK } from './curationContext'
 
-export interface BlacklistData {
-	blacklistedPubkeys: string[] // Array of blacklisted pubkeys in hex format
-	blacklistedProducts: string[] // Array of blacklisted product coordinates
-	blacklistedCollections: string[] // Array of blacklisted collection coordinates
-}
-
-/**
- * Creates a Kind 10000 blacklist event (NIP-51 mute list)
- */
-const createBlacklistEvent = (blacklistData: BlacklistData, signer: NDKSigner, ndk: NDK): NDKEvent => {
-	const event = new NDKEvent(ndk)
-	event.kind = 10000 // NIP-51 mute list
-	event.content = ''
-
-	// Build tags - use 'p' tags for muted pubkeys, 'a' tags for products/collections
-	const tags: NDKTag[] = []
-
-	// Add blacklisted pubkeys as 'p' tags
-	for (const pubkey of blacklistData.blacklistedPubkeys) {
-		tags.push(['p', pubkey])
-	}
-
-	// Add blacklisted products as 'a' tags
-	for (const productCoords of blacklistData.blacklistedProducts) {
-		tags.push(['a', productCoords])
-	}
-
-	// Add blacklisted collections as 'a' tags
-	for (const collectionCoords of blacklistData.blacklistedCollections) {
-		tags.push(['a', collectionCoords])
-	}
-
-	event.tags = tags
-	return event
-}
+export type { BlacklistData }
 
 /**
  * Publishes an updated blacklist through WebSocket interface
  */
 export const publishBlacklist = async (blacklistData: BlacklistData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	// Validate all pubkeys are valid hex strings
-	for (const pubkey of blacklistData.blacklistedPubkeys) {
-		if (!/^[0-9a-f]{64}$/i.test(pubkey)) {
-			throw new Error(`Invalid pubkey format: ${pubkey}`)
-		}
-	}
-
-	// Create and sign the event normally
-	const event = createBlacklistEvent(blacklistData, signer, ndk)
-	await event.sign(signer)
-
-	// Submit through WebSocket interface (will be re-signed with app pubkey)
-	await submitAppSettings(event.rawEvent())
-
-	return event.id
+	const outcome = await publishBlacklistWorkflow(await createAppSettingsPublishContext(ndk, signer), blacklistData)
+	if (!outcome.ok) throw new Error(curationIssueMessage(outcome))
+	return outcome.event.id
 }
+
+/** Fetches the blacklist from the list owner, applies one membership change, and republishes. */
+async function changeBlacklist(
+	field: keyof BlacklistData,
+	item: string,
+	change: 'add' | 'remove',
+	messages: { alreadyListed: string; notListed: string },
+	signer: NDKSigner,
+	ndk: NDK,
+	appPubkey?: string,
+): Promise<string> {
+	const currentBlacklist = await fetchBlacklistSettings(await resolveListOwner(signer, appPubkey))
+	const current: BlacklistData = {
+		blacklistedPubkeys: currentBlacklist?.blacklistedPubkeys || [],
+		blacklistedProducts: currentBlacklist?.blacklistedProducts || [],
+		blacklistedCollections: currentBlacklist?.blacklistedCollections || [],
+	}
+	const result = change === 'add' ? addListItem(current[field], item) : removeListItem(current[field], item)
+	if (!result.ok) throw new Error(result.error === 'already-listed' ? messages.alreadyListed : messages.notListed)
+
+	return publishBlacklist({ ...current, [field]: result.value }, signer, ndk)
+}
+
+const USER_MESSAGES = { alreadyListed: 'User is already blacklisted', notListed: 'User is not blacklisted' }
+const PRODUCT_MESSAGES = { alreadyListed: 'Product is already blacklisted', notListed: 'Product is not blacklisted' }
+const COLLECTION_MESSAGES = { alreadyListed: 'Collection is already blacklisted', notListed: 'Collection is not blacklisted' }
 
 /**
  * Adds a user to the blacklist
  */
-export const addToBlacklist = async (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
-	// Get current user's pubkey (should be an admin or editor)
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise fallback to current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch current blacklist using app pubkey (where the events are actually stored)
-	const currentBlacklist = await fetchBlacklistSettings(targetAppPubkey)
-	const currentBlacklistedPubkeys = currentBlacklist?.blacklistedPubkeys || []
-
-	// Check if user is already blacklisted
-	if (currentBlacklistedPubkeys.includes(userPubkey)) {
-		throw new Error('User is already blacklisted')
-	}
-
-	// Add new user to the blacklist
-	const updatedBlacklistedPubkeys = [...currentBlacklistedPubkeys, userPubkey]
-
-	return publishBlacklist(
-		{
-			blacklistedPubkeys: updatedBlacklistedPubkeys,
-			blacklistedProducts: currentBlacklist?.blacklistedProducts || [],
-			blacklistedCollections: currentBlacklist?.blacklistedCollections || [],
-		},
-		signer,
-		ndk,
-	)
-}
+export const addToBlacklist = (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+	changeBlacklist('blacklistedPubkeys', userPubkey, 'add', USER_MESSAGES, signer, ndk, appPubkey)
 
 /**
  * Removes a user from the blacklist
  */
-export const removeFromBlacklist = async (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
-	// Get current user's pubkey
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise fallback to current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch current blacklist using app pubkey (where the events are actually stored)
-	const currentBlacklist = await fetchBlacklistSettings(targetAppPubkey)
-	const currentBlacklistedPubkeys = currentBlacklist?.blacklistedPubkeys || []
-
-	// Check if user is actually blacklisted
-	if (!currentBlacklistedPubkeys.includes(userPubkey)) {
-		throw new Error('User is not blacklisted')
-	}
-
-	// Remove user from the blacklist
-	const updatedBlacklistedPubkeys = currentBlacklistedPubkeys.filter((pubkey) => pubkey !== userPubkey)
-
-	return publishBlacklist(
-		{
-			blacklistedPubkeys: updatedBlacklistedPubkeys,
-			blacklistedProducts: currentBlacklist?.blacklistedProducts || [],
-			blacklistedCollections: currentBlacklist?.blacklistedCollections || [],
-		},
-		signer,
-		ndk,
-	)
-}
+export const removeFromBlacklist = (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+	changeBlacklist('blacklistedPubkeys', userPubkey, 'remove', USER_MESSAGES, signer, ndk, appPubkey)
 
 /**
  * Mutation hook for publishing blacklist
@@ -249,161 +170,30 @@ export const useRemoveFromBlacklistMutation = () => {
 /**
  * Adds a product to the blacklist
  */
-export const addToBlacklistProducts = async (productCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
-	// Get current user's pubkey (should be an admin or editor)
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise fallback to current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch current blacklist using app pubkey
-	const currentBlacklist = await fetchBlacklistSettings(targetAppPubkey)
-	const currentBlacklistedProducts = currentBlacklist?.blacklistedProducts || []
-
-	// Check if product is already blacklisted
-	if (currentBlacklistedProducts.includes(productCoords)) {
-		throw new Error('Product is already blacklisted')
-	}
-
-	// Add new product to the blacklist
-	const updatedBlacklistedProducts = [...currentBlacklistedProducts, productCoords]
-
-	return publishBlacklist(
-		{
-			blacklistedPubkeys: currentBlacklist?.blacklistedPubkeys || [],
-			blacklistedProducts: updatedBlacklistedProducts,
-			blacklistedCollections: currentBlacklist?.blacklistedCollections || [],
-		},
-		signer,
-		ndk,
-	)
-}
+export const addToBlacklistProducts = (productCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+	changeBlacklist('blacklistedProducts', productCoords, 'add', PRODUCT_MESSAGES, signer, ndk, appPubkey)
 
 /**
  * Removes a product from the blacklist
  */
-export const removeFromBlacklistProducts = async (
-	productCoords: string,
-	signer: NDKSigner,
-	ndk: NDK,
-	appPubkey?: string,
-): Promise<string> => {
-	// Get current user's pubkey
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise fallback to current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch current blacklist using app pubkey
-	const currentBlacklist = await fetchBlacklistSettings(targetAppPubkey)
-	const currentBlacklistedProducts = currentBlacklist?.blacklistedProducts || []
-
-	// Check if product is actually blacklisted
-	if (!currentBlacklistedProducts.includes(productCoords)) {
-		throw new Error('Product is not blacklisted')
-	}
-
-	// Remove product from the blacklist
-	const updatedBlacklistedProducts = currentBlacklistedProducts.filter((coords) => coords !== productCoords)
-
-	return publishBlacklist(
-		{
-			blacklistedPubkeys: currentBlacklist?.blacklistedPubkeys || [],
-			blacklistedProducts: updatedBlacklistedProducts,
-			blacklistedCollections: currentBlacklist?.blacklistedCollections || [],
-		},
-		signer,
-		ndk,
-	)
-}
+export const removeFromBlacklistProducts = (productCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+	changeBlacklist('blacklistedProducts', productCoords, 'remove', PRODUCT_MESSAGES, signer, ndk, appPubkey)
 
 /**
  * Adds a collection to the blacklist
  */
-export const addToBlacklistCollections = async (
-	collectionCoords: string,
-	signer: NDKSigner,
-	ndk: NDK,
-	appPubkey?: string,
-): Promise<string> => {
-	// Get current user's pubkey (should be an admin or editor)
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise fallback to current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch current blacklist using app pubkey
-	const currentBlacklist = await fetchBlacklistSettings(targetAppPubkey)
-	const currentBlacklistedCollections = currentBlacklist?.blacklistedCollections || []
-
-	// Check if collection is already blacklisted
-	if (currentBlacklistedCollections.includes(collectionCoords)) {
-		throw new Error('Collection is already blacklisted')
-	}
-
-	// Add new collection to the blacklist
-	const updatedBlacklistedCollections = [...currentBlacklistedCollections, collectionCoords]
-
-	return publishBlacklist(
-		{
-			blacklistedPubkeys: currentBlacklist?.blacklistedPubkeys || [],
-			blacklistedProducts: currentBlacklist?.blacklistedProducts || [],
-			blacklistedCollections: updatedBlacklistedCollections,
-		},
-		signer,
-		ndk,
-	)
-}
+export const addToBlacklistCollections = (collectionCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+	changeBlacklist('blacklistedCollections', collectionCoords, 'add', COLLECTION_MESSAGES, signer, ndk, appPubkey)
 
 /**
  * Removes a collection from the blacklist
  */
-export const removeFromBlacklistCollections = async (
+export const removeFromBlacklistCollections = (
 	collectionCoords: string,
 	signer: NDKSigner,
 	ndk: NDK,
 	appPubkey?: string,
-): Promise<string> => {
-	// Get current user's pubkey
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise fallback to current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch current blacklist using app pubkey
-	const currentBlacklist = await fetchBlacklistSettings(targetAppPubkey)
-	const currentBlacklistedCollections = currentBlacklist?.blacklistedCollections || []
-
-	// Check if collection is actually blacklisted
-	if (!currentBlacklistedCollections.includes(collectionCoords)) {
-		throw new Error('Collection is not blacklisted')
-	}
-
-	// Remove collection from the blacklist
-	const updatedBlacklistedCollections = currentBlacklistedCollections.filter((coords) => coords !== collectionCoords)
-
-	return publishBlacklist(
-		{
-			blacklistedPubkeys: currentBlacklist?.blacklistedPubkeys || [],
-			blacklistedProducts: currentBlacklist?.blacklistedProducts || [],
-			blacklistedCollections: updatedBlacklistedCollections,
-		},
-		signer,
-		ndk,
-	)
-}
+): Promise<string> => changeBlacklist('blacklistedCollections', collectionCoords, 'remove', COLLECTION_MESSAGES, signer, ndk, appPubkey)
 
 /**
  * Mutation hook for adding a product to blacklist

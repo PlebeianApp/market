@@ -9,6 +9,7 @@ import { NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/wallet'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { validatePreimage } from '@/lib/utils/payment.utils'
+import { createBuyerPaymentReceiptTemplate } from '@sdk/commerce/orders'
 
 /**
  * Mutation hook for publishing payment details with query invalidation
@@ -267,21 +268,21 @@ export const publishPaymentReceipt = async (params: PublishPaymentReceiptParams)
 	const user = await signer.user()
 	if (!user) throw new Error('No user available')
 
-	// Create the payment receipt event (Kind 17)
+	// Build the event through SDK rules, then sign and publish at the app boundary.
 	const event = new (await import('@nostr-dev-kit/ndk')).NDKEvent(ndk)
-	event.kind = 17 // Payment Receipt Kind
-	event.content = invoice.description || 'Payment confirmation'
-
-	const tags = [
-		['p', invoice.recipientPubkey || ''], // Merchant's pubkey
-		['subject', 'order-receipt'],
-		['order', invoice.orderId],
-		['payment', 'lightning', bolt11, preimage], // Payment proof
-		['amount', invoice.amount.toString()],
-	]
-
-	event.tags = tags
-	event.created_at = Math.floor(Date.now() / 1000)
+	const template = createBuyerPaymentReceiptTemplate({
+		merchantPubkey: invoice.recipientPubkey || '',
+		orderId: invoice.orderId,
+		amountSats: invoice.amount,
+		bolt11,
+		proof: preimage,
+		createdAt: Math.floor(Date.now() / 1000),
+		content: invoice.description,
+	})
+	event.kind = template.kind
+	event.content = template.content
+	event.tags = template.tags
+	event.created_at = template.created_at
 
 	try {
 		await event.sign(signer)

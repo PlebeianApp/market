@@ -34,6 +34,8 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys, type AuctionByPubkeyScope } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { excludeTestLabeledEvents } from '@/queries/testLabels'
+import { createApplesauceReadContext, getRawEventStore } from '@platform/web/applesauceReadContext'
+import { excludeDeleted } from '@sdk/core/event-store'
 import { verifyNostrEventSignature } from '@/lib/nostr/event-signature'
 import type { MintKeys } from '@cashu/cashu-ts'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
@@ -65,63 +67,19 @@ export type PrivateAuctionClaimLookupResult =
 	| { status: 'not_found' }
 	| { status: 'unavailable'; reason: 'missing_marker_fields' | 'no_signer' | 'not_seller' | 'relay_error' }
 
-const DELETED_AUCTIONS_STORAGE_KEY = 'plebeian_deleted_auction_ids'
 const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_PAGE_LIMIT = 100
 const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_MAX_PAGES = 5
 const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_WINDOW_SECONDS = 60 * 60 * 24
 const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_POST_MARKER_GRACE_SECONDS = 5 * 60
 const AUCTION_LIST_FILTER_CHUNK_SIZE = 80
 
-const loadDeletedAuctionIds = (): Map<string, number> => {
-	if (typeof localStorage === 'undefined') return new Map()
-	try {
-		const stored = localStorage.getItem(DELETED_AUCTIONS_STORAGE_KEY)
-		if (stored) {
-			const parsed = JSON.parse(stored)
-			if (Array.isArray(parsed)) {
-				const now = Math.floor(Date.now() / 1000)
-				return new Map(parsed.map((dTag: string) => [dTag, now]))
-			}
-			if (typeof parsed === 'object' && parsed !== null) {
-				return new Map(Object.entries(parsed))
-			}
-		}
-	} catch (e) {
-		console.error('Failed to load deleted auction IDs from localStorage:', e)
-	}
-	return new Map()
+/** Records the author's own published deletion so later reads drop it even if relays keep serving the auction. */
+export const recordAuctionDeletion = (deletion: NostrEventLike) => {
+	getRawEventStore().add(deletion)
 }
 
-const saveDeletedAuctionIds = (ids: Map<string, number>) => {
-	try {
-		localStorage.setItem(DELETED_AUCTIONS_STORAGE_KEY, JSON.stringify(Object.fromEntries(ids)))
-	} catch (e) {
-		console.error('Failed to save deleted auction IDs to localStorage:', e)
-	}
-}
-
-const deletedAuctionIds = loadDeletedAuctionIds()
-
-export const markAuctionAsDeleted = (dTag: string, deletionTimestamp?: number) => {
-	const timestamp = deletionTimestamp ?? Math.floor(Date.now() / 1000)
-	deletedAuctionIds.set(dTag, timestamp)
-	saveDeletedAuctionIds(deletedAuctionIds)
-}
-
-export const isAuctionDeleted = (dTag: string, eventCreatedAt?: number) => {
-	const deletionTimestamp = deletedAuctionIds.get(dTag)
-	if (deletionTimestamp === undefined) return false
-	if (eventCreatedAt === undefined) return true
-	return eventCreatedAt < deletionTimestamp
-}
-
-const filterDeletedAuctions = (events: NostrEventLike[]): NostrEventLike[] => {
-	return events.filter((event) => {
-		const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
-		if (!dTag) return true
-		return !isAuctionDeleted(dTag, event.created_at)
-	})
-}
+// Deletion lookup only: auction reads keep every version, because the canonical event is resolved from the whole version set.
+const filterDeletedAuctions = (events: NostrEventLike[]): Promise<NostrEventLike[]> => excludeDeleted(createApplesauceReadContext(), events)
 
 const dedupeEventsById = (events: NostrEventLike[]): NostrEventLike[] => {
 	const eventsById = new Map<string, NostrEventLike>()
@@ -203,7 +161,7 @@ export const fetchAuctions = async (limit: number = 200): Promise<NostrEventLike
 	// Discovery surface (the auction feed): blacklist → local deletes → the
 	// test-label gate, then collapse versions. The gate is coordinate-based, so
 	// every version of a labeled auction drops together.
-	const filteredEvents = await excludeTestLabeledEvents(filterDeletedAuctions(filterBlacklistedEvents(events)))
+	const filteredEvents = await excludeTestLabeledEvents(await filterDeletedAuctions(filterBlacklistedEvents(events)))
 	// Spec-validity admission (AUCTIONS.md §4.1). This is a *browsing* gate, not
 	// a read gate: an event that is shaped like a 30408 but is not a well-formed
 	// auction must not take a card slot — least of all slot #1, which it wins
@@ -226,7 +184,7 @@ export const fetchAuction = async (id: string, verifySignatures = false): Promis
 	const event = filterVerifiedAuctionEvents(events, verifySignatures)[0] ?? null
 	if (!event) return null
 	const dTag = getAuctionId(event)
-	if (dTag && isAuctionDeleted(dTag, event.created_at)) return null
+	if (dTag && (await filterDeletedAuctions([event])).length === 0) return null
 	if (!dTag) return filterBlacklistedEvents([event])[0] || null
 
 	const versionEvents = filterVerifiedAuctionEvents(await fetchAuctionVersionEvents(event.pubkey, dTag), verifySignatures)
@@ -277,7 +235,7 @@ export const fetchAuctionsByPubkey = async (
 	// browsing-only, and this surface is also how the owner reaches their own
 	// inventory). Spec validity does, unless the caller opts out — see
 	// `AuctionByPubkeyReadOptions`.
-	const collapsed = collapseAuctionVersions(filterDeletedAuctions(filterBlacklistedEvents(events)))
+	const collapsed = collapseAuctionVersions(await filterDeletedAuctions(filterBlacklistedEvents(events)))
 	const admitted = options.includeInvalid ? collapsed : filterAdmissibleAuctionEvents(collapsed)
 	return admitted.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
@@ -295,7 +253,7 @@ export const fetchAuctionByATag = async (pubkey: string, dTag: string): Promise<
 		})
 		const event = fallbackEvents[0] ?? null
 		if (!event) return null
-		if (isAuctionDeleted(dTag, event.created_at)) return null
+		if ((await filterDeletedAuctions([event])).length === 0) return null
 		return resolveCanonicalAuctionEvent([event])
 	}
 
@@ -1272,7 +1230,11 @@ export const useAuctionBidsByBidderStream = (pubkey: string, limit: number = 500
 export const useAuctionsByPubkeyStream = (pubkey: string, limit: number = 100): { auctions: NostrEventLike[]; isStreaming: boolean } => {
 	const filter = useMemo<NostrFilter | null>(() => (pubkey ? { kinds: [AUCTION_KIND], authors: [pubkey], limit } : null), [pubkey, limit])
 	const { events, isStreaming } = useSubscriptionEvents(filter, !!pubkey)
-	const auctions = useMemo(() => collapseAuctionVersions(filterDeletedAuctions(filterBlacklistedEvents(events))), [events])
+	// Synchronous: drops deletions the raw store has already seen (own deletes, earlier reads' lookups).
+	const auctions = useMemo(
+		() => collapseAuctionVersions(filterBlacklistedEvents(events).filter((event) => !getRawEventStore().isDeleted(event))),
+		[events],
+	)
 	return { auctions, isStreaming }
 }
 

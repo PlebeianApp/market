@@ -14,13 +14,23 @@ import {
 import { v4VForUserQuery } from '@/queries/v4v'
 import { publishCartSnapshot } from '@/publish/cart'
 import type { PersistedCartContent } from '@/lib/schemas/cartPersistence'
+import {
+	addCartProduct as addCartProductOperation,
+	aggregateBuyerCartTotals,
+	aggregateCartDisplayTotals,
+	groupCartProductsBySeller,
+	removeCartProduct as removeCartProductOperation,
+	setCartProductQuantity,
+	updateCartProductQuantity,
+	type CartQuantityAction,
+} from '@sdk/commerce/cart'
 import { ndkActions } from '@/lib/stores/ndk'
 import {
 	findReusablePublishedShippingSelection,
 	normalizePublishedProductShippingTags,
 	resolvePublishedProductShippingOptions,
 	type ProductShippingSelection,
-} from '@/lib/utils/productShippingSelections'
+} from '@sdk/commerce/products'
 import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
@@ -181,20 +191,32 @@ const initialState: CartState = {
 	lastCartIntentUpdatedAt: null,
 }
 
-// Helper function to compute productsBySeller from products (used during init and updates)
 function computeProductsBySeller(products: Record<string, CartProduct>): Record<string, CartProduct[]> {
-	const grouped: Record<string, CartProduct[]> = {}
+	return groupCartProductsBySeller(products)
+}
 
-	Object.values(products).forEach((product) => {
-		if (HEX_KEYS_REGEX.test(product.sellerPubkey ?? '')) {
-			if (!grouped[product.sellerPubkey]) {
-				grouped[product.sellerPubkey] = []
-			}
-			grouped[product.sellerPubkey].push(product)
+function rebuildCartSellerIndex(
+	products: Record<string, CartProduct>,
+	existingSellers: Record<string, CartSeller>,
+): Record<string, CartSeller> {
+	const groups = groupCartProductsBySeller(products)
+	const sellers: Record<string, CartSeller> = {}
+	for (const [sellerPubkey, groupedProducts] of Object.entries(groups)) {
+		const existing = existingSellers[sellerPubkey]
+		sellers[sellerPubkey] = {
+			...(existing ?? {
+				pubkey: sellerPubkey,
+				currency: '',
+				shippingMethodId: null,
+				shippingMethodName: null,
+				shippingCost: 0,
+				shippingCostCurrency: null,
+				v4vShares: [],
+			}),
+			productIds: groupedProducts.map((product) => product.id),
 		}
-	})
-
-	return grouped
+	}
+	return sellers
 }
 
 function loadInitialCart(): NormalizedCart {
@@ -631,25 +653,6 @@ export const cartActions = {
 		}
 	},
 
-	findOrCreateSeller: (cart: NormalizedCart, sellerPubkey: string) => {
-		// Ensure seller exists
-		const seller = cart.sellers[sellerPubkey] || {
-			pubkey: sellerPubkey,
-			productIds: [],
-			currency: '',
-			shippingMethodId: null,
-			shippingMethodName: null,
-			shippingCost: 0,
-			shippingCostCurrency: null,
-			v4vShares: [],
-		}
-		if (!cart.sellers[sellerPubkey]) {
-			cart.sellers[sellerPubkey] = seller
-		}
-
-		return seller
-	},
-
 	addProduct: async (productData: CartProduct | NDKEvent | string) => {
 		let productId: string
 		let sellerPubkey: string
@@ -686,6 +689,7 @@ export const cartActions = {
 			console.error('Cannot add product without valid seller pubkey:', sellerPubkey)
 			return
 		}
+		if (!Number.isFinite(amount) || amount <= 0) return
 
 		const existingProducts = Object.values(cartStore.state.cart.products)
 		const isNewProduct = !cartStore.state.cart.products[productId]
@@ -706,28 +710,36 @@ export const cartActions = {
 			})
 		}
 
+		let cartChanged = false
 		cartStore.setState((state) => {
-			const cart = { ...state.cart }
-			const seller = cartActions.findOrCreateSeller(cart, sellerPubkey)
-
-			if (cart.products[productId]) {
-				cart.products[productId].amount += amount
-			} else {
-				cart.products[productId] = {
-					id: productId,
-					amount: amount,
-					shippingMethodId: reusableShippingSelection?.shippingMethodId ?? null,
-					shippingMethodName: reusableShippingSelection?.shippingMethodName ?? null,
-					shippingCost: reusableShippingSelection?.shippingCost ?? 0,
-					shippingCostCurrency: reusableShippingSelection?.shippingCostCurrency ?? null,
-					sellerPubkey,
-				}
-				seller.productIds.push(productId)
+			const existingProduct = state.cart.products[productId]
+			const incomingProduct: CartProduct = existingProduct ?? {
+				id: productId,
+				amount,
+				shippingMethodId: reusableShippingSelection?.shippingMethodId ?? null,
+				shippingMethodName: reusableShippingSelection?.shippingMethodName ?? null,
+				shippingCost: reusableShippingSelection?.shippingCost ?? 0,
+				shippingCostCurrency: reusableShippingSelection?.shippingCostCurrency ?? null,
+				sellerPubkey,
+			}
+			const products = addCartProductOperation(state.cart.products, { ...incomingProduct, amount })
+			if (products === state.cart.products) return state
+			cartChanged = true
+			const cart: NormalizedCart = {
+				...state.cart,
+				products,
+				sellers: rebuildCartSellerIndex(products, state.cart.sellers),
 			}
 
 			cartActions.persistCartIntentLocally(cart, updatedAt)
-			return { ...state, cart, lastCartIntentUpdatedAt: updatedAt }
+			return {
+				...state,
+				cart,
+				productsBySeller: computeProductsBySeller(products),
+				lastCartIntentUpdatedAt: updatedAt,
+			}
 		})
+		if (!cartChanged) return
 
 		await cartActions.updateV4VShares()
 		await cartActions.groupProductsBySeller()
@@ -737,15 +749,25 @@ export const cartActions = {
 
 	updateProductAmount: async (buyerPubkey: string, productId: string, amount: number) => {
 		const updatedAt = cartSyncDependencies.now()
+		let cartChanged = false
 		cartStore.setState((state) => {
-			const cart = { ...state.cart }
-			const product = cart.products[productId]
-			if (product) {
-				product.amount = amount
+			const products = setCartProductQuantity(state.cart.products, productId, amount)
+			if (products === state.cart.products) return state
+			cartChanged = true
+			const cart = {
+				...state.cart,
+				products,
+				sellers: rebuildCartSellerIndex(products, state.cart.sellers),
 			}
 			cartActions.persistCartIntentLocally(cart, updatedAt)
-			return { ...state, cart, lastCartIntentUpdatedAt: updatedAt }
+			return {
+				...state,
+				cart,
+				productsBySeller: computeProductsBySeller(products),
+				lastCartIntentUpdatedAt: updatedAt,
+			}
 		})
+		if (!cartChanged) return
 
 		await cartActions.updateSellerData()
 		cartActions.scheduleRemotePublish()
@@ -753,37 +775,18 @@ export const cartActions = {
 
 	removeProduct: async (buyerPubkey: string, productId: string) => {
 		const updatedAt = cartSyncDependencies.now()
+		let cartChanged = false
 		cartStore.setState((state) => {
-			const existingProduct = state.cart.products[productId]
-			if (!existingProduct) {
-				return state
-			}
-
-			const nextProducts = { ...state.cart.products }
-			delete nextProducts[productId]
-
-			const nextSellers = { ...state.cart.sellers }
-			if (existingProduct.sellerPubkey) {
-				const seller = nextSellers[existingProduct.sellerPubkey]
-				if (seller) {
-					const nextProductIds = seller.productIds.filter((id) => id !== productId)
-					if (nextProductIds.length === 0) {
-						delete nextSellers[existingProduct.sellerPubkey]
-					} else {
-						nextSellers[existingProduct.sellerPubkey] = {
-							...seller,
-							productIds: nextProductIds,
-						}
-					}
-				}
-			}
+			const products = removeCartProductOperation(state.cart.products, productId)
+			if (products === state.cart.products) return state
+			cartChanged = true
 
 			const cart = {
 				...state.cart,
-				sellers: nextSellers,
-				products: nextProducts,
+				sellers: rebuildCartSellerIndex(products, state.cart.sellers),
+				products,
 			}
-			const nextProductsBySeller = computeProductsBySeller(nextProducts)
+			const nextProductsBySeller = computeProductsBySeller(products)
 
 			cartActions.persistCartIntentLocally(cart, updatedAt)
 			return {
@@ -793,6 +796,7 @@ export const cartActions = {
 				lastCartIntentUpdatedAt: updatedAt,
 			}
 		})
+		if (!cartChanged) return
 
 		await cartActions.updateV4VShares()
 		await cartActions.updateSellerData()
@@ -902,98 +906,17 @@ export const cartActions = {
 		})
 	},
 
-	handleProductUpdate: async (action: string, productId: string, amount?: number) => {
+	handleProductUpdate: async (action: CartQuantityAction, productId: string, amount?: number) => {
 		const updatedAt = cartSyncDependencies.now()
+		let cartChanged = false
 		cartStore.setState((state) => {
-			const nextProducts = { ...state.cart.products }
-			const nextSellers = { ...state.cart.sellers }
-			const product = nextProducts[productId]
-
-			switch (action) {
-				case 'increment':
-					if (product) {
-						nextProducts[productId] = {
-							...product,
-							amount: product.amount + 1,
-						}
-					}
-					break
-				case 'decrement':
-					if (product) {
-						const newAmount = Math.max(product.amount - 1, 0)
-
-						if (newAmount === 0) {
-							// Remove product from seller's product list
-							const seller = nextSellers[product.sellerPubkey]
-							if (seller) {
-								const nextProductIds = seller.productIds.filter((id: string) => id !== productId)
-								if (nextProductIds.length === 0) {
-									delete nextSellers[product.sellerPubkey]
-								} else {
-									nextSellers[product.sellerPubkey] = {
-										...seller,
-										productIds: nextProductIds,
-									}
-								}
-							}
-							delete nextProducts[productId]
-						} else {
-							nextProducts[productId] = {
-								...product,
-								amount: newAmount,
-							}
-						}
-					}
-					break
-				case 'setAmount':
-					if (amount !== undefined && product) {
-						if (amount <= 0) {
-							// Remove product from seller's product list
-							const seller = nextSellers[product.sellerPubkey]
-							if (seller) {
-								const nextProductIds = seller.productIds.filter((id: string) => id !== productId)
-								if (nextProductIds.length === 0) {
-									delete nextSellers[product.sellerPubkey]
-								} else {
-									nextSellers[product.sellerPubkey] = {
-										...seller,
-										productIds: nextProductIds,
-									}
-								}
-							}
-							delete nextProducts[productId]
-						} else {
-							nextProducts[productId] = {
-								...product,
-								amount,
-							}
-						}
-					}
-					break
-				case 'remove': {
-					if (product) {
-						// Remove product from seller's product list
-						const seller = nextSellers[product.sellerPubkey]
-						if (seller) {
-							const nextProductIds = seller.productIds.filter((id: string) => id !== productId)
-							if (nextProductIds.length === 0) {
-								delete nextSellers[product.sellerPubkey]
-							} else {
-								nextSellers[product.sellerPubkey] = {
-									...seller,
-									productIds: nextProductIds,
-								}
-							}
-						}
-						delete nextProducts[productId]
-					}
-					break
-				}
-			}
+			const nextProducts = updateCartProductQuantity(state.cart.products, productId, action, amount)
+			if (nextProducts === state.cart.products) return state
+			cartChanged = true
 
 			const cart = {
 				...state.cart,
-				sellers: nextSellers,
+				sellers: rebuildCartSellerIndex(nextProducts, state.cart.sellers),
 				products: nextProducts,
 			}
 			const nextProductsBySeller = computeProductsBySeller(nextProducts)
@@ -1006,6 +929,7 @@ export const cartActions = {
 				lastCartIntentUpdatedAt: updatedAt,
 			}
 		})
+		if (!cartChanged) return
 
 		await cartActions.updateV4VShares()
 		await cartActions.updateSellerData()
@@ -1131,27 +1055,8 @@ export const cartActions = {
 		const products = Object.values(state.cart.products)
 		if (products.length === 0) return null
 
-		let subtotalInSats = 0
-		let shippingInSats = 0
-		let totalInSats = 0
-		const currencyTotals: Record<string, { subtotal: number; shipping: number; total: number }> = {}
-
 		const productTotals = await Promise.all(products.map((product) => cartActions.calculateProductTotal(product.id)))
-
-		for (const productTotal of productTotals) {
-			subtotalInSats += productTotal.subtotalInSats
-			shippingInSats += productTotal.shippingInSats
-			totalInSats += productTotal.totalInSats
-
-			if (!currencyTotals[productTotal.currency]) {
-				currencyTotals[productTotal.currency] = { subtotal: 0, shipping: 0, total: 0 }
-			}
-			currencyTotals[productTotal.currency].subtotal += productTotal.subtotalInCurrency
-			currencyTotals[productTotal.currency].shipping += productTotal.shippingInCurrency
-			currencyTotals[productTotal.currency].total += productTotal.totalInCurrency
-		}
-
-		return { subtotalInSats, shippingInSats, totalInSats, currencyTotals }
+		return aggregateBuyerCartTotals(productTotals)
 	},
 
 	calculateGrandTotal: async () => {
@@ -1311,52 +1216,30 @@ export const cartActions = {
 		const state = cartStore.state
 		const sellerData = state.sellerData
 
-		let subtotalInSats = 0
-		let totalShippingInSats = 0
-		const subtotalByCurrency: Record<string, number> = {}
-		const shippingByCurrency: Record<string, number> = {}
-		const totalByCurrency: Record<string, number> = {}
-
 		try {
-			for (const [sellerPubkey, data] of Object.entries(sellerData)) {
-				if (data.shippingSats > 0) {
-					totalShippingInSats += Math.round(data.shippingSats)
-				}
-			}
-
+			const productTotals: Array<{
+				subtotalInSats: number
+				shippingInSats: number
+				subtotalInCurrency: number
+				shippingInCurrency: number
+				currency: string
+			}> = []
 			for (const productId of Object.values(state.cart.products).map((p) => p.id)) {
 				try {
-					const productTotal = await cartActions.calculateProductTotal(productId)
-
-					subtotalInSats += productTotal.subtotalInSats
-
-					const currency = productTotal.currency
-					if (currency) {
-						subtotalByCurrency[currency] = (subtotalByCurrency[currency] || 0) + productTotal.subtotalInCurrency
-						if (productTotal.shippingInCurrency > 0) {
-							shippingByCurrency[currency] = (shippingByCurrency[currency] || 0) + productTotal.shippingInCurrency
-						}
-					}
+					productTotals.push(await cartActions.calculateProductTotal(productId))
 				} catch (error) {
 					console.error(`Error calculating totals for product ${productId}:`, error)
 				}
 			}
 
-			const totalInSats = subtotalInSats + totalShippingInSats
-
-			for (const currency of Object.keys(subtotalByCurrency)) {
-				const subtotal = subtotalByCurrency[currency] || 0
-				const shipping = shippingByCurrency[currency] || 0
-				totalByCurrency[currency] = subtotal + shipping
-			}
+			const totals = aggregateCartDisplayTotals(
+				productTotals,
+				Object.values(sellerData).map((data) => data.shippingSats),
+			)
 
 			cartStore.setState((state) => ({
 				...state,
-				totalInSats,
-				totalShippingInSats,
-				subtotalByCurrency,
-				shippingByCurrency,
-				totalByCurrency,
+				...totals,
 			}))
 		} catch (error) {
 			console.error('Error updating cart totals:', error)

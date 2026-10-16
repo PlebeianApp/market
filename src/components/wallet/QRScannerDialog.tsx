@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { Scanner } from '@yudiel/react-qr-scanner'
-import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@ui/primitives/dialog'
+import { Button } from '@ui/primitives/button'
 import { uiStore } from '@/lib/stores/ui'
 import { toast } from 'sonner'
 

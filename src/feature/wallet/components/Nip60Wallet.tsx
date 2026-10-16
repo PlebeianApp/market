@@ -41,7 +41,7 @@ import { DepositLightningModal } from './DepositLightningModal'
 import { WithdrawLightningModal } from './WithdrawLightningModal'
 import { SendEcashModal } from './SendEcashModal'
 import { ReceiveEcashModal } from './ReceiveEcashModal'
-import { Button } from '@/components/ui/button'
+import { Button } from '@ui/primitives/button'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -51,11 +51,11 @@ import {
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog'
+} from '@ui/primitives/alert-dialog'
+import { Input } from '@ui/primitives/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
+import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@ui/primitives/dialog'
 import { extractProofsByMint, getMintHostname, type ProofInfo } from '@/lib/wallet'
 import { toast } from 'sonner'
 import { QRCodeSVG } from 'qrcode.react'

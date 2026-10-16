@@ -1,12 +1,11 @@
-import { Button } from '@/components/ui/button'
 import { TestLabelDialog } from '@/components/dashboard/TestLabelDialog'
 import { TEST_LABEL_PRODUCT_KIND } from '@/lib/constants/testLabels'
 import { getATagFromCoords } from '@/lib/utils/coords'
 import { useUserRole } from '@/queries/app-settings'
 import { useConfigQuery } from '@/queries/config'
 import { useTestLabelForCoordinate } from '@/queries/testLabels'
-import { FlaskConical } from 'lucide-react'
 import { useState } from 'react'
+import { TestLabelButtonView, type TestLabelDialogMode } from '@ui/components/dashboard/TestLabelViews'
 
 interface TestLabelButtonProps {
 	/** Item event kind: 30402 (product) or 30408 (auction) */
@@ -36,7 +35,7 @@ export function TestLabelButton({ kind, pubkey, dTag, itemLabel = 'Product', cla
 	const { data: config } = useConfigQuery()
 	const { userRole, currentUserPubkey } = useUserRole(config?.appPublicKey)
 
-	const [dialogMode, setDialogMode] = useState<'mark' | 'unmark' | null>(null)
+	const [dialogMode, setDialogMode] = useState<TestLabelDialogMode | null>(null)
 
 	const isProduct = kind === TEST_LABEL_PRODUCT_KIND
 	const kindSlug = isProduct ? 'product' : 'auction'
@@ -50,29 +49,7 @@ export function TestLabelButton({ kind, pubkey, dTag, itemLabel = 'Product', cla
 
 	return (
 		<>
-			{isLabeled ? (
-				<Button
-					variant="outline"
-					size="sm"
-					className={className}
-					data-testid={`unmark-test-label-${kindSlug}-button`}
-					onClick={() => setDialogMode('unmark')}
-				>
-					<FlaskConical className="h-3.5 w-3.5" />
-					Unmark as Test {itemLabel}
-				</Button>
-			) : (
-				<Button
-					variant="outline"
-					size="sm"
-					className={className}
-					data-testid={`mark-test-label-${kindSlug}-button`}
-					onClick={() => setDialogMode('mark')}
-				>
-					<FlaskConical className="h-3.5 w-3.5" />
-					Mark as Test {itemLabel}
-				</Button>
-			)}
+			<TestLabelButtonView isLabeled={isLabeled} itemLabel={itemLabel} kindSlug={kindSlug} className={className} onPress={setDialogMode} />
 
 			{dialogMode && (
 				<TestLabelDialog

@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useStreamingProducts } from './useStreamingProducts'
 import { getProductTitle } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { SortOption } from '@/components/ProductFilters'
+import type { SortOption } from '@ui/components/ProductFilters'
 
 interface UseSimpleInfiniteScrollOptions {
 	chunkSize?: number

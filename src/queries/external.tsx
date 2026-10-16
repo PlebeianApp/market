@@ -3,8 +3,15 @@ import { currencyKeys } from './queryKeyFactory'
 import { CURRENCIES, getCurrencyServerRelays } from '@/lib/constants'
 import { configStore } from '@/lib/stores/config'
 import { PlebianCurrencyClient } from '@/lib/ctxcn-client'
+import {
+	convertFiatToSats,
+	isConvertibleAmount,
+	isSatsCurrency,
+	readContextVmBtcRates,
+	readYadioBtcRates,
+	selectExchangeRate,
+} from '@sdk/commerce/payments/exchangeRates'
 
-const numSatsInBtc = 100000000
 export type SupportedCurrency = (typeof CURRENCIES)[number]
 
 export const CURRENCY_CACHE_CONFIG = {
@@ -86,13 +93,14 @@ async function fetchFromContextVm(): Promise<Record<string, number> | null> {
 			return null
 		}
 
-		if (!result?.rates || result.error) {
+		const contextVmRates = readContextVmBtcRates(result)
+		if (!contextVmRates) {
 			console.warn('ContextVM returned error:', result?.error ?? 'missing rates')
 			return null
 		}
 
 		console.info(`ContextVM BTC fetch succeeded in ${Date.now() - startedAt}ms`)
-		return result.rates as Record<string, number>
+		return contextVmRates
 	} catch (error) {
 		console.warn('ContextVM fetch failed:', error)
 		return null
@@ -112,7 +120,7 @@ export const fetchBtcExchangeRates = async (): Promise<Record<SupportedCurrency,
 				throw new Error(`HTTP error! status: ${response.status}`)
 			}
 			const data = await response.json()
-			rates = data.BTC
+			rates = readYadioBtcRates(data) as Record<string, number> | null
 		} catch (error) {
 			console.error('Failed to fetch BTC exchange rates (ContextVM + Yadio fallback):', error)
 			throw new Error('Failed to fetch BTC exchange rates')
@@ -124,16 +132,13 @@ export const fetchBtcExchangeRates = async (): Promise<Record<SupportedCurrency,
 
 export const fetchCurrencyExchangeRate = async (currency: SupportedCurrency): Promise<number> => {
 	const rates = await fetchBtcExchangeRates()
-	if (!rates || !rates[currency]) {
-		throw new Error(`Exchange rate not available for ${currency}`)
-	}
-	return rates[currency]
+	return selectExchangeRate(rates, currency)
 }
 
 export const convertCurrencyToSats = async (currency: string, amount: number): Promise<number | null> => {
-	if (!currency || !amount || amount <= 0.0001) return null
+	if (!isConvertibleAmount(currency, amount)) return null
 
-	if (['sats', 'sat'].includes(currency.toLowerCase())) {
+	if (isSatsCurrency(currency)) {
 		return amount
 	}
 
@@ -143,7 +148,7 @@ export const convertCurrencyToSats = async (currency: string, amount: number): P
 		if (CURRENCIES.includes(normalizedCurrency as SupportedCurrency)) {
 			const rate = await fetchCurrencyExchangeRate(normalizedCurrency as SupportedCurrency)
 
-			return (amount / rate) * numSatsInBtc
+			return convertFiatToSats(amount, rate)
 		} else {
 			console.warn(`Unsupported currency: ${currency}`)
 			return null

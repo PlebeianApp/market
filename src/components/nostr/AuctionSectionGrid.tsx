@@ -1,5 +1,5 @@
 import { AuctionCard } from '@/components/AuctionCard'
-import { ItemGrid } from '@/components/ItemGrid'
+import { ItemGrid } from '@ui/components/ItemGrid'
 import { cn } from '@/lib/utils'
 import { getAuctionRootEventId } from '@/queries/auctions'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'

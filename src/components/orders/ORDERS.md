@@ -117,9 +117,18 @@ Shipping is represented exclusively via **Type 4** events. Order status (Type 3)
 - Display shipping status from Type 4 events (e.g. show "Shipped" with truck icon)
 - Completion is a buyer action available only after a `shipped` shipping update exists
 
-### Permissions Control
+### Action Availability and Authorization
 
-Status transitions are enforced through conditional rendering in `OrderActions.tsx`:
+Order action rules are extracted to the SDK as local UI affordances and used by
+`OrderActions.tsx` to decide which controls to show. They are **not server- or
+relay-enforced authorization**: Nostr relays generally store signed events and
+do not validate this marketplace state machine, and a client can publish events
+without using this UI. Consumers must treat relayed status events as untrusted
+until validated and must not interpret the visible-action policy as proof that
+a transition was authorized. A future authoritative service would need its own
+explicit protocol and verification decision.
+
+The UI action hints include:
 
 ```typescript
 // Shipping action only available to seller for processing orders not yet shipped

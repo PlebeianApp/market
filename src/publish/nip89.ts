@@ -1,27 +1,26 @@
 import { DEFAULT_INSTANCE_CONFIG } from '@/lib/instance-config'
 import { configStore } from '@/lib/stores/config'
-import { ndkActions } from '@/lib/stores/ndk'
-import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
+import { NDKEvent, type NDKSigner } from '@/lib/nostr/ndk-events'
+import { createNdkPublishContext, type NdkClient as NDK } from '@platform/web/ndkPublishContext'
+import {
+	buildClientTag,
+	buildHandlerInfoEventData,
+	HANDLER_INFO_KIND,
+	NIP89_CLIENT_SOFTWARE_NAME,
+	publishHandlerInfoWorkflow,
+} from '@sdk/core/nip89'
 
 /**
  * NIP-89: Recommended Application Handlers
  * This module handles creation and publishing of Application Handler events
  */
 
-export const HANDLER_INFO_KIND = 31990
+export { HANDLER_INFO_KIND, NIP89_CLIENT_SOFTWARE_NAME }
 export const PRODUCT_KIND = 30402
 export const COLLECTION_KIND = 30405
 
 export const PLEBEIAN_MARKET_URL = 'https://plebeian.market'
 export const PLEBEIAN_MARKET_RELAY = 'wss://relay.plebeian.market'
-
-// Frozen software identity (ADR-018): the NIP-89 `client` tag names the CODE
-// that published the event, not the deployment. It must stay identical across
-// every instance/fork so clients can group events by software regardless of
-// instance branding — the relay hint and handler coordinate carried alongside
-// it are instance-scoped and do resolve from config. Do not read this from
-// `configStore`/`displayName`.
-export const NIP89_CLIENT_SOFTWARE_NAME = 'Plebeian Market'
 
 /**
  * Resolve runtime metadata for a published handler event. The runtime config
@@ -52,34 +51,13 @@ export const createHandlerInfoEvent = (
 	handlerId?: string,
 	appSettings?: Record<string, unknown>,
 ): NDKEvent => {
-	const event = new NDKEvent(ndk)
-	event.kind = HANDLER_INFO_KIND
-
-	// If app settings are provided, use them as content (for backward compatibility with existing system)
-	// Otherwise, leave content empty as per NIP-89
-	if (appSettings) {
-		event.content = JSON.stringify(appSettings)
-	} else {
-		event.content = ''
-	}
-
 	const { effectiveHandlerId, effectiveSiteUrl } = resolveHandlerMetadata(handlerId)
+	const data = buildHandlerInfoEventData({ handlerId: effectiveHandlerId, siteUrl: effectiveSiteUrl, appSettings })
 
-	// Tags for the handler info event
-	event.tags = [
-		['d', effectiveHandlerId], // Handler identifier
-		['k', PRODUCT_KIND.toString()], // Supports product listings (kind 30402)
-		['k', COLLECTION_KIND.toString()], // Supports collections (kind 30405)
-
-		// URL patterns for handling products (kind 30402)
-		// <bech32> will be replaced by clients with the actual NIP-19 encoded entity
-		['web', `${effectiveSiteUrl}/product/<bech32>`, 'naddr'],
-		['web', `${effectiveSiteUrl}/a/<bech32>`, 'naddr'], // Alternative pattern
-
-		// URL patterns for handling collections (kind 30405)
-		['web', `${effectiveSiteUrl}/collection/<bech32>`, 'naddr'],
-	]
-
+	const event = new NDKEvent(ndk)
+	event.kind = data.kind
+	event.content = data.content
+	event.tags = data.tags
 	return event
 }
 
@@ -102,26 +80,19 @@ export const createHandlerInfoEventData = (
 } => {
 	const { effectiveHandlerId, effectiveSiteUrl, effectiveRelayUrl } = resolveHandlerMetadata(handlerId, relayUrl, siteUrl)
 
-	const tags: string[][] = [
-		['d', effectiveHandlerId],
-		['k', PRODUCT_KIND.toString()],
-		['k', COLLECTION_KIND.toString()],
-		['web', `${effectiveSiteUrl}/product/<bech32>`, 'naddr'],
-		['web', `${effectiveSiteUrl}/a/<bech32>`, 'naddr'],
-		['web', `${effectiveSiteUrl}/collection/<bech32>`, 'naddr'],
-	]
-
-	// `effectiveRelayUrl` always resolves — `resolveHandlerMetadata` falls back
-	// to `PLEBEIAN_MARKET_RELAY` when no relay is configured — so the `r` tag
-	// is always present. No conditional here: an `if` on this value would
-	// never evaluate false and would misrepresent the tag as optional.
-	tags.push(['r', effectiveRelayUrl])
+	// `effectiveRelayUrl` always resolves (falls back to `PLEBEIAN_MARKET_RELAY`), so the `r` tag is always present.
+	const data = buildHandlerInfoEventData({
+		handlerId: effectiveHandlerId,
+		siteUrl: effectiveSiteUrl,
+		relayUrl: effectiveRelayUrl,
+		appSettings,
+	})
 
 	return {
-		kind: HANDLER_INFO_KIND,
+		kind: data.kind,
 		created_at: Math.floor(Date.now() / 1000),
-		tags,
-		content: JSON.stringify(appSettings),
+		tags: data.tags,
+		content: data.content,
 		pubkey,
 	}
 }
@@ -136,13 +107,13 @@ export const publishHandlerInfo = async (
 	appSettings?: Record<string, unknown>,
 ): Promise<string | null> => {
 	try {
-		const event = createHandlerInfoEvent(signer, ndk, handlerId, appSettings)
-		await event.sign(signer)
-		await ndkActions.publishEvent(event)
-
-		// Return the handler ID
-		const dTag = event.tags.find((tag) => tag[0] === 'd')
-		return dTag?.[1] || null
+		const { effectiveHandlerId, effectiveSiteUrl } = resolveHandlerMetadata(handlerId)
+		const { handlerId: publishedHandlerId } = await publishHandlerInfoWorkflow(await createNdkPublishContext(ndk, signer), {
+			handlerId: effectiveHandlerId,
+			siteUrl: effectiveSiteUrl,
+			appSettings,
+		})
+		return publishedHandlerId || null
 	} catch (error) {
 		console.error('Error publishing handler info:', error)
 		throw error
@@ -160,5 +131,5 @@ export const publishHandlerInfo = async (
 export const createClientTag = (appPubkey: string, handlerId: string, relayUrl?: string): [string, string, string, string] => {
 	const effectiveRelayUrl = relayUrl || configStore.state.config.appRelay || PLEBEIAN_MARKET_RELAY
 	const effectiveHandlerId = handlerId || configStore.state.config.handlerId || DEFAULT_INSTANCE_CONFIG.handlerId
-	return ['client', NIP89_CLIENT_SOFTWARE_NAME, `31990:${appPubkey}:${effectiveHandlerId}`, effectiveRelayUrl]
+	return buildClientTag(appPubkey, effectiveHandlerId, effectiveRelayUrl)
 }

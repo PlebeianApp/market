@@ -1,9 +1,9 @@
-import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@ui/primitives/sheet'
 import { collectionFormStore, DEFAULT_COLLECTION_FORM_STATE } from '@/lib/stores/collection'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useState } from 'react'
 import { CollectionFormContent } from './CollectionFormContent'
-import { CollectionWelcomeScreen } from './CollectionWelcomeScreen'
+import { CollectionWelcomeScreen } from '@ui/components/CollectionWelcomeScreen'
 
 export function NewCollectionContent({
 	title,
@@ -73,5 +73,5 @@ export function NewCollectionContent({
 // Export all components for reuse
 export { InfoTab } from './InfoTab'
 export { ProductsTab } from './ProductsTab'
-export { CollectionWelcomeScreen } from './CollectionWelcomeScreen'
+export { CollectionWelcomeScreen } from '@ui/components/CollectionWelcomeScreen'
 export { CollectionFormContent } from './CollectionFormContent'

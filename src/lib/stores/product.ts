@@ -21,8 +21,12 @@ import {
 } from '@/queries/products'
 import { productKeys } from '@/queries/queryKeyFactory'
 import { clearProductFormDraft, getProductFormDraft, saveProductFormDraft } from '@/lib/utils/productFormStorage'
-import { resolvePublishPrice } from '@/lib/utils/productPriceResolution'
-import { normalizeProductShippingSelections, type ProductShippingSelection } from '@/lib/utils/productShippingSelections'
+import {
+	resolvePublishPrice,
+	normalizeProductShippingSelections,
+	type ProductShippingSelection,
+	type SellerProductFormTab,
+} from '@sdk/commerce/products'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
@@ -38,6 +42,7 @@ export type ProductShipping = {
 }
 
 export type ProductShippingForm = ProductShippingSelection
+export type ProductFormTab = SellerProductFormTab
 
 export type ProductSpec = {
 	key: string
@@ -53,8 +58,6 @@ export type ProductDimensions = {
 	value: string // format: LxWxH (e.g. "10x20x30")
 	unit: string
 }
-
-export type ProductFormTab = 'name' | 'detail' | 'spec' | 'category' | 'images' | 'shipping'
 
 // Tab navigation order
 const PRODUCT_FORM_TABS: ProductFormTab[] = ['name', 'detail', 'spec', 'category', 'images', 'shipping']

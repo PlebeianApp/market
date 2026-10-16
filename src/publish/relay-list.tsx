@@ -1,11 +1,8 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
+import { parseRelayListTags, publishRelayListWorkflow, type RelayPreference } from '@sdk/core/relays'
 
-export interface RelayPreference {
-	url: string
-	read: boolean
-	write: boolean
-}
+export type { RelayPreference }
 
 /**
  * Publishes user's relay list as a kind 10002 event (NIP-65)
@@ -23,54 +20,11 @@ export async function publishRelayList(relays: RelayPreference[]): Promise<strin
 	const signer = ndkActions.getSigner()
 	if (!signer) throw new Error('User signer not available')
 
-	const event = new NDKEvent(ndk)
-	event.kind = 10002 // NIP-65 Relay List Metadata
-	event.content = ''
-
-	// Build relay tags per NIP-65
-	// ["r", "wss://relay.example.com"] for both read and write
-	// ["r", "wss://relay.example.com", "read"] for read-only
-	// ["r", "wss://relay.example.com", "write"] for write-only
-	event.tags = relays
-		.filter((relay) => relay.read || relay.write) // Only include relays with at least one permission
-		.map((relay) => {
-			// Normalize URL
-			const url = relay.url.startsWith('ws://') || relay.url.startsWith('wss://') ? relay.url : `wss://${relay.url}`
-
-			if (relay.read && relay.write) {
-				return ['r', url] // Both read and write (no marker)
-			} else if (relay.read) {
-				return ['r', url, 'read']
-			} else {
-				return ['r', url, 'write']
-			}
-		})
-
-	await event.sign(signer)
-	await ndkActions.publishEvent(event)
-
+	const event = await publishRelayListWorkflow(await createNdkPublishContext(ndk, signer), relays)
 	return event.id
 }
 
 /**
  * Parses relay tags from a kind 10002 event into RelayPreference objects
  */
-export function parseRelayTags(tags: string[][]): RelayPreference[] {
-	return tags
-		.filter((tag) => tag[0] === 'r' && tag[1])
-		.map((tag) => {
-			const url = tag[1]
-			const marker = tag[2]
-
-			// No marker means both read and write
-			if (!marker) {
-				return { url, read: true, write: true }
-			}
-
-			return {
-				url,
-				read: marker === 'read',
-				write: marker === 'write',
-			}
-		})
-}
+export const parseRelayTags = parseRelayListTags

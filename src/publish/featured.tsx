@@ -1,10 +1,18 @@
-import { submitAppSettings } from '@/lib/appSettings'
 import { fetchLatestAppEvent, ndkActions } from '@/lib/stores/ndk'
 import { configKeys } from '@/queries/queryKeyFactory'
-import { FEATURED_ITEMS_CONFIG, validateCoordinates, validatePubkey } from '@/lib/schemas/featured'
-import NDK, { NDKEvent, NDKKind, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
+import { NDKEvent, type NDKFilter, type NDKSigner } from '@/lib/nostr/ndk-events'
+import {
+	addListItem,
+	buildCurationListEventData,
+	CURATION_LISTS,
+	publishCurationListWorkflow,
+	readCurationListItems,
+	removeListItem,
+	type CurationListKey,
+} from '@sdk/commerce/curation'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { createAppSettingsPublishContext, curationIssueMessage, resolveListOwner, type NdkClient as NDK } from './curationContext'
 
 export interface FeaturedProductsData {
 	featuredProducts: string[] // Array of product coordinates in order
@@ -22,233 +30,115 @@ export interface FeaturedUsersData {
 	featuredUsers: string[] // Array of user pubkeys in order
 }
 
+type FeaturedListKey = Extract<CurationListKey, `featured${string}`>
+
+const FEATURED_LABELS: Record<FeaturedListKey, { invalidItem: string; alreadyListed: string; notListed: string }> = {
+	featuredProducts: {
+		invalidItem: 'product coordinates',
+		alreadyListed: 'Product is already featured',
+		notListed: 'Product is not featured',
+	},
+	featuredCollections: {
+		invalidItem: 'collection coordinates',
+		alreadyListed: 'Collection is already featured',
+		notListed: 'Collection is not featured',
+	},
+	featuredAuctions: {
+		invalidItem: 'auction coordinates',
+		alreadyListed: 'Auction is already featured',
+		notListed: 'Auction is not featured',
+	},
+	featuredUsers: { invalidItem: 'pubkey', alreadyListed: 'User is already featured', notListed: 'User is not featured' },
+}
+
+function createFeaturedListEvent(ndk: NDK, list: FeaturedListKey, items: string[]): NDKEvent {
+	const data = buildCurationListEventData(list, items)
+	const event = new NDKEvent(ndk)
+	event.kind = data.kind
+	event.content = data.content
+	event.tags = data.tags
+	return event
+}
+
 /**
  * Creates a Kind 30405 featured products event (Collection format)
  */
-export const createFeaturedProductsEvent = (data: FeaturedProductsData, signer: NDKSigner, ndk: NDK): NDKEvent => {
-	const event = new NDKEvent(ndk)
-	event.kind = FEATURED_ITEMS_CONFIG.PRODUCTS.kind
-	event.content = 'Featured products collection'
-
-	// Build tags
-	const tags: NDKTag[] = [
-		['d', FEATURED_ITEMS_CONFIG.PRODUCTS.dTag],
-		['title', 'Featured Products'],
-	]
-
-	// Add product references as 'a' tags in order
-	for (const productCoords of data.featuredProducts) {
-		tags.push(['a', productCoords])
-	}
-
-	event.tags = tags
-	return event
-}
+export const createFeaturedProductsEvent = (data: FeaturedProductsData, _signer: NDKSigner, ndk: NDK): NDKEvent =>
+	createFeaturedListEvent(ndk, 'featuredProducts', data.featuredProducts)
 
 /**
  * Creates a Kind 30003 featured collections event (NIP-51 list)
  */
-export const createFeaturedCollectionsEvent = (data: FeaturedCollectionsData, signer: NDKSigner, ndk: NDK): NDKEvent => {
-	const event = new NDKEvent(ndk)
-	event.kind = FEATURED_ITEMS_CONFIG.COLLECTIONS.kind
-	event.content = ''
-
-	// Build tags
-	const tags: NDKTag[] = [['d', FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag]]
-
-	// Add collection references as 'a' tags in order
-	for (const collectionCoords of data.featuredCollections) {
-		tags.push(['a', collectionCoords])
-	}
-
-	event.tags = tags
-	return event
-}
+export const createFeaturedCollectionsEvent = (data: FeaturedCollectionsData, _signer: NDKSigner, ndk: NDK): NDKEvent =>
+	createFeaturedListEvent(ndk, 'featuredCollections', data.featuredCollections)
 
 /**
  * Creates a Kind 30409 featured auctions event
  */
-export const createFeaturedAuctionsEvent = (data: FeaturedAuctionsData, signer: NDKSigner, ndk: NDK): NDKEvent => {
-	const event = new NDKEvent(ndk)
-	event.kind = FEATURED_ITEMS_CONFIG.AUCTIONS.kind
-	event.content = ''
-
-	const tags: NDKTag[] = [['d', FEATURED_ITEMS_CONFIG.AUCTIONS.dTag]]
-	for (const auctionCoords of data.featuredAuctions) {
-		tags.push(['a', auctionCoords])
-	}
-
-	event.tags = tags
-	return event
-}
+export const createFeaturedAuctionsEvent = (data: FeaturedAuctionsData, _signer: NDKSigner, ndk: NDK): NDKEvent =>
+	createFeaturedListEvent(ndk, 'featuredAuctions', data.featuredAuctions)
 
 /**
  * Creates a Kind 30000 featured users event (NIP-51 list)
  */
-export const createFeaturedUsersEvent = (data: FeaturedUsersData, signer: NDKSigner, ndk: NDK): NDKEvent => {
-	const event = new NDKEvent(ndk)
-	event.kind = FEATURED_ITEMS_CONFIG.USERS.kind
-	event.content = ''
+export const createFeaturedUsersEvent = (data: FeaturedUsersData, _signer: NDKSigner, ndk: NDK): NDKEvent =>
+	createFeaturedListEvent(ndk, 'featuredUsers', data.featuredUsers)
 
-	// Build tags
-	const tags: NDKTag[] = [['d', FEATURED_ITEMS_CONFIG.USERS.dTag]]
-
-	// Add user references as 'p' tags in order
-	for (const userPubkey of data.featuredUsers) {
-		tags.push(['p', userPubkey])
-	}
-
-	event.tags = tags
-	return event
+/** Validates, signs, and submits a featured list through the app-settings WebSocket. */
+async function publishFeaturedList(list: FeaturedListKey, items: string[], signer: NDKSigner, ndk: NDK): Promise<string> {
+	const outcome = await publishCurationListWorkflow(await createAppSettingsPublishContext(ndk, signer), list, items)
+	if (!outcome.ok) throw new Error(curationIssueMessage(outcome, FEATURED_LABELS[list].invalidItem))
+	return outcome.event.id
 }
 
-/**
- * Publishes featured products through WebSocket interface
- */
-export const publishFeaturedProducts = async (data: FeaturedProductsData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	// Validate all product coordinates
-	for (const coords of data.featuredProducts) {
-		if (!validateCoordinates(coords, 30402)) {
-			throw new Error(`Invalid product coordinates format: ${coords}`)
-		}
-	}
+export const publishFeaturedProducts = (data: FeaturedProductsData, signer: NDKSigner, ndk: NDK): Promise<string> =>
+	publishFeaturedList('featuredProducts', data.featuredProducts, signer, ndk)
 
-	// Create and sign the event
-	const event = createFeaturedProductsEvent(data, signer, ndk)
-	await event.sign(signer)
+export const publishFeaturedCollections = (data: FeaturedCollectionsData, signer: NDKSigner, ndk: NDK): Promise<string> =>
+	publishFeaturedList('featuredCollections', data.featuredCollections, signer, ndk)
 
-	// Submit through WebSocket interface
-	await submitAppSettings(event.rawEvent())
+export const publishFeaturedAuctions = (data: FeaturedAuctionsData, signer: NDKSigner, ndk: NDK): Promise<string> =>
+	publishFeaturedList('featuredAuctions', data.featuredAuctions, signer, ndk)
 
-	return event.id
+export const publishFeaturedUsers = (data: FeaturedUsersData, signer: NDKSigner, ndk: NDK): Promise<string> =>
+	publishFeaturedList('featuredUsers', data.featuredUsers, signer, ndk)
+
+async function fetchFeaturedItems(list: FeaturedListKey, owner: string, ndk: NDK): Promise<string[]> {
+	const { kind, dTag } = CURATION_LISTS[list]
+	const filter = { kinds: [kind], authors: [owner], '#d': [dTag] }
+	// Auctions read from the regular pool; the other lists read the app relay only to avoid stale copies.
+	const currentEvent =
+		list === 'featuredAuctions'
+			? Array.from(await ndk.fetchEvents({ ...filter, limit: 1 } as NDKFilter))[0]
+			: await fetchLatestAppEvent(filter)
+	return readCurationListItems(list, currentEvent?.tags)
 }
 
-/**
- * Publishes featured collections through WebSocket interface
- */
-export const publishFeaturedCollections = async (data: FeaturedCollectionsData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	// Validate all collection coordinates
-	for (const coords of data.featuredCollections) {
-		if (!validateCoordinates(coords, 30405)) {
-			throw new Error(`Invalid collection coordinates format: ${coords}`)
-		}
-	}
-
-	// Create and sign the event
-	const event = createFeaturedCollectionsEvent(data, signer, ndk)
-	await event.sign(signer)
-
-	// Submit through WebSocket interface
-	await submitAppSettings(event.rawEvent())
-
-	return event.id
-}
-
-/**
- * Publishes featured auctions through WebSocket interface
- */
-export const publishFeaturedAuctions = async (data: FeaturedAuctionsData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	for (const coords of data.featuredAuctions) {
-		if (!validateCoordinates(coords, 30408)) {
-			throw new Error(`Invalid auction coordinates format: ${coords}`)
-		}
-	}
-
-	const event = createFeaturedAuctionsEvent(data, signer, ndk)
-	await event.sign(signer)
-	await submitAppSettings(event.rawEvent())
-	return event.id
-}
-
-/**
- * Publishes featured users through WebSocket interface
- */
-export const publishFeaturedUsers = async (data: FeaturedUsersData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	// Validate all user pubkeys
-	for (const pubkey of data.featuredUsers) {
-		if (!validatePubkey(pubkey)) {
-			throw new Error(`Invalid pubkey format: ${pubkey}`)
-		}
-	}
-
-	// Create and sign the event
-	const event = createFeaturedUsersEvent(data, signer, ndk)
-	await event.sign(signer)
-
-	// Submit through WebSocket interface
-	await submitAppSettings(event.rawEvent())
-
-	return event.id
+async function changeFeaturedList(
+	list: FeaturedListKey,
+	item: string,
+	change: 'add' | 'remove',
+	signer: NDKSigner,
+	ndk: NDK,
+	appPubkey?: string,
+): Promise<string> {
+	const current = await fetchFeaturedItems(list, await resolveListOwner(signer, appPubkey), ndk)
+	const result = change === 'add' ? addListItem(current, item) : removeListItem(current, item)
+	if (!result.ok) throw new Error(result.error === 'already-listed' ? FEATURED_LABELS[list].alreadyListed : FEATURED_LABELS[list].notListed)
+	return publishFeaturedList(list, result.value, signer, ndk)
 }
 
 /**
  * Adds an item to featured products with ordering
  */
-export const addToFeaturedProducts = async (productCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
-	// Get current user's pubkey
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise fallback to current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch latest featured products from the app relay only (avoid stale copies on other relays)
-	const currentEvent = await fetchLatestAppEvent({
-		kinds: [FEATURED_ITEMS_CONFIG.PRODUCTS.kind],
-		authors: [targetAppPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.PRODUCTS.dTag],
-	})
-	const currentProducts = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'a').map((tag: string[]) => tag[1]) || []
-
-	// Check if product is already featured
-	if (currentProducts.includes(productCoords)) {
-		throw new Error('Product is already featured')
-	}
-
-	// Add new product to the end of the list
-	const updatedProducts = [...currentProducts, productCoords]
-
-	return publishFeaturedProducts({ featuredProducts: updatedProducts }, signer, ndk)
-}
+export const addToFeaturedProducts = (productCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+	changeFeaturedList('featuredProducts', productCoords, 'add', signer, ndk, appPubkey)
 
 /**
  * Removes an item from featured products
  */
-export const removeFromFeaturedProducts = async (
-	productCoords: string,
-	signer: NDKSigner,
-	ndk: NDK,
-	appPubkey?: string,
-): Promise<string> => {
-	// Get current user's pubkey
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise fallback to current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch latest featured products from the app relay only (avoid stale copies on other relays)
-	const currentEvent = await fetchLatestAppEvent({
-		kinds: [FEATURED_ITEMS_CONFIG.PRODUCTS.kind],
-		authors: [targetAppPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.PRODUCTS.dTag],
-	})
-	const currentProducts = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'a').map((tag: string[]) => tag[1]) || []
-
-	// Check if product is actually featured
-	if (!currentProducts.includes(productCoords)) {
-		throw new Error('Product is not featured')
-	}
-
-	// Remove product from the list
-	const updatedProducts = currentProducts.filter((coords: string) => coords !== productCoords)
-
-	return publishFeaturedProducts({ featuredProducts: updatedProducts }, signer, ndk)
-}
+export const removeFromFeaturedProducts = (productCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+	changeFeaturedList('featuredProducts', productCoords, 'remove', signer, ndk, appPubkey)
 
 /**
  * Reorders featured products
@@ -260,63 +150,11 @@ export const reorderFeaturedProducts = async (orderedProducts: string[], signer:
 /**
  * Similar functions for collections
  */
-export const addToFeaturedCollections = async (
-	collectionCoords: string,
-	signer: NDKSigner,
-	ndk: NDK,
-	appPubkey?: string,
-): Promise<string> => {
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
+export const addToFeaturedCollections = (collectionCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+	changeFeaturedList('featuredCollections', collectionCoords, 'add', signer, ndk, appPubkey)
 
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch latest featured collections from the app relay only (avoid stale copies on other relays)
-	const currentEvent = await fetchLatestAppEvent({
-		kinds: [FEATURED_ITEMS_CONFIG.COLLECTIONS.kind],
-		authors: [targetAppPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag],
-	})
-	const currentCollections = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'a').map((tag: string[]) => tag[1]) || []
-
-	if (currentCollections.includes(collectionCoords)) {
-		throw new Error('Collection is already featured')
-	}
-
-	const updatedCollections = [...currentCollections, collectionCoords]
-	return publishFeaturedCollections({ featuredCollections: updatedCollections }, signer, ndk)
-}
-
-export const removeFromFeaturedCollections = async (
-	collectionCoords: string,
-	signer: NDKSigner,
-	ndk: NDK,
-	appPubkey?: string,
-): Promise<string> => {
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch latest featured collections from the app relay only (avoid stale copies on other relays)
-	const currentEvent = await fetchLatestAppEvent({
-		kinds: [FEATURED_ITEMS_CONFIG.COLLECTIONS.kind],
-		authors: [targetAppPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag],
-	})
-	const currentCollections = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'a').map((tag: string[]) => tag[1]) || []
-
-	if (!currentCollections.includes(collectionCoords)) {
-		throw new Error('Collection is not featured')
-	}
-
-	const updatedCollections = currentCollections.filter((coords: string) => coords !== collectionCoords)
-	return publishFeaturedCollections({ featuredCollections: updatedCollections }, signer, ndk)
-}
+export const removeFromFeaturedCollections = (collectionCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+	changeFeaturedList('featuredCollections', collectionCoords, 'remove', signer, ndk, appPubkey)
 
 export const reorderFeaturedCollections = async (orderedCollections: string[], signer: NDKSigner, ndk: NDK): Promise<string> => {
 	return publishFeaturedCollections({ featuredCollections: orderedCollections }, signer, ndk)
@@ -325,64 +163,11 @@ export const reorderFeaturedCollections = async (orderedCollections: string[], s
 /**
  * Similar functions for auctions
  */
-export const addToFeaturedAuctions = async (auctionCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
+export const addToFeaturedAuctions = (auctionCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+	changeFeaturedList('featuredAuctions', auctionCoords, 'add', signer, ndk, appPubkey)
 
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	const filter = {
-		kinds: [FEATURED_ITEMS_CONFIG.AUCTIONS.kind as NDKKind],
-		authors: [targetAppPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.AUCTIONS.dTag],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const currentEvent = Array.from(events)[0]
-	const currentAuctions = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'a').map((tag: string[]) => tag[1]) || []
-
-	if (currentAuctions.includes(auctionCoords)) {
-		throw new Error('Auction is already featured')
-	}
-
-	const updatedAuctions = [...currentAuctions, auctionCoords]
-	return publishFeaturedAuctions({ featuredAuctions: updatedAuctions }, signer, ndk)
-}
-
-export const removeFromFeaturedAuctions = async (
-	auctionCoords: string,
-	signer: NDKSigner,
-	ndk: NDK,
-	appPubkey?: string,
-): Promise<string> => {
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	const filter = {
-		kinds: [FEATURED_ITEMS_CONFIG.AUCTIONS.kind],
-		authors: [targetAppPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.AUCTIONS.dTag],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const currentEvent = Array.from(events)[0]
-	const currentAuctions = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'a').map((tag: string[]) => tag[1]) || []
-
-	if (!currentAuctions.includes(auctionCoords)) {
-		throw new Error('Auction is not featured')
-	}
-
-	const updatedAuctions = currentAuctions.filter((coords: string) => coords !== auctionCoords)
-	return publishFeaturedAuctions({ featuredAuctions: updatedAuctions }, signer, ndk)
-}
+export const removeFromFeaturedAuctions = (auctionCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+	changeFeaturedList('featuredAuctions', auctionCoords, 'remove', signer, ndk, appPubkey)
 
 export const reorderFeaturedAuctions = async (orderedAuctions: string[], signer: NDKSigner, ndk: NDK): Promise<string> => {
 	return publishFeaturedAuctions({ featuredAuctions: orderedAuctions }, signer, ndk)
@@ -391,53 +176,11 @@ export const reorderFeaturedAuctions = async (orderedAuctions: string[], signer:
 /**
  * Similar functions for users
  */
-export const addToFeaturedUsers = async (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
+export const addToFeaturedUsers = (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+	changeFeaturedList('featuredUsers', userPubkey, 'add', signer, ndk, appPubkey)
 
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch latest featured users from the app relay only (avoid stale copies on other relays)
-	const currentEvent = await fetchLatestAppEvent({
-		kinds: [FEATURED_ITEMS_CONFIG.USERS.kind],
-		authors: [targetAppPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.USERS.dTag],
-	})
-	const currentUsers = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'p').map((tag: string[]) => tag[1]) || []
-
-	if (currentUsers.includes(userPubkey)) {
-		throw new Error('User is already featured')
-	}
-
-	const updatedUsers = [...currentUsers, userPubkey]
-	return publishFeaturedUsers({ featuredUsers: updatedUsers }, signer, ndk)
-}
-
-export const removeFromFeaturedUsers = async (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch latest featured users from the app relay only (avoid stale copies on other relays)
-	const currentEvent = await fetchLatestAppEvent({
-		kinds: [FEATURED_ITEMS_CONFIG.USERS.kind],
-		authors: [targetAppPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.USERS.dTag],
-	})
-	const currentUsers = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'p').map((tag: string[]) => tag[1]) || []
-
-	if (!currentUsers.includes(userPubkey)) {
-		throw new Error('User is not featured')
-	}
-
-	const updatedUsers = currentUsers.filter((pubkey: string) => pubkey !== userPubkey)
-	return publishFeaturedUsers({ featuredUsers: updatedUsers }, signer, ndk)
-}
+export const removeFromFeaturedUsers = (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> =>
+	changeFeaturedList('featuredUsers', userPubkey, 'remove', signer, ndk, appPubkey)
 
 export const reorderFeaturedUsers = async (orderedUsers: string[], signer: NDKSigner, ndk: NDK): Promise<string> => {
 	return publishFeaturedUsers({ featuredUsers: orderedUsers }, signer, ndk)

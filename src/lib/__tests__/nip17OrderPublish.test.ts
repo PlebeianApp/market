@@ -3,6 +3,8 @@ import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, generateSecretKey, getPublicKey, nip44, type Event } from 'nostr-tools'
 import { NIP59_GIFT_WRAP_KIND } from '../nostr/nip59'
 import { NIP17_DM_RELAY_LIST_KIND, type Nip17DmRelayListEvent } from '../nostr/nip17Relays'
+import type { NostrRelayPort } from '@sdk/core'
+import { WorkflowError } from '@sdk/core'
 import { publishNip17OrderMessage } from '../orders/nip17OrderPublish'
 import { createOrderCreationRumor } from '../orders/orderMessageRumor'
 
@@ -62,6 +64,42 @@ function expectNoPublicOrderSentinels(value: unknown): void {
 }
 
 describe('NIP-17 order publish boundary', () => {
+	test('uses the SDK relay-port adapter when no legacy publisher callback is supplied', async () => {
+		const senderPrivateKey = generateSecretKey()
+		const senderPubkey = getPublicKey(senderPrivateKey)
+		const recipientPubkey = getPublicKey(generateSecretKey())
+		const calls: Array<{ event: Event; relays: readonly string[] }> = []
+		const relayPort: NostrRelayPort<Event> = {
+			fetchEvents: async () => [],
+			subscribe: () => () => {},
+			publish: async (event, relays) => {
+				calls.push({ event, relays })
+				return { acceptedRelays: relays }
+			},
+		}
+		const rumor = createOrderCreationRumor({
+			buyerPubkey: senderPubkey,
+			merchantPubkey: recipientPubkey,
+			orderId: 'relay-port-order',
+			amountSats: 1000,
+			items: [{ productRef: `30402:${recipientPubkey}:item`, quantity: 1 }],
+			createdAt: 123456,
+		})
+
+		const result = await publishNip17OrderMessage({
+			rumor,
+			signer: createSigner(senderPrivateKey),
+			recipientPubkey,
+			recipientRelayEvents: [relayListEvent(recipientPubkey, ['wss://recipient.example'])],
+			senderRelayEvents: [relayListEvent(senderPubkey, ['wss://sender.example'])],
+			relayPort,
+		})
+
+		expect(result.relayTargets.ready).toBe(true)
+		expect(calls.map((call) => call.relays)).toEqual([['wss://sender.example'], ['wss://recipient.example']])
+		expect(calls.every((call) => call.event.kind === NIP59_GIFT_WRAP_KIND)).toBe(true)
+	})
+
 	test('publishes recipient and sender gift wraps only to their kind 10050 relays', async () => {
 		const senderPrivateKey = generateSecretKey()
 		const senderPubkey = getPublicKey(senderPrivateKey)
@@ -125,8 +163,9 @@ describe('NIP-17 order publish boundary', () => {
 			createdAt: 123456,
 		})
 
-		await expect(
-			publishNip17OrderMessage({
+		let caught: unknown
+		try {
+			await publishNip17OrderMessage({
 				rumor,
 				signer: createSigner(senderPrivateKey),
 				recipientPubkey,
@@ -136,9 +175,14 @@ describe('NIP-17 order publish boundary', () => {
 					calls.push({ target, relays, giftWrap })
 					return new Set(relays)
 				},
-			}),
-		).rejects.toThrow('NIP-17 relay targets are not ready')
+			})
+		} catch (error) {
+			caught = error
+		}
 
+		expect(caught).toBeInstanceOf(WorkflowError)
+		expect(caught).toMatchObject({ workflow: 'nip17_order_publish', phase: 'resolve_relay_targets', status: 'failed' })
+		expect(caught).toMatchObject({ message: 'NIP-17 relay targets are not ready' })
 		expect(calls).toHaveLength(0)
 	})
 

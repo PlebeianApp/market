@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parseMarketConfig, type PublicConfigSchemaVersion } from '@sdk/core'
 import { BUG_RELAY, DEFAULT_PUBLIC_RELAYS, DEFAULT_TRUSTED_MINTS, type Stage } from './constants'
 import { RelayUrlSchema, SocialLinksSchema, WebUrlSchema, type AppSettings, type SocialLinks } from './schemas/app'
 
@@ -27,6 +28,7 @@ export interface InstanceConfig {
 export type InstanceConfigEnvironment = Partial<InstanceConfig>
 
 export interface PublicAppConfig extends InstanceConfig {
+	schemaVersion?: PublicConfigSchemaVersion
 	appRelay: string
 	stage: Stage
 	nip46Relay: string
@@ -36,6 +38,26 @@ export interface PublicAppConfig extends InstanceConfig {
 	needsSetup: boolean
 	serverReady: boolean
 	externalZapRelaysEnabled: boolean
+}
+
+export type MarketConfigSource = Pick<
+	PublicAppConfig,
+	'handlerId' | 'name' | 'displayName' | 'siteUrl' | 'appRelay' | 'publicRelays' | 'trustedMints' | 'defaultCurrency'
+>
+
+/** Map host-owned public instance settings into the SDK's protocol-neutral market config. */
+export function toMarketConfig(config: MarketConfigSource): ReturnType<typeof parseMarketConfig> {
+	return parseMarketConfig({
+		schemaVersion: 'market-config-v1',
+		marketId: config.handlerId,
+		name: config.name,
+		displayName: config.displayName,
+		siteUrl: config.siteUrl,
+		appRelay: config.appRelay,
+		relayUrls: config.publicRelays,
+		trustedMints: config.trustedMints,
+		defaultCurrency: config.defaultCurrency,
+	})
 }
 
 const InstanceConfigEnvironmentSchema = z.object({

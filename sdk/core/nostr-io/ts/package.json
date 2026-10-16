@@ -1,0 +1,24 @@
+{
+	"name": "@plebeian-apps/nostr-io",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "The nostr-io module's first implementation (TypeScript): the wire contract in nostr-io/nostr-io.md, over applesauce-relay's pool, with the relay set injected per call and no store anywhere.",
+	"exports": {
+		".": "./index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit",
+		"evidence": "bash ../evidence/run.sh"
+	},
+	"dependencies": {
+		"applesauce-relay": "6.2.1",
+		"nostr-tools": "~2.19",
+		"rxjs": "7.8.2"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.2.0",
+		"typescript": "^5.6.0"
+	}
+}

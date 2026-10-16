@@ -1,0 +1,1079 @@
+signer module — invariant falsification
+# command:   python3 signer/evidence/falsify.py
+# generated: 2026-09-29T08:41:45Z
+# bun:       1.4.2
+#
+# For each named invariant: one mutation is applied, the named check is run, the file is
+# restored byte-for-byte (sha256 verified) and the check is run again. A mutation whose check
+# does NOT fail is reported FALSIFICATION FAILED. A check is either a named case of the
+# module's own suite, or a command — the state machine's three-way table diff is a command,
+# because the thing that can drift is a document, not a function.
+#
+# Two harness rules, both earned: the case name is escaped before it reaches the runner,
+# whose filter is a regular expression (a name containing `(fail closed)` used to match no
+# case at all, and its non-zero exit was read as a failing assertion); and a check that
+# matched no case, or that is not green again on the restored file, is counted as a
+# failure — it is a defect in this harness or in the suite, never evidence for an invariant.
+
+==============================================================================
+mutation 1 — I1
+breaks:   the strict-bind gate stops dropping a bare ack, so an unknown remote signer binds on 'ack'
+file:     signer/ts/nip46.ts
+sha256:   325ec2ea7ea521965b267826b9312a1e838c8c7d40e9e71318e048956dd1b780 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-                     if (await isBareAckResponse(clientSigner, item)) return null
++                     if (false && (await isBareAckResponse(clientSigner, item))) return null
+
+$ cd signer/ts && bun test invariants.test.ts -t "a\ bare\ "ack"\ never\ binds\ an\ unknown\ remote\ signer"
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+72 | 		incoming.next(inboundEvent(REMOTE_SK, { result: 'ack' }))
+73 | 		await settle()
+74 | 
+75 | 		// The library's lax bind (result === "ack") must have been gated by the
+76 | 		// strict-bind transport: an unknown remote on a bare ack is NOT bound.
+77 | 		expect(client.remote).toBeUndefined()
+                             ^
+error: expect(received).toBeUndefined()
+
+Received: "466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/invariants.test.ts:77:25)
+(fail) I1 — an unknown remote signer is never bound without the expected secret > a bare "ack" never binds an unknown remote signer [125.80ms]
+
+ 0 pass
+ 19 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [484.00ms]
+exit: 1
+
+$ sha256 after restore: 325ec2ea7ea521965b267826b9312a1e838c8c7d40e9e71318e048956dd1b780 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) I1 — an unknown remote signer is never bound without the expected secret > a bare "ack" never binds an unknown remote signer [108.41ms]
+
+ 1 pass
+ 19 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [494.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 2 — I2
+breaks:   the NIP-46 capability resolves the CLIENT key as the identity instead of the user's
+file:     signer/ts/nip46.ts
+sha256:   325ec2ea7ea521965b267826b9312a1e838c8c7d40e9e71318e048956dd1b780 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-         getPublicKey: () => race('get_public_key', signer.getPublicKey(), timeoutMs),
++         getPublicKey: async () => (signer as unknown as { clientPubkey: string }).clientPubkey,
+
+$ cd signer/ts && bun test invariants.test.ts -t "behaviourally:\ a\ bound\ session\ resolves\ the\ user,\ not\ the\ client\ key\ nor\ the\ remote"
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+180 | 		})
+181 | 
+182 | 		await session.startSession({ lane: 'bunker', bunkerUrl: bunkerUrl(), clientKeyHex: CLIENT_SK })
+183 | 
+184 | 		const identity = await session.getPublicKey()
+185 | 		expect(identity).toBe(USER_PK)
+                         ^
+error: expect(received).toBe(expected)
+
+Expected: "3c72addb4fdf09af94f0c94d7fe92a386a7e70cf8a1d85916386bb2535c7b1b1"
+Received: "4f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/invariants.test.ts:185:20)
+(fail) I2 — the remote-signer pubkey stays separate from the authenticated identity > behaviourally: a bound session resolves the user, not the client key nor the remote [92.01ms]
+
+ 0 pass
+ 19 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [400.00ms]
+exit: 1
+
+$ sha256 after restore: 325ec2ea7ea521965b267826b9312a1e838c8c7d40e9e71318e048956dd1b780 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) I2 — the remote-signer pubkey stays separate from the authenticated identity > behaviourally: a bound session resolves the user, not the client key nor the remote [128.16ms]
+
+ 1 pass
+ 19 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [484.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 3 — I3
+breaks:   the identity assertion stops comparing the returned event's pubkey with the resolved identity
+file:     signer/ts/capability.ts
+sha256:   6801668fbf4fb2ff0ad44afdb95fca7839bb147303f469edb60a6c2a0d4e206e (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-             if (signed.pubkey.toLowerCase() !== identity) {
++             if (false) {
+
+$ cd signer/ts && bun test invariants.test.ts -t "signEvent\ fails\ closed\ when\ the\ returned\ event\ pubkey\ differs\ from\ the\ authenticated\ identity"
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+200 | 	}
+201 | 
+202 | 	test('signEvent fails closed when the returned event pubkey differs from the authenticated identity', async () => {
+203 | 		const session = await sessionWithSigner(async (template) => finalizeEvent(template, hexToBytes(WRONG_SK)))
+204 | 
+205 | 		await expect(session.signEvent(userTemplate())).rejects.toThrow(IdentityMismatchError)
+                                                                ^
+error: expect(received).rejects.toThrow(expected)
+
+Expected promise that rejects
+Received promise that resolved: Promise { <resolved> }
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/invariants.test.ts:205:59)
+(fail) I3 — a returned event must verify and belong to the resolved identity > signEvent fails closed when the returned event pubkey differs from the authenticated identity [12.20ms]
+
+ 0 pass
+ 19 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [287.00ms]
+exit: 1
+
+$ sha256 after restore: 6801668fbf4fb2ff0ad44afdb95fca7839bb147303f469edb60a6c2a0d4e206e (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) I3 — a returned event must verify and belong to the resolved identity > signEvent fails closed when the returned event pubkey differs from the authenticated identity [13.01ms]
+
+ 1 pass
+ 19 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [285.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 4 — I4
+breaks:   the extension lane synthesises an encryption capability the extension does not provide
+file:     signer/ts/lanes.ts
+sha256:   05ff2f07491635a1157b2c58adf156cb47d28d4ddc6608858976f8d07d237a1d (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-     if (hasEncryption(extension.nip44)) lane.nip44 = extension.nip44 as NipEncryptionCapability
++     lane.nip44 = { encrypt: async () => '', decrypt: async () => '' }
+
+$ cd signer/ts && bun test invariants.test.ts -t "leaves\ nip04\ and\ nip44\ absent\ when\ the\ extension\ lacks\ them\ \(fail\ closed\)"
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+260 | 			ports: { extension: bareExtension() },
+261 | 		})
+262 | 
+263 | 		const snapshot = await session.startSession({ lane: 'extension' })
+264 | 
+265 | 		expect(snapshot.capabilities).toEqual({ nip04: false, nip44: false })
+                                      ^
+error: expect(received).toEqual(expected)
+
+  {
+    "nip04": false,
+-   "nip44": false,
++   "nip44": true,
+  }
+
+- Expected  - 1
++ Received  + 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/invariants.test.ts:265:33)
+(fail) I4 — the encryption capability is optional and fails closed > leaves nip04 and nip44 absent when the extension lacks them (fail closed) [17.70ms]
+
+ 0 pass
+ 19 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [286.00ms]
+exit: 1
+
+$ sha256 after restore: 05ff2f07491635a1157b2c58adf156cb47d28d4ddc6608858976f8d07d237a1d (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) I4 — the encryption capability is optional and fails closed > leaves nip04 and nip44 absent when the extension lacks them (fail closed) [7.73ms]
+
+ 1 pass
+ 19 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [320.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 5 — I4
+breaks:   the composer's allow-list stops gating the capability set (absent allow-list exposes everything present)
+file:     signer/ts/capability.ts
+sha256:   6801668fbf4fb2ff0ad44afdb95fca7839bb147303f469edb60a6c2a0d4e206e (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-     if (!allowed || allowed.length === 0) return false
++     if (!allowed || allowed.length === 0) return true
+
+$ cd signer/ts && bun test session.test.ts -t "the\ composer\ allow\-list\ gates\ the\ capability\ set"
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+336 | 	})
+337 | 
+338 | 	test('the composer allow-list gates the capability set — absent means refuse, never synthesise', async () => {
+339 | 		const closed = createSignerSession()
+340 | 		await closed.startSession({ lane: 'nsec', key: USER_SK })
+341 | 		expect(closed.capabilities()).toEqual({})
+                                      ^
+error: expect(received).toEqual(expected)
+
+- {}
++ {
++   "nip04": {
++     "decrypt": [Function: AsyncFunction],
++     "encrypt": [Function: AsyncFunction],
++   },
++   "nip44": {
++     "decrypt": [Function: AsyncFunction],
++     "encrypt": [Function: AsyncFunction],
++   },
++ }
+
+- Expected  - 1
++ Received  + 10
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/session.test.ts:341:33)
+(fail) the reads a surface decides with > the composer allow-list gates the capability set — absent means refuse, never synthesise [30.69ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [314.00ms]
+exit: 1
+
+$ sha256 after restore: 6801668fbf4fb2ff0ad44afdb95fca7839bb147303f469edb60a6c2a0d4e206e (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+(pass) the reads a surface decides with > the composer allow-list gates the capability set — absent means refuse, never synthesise [45.60ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 7 expect() calls
+Ran 1 test across 1 file. [317.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 6 — I4 · B1
+breaks:   the allow-list stops gating the capability that is HANDED OUT, so currentSigner() offers the scheme the composer refused (the red team's B1 — this mutation is why the suite can see it now)
+file:     signer/ts/capability.ts
+sha256:   6801668fbf4fb2ff0ad44afdb95fca7839bb147303f469edb60a6c2a0d4e206e (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-     if (exposed.nip44) gated.nip44 = exposed.nip44
++     if (capability.nip44) gated.nip44 = capability.nip44
+
+$ cd signer/ts && bun test invariants.test.ts -t "the\ capability\ handed\ out\ through\ currentSigner"
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+310 | 		// contract, and the module's own guard `hasNip44(currentSigner())` answered
+311 | 		// `true` for a refused scheme.
+312 | 		const closed = createSignerSession()
+313 | 		await closed.startSession({ lane: 'nsec', key: USER_SK })
+314 | 		expect(closed.capabilities()).toEqual({})
+315 | 		expect(hasNip44(closed.currentSigner())).toBe(false)
+                                                 ^
+error: expect(received).toBe(expected)
+
+Expected: false
+Received: true
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/invariants.test.ts:315:44)
+(fail) I4 — the encryption capability is optional and fails closed > the capability handed out through currentSigner() obeys the same allow-list (I4) [26.95ms]
+
+ 0 pass
+ 19 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [320.00ms]
+exit: 1
+
+$ sha256 after restore: 6801668fbf4fb2ff0ad44afdb95fca7839bb147303f469edb60a6c2a0d4e206e (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+invariants.test.ts:
+(pass) I4 — the encryption capability is optional and fails closed > the capability handed out through currentSigner() obeys the same allow-list (I4) [36.73ms]
+
+ 1 pass
+ 19 filtered out
+ 0 fail
+ 11 expect() calls
+Ran 1 test across 1 file. [305.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 7 — I5
+breaks:   the vault stops rejecting an envelope whose iteration count was lowered by tampering
+file:     signer/ts/vault.ts
+sha256:   3400545d9db22e290fb2ebfbc5674a9885d86557edfd8044c85f153397b50b16 (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-     if (!Number.isInteger(parsed.iterations) || parsed.iterations < minIterations) {
++     if (false) {
+
+$ cd signer/ts && bun test vault.test.ts -t "iteration\-downgrade\ tamper"
+bun test v1.4.2 (744846f84)
+
+vault.test.ts:
+ 95 | 		// Attacker model: edit the stored iterations 600000 -> 1, exfiltrate the
+ 96 | 		// envelope, brute-force offline at one iteration per guess. The floor must
+ 97 | 		// reject before any derivation — not merely fail later at the auth tag.
+ 98 | 		const envelope = await wrapSession('nbunksec1secret', 'right-pass', { iterations: 200_000 }, webCryptoPort)
+ 99 | 		const downgraded = { ...envelope, iterations: 1 }
+100 | 		await expect(unlockVault(downgraded, 'right-pass', {}, deps)).rejects.toThrow(
+                                                                              ^
+error: expect(received).toThrow(expected)
+
+Expected substring: "iteration count is below the accepted minimum"
+Received message: "Failed to unlock the session vault (wrong passphrase or corrupted vault)"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/vault.test.ts:100:73)
+(fail) session vault wrap/unwrap > iteration-downgrade tamper: lowered iterations are rejected even with the CORRECT passphrase [125.72ms]
+
+ 0 pass
+ 20 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [424.00ms]
+exit: 1
+
+$ sha256 after restore: 3400545d9db22e290fb2ebfbc5674a9885d86557edfd8044c85f153397b50b16 (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+vault.test.ts:
+(pass) session vault wrap/unwrap > iteration-downgrade tamper: lowered iterations are rejected even with the CORRECT passphrase [112.72ms]
+
+ 1 pass
+ 20 filtered out
+ 0 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [444.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 8 — I5
+breaks:   the session persists the raw session token instead of the encrypted envelope (silent plaintext storage)
+file:     signer/ts/session.ts
+sha256:   305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-         await this.guard('storage', 'saveVaultedSession', () =>
+            vault.saveVaultedSession(nbunksec, passphrase, this.wrapOptions(), deps),
+        )
++         await deps.storage.setItem('nostr_session_v1', nbunksec)
+
+$ cd signer/ts && bun test session.test.ts -t "a\ bunker\ session\ is\ written\ encrypted,\ and\ endSession\ clears\ it"
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+449 | 			bunkerUrl: bunkerUrl(),
+450 | 			clientKeyHex: CLIENT_SK,
+451 | 		})
+452 | 		expect(snapshot.record).toBe('vaulted')
+453 | 		expect(storage.map.has(vault.VAULT_STORAGE_KEY)).toBe(true)
+454 | 		expect(storage.map.get(vault.VAULT_STORAGE_KEY)).not.toContain('nbunksec')
+                                                             ^
+error: expect(received).not.toContain(expected)
+
+Expected to not contain: "nbunksec"
+Received: "nbunksec1qqsyvmtletjk8ewtpxsdrpctkkqrgjqyv9u8ng2ff88jy2zlrwhr7fcpyqg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zqscwaehxw309aekjemwv4ezuetcv9khqmr99e3k7mgrp3382mntv4e8xetrwfjhg0ulnk2"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/session.test.ts:454:56)
+(fail) the persisted record (I5, through the session) > a bunker session is written encrypted, and endSession clears it [133.26ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [396.00ms]
+exit: 1
+
+$ sha256 after restore: 305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+(pass) the persisted record (I5, through the session) > a bunker session is written encrypted, and endSession clears it [165.99ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [434.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 9 — I5 · M1
+breaks:   the record is written BEFORE the identity is resolved, so a login that never happened leaves a vaulted session behind
+file:     signer/ts/session.ts
+sha256:   305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-                     await this.activate(bundle.capability, 'bunker', attempt)
+                    await this.persist(bundle.nbunksec)
++                     await this.persist(bundle.nbunksec)
+                    await this.activate(bundle.capability, 'bunker', attempt)
+
+$ cd signer/ts && bun test session.test.ts -t "a\ lane\ that\ fails\ while\ resolving\ its\ identity"
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+550 | 
+551 | 		await expect(
+552 | 			session.startSession({ lane: 'bunker', bunkerUrl: bunkerUrl(), clientKeyHex: CLIENT_SK }),
+553 | 		).rejects.toThrow(IdentityUnresolvedError)
+554 | 
+555 | 		expect(storage.map.size).toBe(0)
+                                 ^
+error: expect(received).toBe(expected)
+
+Expected: 0
+Received: 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/session.test.ts:555:28)
+(fail) the persisted record (I5, through the session) > a lane that fails while resolving its identity writes no persisted record [123.63ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [399.00ms]
+exit: 1
+
+$ sha256 after restore: 305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+(pass) the persisted record (I5, through the session) > a lane that fails while resolving its identity writes no persisted record [132.80ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [413.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 10 — B2
+breaks:   a failed lane's teardown is dropped without being run, so the relay subscription it opened stays open (the red team's B2)
+file:     signer/ts/session.ts
+sha256:   305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-         await this.runTeardown(attempt)
++         // the teardown is dropped without being run
+
+$ cd signer/ts && bun test nip46.test.ts -t "a\ failed\ lane\ releases\ what\ it\ opened"
+bun test v1.4.2 (744846f84)
+
+nip46.test.ts:
+162 | 		expect(transport.active()).toBe(1)
+163 | 
+164 | 		clock.advance()
+165 | 		await expect(started).rejects.toThrow(Nip46RpcTimeoutError)
+166 | 
+167 | 		expect(transport.active()).toBe(0)
+                                   ^
+error: expect(received).toBe(expected)
+
+Expected: 0
+Received: 1
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/nip46.test.ts:167:30)
+(fail) the session over the lanes > a failed lane releases what it opened — no REQ subscription survives the failure [39.03ms]
+
+ 0 pass
+ 9 filtered out
+ 1 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [303.00ms]
+exit: 1
+
+$ sha256 after restore: 305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+nip46.test.ts:
+(pass) the session over the lanes > a failed lane releases what it opened — no REQ subscription survives the failure [36.73ms]
+
+ 1 pass
+ 9 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [298.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 11 — B2 · M6
+breaks:   a `locked` session can no longer be ended, so the record it parked on cannot be cleared
+file:     signer/ts/session.ts
+sha256:   305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-     locked: ['restoring', 'failed', 'closing'],
++     locked: ['restoring', 'failed'],
+
+$ cd signer/ts && bun test session.test.ts -t "endSession\ clears\ the\ persisted\ record\ from"
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+188 | 	// -- the state machine ---------------------------------------------------
+189 | 
+190 | 	private transition(next: SessionState, reason?: string): void {
+191 | 		if (next === this.state) return
+192 | 		if (!ALLOWED[this.state].includes(next)) {
+193 | 			throw new InvalidTransitionError(
+               ^
+InvalidTransitionError: Refused: locked → idle
+ code: "invalid_transition"
+
+      at transition (/home/admin_maxime/projects/market-retrofit/signer/ts/session.ts:193:10)
+      at endSession (/home/admin_maxime/projects/market-retrofit/signer/ts/session.ts:524:36)
+      at async <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/session.test.ts:575:17)
+(fail) the persisted record (I5, through the session) > endSession clears the persisted record from `locked`, and from `failed` [12.78ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [282.00ms]
+exit: 1
+
+$ sha256 after restore: 305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+(pass) the persisted record (I5, through the session) > endSession clears the persisted record from `locked`, and from `failed` [14.20ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 7 expect() calls
+Ran 1 test across 1 file. [316.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 12 — M2
+breaks:   the connect URI (which carries the secret) reaches the caller's sink before the lane's ports are checked
+file:     signer/ts/session.ts
+sha256:   305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-                     const transport = requireTransport(this.transport())
+                    const clock = requireClock(this.clock())
++                     const transport = requireTransport(this.transport())
+                    const clock = this.clock() as ClockPort
+
+$ cd signer/ts && bun test session.test.ts -t "refuses\ before\ the\ URI\ reaches\ the\ sink"
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+293 | 					seen.push(url)
+294 | 				},
+295 | 			}),
+296 | 		).rejects.toThrow(ClockRequiredError)
+297 | 
+298 | 		expect(seen).toEqual([])
+                     ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   "nostrconnect://4f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa?relay=wss%3A%2F%2Fsigner.example.com&secret=ae2mn-47mpNx",
++ ]
+
+- Expected  - 1
++ Received  + 3
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/session.test.ts:298:16)
+(fail) the reads a surface decides with > the client-initiated lane refuses before the URI reaches the sink when the clock is missing [30.82ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [301.00ms]
+exit: 1
+
+$ sha256 after restore: 305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+(pass) the reads a surface decides with > the client-initiated lane refuses before the URI reaches the sink when the clock is missing [2.13ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [286.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 13 — M3
+breaks:   the declared `signerKind` pin is read by nothing again, so a session starts on any lane the caller names
+file:     signer/ts/session.ts
+sha256:   305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-         if (this.settings.signerKind && this.settings.signerKind !== input.lane) {
++         if (false) {
+
+$ cd signer/ts && bun test session.test.ts -t "signerKind\ pins\ the\ lane"
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+250 | 			ports: { transport: transport.pool, clock: manualClock() },
+251 | 		})
+252 | 
+253 | 		await expect(
+254 | 			session.startSession({ lane: 'bunker', bunkerUrl: bunkerUrl(), clientKeyHex: CLIENT_SK }),
+255 | 		).rejects.toThrow(/pins sessions to the nsec lane/)
+                  ^
+error: expect(received).rejects.toThrow(expected)
+
+Expected promise that rejects
+Received promise that resolved: Promise { <resolved> }
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/session.test.ts:255:13)
+(fail) the reads a surface decides with > signerKind pins the lane: another lane is refused, not quietly started [130.79ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [421.00ms]
+exit: 1
+
+$ sha256 after restore: 305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+(pass) the reads a surface decides with > signerKind pins the lane: another lane is refused, not quietly started [28.23ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [306.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 14 — M6
+breaks:   the table the implementation enforces gains an edge the spec's list and the diagram do not carry
+file:     signer/ts/session.ts
+sha256:   305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-     closing: ['idle'],
++     closing: ['idle', 'active'],
+
+$ python3 signer/evidence/transitions.py
+signer.md · #489ae8 (the list) 23 edge(s)
+    active         → closing
+    active         → failed
+    awaiting_user  → active
+    awaiting_user  → closing
+    awaiting_user  → failed
+    closing        → idle
+    connecting     → active
+    connecting     → awaiting_user
+    connecting     → closing
+    connecting     → failed
+    failed         → closing
+    failed         → idle
+    idle           → active
+    idle           → closing
+    idle           → connecting
+    idle           → locked
+    idle           → restoring
+    locked         → closing
+    locked         → failed
+    locked         → restoring
+    restoring      → active
+    restoring      → closing
+    restoring      → failed
+
+signer.md · §7 (the diagram) 23 edge(s)
+    active         → closing
+    active         → failed
+    awaiting_user  → active
+    awaiting_user  → closing
+    awaiting_user  → failed
+    closing        → idle
+    connecting     → active
+    connecting     → awaiting_user
+    connecting     → closing
+    connecting     → failed
+    failed         → closing
+    failed         → idle
+    idle           → active
+    idle           → closing
+    idle           → connecting
+    idle           → locked
+    idle           → restoring
+    locked         → closing
+    locked         → failed
+    locked         → restoring
+    restoring      → active
+    restoring      → closing
+    restoring      → failed
+
+session.ts · ALLOWED (enforced) 24 edge(s)
+    active         → closing
+    active         → failed
+    awaiting_user  → active
+    awaiting_user  → closing
+    awaiting_user  → failed
+    closing        → active
+    closing        → idle
+    connecting     → active
+    connecting     → awaiting_user
+    connecting     → closing
+    connecting     → failed
+    failed         → closing
+    failed         → idle
+    idle           → active
+    idle           → closing
+    idle           → connecting
+    idle           → locked
+    idle           → restoring
+    locked         → closing
+    locked         → failed
+    locked         → restoring
+    restoring      → active
+    restoring      → closing
+    restoring      → failed
+
+diff  <signer.md · §7 (the diagram)> vs <signer.md · #489ae8 (the list)>
+    exit: 0   (0 = the same set of edges)
+
+diff  <session.ts · ALLOWED (enforced)> vs <signer.md · #489ae8 (the list)>
+    only in session.ts · ALLOWED (enforced): closing → active
+    exit: 1   (0 = the same set of edges)
+
+transitions: 23 edge(s), 1 disagreement(s)
+exit: 1
+
+$ sha256 after restore: 305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+signer.md · #489ae8 (the list) 23 edge(s)
+    active         → closing
+    active         → failed
+    awaiting_user  → active
+    awaiting_user  → closing
+    awaiting_user  → failed
+    closing        → idle
+    connecting     → active
+    connecting     → awaiting_user
+    connecting     → closing
+    connecting     → failed
+    failed         → closing
+    failed         → idle
+    idle           → active
+    idle           → closing
+    idle           → connecting
+    idle           → locked
+    idle           → restoring
+    locked         → closing
+    locked         → failed
+    locked         → restoring
+    restoring      → active
+    restoring      → closing
+    restoring      → failed
+
+signer.md · §7 (the diagram) 23 edge(s)
+    active         → closing
+    active         → failed
+    awaiting_user  → active
+    awaiting_user  → closing
+    awaiting_user  → failed
+    closing        → idle
+    connecting     → active
+    connecting     → awaiting_user
+    connecting     → closing
+    connecting     → failed
+    failed         → closing
+    failed         → idle
+    idle           → active
+    idle           → closing
+    idle           → connecting
+    idle           → locked
+    idle           → restoring
+    locked         → closing
+    locked         → failed
+    locked         → restoring
+    restoring      → active
+    restoring      → closing
+    restoring      → failed
+
+session.ts · ALLOWED (enforced) 23 edge(s)
+    active         → closing
+    active         → failed
+    awaiting_user  → active
+    awaiting_user  → closing
+    awaiting_user  → failed
+    closing        → idle
+    connecting     → active
+    connecting     → awaiting_user
+    connecting     → closing
+    connecting     → failed
+    failed         → closing
+    failed         → idle
+    idle           → active
+    idle           → closing
+    idle           → connecting
+    idle           → locked
+    idle           → restoring
+    locked         → closing
+    locked         → failed
+    locked         → restoring
+    restoring      → active
+    restoring      → closing
+    restoring      → failed
+
+diff  <signer.md · §7 (the diagram)> vs <signer.md · #489ae8 (the list)>
+    exit: 0   (0 = the same set of edges)
+
+diff  <session.ts · ALLOWED (enforced)> vs <signer.md · #489ae8 (the list)>
+    exit: 0   (0 = the same set of edges)
+
+transitions: 23 edge(s), 0 disagreement(s)
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 15 — M7
+breaks:   a failing host port escapes as the host's own raw error instead of a typed refusal
+file:     signer/ts/session.ts
+sha256:   305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-             if (error instanceof SignerError) throw error
++             if (true) throw error
+
+$ cd signer/ts && bun test session.test.ts -t "a\ port\ that\ fails\ is\ a\ typed\ refusal"
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+313 | 			},
+314 | 			removeItem: () => {},
+315 | 		})
+316 | 
+317 | 		const restoring = createSignerSession({ ports: { storage: throwing('getItem'), crypto: webCryptoPort } })
+318 | 		await expect(restoring.restoreSession()).rejects.toThrow(PortError)
+                                                         ^
+error: expect(received).toThrow(expected)
+
+Expected constructor: PortError
+Received constructor: Error
+
+Received message: "QuotaExceededError: the host store is unavailable"
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/session.test.ts:318:52)
+(fail) the reads a surface decides with > a port that fails is a typed refusal on both of its paths — never the host’s own error [1.83ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [307.00ms]
+exit: 1
+
+$ sha256 after restore: 305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+(pass) the reads a surface decides with > a port that fails is a typed refusal on both of its paths — never the host’s own error [179.90ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [454.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+mutation 16 — N1
+breaks:   the abandoned-attempt guard is gone, so a lane still in flight re-activates a session that was already ended
+file:     signer/ts/session.ts
+sha256:   305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (before)
+anchor occurrences: 1 (must be exactly 1)
+
+$ the mutation applied (old -> new):
+-         if (attempt !== undefined && attempt !== this.attempt) {
++         if (false) {
+
+$ cd signer/ts && bun test session.test.ts -t "ending\ a\ session\ while\ a\ lane\ is\ in\ flight"
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+201 | 		const observed = observe(session)
+202 | 
+203 | 		const started = session.startSession({ lane: 'bunker', bunkerUrl: bunkerUrl(), clientKeyHex: CLIENT_SK })
+204 | 		await session.endSession()
+205 | 
+206 | 		await expect(started).rejects.toThrow(InvalidTransitionError)
+                                      ^
+error: expect(received).rejects.toThrow(expected)
+
+Expected promise that rejects
+Received promise that resolved: Promise { <resolved> }
+
+      at <anonymous> (/home/admin_maxime/projects/market-retrofit/signer/ts/session.test.ts:206:33)
+(fail) the session state machine > ending a session while a lane is in flight keeps it ended [176.17ms]
+
+ 0 pass
+ 31 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [461.00ms]
+exit: 1
+
+$ sha256 after restore: 305a7d29df2b045f341c6e18b45f0d18439b8eb5bab9c60acc565ae43895866e (must equal the line above)
+restore verified: yes
+
+RESULT: FALSIFIED (the invariant is really covered) — the named check failed under the mutation
+
+$ ...and the same check on the restored file:
+bun test v1.4.2 (744846f84)
+
+session.test.ts:
+(pass) the session state machine > ending a session while a lane is in flight keeps it ended [121.35ms]
+
+ 1 pass
+ 31 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [415.00ms]
+exit: 0   (0 = green again)
+the check is green again on the restored file: yes
+
+==============================================================================
+16 mutation(s) applied, 0 falsification failure(s)
+every mutated file was restored and its sha256 verified; the module's tree is as it was before this run.

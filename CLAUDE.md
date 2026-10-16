@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Plebeian Market is a decentralized marketplace built on the Nostr protocol. All data is stored on Nostr relays - there is no traditional database. Browser storage (localStorage, sessionStorage, IndexedDB) is only used for user preferences, auth keys, and temporary state like shopping carts.
 
-Plebeian Market originally ran on NIP-15, but the current version uses NIP-99 with a migration path for existing users (see `src/routes/_dashboard-layout/dashboard/products/migration-tool.tsx`).
+Plebeian Market originally ran on NIP-15, but the current version uses NIP-99 with a migration path for existing users (see `platform/web/routes/_dashboard-layout/dashboard/products/migration-tool.tsx`).
 
 ## Commands
 
@@ -57,7 +57,7 @@ bun run test:e2e -- --headed   # Run tests with visible browser
 **Tech Stack:**
 
 - React 19 + TypeScript
-- TanStack Router (file-based routing in `src/routes/`)
+- TanStack Router (file-based routing in `platform/web/routes/`)
 - TanStack Query (server state in `src/queries/`)
 - TanStack Store (client state in `src/lib/stores/`)
 - Radix UI + Tailwind CSS 4
@@ -66,12 +66,12 @@ bun run test:e2e -- --headed   # Run tests with visible browser
 
 **Key Directories:**
 
-- `src/routes/` - File-based routing (TanStack Router auto-generates `routeTree.gen.ts`)
+- `platform/web/routes/` - File-based routing (TanStack Router generates `platform/web/routeTree.gen.ts`; see `tsr.config.json`)
 - `src/components/` - React components; `ui/` contains Radix primitives
 - `src/lib/stores/` - Global state stores (auth, cart, ndk, product, wallet, ui)
 - `src/lib/schemas/` - Zod validation schemas
 - `src/queries/` - React Query hooks and query key factory
-- `src/server/` - Backend event handling (NDK, validation, signing)
+- `platform/server/` - Backend event handling (NDK, validation, signing)
 - `e2e/` - Playwright tests with page objects in `e2e/po/`
 
 ## Development Patterns

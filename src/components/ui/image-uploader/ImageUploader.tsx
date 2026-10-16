@@ -1,10 +1,10 @@
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@ui/primitives/button'
+import { Input } from '@ui/primitives/input'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { getMediaType } from '@/lib/media'
+import { getMediaType } from '@ui/utils/media'
 import { uploadFileToBlossom, BLOSSOM_SERVERS } from '@/lib/blossom'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { compressImage, isCompressibleImage, formatFileSize, getCompressionStats } from '@/lib/image-compression'
 
 const COMPRESSED_IMAGE_EXTENSIONS: Record<string, string> = {

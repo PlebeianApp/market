@@ -1,5 +1,5 @@
-import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@ui/primitives/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
 import { collectionFormActions, collectionFormStore } from '@/lib/stores/collection'
 import { usePublishCollectionMutation, useUpdateCollectionMutation, type CollectionFormData } from '@/publish/collections'
 import { useForm } from '@tanstack/react-form'

@@ -13,7 +13,7 @@ import {
 	upsertAuction,
 	upsertBid,
 	type ValidatorBidState,
-} from '../../server/auction-validator/state'
+} from '@platform/server/auction-validator/state'
 
 const SELLER_PK = 'a'.repeat(64)
 const BIDDER_PK = 'b'.repeat(64)

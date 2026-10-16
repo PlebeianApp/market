@@ -23,5 +23,5 @@ src/publish/nip89.ts|Plebeian Market|4
 src/publish/nip89.ts|plebeian.market|2
 src/publish/relay-preferences.tsx|plebeian-market|1
 src/queries/bugReports.tsx|plebian2beta|3
-src/routes/products.$productId.tsx|Plebeian Market|2
-src/routes/setup.tsx|plebeian-market|1
+platform/web/routes/products.$productId.tsx|Plebeian Market|2
+platform/web/routes/setup.tsx|plebeian-market|1

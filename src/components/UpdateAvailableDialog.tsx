@@ -1,5 +1,5 @@
 import { RefreshCw, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@ui/primitives/button'
 
 interface UpdateAvailableDialogProps {
 	open: boolean

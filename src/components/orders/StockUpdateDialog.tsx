@@ -1,8 +1,5 @@
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { fetchProductByATag, fetchProduct, getProductId, getProductStock, isNSFWProduct } from '@/queries/products'
+import { StockUpdateDialogView } from '@ui/components/orders/OrderActionsView'
 import { useUpdateProductMutation, type ProductFormData } from '@/publish/products'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { useEffect, useState } from 'react'
@@ -219,55 +216,13 @@ export function StockUpdateDialog({ open, onOpenChange, order, onComplete }: Sto
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-				<DialogHeader>
-					<DialogTitle>Update Product Stock</DialogTitle>
-					<DialogDescription>The order has been completed. Update the stock levels for the products in this order.</DialogDescription>
-				</DialogHeader>
-
-				{loading && products.length === 0 ? (
-					<div className="py-8 text-center text-muted-foreground">Loading product information...</div>
-				) : (
-					<div className="space-y-4 py-4">
-						{products.map((product) => (
-							<div key={product.productRef} className="border rounded-lg p-4 space-y-3">
-								<div className="font-medium">{product.productName}</div>
-								<div className="grid grid-cols-3 gap-4 text-sm">
-									<div>
-										<Label className="text-muted-foreground">Ordered</Label>
-										<div className="font-medium">{product.quantityOrdered}</div>
-									</div>
-									<div>
-										<Label className="text-muted-foreground">Current Stock</Label>
-										<div className="font-medium">{product.currentStock}</div>
-									</div>
-									<div>
-										<Label htmlFor={`stock-${product.productRef}`}>New Stock</Label>
-										<Input
-											id={`stock-${product.productRef}`}
-											type="number"
-											min="0"
-											value={product.newStock}
-											onChange={(e) => handleStockChange(product.productRef, e.target.value)}
-											className="mt-1"
-										/>
-									</div>
-								</div>
-							</div>
-						))}
-					</div>
-				)}
-
-				<DialogFooter>
-					<Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
-						Cancel
-					</Button>
-					<Button onClick={handleUpdateStock} disabled={loading || products.length === 0}>
-						{loading ? 'Updating...' : 'Update Stock'}
-					</Button>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
+		<StockUpdateDialogView
+			open={open}
+			onOpenChange={onOpenChange}
+			rows={products}
+			loading={loading}
+			onStockChange={handleStockChange}
+			onSubmit={handleUpdateStock}
+		/>
 	)
 }

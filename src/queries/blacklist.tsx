@@ -2,15 +2,18 @@ import { fetchLatestAppEvent, getMainRelay, ndkActions } from '@/lib/stores/ndk'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import {
+	buildBlacklistFilter,
+	getFormattedBlacklist,
+	isBlacklisted,
+	parseBlacklistSettings,
+	type BlacklistSettings as SdkBlacklistSettings,
+} from '@sdk/commerce/curation'
 import { configKeys } from './queryKeyFactory'
 
-export interface BlacklistSettings {
-	blacklistedPubkeys: string[] // Array of blacklisted pubkeys in hex format
-	blacklistedProducts: string[] // Array of blacklisted product coordinates
-	blacklistedCollections: string[] // Array of blacklisted collection coordinates
-	lastUpdated: number // Timestamp of last update
-	event: NDKEvent | null // Raw blacklist event
-}
+export { getFormattedBlacklist, isBlacklisted }
+
+export type BlacklistSettings = SdkBlacklistSettings<NDKEvent>
 
 /**
  * Fetches blacklist settings (kind 10000) for the app
@@ -23,41 +26,11 @@ export const fetchBlacklistSettings = async (appPubkey?: string): Promise<Blackl
 		throw new Error('App pubkey is required')
 	}
 
-	const latestEvent = await fetchLatestAppEvent({
-		kinds: [10000], // NIP-51 mute list
-		authors: [targetPubkey],
-	})
+	const latestEvent = await fetchLatestAppEvent(buildBlacklistFilter(targetPubkey))
 
-	if (!latestEvent) {
-		console.log(`No blacklist settings found for app pubkey: ${targetPubkey}`)
-		// Return empty blacklist instead of null for consistency
-		return {
-			blacklistedPubkeys: [],
-			blacklistedProducts: [],
-			blacklistedCollections: [],
-			lastUpdated: 0,
-			event: null,
-		}
-	}
+	if (!latestEvent) console.log(`No blacklist settings found for app pubkey: ${targetPubkey}`)
 
-	// Extract blacklisted pubkeys from 'p' tags
-	const blacklistedPubkeys = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
-
-	// Extract blacklisted products from 'a' tags (kind 30402)
-	const blacklistedProducts = latestEvent.tags.filter((tag) => tag[0] === 'a' && tag[1] && tag[1].startsWith('30402:')).map((tag) => tag[1])
-
-	// Extract blacklisted collections from 'a' tags (kind 30405)
-	const blacklistedCollections = latestEvent.tags
-		.filter((tag) => tag[0] === 'a' && tag[1] && tag[1].startsWith('30405:'))
-		.map((tag) => tag[1])
-
-	return {
-		blacklistedPubkeys,
-		blacklistedProducts,
-		blacklistedCollections,
-		lastUpdated: latestEvent.created_at ?? 0,
-		event: latestEvent,
-	}
+	return parseBlacklistSettings(latestEvent)
 }
 
 /**
@@ -72,10 +45,7 @@ export const useBlacklistSettings = (appPubkey?: string) => {
 	useEffect(() => {
 		if (!appPubkey || !ndk || !mainRelay) return
 
-		const blacklistFilter = {
-			kinds: [10000], // NIP-51 mute list
-			authors: [appPubkey],
-		}
+		const blacklistFilter = buildBlacklistFilter(appPubkey)
 
 		let latestEventTime = 0
 		let receivedEose = false
@@ -116,24 +86,4 @@ export const useBlacklistSettings = (appPubkey?: string) => {
 		refetchOnWindowFocus: true,
 		refetchOnReconnect: true,
 	})
-}
-
-/**
- * Check if a specific pubkey is blacklisted
- */
-export const isBlacklisted = (blacklistSettings: BlacklistSettings | null | undefined, pubkey: string): boolean => {
-	if (!blacklistSettings || !pubkey) return false
-	return blacklistSettings.blacklistedPubkeys.includes(pubkey)
-}
-
-/**
- * Get formatted blacklist data for display
- */
-export const getFormattedBlacklist = (blacklistSettings: BlacklistSettings | null | undefined) => {
-	if (!blacklistSettings || !blacklistSettings.blacklistedPubkeys) return []
-
-	return blacklistSettings.blacklistedPubkeys.map((pubkey) => ({
-		pubkey,
-		status: 'blacklisted' as const,
-	}))
 }

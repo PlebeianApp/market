@@ -2,20 +2,26 @@ import { fetchLatestAppEvent, getMainRelay, ndkActions } from '@/lib/stores/ndk'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import {
+	buildCurationListFilter,
+	getFormattedAdmins,
+	getFormattedEditors,
+	getUserRoleForPubkey,
+	isAdmin,
+	isEditor,
+	isOwner,
+	parseAdminSettings,
+	parseEditorSettings,
+	type AdminSettings as SdkAdminSettings,
+	type EditorSettings as SdkEditorSettings,
+} from '@sdk/commerce/curation'
 import { configKeys } from './queryKeyFactory'
 
-export interface AdminSettings {
-	admins: string[] // Array of admin pubkeys in hex format
-	owner: string // Owner pubkey in hex format
-	lastUpdated: number // Timestamp of last update
-	event: NDKEvent // Raw admin list event
-}
+export { getFormattedAdmins, getFormattedEditors, getUserRoleForPubkey, isAdmin, isEditor, isOwner }
 
-export interface EditorSettings {
-	editors: string[]
-	lastUpdated: number
-	event: NDKEvent | null
-}
+export type AdminSettings = SdkAdminSettings<NDKEvent>
+
+export type EditorSettings = SdkEditorSettings<NDKEvent>
 
 /**
  * Fetches admin settings (kind 30000) for the app
@@ -31,29 +37,14 @@ export const fetchAdminSettings = async (appPubkey?: string): Promise<AdminSetti
 		throw new Error('App pubkey is required')
 	}
 
-	const latestEvent = await fetchLatestAppEvent({
-		kinds: [30000],
-		authors: [targetPubkey],
-		'#d': ['admins'],
-	})
+	const latestEvent = await fetchLatestAppEvent(buildCurationListFilter('admins', targetPubkey))
 
 	if (!latestEvent) {
 		console.log(`No admin settings found for app pubkey: ${targetPubkey}`)
 		return null
 	}
 
-	// Extract admin pubkeys from 'p' tags
-	const adminPubkeys = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
-
-	// Assume the first admin is the owner (or use a specific tag if available)
-	const owner = adminPubkeys[0] || targetPubkey
-
-	return {
-		admins: adminPubkeys,
-		owner,
-		lastUpdated: latestEvent.created_at ?? 0,
-		event: latestEvent,
-	}
+	return parseAdminSettings(latestEvent, targetPubkey)
 }
 
 /**
@@ -68,11 +59,7 @@ export const useAdminSettings = (appPubkey?: string) => {
 	useEffect(() => {
 		if (!appPubkey || !ndk || !mainRelay) return
 
-		const adminListFilter = {
-			kinds: [30000],
-			authors: [appPubkey],
-			'#d': ['admins'],
-		}
+		const adminListFilter = buildCurationListFilter('admins', appPubkey)
 
 		// Track latest event timestamp to avoid reacting to historical events
 		let latestEventTime = 0
@@ -118,22 +105,6 @@ export const useAdminSettings = (appPubkey?: string) => {
 }
 
 /**
- * Check if a specific pubkey is an admin
- */
-export const isAdmin = (adminSettings: AdminSettings | null | undefined, pubkey: string): boolean => {
-	if (!adminSettings || !pubkey) return false
-	return adminSettings.admins.includes(pubkey)
-}
-
-/**
- * Check if a specific pubkey is the owner
- */
-export const isOwner = (adminSettings: AdminSettings | null | undefined, pubkey: string): boolean => {
-	if (!adminSettings || !pubkey) return false
-	return adminSettings.owner === pubkey
-}
-
-/**
  * Hook to check if the current user is an admin
  */
 export const useAmIAdmin = (appPubkey?: string) => {
@@ -154,19 +125,6 @@ export const useAmIAdmin = (appPubkey?: string) => {
 }
 
 /**
- * Get formatted admin list for display
- */
-export const getFormattedAdmins = (adminSettings: AdminSettings | null | undefined) => {
-	if (!adminSettings) return []
-
-	return adminSettings.admins.map((pubkey, index) => ({
-		pubkey,
-		isOwner: pubkey === adminSettings.owner,
-		index,
-	}))
-}
-
-/**
  * Fetches editor settings (kind 30000) for the app
  */
 export const fetchEditorSettings = async (appPubkey?: string): Promise<EditorSettings | null> => {
@@ -180,30 +138,11 @@ export const fetchEditorSettings = async (appPubkey?: string): Promise<EditorSet
 		throw new Error('App pubkey is required')
 	}
 
-	const latestEvent = await fetchLatestAppEvent({
-		kinds: [30000],
-		authors: [targetPubkey],
-		'#d': ['editors'],
-	})
+	const latestEvent = await fetchLatestAppEvent(buildCurationListFilter('editors', targetPubkey))
 
-	if (!latestEvent) {
-		console.log(`No editor settings found for app pubkey: ${targetPubkey}`)
-		// Return empty editor list instead of null for consistency
-		return {
-			editors: [],
-			lastUpdated: 0,
-			event: null,
-		}
-	}
+	if (!latestEvent) console.log(`No editor settings found for app pubkey: ${targetPubkey}`)
 
-	// Extract editor pubkeys from 'p' tags
-	const editorPubkeys = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
-
-	return {
-		editors: editorPubkeys,
-		lastUpdated: latestEvent.created_at ?? 0,
-		event: latestEvent,
-	}
+	return parseEditorSettings(latestEvent)
 }
 
 /**
@@ -218,11 +157,7 @@ export const useEditorSettings = (appPubkey?: string) => {
 	useEffect(() => {
 		if (!appPubkey || !ndk || !mainRelay) return
 
-		const editorListFilter = {
-			kinds: [30000],
-			authors: [appPubkey],
-			'#d': ['editors'],
-		}
+		const editorListFilter = buildCurationListFilter('editors', appPubkey)
 
 		// Track latest event timestamp to avoid reacting to historical events
 		let latestEventTime = 0
@@ -268,26 +203,6 @@ export const useEditorSettings = (appPubkey?: string) => {
 }
 
 /**
- * Check if a pubkey is an editor
- */
-export const isEditor = (editorSettings: EditorSettings | null | undefined, pubkey: string): boolean => {
-	if (!editorSettings || !pubkey) return false
-	return editorSettings.editors.includes(pubkey)
-}
-
-/**
- * Get formatted editor data for display
- */
-export const getFormattedEditors = (editorSettings: EditorSettings | null | undefined) => {
-	if (!editorSettings || !editorSettings.editors) return []
-
-	return editorSettings.editors.map((pubkey) => ({
-		pubkey,
-		role: 'editor' as const,
-	}))
-}
-
-/**
  * Hook to check comprehensive user role status (admin, editor, etc.)
  */
 export const useUserRole = (appPubkey?: string) => {
@@ -301,7 +216,7 @@ export const useUserRole = (appPubkey?: string) => {
 	const amIEditor = isEditor(editorSettings, currentUserPubkey || '')
 
 	// Determine the user's highest role
-	const userRole: 'owner' | 'admin' | 'editor' | 'user' = amIOwner ? 'owner' : amIAdmin ? 'admin' : amIEditor ? 'editor' : 'user'
+	const userRole = getUserRoleForPubkey(adminSettings, editorSettings, currentUserPubkey || '')
 
 	return {
 		amIAdmin,
@@ -313,18 +228,4 @@ export const useUserRole = (appPubkey?: string) => {
 		editorSettings,
 		currentUserPubkey,
 	}
-}
-
-/**
- * Get user role for a specific pubkey
- */
-export const getUserRoleForPubkey = (
-	adminSettings: AdminSettings | null | undefined,
-	editorSettings: EditorSettings | null | undefined,
-	pubkey: string,
-): 'owner' | 'admin' | 'editor' | 'user' => {
-	if (isOwner(adminSettings, pubkey)) return 'owner'
-	if (isAdmin(adminSettings, pubkey)) return 'admin'
-	if (isEditor(editorSettings, pubkey)) return 'editor'
-	return 'user'
 }

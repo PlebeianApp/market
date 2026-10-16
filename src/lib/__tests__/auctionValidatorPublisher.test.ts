@@ -4,8 +4,8 @@ import type { EventTemplate } from 'nostr-tools'
 import type { MinBidCurve, ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { makeHonestDleqProof } from '../cashu/dleqFixture'
-import { createVerdictPublisher } from '../../server/auction-validator/publisher'
-import { createValidatorState, setAuctionMintReachability, upsertAuction, upsertBid } from '../../server/auction-validator/state'
+import { createVerdictPublisher } from '@platform/server/auction-validator/publisher'
+import { createValidatorState, setAuctionMintReachability, upsertAuction, upsertBid } from '@platform/server/auction-validator/state'
 
 const SELLER_PK = 'a'.repeat(64)
 const BIDDER_A = 'b'.repeat(64)

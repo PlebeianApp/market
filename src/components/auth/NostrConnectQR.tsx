@@ -1,14 +1,10 @@
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DEFAULT_NIP46_RELAYS } from '@/lib/constants'
 import { authActions } from '@/lib/stores/auth'
 import { copyToClipboard } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
 import NDK, { NDKEvent, NDKKind, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
-import { CopyIcon, Loader2 } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { CUSTOM_RELAY_OPTION, NostrConnectQRView } from '@ui/components/auth/NostrConnectQRView'
 
 interface NostrConnectQRProps {
 	onError?: (error: string) => void
@@ -25,7 +21,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 	const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
 	const [selectedRelay, setSelectedRelay] = useState(DEFAULT_NIP46_RELAYS[0].value)
 	const [customRelay, setCustomRelay] = useState('')
-	const isCustomRelay = selectedRelay === 'custom'
+	const isCustomRelay = selectedRelay === CUSTOM_RELAY_OPTION
 	const activeRelay = isCustomRelay ? customRelay : selectedRelay
 
 	// Generate secret once and keep it stable
@@ -310,95 +306,18 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 	}, [connectionUrl, localPubkey, localSigner, tempSecret, config, onError, handleLoginWithNip46Signer, cleanup, activeRelay])
 
 	return (
-		<div className="flex flex-col items-center gap-4 py-4 w-full max-w-full overflow-hidden">
-			{connectionStatus === 'error' && (
-				<div className="bg-destructive/10 text-destructive rounded p-2 mb-2 text-sm w-full">Connection failed. Please try again.</div>
-			)}
-
-			<div className="w-full space-y-2">
-				<label className="text-sm font-medium">Relay</label>
-				<Select value={selectedRelay} onValueChange={setSelectedRelay}>
-					<SelectTrigger className="w-full">
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						{DEFAULT_NIP46_RELAYS.map((relay) => (
-							<SelectItem key={relay.value} value={relay.value}>
-								{relay.label}
-							</SelectItem>
-						))}
-						<SelectItem value="custom">Custom relay...</SelectItem>
-					</SelectContent>
-				</Select>
-				{isCustomRelay && <Input placeholder="wss://..." value={customRelay} onChange={(e) => setCustomRelay(e.target.value)} />}
-			</div>
-
-			{generatingConnectionUrl ? (
-				<div className="flex flex-col items-center gap-2 py-8">
-					<Loader2 className="h-8 w-8 animate-spin" />
-					<p className="text-sm text-muted-foreground">Generating connection...</p>
-				</div>
-			) : connectionStatus === 'connected' ? (
-				<div className="flex flex-col items-center gap-2 py-8">
-					<div className="text-green-500 mb-2">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="36"
-							height="36"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-						>
-							<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-							<polyline points="22 4 12 14.01 9 11.01" />
-						</svg>
-					</div>
-					<p className="text-sm text-green-500 font-medium">Connected successfully!</p>
-					<p className="text-sm text-muted-foreground">Logging you in...</p>
-				</div>
-			) : connectionUrl ? (
-				<>
-					<a
-						href={connectionUrl}
-						className="block hover:opacity-90 transition-opacity bg-white p-4 rounded-lg w-full max-w-[250px]"
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						<QRCodeSVG
-							value={connectionUrl}
-							className="w-full h-auto"
-							bgColor="#ffffff"
-							fgColor="#000000"
-							level="L"
-							includeMargin={false}
-						/>
-					</a>
-
-					<div className="flex w-full items-center justify-center">
-						{listening && (
-							<div className="flex items-center gap-2">
-								<Loader2 className="h-4 w-4 animate-spin" />
-								<span className="text-sm">Waiting for approval...</span>
-							</div>
-						)}
-					</div>
-
-					<div className="flex items-center gap-2 w-full min-w-0">
-						<Input value={connectionUrl} readOnly onClick={(e) => e.currentTarget.select()} className="min-w-0" />
-						<Button variant="outline" size="icon" className="shrink-0" onClick={() => copyToClipboard(connectionUrl)}>
-							<CopyIcon className="h-4 w-4" />
-						</Button>
-					</div>
-				</>
-			) : (
-				<div className="flex flex-col items-center gap-2 py-8">
-					<Loader2 className="h-8 w-8 animate-spin" />
-					<p className="text-sm text-muted-foreground">Initializing connection...</p>
-				</div>
-			)}
-		</div>
+		<NostrConnectQRView
+			relays={DEFAULT_NIP46_RELAYS}
+			selectedRelay={selectedRelay}
+			onRelayChange={setSelectedRelay}
+			customRelay={customRelay}
+			onCustomRelayChange={setCustomRelay}
+			isGenerating={generatingConnectionUrl}
+			isConnected={connectionStatus === 'connected'}
+			hasError={connectionStatus === 'error'}
+			isListening={listening}
+			connectionUrl={connectionUrl}
+			onCopyConnectionUrl={(url) => copyToClipboard(url)}
+		/>
 	)
 }

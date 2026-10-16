@@ -1,5 +1,5 @@
 import { ConversationView } from '@/components/messages/ConversationView'
-import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@ui/primitives/sheet'
 import { useState } from 'react'
 import { UserCard } from '../UserCard'
 

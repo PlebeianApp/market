@@ -26,6 +26,11 @@ import type { Event } from 'nostr-tools'
 import { useEffect, useMemo } from 'react'
 import { orderKeys } from './queryKeyFactory'
 import { getCoordsFromATag, isValidATag } from '@/lib/utils/coords'
+import { resolveBuyerOrderStatus, resolveBuyerShippingStatus } from '@sdk/commerce/orders'
+
+// The SDK's order-kind constants are plain numbers (NDK-free); NDKFilter.kinds wants
+// the branded NDKKind type, so cast once here rather than at every call site.
+const ORDER_RELATED_KINDS = [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND] as NonNullable<NDKFilter['kinds']>
 
 export type OrderWithRelatedEvents = {
 	order: NDKEvent // The original order creation event (kind 16, type 1)
@@ -272,12 +277,12 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	// This is much more efficient than fetching all events
 	const relatedEventsFilters: NDKFilter[] = [
 		{
-			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			kinds: ORDER_RELATED_KINDS,
 			authors: authors, // Events created by buyers/sellers
 			limit: 500,
 		},
 		{
-			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			kinds: ORDER_RELATED_KINDS,
 			'#p': authors, // Events mentioning buyers/sellers
 			limit: 500,
 		},
@@ -479,12 +484,12 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 	// Fetch related events more efficiently using authors filter
 	const relatedEventsFilters: NDKFilter[] = [
 		{
-			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			kinds: ORDER_RELATED_KINDS,
 			authors: allAuthors,
 			limit: 500,
 		},
 		{
-			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			kinds: ORDER_RELATED_KINDS,
 			'#p': allAuthors,
 			limit: 500,
 		},
@@ -669,12 +674,12 @@ export const fetchOrdersBySeller = async (
 	// Fetch related events more efficiently using authors filter
 	const relatedEventsFilters: NDKFilter[] = [
 		{
-			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			kinds: ORDER_RELATED_KINDS,
 			authors: allAuthors,
 			limit: 500,
 		},
 		{
-			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			kinds: ORDER_RELATED_KINDS,
 			'#p': allAuthors,
 			limit: 500,
 		},
@@ -885,12 +890,12 @@ export const fetchOrderById = async (orderId: string, options: FetchOrderByIdOpt
 	// Fetch related events more efficiently using authors filter
 	const relatedEventsFilters: NDKFilter[] = [
 		{
-			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			kinds: ORDER_RELATED_KINDS,
 			authors: participants,
 			limit: 500,
 		},
 		{
-			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			kinds: ORDER_RELATED_KINDS,
 			'#p': participants,
 			limit: 500,
 		},
@@ -997,7 +1002,7 @@ export function subscribeToOrderUpdates(params: {
 }): () => void {
 	const { ndk, orderId, logicalOrderId, fetchedOrderEventId, onMatchedEvent } = params
 	const relatedEventsFilter: NostrFilter = {
-		kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+		kinds: ORDER_RELATED_KINDS,
 	}
 
 	return applesauceIo.subscribe(
@@ -1078,14 +1083,7 @@ export const getOrderStatus = (order: OrderWithRelatedEvents): OrderStatus => {
 	// from latest event (at index 0) to oldest event (at index N - 1). Similarly, we assume `latestStatus` references the latest
 	// status event (at index 0) from this list.
 
-	const status = order.latestStatus?.tags.find((tag) => tag[0] === 'status')?.at(1)
-
-	if (status && Object.values(ORDER_STATUS).includes(status as any)) {
-		return status as OrderStatus
-	}
-
-	// Default to pending if no other status is found
-	return ORDER_STATUS.PENDING
+	return resolveBuyerOrderStatus(order.latestStatus?.tags) as OrderStatus
 }
 
 export const getShippingStatus = (order: OrderWithRelatedEvents): ShippingStatus | null => {
@@ -1093,58 +1091,7 @@ export const getShippingStatus = (order: OrderWithRelatedEvents): ShippingStatus
 	// from latest event (at index 0) to oldest event (at index N - 1). Similarly, we assume `latestShipping` references the latest
 	// shipping event (at index 0) from this list.
 
-	const shipping = order.latestShipping?.tags.find((tag) => tag[0] === 'status')?.at(1)
-
-	if (shipping && Object.values(SHIPPING_STATUS).includes(shipping as any)) {
-		return shipping as ShippingStatus
-	}
-
-	return null
-}
-
-/**
- * Get formatted date from event
- */
-export const getEventDate = (event?: NDKEvent): string => {
-	if (!event || !event.created_at) return '-'
-	return new Date(event.created_at * 1000).toLocaleString('de-DE', {
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit',
-		hour: '2-digit',
-		minute: '2-digit',
-	})
-}
-
-/**
- * Get seller pubkey from order
- */
-export const getSellerPubkey = (order: NDKEvent): string | undefined => {
-	const recipientTag = order.tags.find((tag) => tag[0] === 'p')
-	return recipientTag?.[1]
-}
-
-/**
- * Get buyer pubkey from order
- */
-export const getBuyerPubkey = (order: NDKEvent): string | undefined => {
-	return order.pubkey
-}
-
-/**
- * Get order ID from order
- */
-export const getOrderId = (order: NDKEvent): string | undefined => {
-	const orderTag = order.tags.find((tag) => tag[0] === 'order')
-	return orderTag?.[1]
-}
-
-/**
- * Get total amount from order
- */
-export const getOrderAmount = (order: NDKEvent): string | undefined => {
-	const amountTag = order.tags.find((tag) => tag[0] === 'amount')
-	return amountTag?.[1]
+	return resolveBuyerShippingStatus(order.latestShipping?.tags) as ShippingStatus | null
 }
 
 function comparePrivateOrderDetailsCandidates(a: SellerPrivateOrderDetailsCandidate, b: SellerPrivateOrderDetailsCandidate): number {
@@ -1258,12 +1205,4 @@ function isAddressableRef(value: string, expectedKind: string, expectedPubkey: s
 
 function isHexPubkey(value: string): boolean {
 	return HEX_PUBKEY_RE.test(value)
-}
-
-/**
- * Format a satoshi amount for display
- */
-export const formatSats = (amount?: string): string => {
-	if (!amount) return '-'
-	return `${parseInt(amount).toLocaleString()} sats`
 }

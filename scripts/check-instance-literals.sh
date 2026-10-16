@@ -26,7 +26,7 @@ for token in "${TOKENS[@]}"; do
 		if [[ "$count" -gt 0 ]]; then
 			printf '%s|%s|%s\n' "$file" "$token" "$count"
 		fi
-	done < <(find "$ROOT/src" -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.html' \) -print | sed "s#^$ROOT/##" | sort)
+	done < <(find "$ROOT/src" "$ROOT/platform" -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.html' \) -print | sed "s#^$ROOT/##" | sort)
 done | sort > "$CURRENT"
 
 CURRENT_TOTAL="$(awk -F'|' '{sum += $3} END {print sum + 0}' "$CURRENT")"

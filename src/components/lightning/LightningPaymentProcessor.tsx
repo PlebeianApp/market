@@ -1,20 +1,17 @@
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { QRCode } from '@/components/ui/qr-code'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
-import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
+import { nip60Store } from '@/lib/stores/nip60'
+import { createNip60WalletPort } from '@/lib/sdkAdapters'
 import type { PaymentProof } from '@/lib/payments/proof'
 import { paymentProofToReceiptPreimage } from '@/lib/payments/proof'
 import { handleNWCPayment, handleWebLNPayment, hasWebLN, validatePreimage } from '@/lib/utils/payment.utils'
 import { copyToClipboard } from '@/lib/utils'
 import { NDKEvent, NDKUser, NDKZapper } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
-import { ChevronLeft, ChevronRight, Copy, CreditCard, Loader2, Zap } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { LightningPaymentView } from '@ui/components/lightning/LightningPaymentView'
+
+const nip60WalletPort = createNip60WalletPort()
 
 export interface LightningPaymentData {
 	amount: number
@@ -501,7 +498,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			walletPreimageRef.current = null
 
 			try {
-				const walletResult = await nip60Actions.payLightningInvoice(invoice)
+				const walletResult = await nip60WalletPort.pay({ invoice })
 				if (walletResult.preimage && validatePreimage(invoice, walletResult.preimage)) {
 					walletPreimageRef.current = walletResult.preimage
 				}
@@ -680,188 +677,26 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		}, [data.amount, data.description, data.isZap, invoice, stopZapMonitoring])
 
 		return (
-			<TooltipProvider>
-				<Card className={className}>
-					{title && (
-						<CardHeader>
-							<CardTitle>{title}</CardTitle>
-						</CardHeader>
-					)}
-					<CardContent className="space-y-6 p-6">
-						{/* Loading state */}
-						{(isGeneratingInvoice || isPaymentInProgress) && (
-							<div className="flex justify-center items-center py-8">
-								<Loader2 className="w-8 h-8 animate-spin" />
-								<span className="ml-2">{isGeneratingInvoice ? 'Generating invoice...' : 'Processing payment...'}</span>
-							</div>
-						)}
-
-						{/* Error state - Failed to generate invoice */}
-						{!invoice && !isGeneratingInvoice && !isPaymentInProgress && (
-							<div className="space-y-4 py-4">
-								<div className="text-amber-600 text-center">
-									<p className="font-medium">Unable to generate Lightning invoice</p>
-									<p className="mt-1 text-gray-600 text-sm">
-										{skippable
-											? 'The recipient may not have Lightning configured. You can skip this payment and pay directly later.'
-											: 'The recipient may not have Lightning configured.'}
-									</p>
-								</div>
-								{onSkipPayment && skippable && (
-									<Button onClick={handleSkipPayment} variant="secondary" className="w-full">
-										Skip Payment (Pay Later)
-									</Button>
-								)}
-							</div>
-						)}
-
-						{/* Invoice QR Code - Always visible when available */}
-						{invoice && !isGeneratingInvoice && (
-							<div className="space-y-4">
-								<div className="flex justify-center">
-									<a href={lightningUrl} className="block hover:opacity-90 transition-opacity" target="_blank" rel="noopener noreferrer">
-										<QRCode value={invoice} size={200} />
-									</a>
-								</div>
-
-								{/* Mobile navigation under QR code */}
-								{showNavigation && (totalInvoices || 0) > 1 && (
-									<div className="sm:hidden flex gap-2 mt-3">
-										<Button
-											variant="outline"
-											className="flex-1"
-											onClick={() => onNavigate?.(Math.max(0, (currentIndex || 0) - 1))}
-											disabled={(currentIndex || 0) === 0}
-										>
-											<ChevronLeft className="mr-2 w-4 h-4" />
-											Previous
-										</Button>
-										<Button
-											variant="outline"
-											className="flex-1"
-											onClick={() => onNavigate?.(Math.min((totalInvoices || 0) - 1, (currentIndex || 0) + 1))}
-											disabled={(currentIndex || 0) >= (totalInvoices || 0) - 1}
-										>
-											Next
-											<ChevronRight className="ml-2 w-4 h-4" />
-										</Button>
-									</div>
-								)}
-
-								{/* Invoice text with copy button */}
-								<div className="space-y-2">
-									<Label htmlFor="invoice">Lightning Invoice</Label>
-									<div className="flex gap-2">
-										<Input id="invoice" value={invoice} readOnly className="font-mono text-xs" />
-										<Button variant="outline" size="icon" onClick={() => copyToClipboard(invoice)}>
-											<Copy className="w-4 h-4" />
-										</Button>
-									</div>
-								</div>
-
-								{/* Passive monitoring status */}
-								{isCheckingForReceipt && !isPaymentInProgress && (
-									<div className="flex justify-center items-center gap-2 text-muted-foreground text-sm">
-										<Loader2 className="w-4 h-4 animate-spin" />
-										<span>Checking for payment…</span>
-									</div>
-								)}
-							</div>
-						)}
-
-						{/* Payment buttons */}
-						{invoice && !isGeneratingInvoice && (
-							<div className="space-y-3">
-								<div className="flex sm:flex-row flex-col sm:flex-wrap gap-2">
-									{/* NIP-60 Payment Button */}
-									{capabilities.hasNip60 && (
-										<Button onClick={handleNip60Payment} disabled={isPaymentInProgress} className="sm:flex-1 w-full" variant="outline">
-											<Zap className="mr-2 w-4 h-4" />
-											Pay with NIP-60 Wallet
-										</Button>
-									)}
-
-									{/* NWC Payment Button */}
-									{!capabilities.hasNwc ? (
-										<Tooltip>
-											<TooltipTrigger asChild>
-												<div className="sm:flex-1 w-full">
-													<Button disabled={true} className="w-full" variant="outline">
-														<Zap className="mr-2 w-4 h-4" />
-														Pay with NWC
-													</Button>
-												</div>
-											</TooltipTrigger>
-											<TooltipContent>
-												<p>No NWC wallet connected</p>
-											</TooltipContent>
-										</Tooltip>
-									) : (
-										<Button onClick={handleNwcPayment} disabled={isPaymentInProgress} className="sm:flex-1 w-full" variant="outline">
-											<Zap className="mr-2 w-4 h-4" />
-											Pay with NWC
-										</Button>
-									)}
-
-									{/* WebLN Payment Button */}
-									{!capabilities.hasWebLn ? (
-										<Tooltip>
-											<TooltipTrigger asChild>
-												<div className="sm:flex-1 w-full">
-													<Button disabled={true} className="w-full" variant="outline">
-														<CreditCard className="mr-2 w-4 h-4" />
-														Pay with WebLN
-													</Button>
-												</div>
-											</TooltipTrigger>
-											<TooltipContent>
-												<p>WebLN not available</p>
-											</TooltipContent>
-										</Tooltip>
-									) : (
-										<Button onClick={handleWebLnPayment} disabled={isPaymentInProgress} className="sm:flex-1 w-full" variant="outline">
-											<CreditCard className="mr-2 w-4 h-4" />
-											Pay with WebLN
-										</Button>
-									)}
-								</div>
-
-								{/* Manual verification */}
-								{capabilities.canManualVerify && (
-									<div className="space-y-2">
-										<Label htmlFor="preimage">Payment Preimage (Manual Verification)</Label>
-										<div className="flex gap-2">
-											<Input
-												id="preimage"
-												placeholder="Enter payment preimage"
-												value={manualPreimage}
-												onChange={(e) => setManualPreimage(e.target.value)}
-											/>
-											<Button onClick={handleManualVerification} variant="secondary">
-												Verify
-											</Button>
-										</div>
-									</div>
-								)}
-
-								{/* Pay Later / Skip button */}
-								{onSkipPayment && skippable && (
-									<Button onClick={handleSkipPayment} variant="outline" className="w-full">
-										Pay Later
-									</Button>
-								)}
-
-								{/* Cancel button */}
-								{onCancel && (
-									<Button onClick={onCancel} variant="ghost" className="w-full">
-										Cancel
-									</Button>
-								)}
-							</div>
-						)}
-					</CardContent>
-				</Card>
-			</TooltipProvider>
+			<LightningPaymentView
+				className={className}
+				title={title}
+				invoice={invoice}
+				isGeneratingInvoice={isGeneratingInvoice}
+				isPaymentInProgress={isPaymentInProgress}
+				isCheckingForReceipt={isCheckingForReceipt}
+				capabilities={capabilities}
+				manualPreimage={manualPreimage}
+				onManualPreimageChange={setManualPreimage}
+				onPayNip60={handleNip60Payment}
+				onPayNwc={handleNwcPayment}
+				onPayWebLn={handleWebLnPayment}
+				onVerifyPreimage={handleManualVerification}
+				onCopyInvoice={(value) => copyToClipboard(value)}
+				onSkip={onSkipPayment ? handleSkipPayment : undefined}
+				skippable={skippable}
+				onCancel={onCancel}
+				navigation={showNavigation && onNavigate ? { currentIndex: currentIndex || 0, total: totalInvoices || 0, onNavigate } : undefined}
+			/>
 		)
 	},
 )

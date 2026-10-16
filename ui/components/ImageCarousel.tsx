@@ -1,0 +1,134 @@
+import { cn } from '../utils/cn'
+import { isVideoUrl } from '../utils/media'
+import { Media } from './Media'
+import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '../primitives/carousel'
+import { ImageOff, Play } from 'lucide-react'
+import { useState, useEffect } from 'react'
+
+interface ProductImage {
+	url: string
+	dimensions?: string
+	order?: number
+}
+
+interface ImageCarouselProps {
+	images: ProductImage[]
+	title: string
+	className?: string
+	onImageChange?: (index: number) => void
+	onImageClick?: (index: number) => void
+}
+
+export function ImageCarousel({ images, title, className, onImageChange, onImageClick }: ImageCarouselProps) {
+	const [currentIndex, setCurrentIndex] = useState(0)
+	const [api, setApi] = useState<CarouselApi>()
+	const [previewApiVertical, setPreviewApiVertical] = useState<CarouselApi>()
+
+	useEffect(() => {
+		if (!api) return
+
+		api.on('select', () => {
+			const newIndex = api.selectedScrollSnap()
+			setCurrentIndex(newIndex)
+			previewApiVertical?.scrollTo(newIndex)
+			onImageChange?.(newIndex)
+		})
+	}, [api, onImageChange, previewApiVertical])
+
+	// Call onImageChange when component mounts or images change
+	useEffect(() => {
+		if (images.length > 0) {
+			onImageChange?.(0)
+		}
+	}, [images, onImageChange])
+
+	const handlePreviewClick = (index: number) => {
+		api?.scrollTo(index)
+		setCurrentIndex(index)
+		onImageChange?.(index)
+	}
+
+	if (!images || images.length === 0) {
+		return (
+			<div className={cn('relative h-full w-full bg-zinc-900', className)}>
+				<div className="flex h-full w-full items-center justify-center">
+					<ImageOff className="h-12 w-12 text-zinc-500" />
+				</div>
+			</div>
+		)
+	}
+
+	return (
+		<div className="h-full flex flex-col gap-4">
+			{/* Main Carousel */}
+			<Carousel setApi={setApi} className="w-full aspect-square">
+				<CarouselContent>
+					{images.map((image, index) => (
+						<CarouselItem key={index} className="flex items-center justify-center relative aspect-square bg-black">
+							{index === currentIndex && <div className="absolute inset-0 bg-dots-image-overlay pointer-events-none z-0" />}
+							{isVideoUrl(image.url) ? (
+								<Media
+									src={image.url}
+									alt={`${title} - Image ${index + 1}`}
+									className="relative z-10 max-w-full max-h-full object-contain"
+									controls
+									muted
+									loop
+									playsInline
+								/>
+							) : (
+								<button
+									onClick={() => onImageClick?.(index)}
+									className="relative z-10 w-full h-full cursor-pointer flex items-center justify-center"
+									aria-label={`View ${title} - Image ${index + 1} in full size`}
+								>
+									<Media
+										src={image.url}
+										alt={`${title} - Image ${index + 1}`}
+										className="max-w-full max-h-full object-contain"
+										video={false}
+									/>
+								</button>
+							)}
+						</CarouselItem>
+					))}
+				</CarouselContent>
+			</Carousel>
+
+			{/* Preview Images - horizontal row below main image */}
+			{images.length > 1 && (
+				<Carousel
+					setApi={setPreviewApiVertical}
+					opts={{
+						align: 'start',
+					}}
+					className="w-full"
+				>
+					<CarouselContent className="ml-1">
+						{images.map((image, index) => (
+							<CarouselItem key={index} className="basis-1/4 sm:basis-1/5 md:basis-1/6 lg:basis-1/6 p-2">
+								<button
+									className={cn(
+										'relative w-full p-1 transition-all flex-shrink-0',
+										index === currentIndex ? 'ring-2 ring-secondary' : 'hover:ring-1 hover:ring-primary/50',
+									)}
+									onClick={() => handlePreviewClick(index)}
+									aria-label={`View ${title} - Image ${index + 1}`}
+								>
+									<div className="aspect-square w-full overflow-hidden relative bg-black border border-gray-800 flex items-center justify-center">
+										{isVideoUrl(image.url) ? (
+											<Play className="h-6 w-6 text-white" />
+										) : (
+											<img className="h-full w-full object-cover" src={image.url} alt={`${title} thumbnail ${index + 1}`} />
+										)}
+									</div>
+									{index === currentIndex && <div className="absolute bottom-1 right-1 w-2 h-2 bg-primary rounded-full" />}
+								</button>
+							</CarouselItem>
+						))}
+					</CarouselContent>
+				</Carousel>
+			)}
+		</div>
+	)
+}
