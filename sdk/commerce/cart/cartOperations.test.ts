@@ -9,6 +9,8 @@ import {
 	setCartProductQuantity,
 	updateCartProductQuantity,
 } from './cartOperations'
+import { currencyPrecision, minorUnitSum, UndeclaredCurrencyPrecisionError } from './money'
+import type { CartProductEntry } from './cartOperations'
 
 const sellerA = 'a'.repeat(64)
 const sellerB = 'b'.repeat(64)
@@ -54,6 +56,21 @@ describe('cart product operations', () => {
 		expect(grouped[sellerB]?.map((entry) => entry.id)).toEqual(['three'])
 		expect(Object.keys(grouped)).not.toContain('bad-pubkey')
 	})
+
+	/**
+	 * The availability rule that the demo's surface carried before this
+	 * increment: an out-of-stock listing is refused by the SDK itself.
+	 *
+	 * **The mutation that turns it red:** remove the `inStock === false`
+	 * check from `addCartProduct`. The product is then added regardless
+	 * of stock status and the test expects it to be present.
+	 */
+	test('an out-of-stock listing is refused by the SDK function itself', () => {
+		const cart = { coat: product('coat', 2) }
+		const unchanged = addCartProduct(cart, { id: 'scarf', amount: 1, sellerPubkey: sellerA, inStock: false } as CartProductEntry)
+		expect(unchanged).toBe(cart)
+		expect(unchanged.scarf).toBeUndefined()
+	})
 })
 
 describe('cart total aggregation', () => {
@@ -83,5 +100,48 @@ describe('cart total aggregation', () => {
 			shippingByCurrency: { USD: 3 },
 			totalByCurrency: { USD: 14, EUR: 7 },
 		})
+	})
+
+	/**
+	 * The case the increment exists for, with its premise measured first so the
+	 * premise itself cannot quietly stop being true.
+	 *
+	 * **The mutation that turns this red:** sum `subtotalInCurrency` with `+` on the
+	 * raw numbers — what this function did before the increment — and the two
+	 * amounts add up as binary floats to `0.00030000000000000003`.
+	 */
+	test('the binary-float case is exact: 0.0001 + 0.0002 is 0.0003', () => {
+		expect(0.0001 + 0.0002).not.toBe(0.0003)
+		expect(String(0.0001 + 0.0002)).toBe('0.00030000000000000003')
+
+		const btcLines = [
+			{ subtotalInSats: 0, shippingInSats: 0, subtotalInCurrency: 0.0001, shippingInCurrency: 0, currency: 'BTC' },
+			{ subtotalInSats: 0, shippingInSats: 0, subtotalInCurrency: 0.0002, shippingInCurrency: 0, currency: 'BTC' },
+		]
+
+		expect(aggregateCartDisplayTotals(btcLines, []).subtotalByCurrency.BTC).toBe(0.0003)
+		expect(aggregateCartDisplayTotals(btcLines, []).totalByCurrency.BTC).toBe(0.0003)
+		expect(aggregateBuyerCartTotals(btcLines).currencyTotals.BTC?.subtotal).toBe(0.0003)
+		expect(aggregateBuyerCartTotals(btcLines).currencyTotals.BTC?.total).toBe(0.0003)
+	})
+
+	test('a currency with no declared precision is refused by name, never assumed', () => {
+		expect(currencyPrecision('BTC')).toBe(8)
+		expect(currencyPrecision('SAT')).toBe(0)
+		expect(currencyPrecision('USD')).toBe(2)
+		expect(currencyPrecision('XBT')).toBeNull()
+
+		expect(() => minorUnitSum('XBT')).toThrow(UndeclaredCurrencyPrecisionError)
+		expect(() =>
+			aggregateCartDisplayTotals(
+				[{ subtotalInSats: 0, shippingInSats: 0, subtotalInCurrency: 1, shippingInCurrency: 0, currency: 'XBT' }],
+				[],
+			),
+		).toThrow(UndeclaredCurrencyPrecisionError)
+		expect(() =>
+			aggregateBuyerCartTotals([
+				{ subtotalInSats: 0, shippingInSats: 0, subtotalInCurrency: 1, shippingInCurrency: 0, currency: 'XBT' },
+			]),
+		).toThrow(UndeclaredCurrencyPrecisionError)
 	})
 })

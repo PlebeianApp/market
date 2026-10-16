@@ -26,3 +26,12 @@ export {
 	updateCartProductQuantity,
 } from './cartOperations'
 export type { BuyerCartTotals, CartDisplayTotals, CartProductEntry, CartProductTotalsInput, CartQuantityAction } from './cartOperations'
+export {
+	CART_CURRENCY_PRECISION,
+	currencyPrecision,
+	fromMinorUnits,
+	minorUnitSum,
+	toMinorUnits,
+	UndeclaredCurrencyPrecisionError,
+} from './money'
+export type { MinorUnitSum } from './money'

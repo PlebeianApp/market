@@ -1,4 +1,5 @@
 import { normalizeProductShippingSelections, type ProductShippingSelectionInput } from './productShipping'
+import { normalizeCurrency } from './currencyNotation'
 
 export type SellerProductStatus = 'hidden' | 'on-sale' | 'pre-order'
 export type SellerProductType = 'single' | 'variable'
@@ -62,10 +63,11 @@ export function buildSellerProductEventData(
 	productId: string,
 	options: { clientTag?: string[] } = {},
 ): SellerProductEventData {
+	const currency = normalizeCurrency(input.currency)
 	const tags: string[][] = [
 		['d', productId],
 		['title', input.name],
-		['price', input.price, input.currency],
+		['price', input.price, currency.ok ? currency.value : input.currency],
 		['type', input.productType === 'single' ? 'simple' : 'variable', 'physical'],
 		['visibility', input.status],
 		['stock', input.quantity],
