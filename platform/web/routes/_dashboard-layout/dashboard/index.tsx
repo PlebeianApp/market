@@ -26,6 +26,7 @@ function DashboardInnerComponent() {
 	const { data: conversations, isLoading: isLoadingMessages } = useConversationsList()
 
 	const recentOrders = orders?.slice(0, 3) || []
+	const totalListings = myProducts?.length || 0
 
 	const isLoading = isLoadingProducts || isLoadingOrders || isLoadingMessages
 
