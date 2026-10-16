@@ -408,6 +408,8 @@ export function CheckoutEntry({
 				) : null}
 			</div>
 
+			{place}
+
 			<p className="ds-muted" data-testid="checkout-invoice">
 				{checkout.nextInvoiceIndex === -1
 					? 'No payment invoice is open — none has been raised, because payment is not built.'
@@ -431,8 +433,6 @@ export function CheckoutEntry({
 					Back to the cart
 				</a>
 			</p>
-
-			{place}
 		</CheckoutRegion>
 	)
 }

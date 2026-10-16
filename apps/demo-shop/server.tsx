@@ -42,6 +42,8 @@ import { join } from 'node:path'
 import { renderToString } from 'react-dom/server'
 
 import { parseCartPersistenceContent } from '@sdk/commerce/cart'
+import { createSignerFromKey } from '@sdk/core/signer/ts/session'
+import { generateSecretKey, getPublicKey } from 'nostr-tools/pure'
 
 import { App, type DemoShopPageProps, type DemoShopShellProps } from './instance/App'
 import { buildAssumptionRegister, type AssumptionRegister } from './instance/assumptions'
@@ -236,6 +238,7 @@ async function handlePlacement(
 	request: Request,
 	runtime: InstanceRuntime,
 	store: PlacedOrderStore,
+	signer: { signEvent: (template: { kind: number; created_at: number; content: string; tags: string[][] }) => Promise<{ kind: number; created_at: number; content: string; tags: string[][]; id: string; sig: string; pubkey: string }> },
 ): Promise<Response> {
 	const form = await request.formData()
 	const postedCart = form.get(CART_FIELD_NAME)
@@ -265,8 +268,16 @@ async function handlePlacement(
 	})
 
 	if (attempt.outcome.status === 'placed') {
-		store.remember(attempt.outcome.orders)
-		const first = attempt.outcome.orders[0]
+		// Sign each order template before storing it. The signer is the demo's own key,
+		// generated at boot — no session, no remote signer, no UI.
+		const signedOrders = await Promise.all(
+			attempt.outcome.orders.map(async (order) => {
+				const signed = await signer.signEvent(order.order)
+				return { ...order, order: signed }
+			}),
+		)
+		store.remember(signedOrders)
+		const first = signedOrders[0]
 		if (first) return Response.redirect(new URL(orderPath(first.orderId), request.url).toString(), 303)
 	}
 
@@ -301,6 +312,8 @@ export interface StartedDemoShop {
 	runtime: InstanceRuntime
 	/** The orders this instance has placed, for a probe or a test to read. */
 	placedOrders: PlacedOrderStore
+	/** The signer's public key (hex), derived from the demo key the server generated at boot. */
+	signerPubkey: string
 }
 
 /**
@@ -326,6 +339,12 @@ export async function startDemoShop(options: StartDemoShopOptions = {}): Promise
 	const stylesheet = Bun.file(join(HERE, 'styles.css'))
 	const placedOrders = instancePlacedOrders()
 
+	// The demo's own signing key, generated once at boot. The signer knows nothing about
+	// sessions, vaults or remote signers — it signs with the raw key this instance owns.
+	const sk = generateSecretKey()
+	const signer = createSignerFromKey(Buffer.from(sk).toString('hex'))
+	const signerPubkey = getPublicKey(sk)
+
 	const server = Bun.serve({
 		port: options.port ?? Number(process.env.DEMO_SHOP_PORT ?? DEFAULT_PORT),
 		hostname: options.hostname ?? process.env.DEMO_SHOP_HOST ?? '127.0.0.1',
@@ -336,7 +355,7 @@ export async function startDemoShop(options: StartDemoShopOptions = {}): Promise
 			// The placement. A cart exists only in a browser, so the browser submits it; the
 			// instance does the placement and answers with where the order now lives.
 			if (request.method === 'POST' && url.pathname === CHECKOUT_PATH) {
-				return handlePlacement(request, runtime, placedOrders)
+				return handlePlacement(request, runtime, placedOrders, signer)
 			}
 
 			// Every other address is a **read**. A POST to one is not "not found" — the
@@ -414,7 +433,7 @@ export async function startDemoShop(options: StartDemoShopOptions = {}): Promise
 		},
 	})
 
-	return { server, runtime, placedOrders }
+	return { server, runtime, placedOrders, signerPubkey }
 }
 
 if (import.meta.main) {

@@ -19,7 +19,8 @@
  * `not-requested` (the module's lifecycle **stage**, imported and never re-typed),
  * `not signed` (derived by inspecting the template's own envelope),
  * `not-published` (named, because this app composes no publish path — an arm below walks
- * every file the app owns and refuses a signing or publishing symbol).
+ * every file the app owns and refuses a publishing symbol; signing symbols are allowed
+ * because the demo signs its own orders before storing them).
  *
  * The mutations that turn these red:
  * - rendering a `paid` boolean beside the stage: the "no boolean" arm names the key.
@@ -215,8 +216,6 @@ describe('unsigned and unpublished are stated, not implied', () => {
 		const FORBIDDEN = [
 			'executeSellerOrderPublishWorkflow',
 			'finalizeEvent',
-			'signEvent',
-			'generateSecretKey',
 			'createSellerOrderPublishFailure',
 		]
 

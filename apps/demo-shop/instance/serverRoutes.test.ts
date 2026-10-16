@@ -154,6 +154,9 @@ describe('the placement answers where the order lives, and that address serves i
 
 		// The whole assumption register is in the served bytes: 24 entries on this run.
 		expect(html.match(/data-assumption-id=/g) ?? []).toHaveLength(24)
+
+		// The order is now signed by the demo's own key, generated at boot.
+		expect(html).toContain('signed — the event carries a signature')
 	})
 })
 
