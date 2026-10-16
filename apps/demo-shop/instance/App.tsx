@@ -105,7 +105,7 @@ export type DemoShopPageProps =
 			 */
 			readonly submission?: CheckoutSubmission | null
 	  })
-	| (DemoShopShellProps & { readonly route: 'order'; readonly order: OrderView })
+	| (DemoShopShellProps & { readonly route: 'order'; readonly order: OrderView; readonly invoice?: import('./demoInvoice').DemoInvoice })
 	| (DemoShopShellProps & { readonly route: 'order-missing'; readonly orderId: string })
 	| (DemoShopShellProps & { readonly route: 'orders'; readonly orders: readonly OrderView[] })
 
@@ -289,7 +289,7 @@ export function App(props: DemoShopPageProps) {
 		) : props.route === 'checkout' ? (
 			<CheckoutEntry cart={cart} view={view} shipping={shipping} submission={props.submission} />
 		) : props.route === 'order' ? (
-			<OrderDetail order={props.order} />
+			<OrderDetail order={props.order} invoice={props.invoice} />
 		) : props.route === 'order-missing' ? (
 			<OrderMissing orderId={props.orderId} />
 		) : props.route === 'orders' ? (

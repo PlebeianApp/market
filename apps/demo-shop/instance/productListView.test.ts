@@ -49,7 +49,7 @@ describe('the product list composes the SDK discovery read model', () => {
 		expect(coat?.coordinates).toBe(`30402:${DEMO_SELLER_PUBKEY}:wool-coat`)
 		expect(coat?.title).toBe('Merino Wool Coat')
 		expect(coat?.summary).toBe('Hand-finished, unlined, made to last a decade')
-		expect(coat?.price).toEqual({ amount: '0.00185', currency: 'BTC', display: '0.00185 BTC' })
+		expect(coat?.price).toEqual({ amount: '0.00000099', currency: 'BTC', display: '0.00000099 BTC' })
 		expect(coat?.inStock).toBe(true)
 		expect(coat?.stock).toBe(3)
 		expect(coat?.visibility).toBe('on-sale')

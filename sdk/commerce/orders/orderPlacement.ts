@@ -110,7 +110,9 @@ export type CartOrderPlacementRefusal =
  * stage, never by flipping a flag.
  */
 export const PLACED_ORDER_PAYMENT_LIFECYCLE = 'not-requested' as const
-export type PlacedOrderPaymentLifecycle = typeof PLACED_ORDER_PAYMENT_LIFECYCLE
+/** The invoice has been requested from the seller's lightning endpoint; payment is awaited. */
+export const PAYMENT_REQUESTED_LIFECYCLE = 'requested' as const
+export type PlacedOrderPaymentLifecycle = typeof PLACED_ORDER_PAYMENT_LIFECYCLE | typeof PAYMENT_REQUESTED_LIFECYCLE
 
 /** One placed buyer order: the event the module built, and the facts derived from that event. */
 export interface PlacedBuyerOrder {

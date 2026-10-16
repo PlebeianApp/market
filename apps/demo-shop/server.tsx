@@ -42,8 +42,10 @@ import { join } from 'node:path'
 import { renderToString } from 'react-dom/server'
 
 import { parseCartPersistenceContent } from '@sdk/commerce/cart'
+import { PAYMENT_REQUESTED_LIFECYCLE } from '@sdk/commerce/orders/orderPlacement'
 import { createSignerFromKey } from '@sdk/core/signer/ts/session'
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure'
+import { demoInvoiceStore, forgetDemoInvoices, requestInvoice, type DemoInvoiceStore } from './instance/demoInvoice'
 
 import { App, type DemoShopPageProps, type DemoShopShellProps } from './instance/App'
 import { buildAssumptionRegister, type AssumptionRegister } from './instance/assumptions'
@@ -73,6 +75,9 @@ import {
 const HERE = import.meta.dir
 
 const DEFAULT_PORT = 3400
+
+/** The seller's Lightning address the demo requests payment invoices from. */
+const DEMO_LIGHTNING_ADDRESS = 'plebeianuser@coinos.io'
 
 /** Bundle the browser entry. Throws with the build's own log rather than serving a blank page. */
 async function bundleClient(): Promise<string> {
@@ -168,6 +173,7 @@ function renderPage(props: DemoShopPageProps, status = 200): Response {
 function pageProps(
 	runtime: InstanceRuntime,
 	store: PlacedOrderStore,
+	invoices: DemoInvoiceStore,
 	pathname: string,
 ): { props: DemoShopPageProps; status: number } {
 	const coordinates = coordinatesFromProductPath(pathname)
@@ -188,11 +194,12 @@ function pageProps(
 	if (orderId !== null) {
 		const placed = store.find(orderId)
 		if (placed === null) return { props: { ...shell(runtime), route: 'order-missing', orderId }, status: 404 }
+		const invoice = invoices.find(orderId)
 		const order = buildOrderView(placed, {
 			items: runtime.view.items,
 			servicesByShippingRef: runtime.shipping.servicesByShippingRef,
 		})
-		return { props: { ...shell(runtime), route: 'order', order }, status: 200 }
+		return { props: { ...shell(runtime), route: 'order', order, invoice }, status: 200 }
 	}
 
 	// The order index is the list of every order this instance holds.
@@ -239,6 +246,8 @@ async function handlePlacement(
 	runtime: InstanceRuntime,
 	store: PlacedOrderStore,
 	signer: { signEvent: (template: { kind: number; created_at: number; content: string; tags: string[][] }) => Promise<{ kind: number; created_at: number; content: string; tags: string[][]; id: string; sig: string; pubkey: string }> },
+	invoices: DemoInvoiceStore,
+	lightningAddress: string | undefined,
 ): Promise<Response> {
 	const form = await request.formData()
 	const postedCart = form.get(CART_FIELD_NAME)
@@ -276,6 +285,31 @@ async function handlePlacement(
 				return { ...order, order: signed }
 			}),
 		)
+
+		// Request a payment invoice for each placed order, using the seller's Lightning address.
+		// Only when one is configured: an omitted address means no network call (tests), and a
+		// failure to obtain an invoice is not a failure to place or sign — the order exists even
+		// without an invoice, and the page reports what is available.
+		if (lightningAddress !== undefined) {
+			await Promise.all(
+				signedOrders.map(async (order) => {
+					const result = await requestInvoice(order.orderId, order.amountSats, lightningAddress)
+					if ('bolt11' in result) {
+						invoices.save({
+							orderId: order.orderId,
+							bolt11: result.bolt11,
+							paymentHash: result.paymentHash,
+							createdAtMs: Date.now(),
+							lightningAddress,
+							paymentStage: PAYMENT_REQUESTED_LIFECYCLE,
+						})
+					}
+					// When the invoice request fails we continue — the order is still placed and
+					// signed, and the payment lifecycle remains not-requested.
+				}),
+			)
+		}
+
 		store.remember(signedOrders)
 		const first = signedOrders[0]
 		if (first) return Response.redirect(new URL(orderPath(first.orderId), request.url).toString(), 303)
@@ -312,6 +346,8 @@ export interface StartedDemoShop {
 	runtime: InstanceRuntime
 	/** The orders this instance has placed, for a probe or a test to read. */
 	placedOrders: PlacedOrderStore
+	/** The invoices this instance has requested, one per placed order. */
+	invoices: DemoInvoiceStore
 	/** The signer's public key (hex), derived from the demo key the server generated at boot. */
 	signerPubkey: string
 }
@@ -330,14 +366,24 @@ export interface StartDemoShopOptions extends BootInstanceOptions {
 	readonly port?: number
 	/** The address to bind. Defaults to `DEMO_SHOP_HOST`, then `127.0.0.1` — loopback, never a wildcard. */
 	readonly hostname?: string
+	/**
+	 * The seller's Lightning address used to request payment invoices after placement.
+	 * When omitted (tests), no invoice is requested, so the instance makes no network
+	 * call and orders are placed without an invoice. Production passes
+	 * `plebeianuser@coinos.io`.
+	 */
+	readonly lightningAddress?: string
 }
 
 export async function startDemoShop(options: StartDemoShopOptions = {}): Promise<StartedDemoShop> {
 	forgetPlacedOrders()
+	forgetDemoInvoices()
 	const runtime = await bootInstance(options)
 	const clientJs = await bundleClient()
 	const stylesheet = Bun.file(join(HERE, 'styles.css'))
 	const placedOrders = instancePlacedOrders()
+	const invoices = demoInvoiceStore()
+	const lightningAddress = options.lightningAddress
 
 	// The demo's own signing key, generated once at boot. The signer knows nothing about
 	// sessions, vaults or remote signers — it signs with the raw key this instance owns.
@@ -355,7 +401,7 @@ export async function startDemoShop(options: StartDemoShopOptions = {}): Promise
 			// The placement. A cart exists only in a browser, so the browser submits it; the
 			// instance does the placement and answers with where the order now lives.
 			if (request.method === 'POST' && url.pathname === CHECKOUT_PATH) {
-				return handlePlacement(request, runtime, placedOrders, signer)
+				return handlePlacement(request, runtime, placedOrders, signer, invoices, lightningAddress)
 			}
 
 			// Every other address is a **read**. A POST to one is not "not found" — the
@@ -377,7 +423,7 @@ export async function startDemoShop(options: StartDemoShopOptions = {}): Promise
 			// The page routes. `/` is exact; a product address and an order address are ones
 			// that parse.
 			if (isPagePath(url.pathname)) {
-				const { props, status } = pageProps(runtime, placedOrders, url.pathname)
+				const { props, status } = pageProps(runtime, placedOrders, invoices, url.pathname)
 				return renderPage(props, status)
 			}
 
@@ -433,11 +479,11 @@ export async function startDemoShop(options: StartDemoShopOptions = {}): Promise
 		},
 	})
 
-	return { server, runtime, placedOrders, signerPubkey }
+	return { server, runtime, placedOrders, invoices, signerPubkey }
 }
 
 if (import.meta.main) {
-	const { server, runtime } = await startDemoShop()
+	const { server, runtime } = await startDemoShop({ lightningAddress: DEMO_LIGHTNING_ADDRESS })
 	console.log(`demo-shop: ${runtime.config.displayName} listening on ${server.url}`)
 	console.log(`demo-shop: edge = ${runtime.sourceKind} · ${runtime.view.summaryLine}`)
 	console.log(`demo-shop: ${runtime.shipping.summaryLine}`)

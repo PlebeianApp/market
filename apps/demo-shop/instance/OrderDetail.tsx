@@ -37,7 +37,7 @@ import { CART_PATH, CHECKOUT_PATH, PRODUCTS_PATH, productPath } from './routes'
 export const PLACED_ORDER_TRUTH =
 	'This order was built and recorded by this instance. It is not signed, not published, and no payment has been requested: the demo holds no key, composes no relay transport, and raises no invoice.'
 
-export function OrderDetail({ order, className }: { order: OrderView; className?: string }) {
+export function OrderDetail({ order, invoice, className }: { order: OrderView; invoice?: import('./demoInvoice').DemoInvoice; className?: string }) {
 	const lines = orderLifecycleLines(order)
 
 	return (
@@ -102,10 +102,26 @@ export function OrderDetail({ order, className }: { order: OrderView; className?
 					{orderStatusExplanation(order)}
 				</p>
 				<p className="ds-muted" data-testid="order-invoice">
-					{order.nextInvoiceIndex === -1
-						? 'No payment invoice is open — the checkout’s own progress rule found nothing to settle, because none was raised.'
-						: `Invoice ${order.nextInvoiceIndex} is the next to settle.`}
-				</p>
+				{order.nextInvoiceIndex === -1
+					? 'No payment invoice is open — the checkout’s own progress rule found nothing to settle, because none was raised.'
+					: `Invoice ${order.nextInvoiceIndex} is the next to settle.`}
+			</p>
+
+			{invoice ? (
+				<div className="ds-note" data-testid="order-payment-invoice">
+					<h3 className="ds-section-title">Payment invoice</h3>
+					<p className="ds-muted" data-testid="order-payment-invoice-address">
+						Pay to <strong>{invoice.lightningAddress}</strong>
+					</p>
+					<p className="ds-meta" data-testid="order-payment-invoice-status">
+						Invoice requested — payment is pending.
+					</p>
+					<details className="ds-note" data-testid="order-payment-invoice-bolt11">
+						<summary>Show bolt11 invoice</summary>
+						<code className="ds-code" data-testid="order-bolt11">{invoice.bolt11}</code>
+					</details>
+				</div>
+			) : null}
 			</div>
 
 			<div className="ds-detail-body">

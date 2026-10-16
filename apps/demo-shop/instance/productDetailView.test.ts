@@ -43,7 +43,7 @@ describe('a listing resolves by the address the list emits', () => {
 		expect(lookup.detail.item).toEqual(row)
 		expect(lookup.detail.item.coordinates).toBe(coat)
 		expect(lookup.detail.item.title).toBe('Merino Wool Coat')
-		expect(lookup.detail.item.price?.display).toBe('0.00185 BTC')
+		expect(lookup.detail.item.price?.display).toBe('0.00000099 BTC')
 		expect(lookup.detail.item.stock).toBe(3)
 	})
 

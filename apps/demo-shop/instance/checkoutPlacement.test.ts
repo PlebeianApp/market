@@ -125,10 +125,10 @@ describe('a placeable cart becomes an order, through the module that owns placem
 	})
 
 	test('the amount in sats is the read’s own conversion of the lines’ prices', () => {
-		// 0.00185 BTC × 2 = 185,000 sats each, through the SDK's own BTC→sats conversion.
+		// 0.00000099 BTC × 2 = 99 sats each × 2 items = 198 sats, through the SDK's own BTC→sats conversion.
 		expect(attempt.terms.sellers).toHaveLength(1)
-		expect(attempt.terms.sellers[0]?.amountSats).toBe(370_000)
-		expect(attempt.terms.sellerTerms[DEMO_SELLER_PUBKEY]?.amountSats).toBe(370_000)
+		expect(attempt.terms.sellers[0]?.amountSats).toBe(198)
+		expect(attempt.terms.sellerTerms[DEMO_SELLER_PUBKEY]?.amountSats).toBe(198)
 	})
 
 	test('the order event is the template the module builds, not a hand-built one', () => {
@@ -141,7 +141,7 @@ describe('a placeable cart becomes an order, through the module that owns placem
 			['subject', 'order-info'],
 			['type', '1'],
 			['order', order.orderId],
-			['amount', '370000'],
+			['amount', '198'],
 			['item', coat.coordinates, '2'],
 			['shipping', DEMO_SHIPPING_REF],
 		])
@@ -161,11 +161,11 @@ describe('a placeable cart becomes an order, through the module that owns placem
 		expect(order.orderId).toMatch(/^order-[0-9a-f]{8}$/)
 		// The same inputs mint the same id — which is what makes `/orders/<id>` an address.
 		expect(
-			mintOrderId({ sellerPubkey: DEMO_SELLER_PUBKEY, amountSats: 370_000, intent: attempt.terms.intent }),
+			mintOrderId({ sellerPubkey: DEMO_SELLER_PUBKEY, amountSats: 198, intent: attempt.terms.intent }),
 		).toBe(order.orderId)
 		// A different amount is a different order, and so a different id.
 		expect(
-			mintOrderId({ sellerPubkey: DEMO_SELLER_PUBKEY, amountSats: 370_001, intent: attempt.terms.intent }),
+			mintOrderId({ sellerPubkey: DEMO_SELLER_PUBKEY, amountSats: 199, intent: attempt.terms.intent }),
 		).not.toBe(order.orderId)
 	})
 

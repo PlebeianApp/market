@@ -76,8 +76,8 @@ describe('the cart view the surface renders', () => {
 		const view = buildCartView(cartOf([lineOf(coat, 2)]), items)
 
 		expect(view.lines).toHaveLength(1)
-		expect(view.lines[0]?.unitPrice).toBe('0.00185 BTC')
-		expect(view.lines[0]?.lineTotal).toBe('0.00370 BTC')
+		expect(view.lines[0]?.unitPrice).toBe('0.00000099 BTC')
+		expect(view.lines[0]?.lineTotal).toBe('0.00000198 BTC')
 		expect(view.itemCount).toBe(2)
 		expect(view.pricedCount).toBe(1)
 		expect(view.summaryLine).toBe('1 line · 2 items')
@@ -85,12 +85,12 @@ describe('the cart view the surface renders', () => {
 
 	test('the subtotal is the SDK’s aggregation, and no shipping is added to it', () => {
 		// The coat's listing tags a `shipping_option` of 250. If that amount were fed
-		// to the aggregation, the total would be 379,250 rather than 379,000 — a cost
+		// to the aggregation, the total would be 207,207 rather than 207 — a cost
 		// in a unit the read model never declared.
 		const view = buildCartView(cartOf([lineOf(coat, 2), lineOf(notebook, 1)]), items)
 
-		expect(view.subtotalByCurrency).toEqual({ BTC: '0.00379 BTC' })
-		expect(view.totalInSats).toBe(379_000)
+		expect(view.subtotalByCurrency).toEqual({ BTC: '0.00000207 BTC' })
+		expect(view.totalInSats).toBe(207)
 		expect(view.shipping).toBe('not-in-the-read-model')
 	})
 

@@ -96,7 +96,7 @@ describe('the product list’s own text is in the served bytes', () => {
 	test('the titles, the prices and the summary line are all there', () => {
 		expect(html).toContain('Merino Wool Coat')
 		expect(html).toContain('Cast Iron Skillet')
-		expect(html).toContain('0.00185 BTC')
+		expect(html).toContain('0.00000099 BTC')
 		expect(html).toContain('5 listings · 1 not on sale')
 		expect(html).toContain('in stock · 3')
 	})
@@ -141,7 +141,7 @@ describe('a listing’s page carries its own fields', () => {
 
 	test('the title, price, description, availability and specs are in the markup', () => {
 		expect(html).toContain('Merino Wool Coat')
-		expect(html).toContain('0.00185 BTC')
+		expect(html).toContain('0.00000099 BTC')
 		expect(html).toContain('A heavy merino coat cut for cold mornings.')
 		expect(html).toContain('in stock · 3')
 		expect(html).toContain('size')
