@@ -16,7 +16,7 @@ import { isNip60WalletDevModeEnabled, NIP60_DEV_TEST_MINTS } from '@/lib/stores/
 import { normalizeProductShippingSelections, type ProductShippingSelection } from '@sdk/commerce/products'
 import { usePublishAuctionMutation, type AuctionFormData, type AuctionSpecEntry } from '@/publish/auctions'
 import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
-import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
+import { createShippingReference, getShippingInfo, isShippingOptionDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@/lib/utils/auctionFormStorage'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -112,10 +112,7 @@ function ShippingTab({
 	const availableShippingOptions = useMemo<AvailableShipping[]>(() => {
 		if (!shippingOptionsQuery.data || !userPubkey) return []
 		return shippingOptionsQuery.data
-			.filter((event) => {
-				const dTag = event.tags?.find((t: string[]) => t[0] === 'd')?.[1]
-				return dTag ? !isShippingDeleted(dTag, event.created_at) : true
-			})
+			.filter((event) => !isShippingOptionDeleted(event))
 			.map((event) => {
 				const info = getShippingInfo(event)
 				if (!info || !info.id || !info.id.trim()) return null

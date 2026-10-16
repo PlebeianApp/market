@@ -3,85 +3,20 @@ import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
 import { isValidHexKey } from '@/lib/utils'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { orderKeys, shippingKeys } from './queryKeyFactory'
 import { publishShippingStatusUpdateWorkflow } from '@sdk/commerce/orders'
+import { readShippingOptionsWorkflow } from '@sdk/commerce/shipping'
 import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
+import { createNdkReadContext, getNdkEventStore } from '@platform/web/ndkReadContext'
 
 // Re-export shippingKeys for use in other files
 export { shippingKeys }
 
-// --- DELETED SHIPPING OPTIONS TRACKING ---
-// Track deleted shipping option d-tags with deletion timestamps to filter them from relay responses.
-// Per NIP-09, deletions only apply to events older than the deletion event.
-// If a new event with the same d-tag is published after the deletion, it should be visible.
-// Persisted to localStorage so deletions survive page reloads.
-
-const DELETED_SHIPPING_STORAGE_KEY = 'plebeian_deleted_shipping_ids'
-const hasLocalStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
-
-// Map of d-tag -> deletion timestamp (unix seconds)
-const loadDeletedShippingIds = (): Map<string, number> => {
-	if (!hasLocalStorage()) return new Map()
-
-	try {
-		const stored = localStorage.getItem(DELETED_SHIPPING_STORAGE_KEY)
-		if (stored) {
-			const parsed = JSON.parse(stored)
-			// Handle legacy format (array of strings) - migrate to new format
-			if (Array.isArray(parsed)) {
-				const now = Math.floor(Date.now() / 1000)
-				return new Map(parsed.map((dTag: string) => [dTag, now]))
-			}
-			// New format: object with d-tag keys and timestamp values
-			if (typeof parsed === 'object' && parsed !== null) {
-				return new Map(Object.entries(parsed))
-			}
-		}
-	} catch (e) {
-		console.error('Failed to load deleted shipping IDs from localStorage:', e)
-	}
-	return new Map()
-}
-
-const saveDeletedShippingIds = (ids: Map<string, number>) => {
-	if (!hasLocalStorage()) return
-
-	try {
-		localStorage.setItem(DELETED_SHIPPING_STORAGE_KEY, JSON.stringify(Object.fromEntries(ids)))
-	} catch (e) {
-		console.error('Failed to save deleted shipping IDs to localStorage:', e)
-	}
-}
-
-const deletedShippingIds = loadDeletedShippingIds()
-
-export const markShippingAsDeleted = (dTag: string, deletionTimestamp?: number) => {
-	// Use provided timestamp or current time
-	const timestamp = deletionTimestamp ?? Math.floor(Date.now() / 1000)
-	deletedShippingIds.set(dTag, timestamp)
-	saveDeletedShippingIds(deletedShippingIds)
-}
-
-export const isShippingDeleted = (dTag: string, eventCreatedAt?: number) => {
-	const deletionTimestamp = deletedShippingIds.get(dTag)
-	if (deletionTimestamp === undefined) return false
-	// If no event timestamp provided, assume deleted
-	if (eventCreatedAt === undefined) return true
-	// Per NIP-09: deletion only applies to events older than the deletion
-	return eventCreatedAt < deletionTimestamp
-}
-
-const filterDeletedShippingOptions = (events: NDKEvent[]): NDKEvent[] => {
-	return events.filter((event) => {
-		const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
-		if (!dTag) return true
-		return !isShippingDeleted(dTag, event.created_at)
-	})
-}
+/** True once the author's NIP-09 deletion for this option has been seen by the shared store. */
+export const isShippingOptionDeleted = (event: NDKEvent): boolean => getNdkEventStore().isDeleted(event)
 
 // --- DATA FETCHING FUNCTIONS ---
 
@@ -93,13 +28,7 @@ export const fetchShippingOptions = async () => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const filter: NDKFilter = {
-		kinds: [SHIPPING_KIND], // Shipping options in Nostr
-		limit: 50,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	return filterDeletedShippingOptions(Array.from(events))
+	return readShippingOptionsWorkflow(createNdkReadContext(), { limit: 50 })
 }
 
 /**
@@ -152,13 +81,7 @@ export const fetchShippingOptionsByPubkey = async (pubkey: string) => {
 	// trips NDK's strict filter validation. Reject before constructing it.
 	if (!isValidHexKey(pubkey)) return []
 
-	const filter: NDKFilter = {
-		kinds: [SHIPPING_KIND],
-		authors: [pubkey],
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	return filterDeletedShippingOptions(Array.from(events))
+	return readShippingOptionsWorkflow(createNdkReadContext(), { author: pubkey })
 }
 
 // --- REACT QUERY OPTIONS ---

@@ -1,7 +1,7 @@
 import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { collectionsKeys } from '@/queries/queryKeyFactory'
-import { markCollectionAsDeleted } from '@/queries/collections'
+import { getNdkEventStore } from '@platform/web/ndkReadContext'
 import { toast } from 'sonner'
 import { ndkActions } from '@/lib/stores/ndk'
 import {
@@ -101,7 +101,9 @@ export const updateCollection = async (
  */
 export const deleteCollection = async (collectionId: string, signer: NDKSigner, ndk: NDK): Promise<boolean> => {
 	try {
-		await deleteCollectionWorkflow(await createNdkPublishContext(ndk, signer), collectionId)
+		const deletion = await deleteCollectionWorkflow(await createNdkPublishContext(ndk, signer), collectionId)
+		// Relays may keep serving the collection; the store applies the deletion to every later read.
+		getNdkEventStore().add(deletion)
 		return true
 	} catch (error) {
 		console.error('Error deleting collection:', error)
@@ -216,10 +218,6 @@ export const useDeleteCollectionMutation = () => {
 		},
 
 		onSuccess: async (success, collectionId) => {
-			// Mark collection as deleted locally so it's filtered from queries
-			// even if relays still return it
-			markCollectionAsDeleted(collectionId)
-
 			// Get current user pubkey
 			let userPubkey = ''
 			if (signer) {

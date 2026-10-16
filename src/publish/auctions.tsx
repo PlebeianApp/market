@@ -17,7 +17,7 @@ import {
 	runAuctionSettlementAppAdapter,
 	runAuctionWinnerClaimAppAdapter,
 } from './auctionWorkflowAdapters'
-import { fetchAuction, getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
+import { fetchAuction, getBidAmount, getBidStatus, recordAuctionDeletion } from '@/queries/auctions'
 import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { toRawEvent, type NostrEventLike } from '@/lib/nostr/eventLike'
@@ -336,6 +336,7 @@ export const deleteAuction = async (auctionDTag: string): Promise<boolean> => {
 
 	const event = await signNostrEvent(template)
 	await publishRequired(event)
+	recordAuctionDeletion(event)
 	return true
 }
 
@@ -345,8 +346,6 @@ export const useDeleteAuctionMutation = () => {
 	return useMutation({
 		mutationFn: async (auctionDTag: string) => deleteAuction(auctionDTag),
 		onSuccess: async (_success, auctionDTag) => {
-			markAuctionAsDeleted(auctionDTag)
-
 			const user = await getUser()
 			const userPubkey = user?.pubkey || ''
 

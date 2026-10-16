@@ -8,6 +8,7 @@ import { routeTree } from './routeTree.gen'
 import type { AppRouterContext } from '@/lib/router-utils'
 import { bootApp, bootStore } from '@platform/web/boot'
 import { WebUiProvider } from '@platform/web/WebUiProvider'
+import { syncEventStoresToQueryClient } from '@platform/web/eventStoreQuerySync'
 import { UpdateAvailableDialog } from '@/components/UpdateAvailableDialog'
 import { useServiceWorker } from '@/hooks/useServiceWorker'
 
@@ -22,6 +23,7 @@ if (process.env.NODE_ENV !== 'development') {
 // router on every render would lose route state (TanStack Router stores
 // match cache + pending nav on the instance).
 const queryClient = createQueryClient()
+syncEventStoresToQueryClient(queryClient)
 
 function DefaultPending() {
 	return (

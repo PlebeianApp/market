@@ -1,10 +1,11 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { shippingKeys } from '@/queries/queryKeyFactory'
-import { createShippingReference, markShippingAsDeleted } from '@/queries/shipping'
+import { createShippingReference } from '@/queries/shipping'
 import type { NDKEvent, NDKSigner } from '@/lib/nostr/ndk-events'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createNdkPublishContext, type NdkClient as NDK } from '@platform/web/ndkPublishContext'
+import { getNdkEventStore } from '@platform/web/ndkReadContext'
 import {
 	deleteShippingOptionWorkflow,
 	publishShippingOptionWorkflow,
@@ -86,7 +87,9 @@ export const updateShippingOption = async (
  */
 export const deleteShippingOption = async (shippingDTag: string, signer: NDKSigner, ndk: NDK): Promise<boolean> => {
 	try {
-		await deleteShippingOptionWorkflow(await createNdkPublishContext(ndk, signer), shippingDTag)
+		const deletion = await deleteShippingOptionWorkflow(await createNdkPublishContext(ndk, signer), shippingDTag)
+		// Relays may keep serving the option; the store applies the deletion to every later read.
+		getNdkEventStore().add(deletion)
 		return true
 	} catch (error) {
 		console.error('Error deleting shipping option:', error)
@@ -175,9 +178,6 @@ export const useDeleteShippingOptionMutation = () => {
 			return deleteShippingOption(shippingDTag, signer, ndk)
 		},
 		onMutate: async (shippingDTag) => {
-			// Mark as deleted so future fetches will filter it out
-			markShippingAsDeleted(shippingDTag)
-
 			// Cancel any outgoing refetches to avoid overwriting our optimistic update
 			await queryClient.cancelQueries({ queryKey: shippingKeys.all })
 			if (currentUserPubkey) {
