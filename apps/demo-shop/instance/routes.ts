@@ -20,8 +20,33 @@ export const PRODUCTS_PATH = '/'
 /** The cart's page. A full page load, like every other route here. */
 export const CART_PATH = '/cart'
 
-/** The checkout entry. The payment itself is not built; this is where it would land. */
+/** The checkout entry. It places an order here; the payment itself is not built. */
 export const CHECKOUT_PATH = '/checkout'
+
+/** Every placed order's page lives under this prefix. */
+export const ORDERS_PATH_PREFIX = '/orders/'
+
+/**
+ * A placed order's address: the **order id this instance minted**, which is the key its
+ * own memory holds the order under (`instance/placedOrders.ts`). No id is re-spelled and
+ * none is invented at the router: what the checkout minted is what the URL carries.
+ */
+export function orderPath(orderId: string): string {
+	return `${ORDERS_PATH_PREFIX}${encodeURIComponent(orderId)}`
+}
+
+/**
+ * The order id in an order address, or `null` when the path is not one.
+ *
+ * `null` is a decision, not an absence: `/orders/` with nothing after it is a **prefix
+ * without a child** — the parent-route-swallows-its-child defect `productPath`'s parser
+ * also refuses — so the caller answers 404 rather than an order nobody named.
+ */
+export function orderIdFromOrderPath(pathname: string): string | null {
+	if (!pathname.startsWith(ORDERS_PATH_PREFIX)) return null
+	const orderId = decodeURIComponent(pathname.slice(ORDERS_PATH_PREFIX.length))
+	return orderId.length > 0 ? orderId : null
+}
 
 /** Every listing's page lives under this prefix. */
 export const PRODUCT_PATH_PREFIX = '/products/'
@@ -72,6 +97,7 @@ export function isPagePath(pathname: string): boolean {
 		pathname === PRODUCTS_PATH ||
 		pathname === CART_PATH ||
 		pathname === CHECKOUT_PATH ||
-		coordinatesFromProductPath(pathname) !== null
+		coordinatesFromProductPath(pathname) !== null ||
+		orderIdFromOrderPath(pathname) !== null
 	)
 }

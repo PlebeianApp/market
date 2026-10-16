@@ -17,6 +17,7 @@ import type { ProductReadEvent } from '@sdk/commerce/discovery'
 import { buildCatalogEvents } from './catalog'
 import { resolveInstanceConfig, type DemoShopInstanceConfig } from './config'
 import { buildProductListView, type ProductListView, type ProductListViewOptions } from './productListView'
+import { buildShippingCatalogEvents, buildShippingRead, type ShippingReadView } from './shippingSource'
 import {
 	createFixtureProductSource,
 	createInstanceNostrIo,
@@ -39,6 +40,12 @@ export interface InstanceRuntime {
 	 */
 	readonly events: readonly ProductReadEvent[]
 	readonly view: ProductListView
+	/**
+	 * The shipping edge: the kind-30406 records this run read, joined to the refs the
+	 * listings publish, so the checkout resolves a chosen ref against **a record** rather
+	 * than against the ref's own text (`instance/shippingSource.ts`).
+	 */
+	readonly shipping: ShippingReadView
 	/** The listing fields the SDK would need to agree on with the read model, kept for the page. */
 	readonly loadedAtMs: number
 }
@@ -89,11 +96,20 @@ export async function bootInstance(options: BootInstanceOptions = {}): Promise<I
 	const events = await source.listProducts()
 	const view = buildProductListView(events, options.view)
 
+	// The shipping edge. The fixture edge states its own kind-30406 record
+	// (`instance/shippingSource.ts`); the relay adapter of this slice reads kind-30402 and
+	// only that, so it composes **no** shipping corpus — `null`, which the view reports as
+	// "not read on this edge" rather than as an empty one.
+	const shipping = buildShippingRead(events, {
+		records: source.kind === 'fixture' ? buildShippingCatalogEvents() : null,
+	})
+
 	return {
 		config,
 		sourceKind: source.kind,
 		events,
 		view,
+		shipping,
 		loadedAtMs: now(),
 	}
 }

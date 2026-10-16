@@ -39,11 +39,15 @@ import * as React from 'react'
 import type { AssumptionEntry, AssumptionRegister } from './assumptions'
 import { CartView } from './CartView'
 import { CheckoutEntry } from './CheckoutEntry'
+import type { CheckoutSubmission } from './checkoutView'
+import { OrderDetail, OrderMissing } from './OrderDetail'
+import type { OrderView } from './orderView'
 import { ProductDetail, ProductMissing } from './ProductDetail'
 import { ProductList } from './ProductList'
 import type { ProductDetailView, ProductMissingView } from './productDetailView'
 import type { ProductListView } from './productListView'
 import { CART_PATH, CHECKOUT_PATH, PRODUCTS_PATH } from './routes'
+import type { ShippingReadView } from './shippingSource'
 import { useCart, type CartControl } from './useCart'
 
 /** The shell every route shares. */
@@ -66,6 +70,16 @@ export interface DemoShopShellProps {
 	 * rendered.
 	 */
 	readonly assumptions: AssumptionRegister
+	/**
+	 * The shipping edge: the kind-30406 records this run read, joined to the refs the
+	 * listings publish (`instance/shippingSource.ts`).
+	 *
+	 * It travels in the props like `view` does, because it is a read the **server**
+	 * performed and the browser cannot repeat: the checkout resolves its delivery
+	 * requirements against this map, and a browser that guessed at it would be resolving a
+	 * chosen shipping ref against the ref's own text.
+	 */
+	readonly shipping: ShippingReadView
 }
 
 /**
@@ -81,7 +95,17 @@ export type DemoShopPageProps =
 	| (DemoShopShellProps & { readonly route: 'product'; readonly detail: ProductDetailView })
 	| (DemoShopShellProps & { readonly route: 'product-missing'; readonly missing: ProductMissingView })
 	| (DemoShopShellProps & { readonly route: 'cart' })
-	| (DemoShopShellProps & { readonly route: 'checkout' })
+	| (DemoShopShellProps & {
+			readonly route: 'checkout'
+			/**
+			 * The placement the instance just answered, when it refused one. Server-rendered,
+			 * so a refusal's own words are in the served bytes rather than only on screen
+			 * after hydration.
+			 */
+			readonly submission?: CheckoutSubmission | null
+	  })
+	| (DemoShopShellProps & { readonly route: 'order'; readonly order: OrderView })
+	| (DemoShopShellProps & { readonly route: 'order-missing'; readonly orderId: string })
 
 /** The nav's sections. One entry per section, and the nav is drawn from the list. */
 type NavSection = 'products' | 'cart' | 'checkout'
@@ -234,18 +258,20 @@ function AssumptionRegisterPanel({ register }: { register: AssumptionRegister })
 }
 
 export function App(props: DemoShopPageProps) {
-	const { instanceName, instanceId, sourceKind, view, assumptions } = props
+	const { instanceName, instanceId, sourceKind, view, assumptions, shipping } = props
 	const cart = useCart()
 
 	const edgeVerb = sourceKind === 'fixture' ? 'injected fixture source (no network)' : 'relay read via sdk/core/nostr-io'
 	const edgeLine = `edge: ${edgeVerb} · instance ${instanceId}`
 
 	// The section the nav marks. A listing's page and its missing state are part of
-	// the products section, so they mark Products current rather than nothing.
+	// the products section, so they mark Products current rather than nothing; an order's
+	// page and its missing state belong to the checkout arc, because that is where an
+	// order is placed from.
 	const current: NavSection =
 		props.route === 'cart'
 			? 'cart'
-			: props.route === 'checkout'
+			: props.route === 'checkout' || props.route === 'order' || props.route === 'order-missing'
 				? 'checkout'
 				: 'products'
 
@@ -259,7 +285,11 @@ export function App(props: DemoShopPageProps) {
 		) : props.route === 'cart' ? (
 			<CartView cart={cart} view={view} />
 		) : props.route === 'checkout' ? (
-			<CheckoutEntry cart={cart} view={view} />
+			<CheckoutEntry cart={cart} view={view} shipping={shipping} submission={props.submission} />
+		) : props.route === 'order' ? (
+			<OrderDetail order={props.order} />
+		) : props.route === 'order-missing' ? (
+			<OrderMissing orderId={props.orderId} />
 		) : (
 			<ProductList view={view} />
 		)

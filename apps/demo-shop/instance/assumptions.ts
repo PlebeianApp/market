@@ -50,6 +50,7 @@
 
 import { CART_CURRENCY_PRECISION } from '@sdk/commerce/cart'
 import { CURRENCY_ASSUMPTIONS } from '@sdk/commerce/currency/assumptions'
+import { ORDER_PLACEMENT_ASSUMPTIONS } from '@sdk/commerce/orders/orderPlacement'
 import { BITCOIN_CURRENCY, normalizeCurrency } from '@sdk/commerce/products'
 import { SHIPPING_READ_ASSUMPTIONS } from '@sdk/commerce/shipping/shippingRead'
 
@@ -58,6 +59,9 @@ export const CURRENCY_REGISTER_SOURCE = 'sdk/commerce/currency/assumptions.ts'
 
 /** The file the SDK's shipping read register is declared in. */
 export const SHIPPING_REGISTER_SOURCE = 'sdk/commerce/shipping/shippingRead.ts'
+
+/** The file the SDK's order-placement register is declared in. */
+export const ORDER_PLACEMENT_REGISTER_SOURCE = 'sdk/commerce/orders/orderPlacement.ts'
 
 /** The app's own address, for the entries the app is the one assuming. */
 export const APP_SOURCE = 'apps/demo-shop/instance/assumptions.ts'
@@ -252,6 +256,29 @@ export function shippingAssumptions(): readonly AssumptionEntry[] {
 	}))
 }
 
+/**
+ * The SDK's **order-placement** register, re-addressed as entries.
+ *
+ * `ORDER_PLACEMENT_ASSUMPTIONS` (`sdk/commerce/orders/orderPlacement.ts`) is the register
+ * the step this increment wires landed with — the judgements a cart→order placement makes
+ * so that it can answer at all, each with the observation that would falsify it. It is
+ * **imported, never copied**: the module's own string is what the page renders.
+ *
+ * Its entries carry no `id`, so ids are composed from the source and the position in the
+ * register, as the shipping read's are. `ORDER_MESSAGING_ASSUMPTIONS` — the sibling
+ * register for the messaging step — is **not present in this base** (the messaging modules
+ * here export no assumption register), so nothing is claimed for it on the page; when it
+ * lands, it joins this list the same way and no sentence here has to change.
+ */
+export function orderPlacementAssumptions(): readonly AssumptionEntry[] {
+	return ORDER_PLACEMENT_ASSUMPTIONS.map((assumption, index) => ({
+		id: `order-placement-${index + 1}`,
+		source: ORDER_PLACEMENT_REGISTER_SOURCE,
+		statement: assumption.assumption,
+		falsifiedBy: assumption.falsifiedBy,
+	}))
+}
+
 /** The sources in the order the register lists them. */
 function sourcesOf(entries: readonly AssumptionEntry[]): { source: string; count: number }[] {
 	const counts = new Map<string, number>()
@@ -263,12 +290,17 @@ function sourcesOf(entries: readonly AssumptionEntry[]): { source: string; count
  * Build the register for a running instance.
  *
  * The app's own entries come first — they are the ones this instance is making —
- * and the two SDK registers follow, in the order the modules declare them. Every
- * entry is present on every page: the register is a property of the instance, not
- * of a route.
+ * and the SDK registers follow, in the order the modules declare them. Every entry
+ * is present on every page: the register is a property of the instance, not of a
+ * route.
  */
 export function buildAssumptionRegister(input: RegisterInput): AssumptionRegister {
-	const entries = Object.freeze([...appAssumptions(input), ...currencyAssumptions(), ...shippingAssumptions()])
+	const entries = Object.freeze([
+		...appAssumptions(input),
+		...currencyAssumptions(),
+		...shippingAssumptions(),
+		...orderPlacementAssumptions(),
+	])
 	const bySource = sourcesOf(entries)
 
 	return {

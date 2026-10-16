@@ -860,6 +860,69 @@ a {
 
 /* A badge is a label, never a stretched control: as a flex child it would take
    the column's whole width and read as a button. */
+/* ── the order details page ───────────────────────────────────────────────────
+   The order page and the checkout's place region. The page is the instance's own
+   record of what was placed, so it wears the detail layout; the five lifecycle
+   rows carry their own tone, because "not signed" and "no payment requested" are
+   not successes and a page that painted them green would be saying so. */
+
+.region-order .ds-total-row[data-lifecycle-tone='warn'] .ds-total-value {
+	color: var(--ds-warn);
+}
+
+.region-order .ds-total-row[data-lifecycle-tone='neutral'] .ds-total-value {
+	color: var(--ds-muted);
+}
+
+.region-order .ds-total-row[data-lifecycle-tone='ok'] .ds-total-value {
+	color: var(--ds-success);
+}
+
+.region-order .ds-totals {
+	gap: var(--ds-2);
+}
+
+.region-order .ds-meta {
+	margin: var(--ds-2) 0;
+}
+
+/* The event's own tags read as data, one per line, so the derivation the status
+   comes from can be checked against them rather than taken on trust. */
+.region-order .ds-meta li {
+	font-family: var(--ds-mono);
+	font-size: 12.5px;
+}
+
+/* ── the checkout's place region ─────────────────────────────────────────────
+   Everything here is server-known except the cart record and whether the read
+   has landed, so the region is in the served bytes even in the skeleton state. */
+
+[data-testid='checkout-place-form'] {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ds-2);
+	margin-top: var(--ds-2);
+}
+
+[data-testid='checkout-shipping-choice'] {
+	margin: 0;
+	padding: var(--ds-2);
+	border: 1px solid var(--ds-border);
+	border-radius: var(--ds-r);
+}
+
+[data-testid='checkout-refusal'] {
+	padding: var(--ds-2);
+	border: 1px solid var(--ds-danger);
+	border-radius: var(--ds-r);
+	background: var(--ds-danger-soft);
+	color: var(--ds-danger);
+}
+
+.ds-status[data-tone='off'] {
+	color: var(--ds-muted);
+}
+
 .ds-badges > *,
 .ds-detail-meta > * {
 	align-self: flex-start;

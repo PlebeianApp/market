@@ -27,6 +27,7 @@ import {
 	addLineToCart,
 	browserCartStorage,
 	cartCount,
+	cartIntentOf,
 	readCart,
 	writeCart,
 	type Cart,
@@ -53,6 +54,16 @@ export interface CartControl {
 	 * into its own words instead of showing a stale number.
 	 */
 	add(line: CartLine): number | null
+	/**
+	 * The SDK's own persisted record for the cart as it stands — the bytes the checkout
+	 * **submits** to place an order, and the same bytes this hook stores.
+	 *
+	 * `null` until the read has landed, which is why the checkout's place control is
+	 * disabled before then: a submission made before the read is a submission of nothing.
+	 * Built by `createCartIntent` at the moment it is asked, so the record's own
+	 * `updatedAt` is the moment of the attempt and not the moment of the read.
+	 */
+	persisted(): string | null
 }
 
 /** The clock the write stamps, injected so nothing here reaches for a global. */
@@ -107,5 +118,10 @@ export function useCart(options: CartOptions = {}): CartControl {
 		[cart, now, storageOf],
 	)
 
-	return { status, count: cart === null ? null : cartCount(cart), cart, add }
+	const persisted = React.useCallback(
+		(): string | null => (cart === null ? null : JSON.stringify(cartIntentOf(cart, now()))),
+		[cart, now],
+	)
+
+	return { status, count: cart === null ? null : cartCount(cart), cart, add, persisted }
 }

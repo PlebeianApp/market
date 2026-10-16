@@ -47,7 +47,22 @@ export interface DemoListing {
 	readonly listing: SellerProductListingInput
 }
 
-const shipping = [{ shippingRef: '30406:' + DEMO_SELLER_PUBKEY + ':standard', extraCost: '250' }]
+/**
+ * The demo seller's shipping option id, and the `30406` **ref** every listing of
+ * theirs publishes — one definition, because `instance/shippingSource.ts` states the
+ * kind-30406 record that ref has to resolve *under*, and the two spelling it separately
+ * is how a listing ends up naming shipping nobody offers.
+ */
+export const DEMO_SHIPPING_OPTION_ID = 'standard'
+export const DEMO_SHIPPING_REF = `30406:${DEMO_SELLER_PUBKEY}:${DEMO_SHIPPING_OPTION_ID}`
+
+/** The amount the listing's own `shipping_option` tag carries, and the record's `price` amount. */
+export const DEMO_SHIPPING_AMOUNT = '250'
+
+/** The unit only the kind-30406 record declares for that amount: the SDK's three-letter `SAT`. */
+export const DEMO_SHIPPING_CURRENCY = 'SAT'
+
+const shipping = [{ shippingRef: DEMO_SHIPPING_REF, extraCost: DEMO_SHIPPING_AMOUNT }]
 
 /**
  * Six listings across five categories, with deliberately varied stock and
