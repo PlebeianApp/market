@@ -14,3 +14,5 @@ export {
 } from './mergeRules'
 export type { DeletionTargets } from './mergeRules'
 export type { EventAdmission, EventStoreAddResult, EventStorePort } from './port'
+export { buildDeletionLookupFilters, excludeDeleted, readThroughStore } from './read'
+export type { EventReadContext } from './read'

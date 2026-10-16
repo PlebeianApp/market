@@ -8,8 +8,8 @@ import {
 	type SellerProductPublishValidationIssue,
 } from '@sdk/commerce/products'
 import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
+import { getNdkEventStore } from '@platform/web/ndkReadContext'
 import { productKeys } from '@/queries/queryKeyFactory'
-import { markProductAsDeleted } from '@/queries/products'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -96,7 +96,9 @@ export const updateProduct = async (
  */
 export const deleteProduct = async (productDTag: string, signer: NDKSigner, ndk: NDK): Promise<boolean> => {
 	try {
-		await deleteProductListingWorkflow(await createNdkPublishContext(ndk, signer), productDTag)
+		const deletion = await deleteProductListingWorkflow(await createNdkPublishContext(ndk, signer), productDTag)
+		// Relays may keep serving the listing; the store applies the deletion to every later read.
+		getNdkEventStore().add(deletion)
 		return true
 	} catch (error) {
 		console.error('Error deleting product:', error)
@@ -212,10 +214,6 @@ export const useDeleteProductMutation = () => {
 		},
 
 		onSuccess: async (success, productDTag) => {
-			// Mark product as deleted locally so it's filtered from queries
-			// even if relays still return it
-			markProductAsDeleted(productDTag)
-
 			// Get current user pubkey
 			let userPubkey = ''
 			if (signer) {

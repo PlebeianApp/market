@@ -26,3 +26,5 @@ export {
 	isNSFWProduct,
 } from './productReadModel'
 export type { ProductReadEvent } from './productReadModel'
+export { buildProductListFilter, excludeDeletedProducts, isProductListed, readProductListWorkflow } from './productRead'
+export type { ProductListingVisibility, ProductListQuery } from './productRead'

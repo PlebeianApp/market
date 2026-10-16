@@ -24,6 +24,7 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/publish/collections.tsx',
 	'src/publish/orders.tsx',
 	'src/queries/shipping.tsx',
+	'src/queries/products.tsx',
 	'src/publish/comments.tsx',
 	'src/publish/liveChat.tsx',
 	'src/publish/reactions.tsx',
