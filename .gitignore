@@ -53,3 +53,6 @@ contextvm/
 # Encrypted test wallet material
 scripts/encrypted_test_wallet.json
 e2e/baseline-results/
+
+# e2e gate evidence is attached to the PR, not committed
+e2e/artifacts/
