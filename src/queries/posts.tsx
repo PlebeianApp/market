@@ -1,50 +1,27 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { postKeys } from './queryKeyFactory'
 import { queryOptions } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
+import { buildPostByIdFilter, buildRecentPostsFilter, parsePost, sortPostsNewestFirst } from '@sdk/commerce/messaging'
 
-export type NostrPost = {
-	id: string
-	content: string
-	author: string
-	createdAt: number
-}
-
-const transformEvent = (event: NDKEvent): NostrPost => ({
-	id: event.id,
-	content: event.content,
-	author: event.pubkey,
-	createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
-})
+export type { NostrPost } from '@sdk/commerce/messaging'
 
 export const fetchPosts = async () => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const filter: NDKFilter = {
-		kinds: [1], // kind 1 is text notes
-		limit: 20,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const posts = Array.from(events).map(transformEvent)
-
-	// Sort by newest first
-	return posts.sort((a, b) => b.createdAt - a.createdAt)
+	const events = await ndk.fetchEvents(buildRecentPostsFilter())
+	return sortPostsNewestFirst(Array.from(events).map(parsePost))
 }
 
 export const fetchPost = async (id: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const event = await ndk.fetchEvent({
-		ids: [id],
-	})
+	const event = await ndk.fetchEvent(buildPostByIdFilter(id))
 	if (!event) {
 		throw new Error('Post not found')
 	}
-	return transformEvent(event)
+	return parsePost(event)
 }
 
 export const postQueryOptions = (id: string) =>

@@ -1,8 +1,8 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import { parseRelayTags, type RelayPreference } from '@/publish/relay-list'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { type RelayPreference } from '@/publish/relay-list'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { publishRelayList } from '@/publish/relay-list'
+import { buildRelayListFilter, parseRelayListEvents } from '@sdk/core/relays'
 
 export const relayListKeys = {
 	all: ['relay-list'] as const,
@@ -19,31 +19,8 @@ export async function fetchUserRelayListWithPreferences(userPubkey: string): Pro
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const events = await ndk.fetchEvents({
-		kinds: [10002],
-		authors: [userPubkey],
-		limit: 1,
-	})
-
-	if (events.size === 0) {
-		return []
-	}
-
-	// Get the most recent relay list event
-	let mostRecentEvent: NDKEvent | undefined
-	let mostRecentTimestamp = 0
-	events.forEach((event) => {
-		if (event.created_at && event.created_at > mostRecentTimestamp) {
-			mostRecentEvent = event
-			mostRecentTimestamp = event.created_at
-		}
-	})
-
-	if (!mostRecentEvent) {
-		return []
-	}
-
-	return parseRelayTags(mostRecentEvent.tags)
+	const events = await ndk.fetchEvents(buildRelayListFilter(userPubkey))
+	return parseRelayListEvents(events)
 }
 
 /**

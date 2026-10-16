@@ -1,11 +1,9 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import type { NDKFilter, NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { verifyNostrEventSignature } from '@/lib/nostr/event-signature'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { liveActivityKeys } from './queryKeyFactory'
 import {
-	LIVE_ACTIVITY_KIND,
-	LIVE_CHAT_KIND,
 	AUCTION_KIND,
 	buildLiveActivityDTag,
 	parseLiveActivity,
@@ -13,10 +11,13 @@ import {
 	type LiveActivity,
 	type LiveChatMessage,
 } from '@/lib/nip53'
-
-type NDKKind = NonNullable<NDKFilter['kinds']>[number]
-const LIVE_ACTIVITY_KIND_NDK = LIVE_ACTIVITY_KIND as unknown as NDKKind
-const LIVE_CHAT_KIND_NDK = LIVE_CHAT_KIND as unknown as NDKKind
+import {
+	buildLiveActivityFilter,
+	buildLiveChatMessagesFilter,
+	getLiveActivityCandidateRejection,
+	sortLiveActivityCandidates,
+	sortLiveChatMessages,
+} from '@sdk/commerce/messaging'
 import { getAuctionId } from './auctions'
 import { configStore } from '@/lib/stores/config'
 
@@ -48,45 +49,33 @@ export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity |
 
 	// Include #d filter (on the derived live-activity d) to reduce noise and help
 	// NDK dedup select the right replacement candidate before we even see the results.
-	const filter: NDKFilter = {
-		kinds: [LIVE_ACTIVITY_KIND_NDK],
-		authors: [cvmServerPubkey],
-		'#a': [coord],
-		'#d': [expectedActivityD],
-		limit: 10,
-	}
+	const expected = { cvmServerPubkey, expectedActivityD }
+	const filter = buildLiveActivityFilter(coord, expected)
 
 	const events = await ndkActions.fetchEventsWithTimeout([filter], { timeoutMs: 5000 })
 	if (events.size === 0) return null
 
-	// Deterministic sort: newest by created_at, then lexicographically lower
-	// event ID as tiebreaker for equal timestamps.
-	const sorted = Array.from(events).sort((a, b) => {
-		if ((b.created_at ?? 0) !== (a.created_at ?? 0)) return (b.created_at ?? 0) - (a.created_at ?? 0)
-		return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
-	})
+	const sorted = sortLiveActivityCandidates(events)
 
 	// Belt-and-suspenders: relays or subscriptions may return events outside the
 	// requested author set. Scan the full sorted array and return the first event
 	// that passes all validation checks, so one misbehaving relay cannot suppress
 	// status by injecting an invalid event at sorted[0].
 	for (const candidate of sorted) {
-		if (candidate.pubkey !== cvmServerPubkey) {
-			console.warn('fetchLiveActivity: skipping live activity event from unexpected author', candidate.pubkey.slice(0, 16))
-			continue
-		}
-
-		if (candidate.kind !== LIVE_ACTIVITY_KIND_NDK) {
-			console.warn('fetchLiveActivity: skipping event with unexpected kind', candidate.kind)
-			continue
-		}
-
 		// The candidate's exact d tag must equal the derived live-activity d —
 		// not merely be defined — so events for other auctions (or the auction's
 		// bare d) can never be accepted as this auction's live activity.
-		const candidateD = candidate.tags?.find((t: string[]) => t[0] === 'd')?.[1]
-		if (candidateD !== expectedActivityD) {
-			console.warn('fetchLiveActivity: skipping live activity event with unexpected d tag', candidateD)
+		const rejection = getLiveActivityCandidateRejection(candidate, expected)
+		if (rejection?.reason === 'author') {
+			console.warn('fetchLiveActivity: skipping live activity event from unexpected author', rejection.value.slice(0, 16))
+			continue
+		}
+		if (rejection?.reason === 'kind') {
+			console.warn('fetchLiveActivity: skipping event with unexpected kind', rejection.value)
+			continue
+		}
+		if (rejection?.reason === 'd-tag') {
+			console.warn('fetchLiveActivity: skipping live activity event with unexpected d tag', rejection.value)
 			continue
 		}
 
@@ -112,18 +101,8 @@ export const fetchLiveChatMessages = async (liveActivityCoord: string): Promise<
 	const ndk = ndkActions.getNDK()
 	if (!ndk) return []
 
-	const filters: NDKFilter[] = [
-		{
-			kinds: [LIVE_CHAT_KIND_NDK],
-			'#a': [liveActivityCoord],
-			limit: 200,
-		},
-	]
-
-	const events = await ndkActions.fetchEventsWithTimeout(filters, { timeoutMs: 5000 })
-	return Array.from(events)
-		.map(parseLiveChatMessage)
-		.sort((a, b) => a.createdAt - b.createdAt)
+	const events = await ndkActions.fetchEventsWithTimeout([buildLiveChatMessagesFilter(liveActivityCoord)], { timeoutMs: 5000 })
+	return sortLiveChatMessages(Array.from(events).map(parseLiveChatMessage))
 }
 
 export interface UseLiveActivityOptions {

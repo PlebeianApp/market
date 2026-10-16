@@ -1,7 +1,15 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { configStore } from '@/lib/stores/config'
 import { migrationKeys } from '@/queries/queryKeyFactory'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import {
+	buildMigratedProductsFilter,
+	buildNip15ProductsFilter,
+	collectMigratedOriginalIds,
+	readRelayListUrls,
+	resolveMigrationRelays,
+} from '@sdk/commerce/products/nip15MigrationRead'
+import { buildRelayListFilter } from '@sdk/core/relays/relayListRead'
 import { queryOptions } from '@tanstack/react-query'
 
 export { migrationKeys }
@@ -13,39 +21,9 @@ export const fetchUserRelayList = async (userPubkey: string): Promise<string[]> 
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const events = await ndk.fetchEvents({
-		kinds: [10002],
-		authors: [userPubkey],
-		limit: 1,
-	})
+	const events = await ndk.fetchEvents(buildRelayListFilter(userPubkey))
 
-	if (events.size === 0) {
-		return []
-	}
-
-	// Get the most recent relay list event
-	let mostRecentEvent: NDKEvent | undefined
-	let mostRecentTimestamp = 0
-	events.forEach((event) => {
-		if (event.created_at && event.created_at > mostRecentTimestamp) {
-			mostRecentEvent = event
-			mostRecentTimestamp = event.created_at
-		}
-	})
-
-	if (!mostRecentEvent) {
-		return []
-	}
-
-	// Extract relay URLs from 'r' tags
-	const relayUrls: string[] = []
-	mostRecentEvent.tags.forEach((tag) => {
-		if (tag[0] === 'r' && tag[1]) {
-			relayUrls.push(tag[1])
-		}
-	})
-
-	return relayUrls
+	return readRelayListUrls(events)
 }
 
 /**
@@ -71,27 +49,8 @@ export const fetchNip15Products = async (userPubkey: string): Promise<NDKEvent[]
 	// Get user's relay list
 	const userRelays = await fetchUserRelayList(userPubkey)
 
-	// Build relay list: app relay + user relays (or fallback to default)
-	let relaysToUse: string[] = []
-	if (appRelay) {
-		relaysToUse.push(appRelay)
-	}
-	if (userRelays.length > 0) {
-		// Add user relays, avoiding duplicates
-		userRelays.forEach((relay) => {
-			if (!relaysToUse.includes(relay)) {
-				relaysToUse.push(relay)
-			}
-		})
-	} else {
-		// No relay list found, use NDK's current relays
-		const fallbackRelays = ndk.explicitRelayUrls || []
-		fallbackRelays.forEach((relay) => {
-			if (!relaysToUse.includes(relay)) {
-				relaysToUse.push(relay)
-			}
-		})
-	}
+	// Build relay list: app relay + user relays (or fallback to NDK's current relays)
+	const relaysToUse = resolveMigrationRelays(appRelay, userRelays, ndk.explicitRelayUrls || [])
 
 	// Temporarily add all relays to NDK
 	if (relaysToUse.length > 0) {
@@ -102,14 +61,8 @@ export const fetchNip15Products = async (userPubkey: string): Promise<NDKEvent[]
 		}
 	}
 
-	const filter: NDKFilter = {
-		kinds: [30018], // NIP-15 product kind
-		authors: [userPubkey],
-		limit: 100,
-	}
-
 	try {
-		const events = await ndk.fetchEvents(filter)
+		const events = await ndk.fetchEvents(buildNip15ProductsFilter(userPubkey))
 		const eventsArray = Array.from(events)
 		return eventsArray
 	} catch (error) {
@@ -138,25 +91,9 @@ export const fetchMigratedEvents = async (userPubkey: string): Promise<Set<strin
 		console.error('Failed to add app relay:', error)
 	}
 
-	const filter: NDKFilter = {
-		kinds: [30402], // NIP-99 product kind
-		authors: [userPubkey],
-		limit: 1000,
-	}
-
 	try {
-		const events = await ndk.fetchEvents(filter)
-		const migratedOriginalIds = new Set<string>()
-
-		events.forEach((event) => {
-			// Find the "migrated" tag which should contain the original NIP-15 event ID
-			const migratedTag = event.tags.find((tag) => tag[0] === 'migrated')
-			if (migratedTag && migratedTag[1]) {
-				migratedOriginalIds.add(migratedTag[1])
-			}
-		})
-
-		return migratedOriginalIds
+		const events = await ndk.fetchEvents(buildMigratedProductsFilter(userPubkey))
+		return collectMigratedOriginalIds(events)
 	} catch (error) {
 		console.error('Failed to fetch migrated events:', error)
 		return new Set()

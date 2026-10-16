@@ -1,7 +1,14 @@
 import { fetchLatestAppEvent, getAppRelaySet, ndkActions } from '@/lib/stores/ndk'
-import { FEATURED_ITEMS_CONFIG } from '@/lib/schemas/featured'
 import type { FeaturedProducts, FeaturedCollections, FeaturedAuctions, FeaturedUsers } from '@/lib/schemas/featured'
 import { configKeys } from '@/queries/queryKeyFactory'
+import {
+	buildCurationListFilter,
+	parseFeaturedAuctions,
+	parseFeaturedCollections,
+	parseFeaturedProducts,
+	parseFeaturedUsers,
+	type FeaturedListKey,
+} from '@sdk/commerce/curation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { filterBlacklistedProductCoords, filterBlacklistedCollectionCoords, filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
@@ -14,22 +21,8 @@ import { filterBlacklistedProductCoords, filterBlacklistedCollectionCoords, filt
  * @returns Featured products data or null
  */
 export const fetchFeaturedProducts = async (appPubkey: string): Promise<FeaturedProducts | null> => {
-	const event = await fetchLatestAppEvent({
-		kinds: [FEATURED_ITEMS_CONFIG.PRODUCTS.kind],
-		authors: [appPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.PRODUCTS.dTag],
-	})
-
-	if (!event) return null
-
-	// Extract product coordinates from 'a' tags and filter out blacklisted ones
-	const rawProducts = event.tags.filter((tag) => tag[0] === 'a' && tag[1]?.startsWith('30402:')).map((tag) => tag[1])
-	const featuredProducts = filterBlacklistedProductCoords(rawProducts)
-
-	return {
-		featuredProducts,
-		lastUpdated: event.created_at || Date.now() / 1000,
-	}
+	const event = await fetchLatestAppEvent(buildCurationListFilter('featuredProducts', appPubkey))
+	return event ? parseFeaturedProducts(event, filterBlacklistedProductCoords) : null
 }
 
 /**
@@ -38,22 +31,8 @@ export const fetchFeaturedProducts = async (appPubkey: string): Promise<Featured
  * @returns Featured collections data or null
  */
 export const fetchFeaturedCollections = async (appPubkey: string): Promise<FeaturedCollections | null> => {
-	const event = await fetchLatestAppEvent({
-		kinds: [FEATURED_ITEMS_CONFIG.COLLECTIONS.kind],
-		authors: [appPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag],
-	})
-
-	if (!event) return null
-
-	// Extract collection coordinates from 'a' tags and filter out blacklisted ones
-	const rawCollections = event.tags.filter((tag) => tag[0] === 'a' && tag[1]?.startsWith('30405:')).map((tag) => tag[1])
-	const featuredCollections = filterBlacklistedCollectionCoords(rawCollections)
-
-	return {
-		featuredCollections,
-		lastUpdated: event.created_at || Date.now() / 1000,
-	}
+	const event = await fetchLatestAppEvent(buildCurationListFilter('featuredCollections', appPubkey))
+	return event ? parseFeaturedCollections(event, filterBlacklistedCollectionCoords) : null
 }
 
 /**
@@ -62,25 +41,8 @@ export const fetchFeaturedCollections = async (appPubkey: string): Promise<Featu
  * @returns Featured auctions data or null
  */
 export const fetchFeaturedAuctions = async (appPubkey: string): Promise<FeaturedAuctions | null> => {
-	const event = await fetchLatestAppEvent({
-		kinds: [FEATURED_ITEMS_CONFIG.AUCTIONS.kind],
-		authors: [appPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.AUCTIONS.dTag],
-	})
-
-	if (!event) return null
-
-	const rawAuctions = event.tags.filter((tag) => tag[0] === 'a' && tag[1]?.startsWith('30408:')).map((tag) => tag[1])
-	const featuredAuctions = rawAuctions.filter((coords) => {
-		const parts = coords.split(':')
-		if (parts.length !== 3 || !parts[1] || !parts[2]) return false
-		return filterBlacklistedPubkeys([parts[1]]).length > 0
-	})
-
-	return {
-		featuredAuctions,
-		lastUpdated: event.created_at || Date.now() / 1000,
-	}
+	const event = await fetchLatestAppEvent(buildCurationListFilter('featuredAuctions', appPubkey))
+	return event ? parseFeaturedAuctions(event, filterBlacklistedPubkeys) : null
 }
 
 /**
@@ -89,27 +51,13 @@ export const fetchFeaturedAuctions = async (appPubkey: string): Promise<Featured
  * @returns Featured users data or null
  */
 export const fetchFeaturedUsers = async (appPubkey: string): Promise<FeaturedUsers | null> => {
-	const event = await fetchLatestAppEvent({
-		kinds: [FEATURED_ITEMS_CONFIG.USERS.kind],
-		authors: [appPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.USERS.dTag],
-	})
-
-	if (!event) return null
-
-	// Extract user pubkeys from 'p' tags and filter out blacklisted ones
-	const rawUsers = event.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
-	const featuredUsers = filterBlacklistedPubkeys(rawUsers)
-
-	return {
-		featuredUsers,
-		lastUpdated: event.created_at || Date.now() / 1000,
-	}
+	const event = await fetchLatestAppEvent(buildCurationListFilter('featuredUsers', appPubkey))
+	return event ? parseFeaturedUsers(event, filterBlacklistedPubkeys) : null
 }
 
 // --- REACT QUERY HOOKS ---
 
-const useFeaturedSettingsSubscription = (appPubkey: string, queryKey: readonly unknown[], expectedKind: number, expectedDTag: string) => {
+const useFeaturedSettingsSubscription = (appPubkey: string, queryKey: readonly unknown[], list: FeaturedListKey) => {
 	const queryClient = useQueryClient()
 	const ndk = ndkActions.getNDK()
 
@@ -119,18 +67,11 @@ const useFeaturedSettingsSubscription = (appPubkey: string, queryKey: readonly u
 		let latestEventTime = 0
 		let receivedEose = false
 
-		const subscription = ndk.subscribe(
-			{
-				kinds: [expectedKind],
-				authors: [appPubkey],
-				'#d': [expectedDTag],
-			},
-			{
-				closeOnEose: false,
-				relaySet: getAppRelaySet(),
-				exclusiveRelay: true, // Reject stale copies from other relays in the pool
-			},
-		)
+		const subscription = ndk.subscribe(buildCurationListFilter(list, appPubkey), {
+			closeOnEose: false,
+			relaySet: getAppRelaySet(),
+			exclusiveRelay: true, // Reject stale copies from other relays in the pool
+		})
 
 		subscription.on('event', (event) => {
 			const eventTime = event.created_at ?? 0
@@ -149,7 +90,7 @@ const useFeaturedSettingsSubscription = (appPubkey: string, queryKey: readonly u
 		return () => {
 			subscription.stop()
 		}
-	}, [appPubkey, expectedDTag, expectedKind, ndk, queryClient, queryKey])
+	}, [appPubkey, list, ndk, queryClient, queryKey])
 }
 
 /**
@@ -157,7 +98,7 @@ const useFeaturedSettingsSubscription = (appPubkey: string, queryKey: readonly u
  */
 export const useFeaturedProducts = (appPubkey: string) => {
 	const queryKey = configKeys.featuredProducts(appPubkey)
-	useFeaturedSettingsSubscription(appPubkey, queryKey, FEATURED_ITEMS_CONFIG.PRODUCTS.kind, FEATURED_ITEMS_CONFIG.PRODUCTS.dTag)
+	useFeaturedSettingsSubscription(appPubkey, queryKey, 'featuredProducts')
 
 	return useQuery({
 		queryKey,
@@ -172,7 +113,7 @@ export const useFeaturedProducts = (appPubkey: string) => {
  */
 export const useFeaturedCollections = (appPubkey: string) => {
 	const queryKey = configKeys.featuredCollections(appPubkey)
-	useFeaturedSettingsSubscription(appPubkey, queryKey, FEATURED_ITEMS_CONFIG.COLLECTIONS.kind, FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag)
+	useFeaturedSettingsSubscription(appPubkey, queryKey, 'featuredCollections')
 
 	return useQuery({
 		queryKey,
@@ -187,7 +128,7 @@ export const useFeaturedCollections = (appPubkey: string) => {
  */
 export const useFeaturedAuctions = (appPubkey: string) => {
 	const queryKey = configKeys.featuredAuctions(appPubkey)
-	useFeaturedSettingsSubscription(appPubkey, queryKey, FEATURED_ITEMS_CONFIG.AUCTIONS.kind, FEATURED_ITEMS_CONFIG.AUCTIONS.dTag)
+	useFeaturedSettingsSubscription(appPubkey, queryKey, 'featuredAuctions')
 
 	return useQuery({
 		queryKey,
@@ -202,7 +143,7 @@ export const useFeaturedAuctions = (appPubkey: string) => {
  */
 export const useFeaturedUsers = (appPubkey: string) => {
 	const queryKey = configKeys.featuredUsers(appPubkey)
-	useFeaturedSettingsSubscription(appPubkey, queryKey, FEATURED_ITEMS_CONFIG.USERS.kind, FEATURED_ITEMS_CONFIG.USERS.dTag)
+	useFeaturedSettingsSubscription(appPubkey, queryKey, 'featuredUsers')
 
 	return useQuery({
 		queryKey,

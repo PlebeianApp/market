@@ -2,8 +2,17 @@ import type { V4VDTO } from '@/lib/stores/cart'
 import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { nip19 } from 'nostr-tools'
 import { v4 as uuidv4 } from 'uuid'
+import {
+	buildV4VMerchantsFilter,
+	buildV4VSharesFilter,
+	collectV4VMerchantPubkeys,
+	parseV4VShareEntries,
+	pickMostRecentV4VEvent,
+	resolveParsedV4VState,
+	resolveV4VConfigurationState,
+	type V4VConfigurationState,
+} from '@sdk/commerce/v4v/v4vRead'
 import { v4vKeys } from './queryKeyFactory'
 import { filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
 import {
@@ -13,143 +22,42 @@ import {
 	resolveCommunityQueryFixtureStep,
 } from '@/lib/tests/communityQueryFixtures'
 
-export type V4VConfigurationState = 'unknown' | 'never-configured' | 'configured-zero' | 'configured-nonzero'
+export type { V4VConfigurationState }
+export { resolveV4VConfigurationState }
 
 export interface V4VConfiguration {
 	shares: V4VDTO[]
 	state: V4VConfigurationState
 }
 
-function padHexString(hex: string): string {
-	return hex.length % 2 === 1 ? '0' + hex : hex
-}
-
-function normalizeAndEncodePubkey(value: string): { pubkey: string; npub: string } | null {
-	try {
-		if (/^[0-9a-f]{60,64}$/i.test(value)) {
-			const paddedHex = padHexString(value)
-			return {
-				pubkey: paddedHex,
-				npub: nip19.npubEncode(paddedHex),
-			}
-		}
-
-		if (value.startsWith('npub1') || value.startsWith('0npub1')) {
-			const cleanValue = value.startsWith('0') ? value.substring(1) : value
-			try {
-				const { data: hexPubkey } = nip19.decode(cleanValue)
-				return {
-					pubkey: hexPubkey as string,
-					npub: cleanValue,
-				}
-			} catch (e) {
-				console.error('Failed to decode npub:', e)
-				return null
-			}
-		}
-
-		console.error('Unknown pubkey format:', value)
-		return null
-	} catch (e) {
-		console.error('Error processing pubkey:', e, 'for value:', value)
-		return null
-	}
-}
-
-function getMostRecentV4VEvent(events: Set<NDKEvent>): NDKEvent | null {
-	let mostRecentEvent: NDKEvent | null = null
-	let mostRecentTimestamp = 0
-
-	for (const event of Array.from(events)) {
-		if (event.created_at && event.created_at > mostRecentTimestamp) {
-			mostRecentEvent = event
-			mostRecentTimestamp = event.created_at
-		}
-	}
-
-	return mostRecentEvent
-}
-
-export function resolveV4VConfigurationState(event: Pick<NDKEvent, 'content'> | null | undefined): V4VConfigurationState {
-	if (!event) {
-		return 'never-configured'
-	}
-
-	try {
-		const content = JSON.parse(event.content)
-		if (!Array.isArray(content)) {
-			console.warn('V4V event content is not an array')
-			return 'unknown'
-		}
-
-		return content.length === 0 ? 'configured-zero' : 'configured-nonzero'
-	} catch (error) {
-		console.error('Error parsing V4V share content:', error)
-		return 'unknown'
-	}
-}
-
 async function parseV4VSharesFromEvent(event: NDKEvent, ndk: ReturnType<typeof ndkActions.getNDK>): Promise<V4VDTO[]> {
-	const content = JSON.parse(event.content)
-	if (!Array.isArray(content) || content.length === 0) {
-		return []
-	}
-
-	const seenPubkeys = new Set<string>()
-	const dedupedContent = content.filter((zapTag) => {
-		if (zapTag[0] === 'zap' && zapTag[1]) {
-			const normalized = normalizeAndEncodePubkey(zapTag[1])
-			if (normalized && !seenPubkeys.has(normalized.pubkey)) {
-				seenPubkeys.add(normalized.pubkey)
-				return true
-			}
-			return false
-		}
-		return false
-	})
-
-	const shares = await Promise.all(
-		dedupedContent
-			.map(async (zapTag, index) => {
-				if (zapTag[0] === 'zap' && zapTag[1] && zapTag[2]) {
-					const pubkeyValue = zapTag[1]
-					const percentage = parseFloat(zapTag[2]) || 5
-
-					const normalized = normalizeAndEncodePubkey(pubkeyValue)
-					if (!normalized) {
-						return null
-					}
-
-					let name = ''
-					try {
-						if (ndk) {
-							const user = ndk.getUser({
-								pubkey: normalized.pubkey,
-							})
-							await user.fetchProfile()
-							if (user.profile?.name) {
-								name = user.profile.name
-							} else if (user.profile?.displayName) {
-								name = user.profile.displayName
-							}
-						}
-					} catch (error) {
-						console.warn('Error fetching profile for V4V share:', error)
-					}
-
-					return {
-						id: `v4v-${index}-${normalized.pubkey.substring(0, 8)}`,
-						pubkey: normalized.pubkey,
-						name,
-						percentage,
+	return Promise.all(
+		parseV4VShareEntries(event.content).map(async (entry) => {
+			let name = ''
+			try {
+				if (ndk) {
+					const user = ndk.getUser({
+						pubkey: entry.pubkey,
+					})
+					await user.fetchProfile()
+					if (user.profile?.name) {
+						name = user.profile.name
+					} else if (user.profile?.displayName) {
+						name = user.profile.displayName
 					}
 				}
-				return null
-			})
-			.filter(Boolean),
-	)
+			} catch (error) {
+				console.warn('Error fetching profile for V4V share:', error)
+			}
 
-	return shares.filter(Boolean) as V4VDTO[]
+			return {
+				id: entry.id,
+				pubkey: entry.pubkey,
+				name,
+				percentage: entry.percentage,
+			}
+		}),
+	)
 }
 
 export const fetchV4VConfiguration = async (pubkey: string): Promise<V4VConfiguration> => {
@@ -165,17 +73,13 @@ export const fetchV4VConfiguration = async (pubkey: string): Promise<V4VConfigur
 			return { shares: [], state: 'unknown' }
 		}
 
-		const events = await ndk.fetchEvents({
-			kinds: [30078],
-			authors: [pubkey],
-			'#l': ['v4v_share'],
-		})
+		const events = await ndk.fetchEvents(buildV4VSharesFilter(pubkey))
 
 		if (!events || events.size === 0) {
 			return { shares: [], state: 'never-configured' }
 		}
 
-		const mostRecentEvent = getMostRecentV4VEvent(events)
+		const mostRecentEvent = pickMostRecentV4VEvent(events)
 		const state = resolveV4VConfigurationState(mostRecentEvent)
 
 		if (!mostRecentEvent || state === 'never-configured' || state === 'configured-zero') {
@@ -189,7 +93,7 @@ export const fetchV4VConfiguration = async (pubkey: string): Promise<V4VConfigur
 		const shares = await parseV4VSharesFromEvent(mostRecentEvent, ndk)
 		return {
 			shares,
-			state: shares.length > 0 ? 'configured-nonzero' : 'unknown',
+			state: resolveParsedV4VState(shares.length),
 		}
 	} catch (error) {
 		console.error('Error fetching V4V configuration:', error)
@@ -306,25 +210,13 @@ export const fetchV4VMerchants = async (): Promise<string[]> => {
 		throw new Error('NDK not ready, cannot fetch merchants')
 	}
 
-	const events = await ndk.fetchEvents({
-		kinds: [30078],
-		'#l': ['v4v_share'],
-		limit: 100, // Limit to 100 most recent merchants
-	})
+	const events = await ndk.fetchEvents(buildV4VMerchantsFilter())
 
 	if (!events || events.size === 0) {
 		return []
 	}
 
-	// Get unique pubkeys from the events and filter out blacklisted ones
-	const pubkeySet = new Set<string>()
-	Array.from(events).forEach((event) => {
-		if (event.pubkey) {
-			pubkeySet.add(event.pubkey)
-		}
-	})
-
-	return filterBlacklistedPubkeys(Array.from(pubkeySet))
+	return filterBlacklistedPubkeys(collectV4VMerchantPubkeys(events))
 }
 
 /**

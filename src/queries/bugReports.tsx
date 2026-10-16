@@ -1,15 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { getBugRelay, ndkActions } from '@/lib/stores/ndk'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { NDKRelaySet } from '@nostr-dev-kit/ndk'
+import { buildBugReportsFilter, parseBugReports, type BugReport as SdkBugReport } from '@sdk/commerce/messaging/bugReportRead'
 
-export interface BugReport {
-	id: string
-	pubkey: string
-	content: string
-	createdAt: number
-	event: NDKEvent
-}
+export type BugReport = SdkBugReport<NDKEvent>
 
 export interface UserProfile {
 	pubkey: string
@@ -30,29 +25,10 @@ export const fetchBugReports = async (limit: number = 20, until?: number): Promi
 	const relayUrl = getBugRelay()
 	if (!relayUrl) throw new Error('App relay not configured')
 
-	const filter: NDKFilter = {
-		kinds: [1], // kind 1 is text notes
-		'#t': ['plebian2beta'], // tag filter for plebian2beta
-		limit,
-		...(until && { until }),
-	}
-
 	// Query the bug relay explicitly so bug report history stays off the write set.
 	const bugRelaySet = NDKRelaySet.fromRelayUrls([relayUrl], ndk)
-	const events = await ndk.fetchEvents(filter, { subId: 'bug-reports' }, bugRelaySet)
-	const bugReports = Array.from(events)
-		.map(
-			(event): BugReport => ({
-				id: event.id,
-				pubkey: event.pubkey,
-				content: event.content,
-				createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
-				event,
-			}),
-		)
-		.sort((a, b) => b.createdAt - a.createdAt) // Sort by newest first
-
-	return bugReports
+	const events = await ndk.fetchEvents(buildBugReportsFilter(limit, until), { subId: 'bug-reports' }, bugRelaySet)
+	return parseBugReports(events)
 }
 
 // Query keys

@@ -1,12 +1,7 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import {
-	DEFAULT_RELAY_PREFERENCES,
-	getRelayPreferencesDTag,
-	publishRelayPreferences,
-	type RelayPreferencesSettings,
-} from '@/publish/relay-preferences'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { DEFAULT_RELAY_PREFERENCES, publishRelayPreferences, type RelayPreferencesSettings } from '@/publish/relay-preferences'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { buildRelayPreferencesFilter, parseRelayPreferencesContent, pickMostRecentTimestampedEvent } from '@sdk/core/relays'
 
 export const relayPreferencesKeys = {
 	all: ['relay-preferences'] as const,
@@ -23,36 +18,15 @@ export async function fetchRelayPreferences(userPubkey: string): Promise<RelayPr
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const events = await ndk.fetchEvents({
-		kinds: [30078],
-		authors: [userPubkey],
-		'#d': [getRelayPreferencesDTag()],
-		limit: 1,
-	})
-
-	if (events.size === 0) {
-		return null
-	}
-
-	// Get the most recent event
-	let mostRecentEvent: NDKEvent | undefined
-	let mostRecentTimestamp = 0
-	events.forEach((event) => {
-		if (event.created_at && event.created_at > mostRecentTimestamp) {
-			mostRecentEvent = event
-			mostRecentTimestamp = event.created_at
-		}
-	})
+	const events = await ndk.fetchEvents(buildRelayPreferencesFilter(userPubkey))
+	const mostRecentEvent = pickMostRecentTimestampedEvent(events)
 
 	if (!mostRecentEvent) {
 		return null
 	}
 
 	try {
-		const content = JSON.parse(mostRecentEvent.content)
-		return {
-			includeAppDefaults: content.includeAppDefaults ?? DEFAULT_RELAY_PREFERENCES.includeAppDefaults,
-		}
+		return parseRelayPreferencesContent(mostRecentEvent.content)
 	} catch (error) {
 		console.error('Error parsing relay preferences:', error)
 		return null
