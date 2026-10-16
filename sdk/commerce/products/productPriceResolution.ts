@@ -64,7 +64,7 @@ function isValidNumberString(value: string): boolean {
 export function resolvePublishPrice(state: ProductPriceFormState): PublishPriceResolution {
 	if (state.currency === 'SATS' || state.currency === 'BTC') {
 		if (!isValidNumberString(state.price)) return { status: 'error', reason: 'unresolved-sats-price' }
-		return { status: 'ok', price: convertBitcoinToSatsString(state.price, state.bitcoinUnit), currency: 'SATS' }
+		return { status: 'ok', price: convertBitcoinToSatsString(state.price, state.bitcoinUnit), currency: 'SAT' }
 	}
 
 	if (state.currencyMode === 'fiat') {
@@ -73,7 +73,7 @@ export function resolvePublishPrice(state: ProductPriceFormState): PublishPriceR
 	}
 
 	if (!isValidNumberString(state.price)) return { status: 'error', reason: 'unresolved-sats-price' }
-	return { status: 'ok', price: convertBitcoinToSatsString(state.price, state.bitcoinUnit), currency: 'SATS' }
+	return { status: 'ok', price: convertBitcoinToSatsString(state.price, state.bitcoinUnit), currency: 'SAT' }
 }
 
 function convertBitcoinToSatsString(price: string, bitcoinUnit: 'SATS' | 'BTC'): string {

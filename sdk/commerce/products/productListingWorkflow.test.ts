@@ -38,7 +38,7 @@ describe('seller product listing workflow', () => {
 			tags: [
 				['d', 'product-1'],
 				['title', 'Coat'],
-				['price', '1200', 'SATS'],
+				['price', '1200', 'SAT'],
 				['type', 'simple', 'physical'],
 				['visibility', 'on-sale'],
 				['stock', '4'],
