@@ -26,7 +26,13 @@
  * and counts.
  */
 
-import { CART_PERSISTENCE_VERSION, addCartProduct, createCartIntent, parseCartPersistenceContent } from '@sdk/commerce/cart'
+import {
+	CART_PERSISTENCE_VERSION,
+	addCartProduct,
+	createCartIntent,
+	parseCartPersistenceContent,
+	type PersistedCartContent,
+} from '@sdk/commerce/cart'
 
 import type { ProductListItem } from './productListView'
 
@@ -80,6 +86,29 @@ export function splitProductRef(productRef: string): { id: string; sellerPubkey:
 }
 
 /**
+ * The app's own view of a record the SDK's parser accepted: one line per item.
+ *
+ * One definition, because the cart is read from storage **and** submitted by the
+ * checkout, and the two must not disagree about what a persisted item means: a line the
+ * ref splitter refuses is dropped in both, never in one.
+ */
+export function cartFromPersistedContent(content: PersistedCartContent): Cart {
+	const lines: CartLine[] = []
+	for (const item of content.items) {
+		const parts = splitProductRef(item.productRef)
+		if (!parts) continue
+		lines.push({
+			productRef: item.productRef,
+			id: parts.id,
+			sellerPubkey: parts.sellerPubkey,
+			amount: item.quantity,
+			shippingMethodId: item.shippingRef ?? null,
+		})
+	}
+	return { lines }
+}
+
+/**
  * Read the browser's cart.
  *
  * A record the SDK's parser refuses is **not** repaired and not guessed at: the
@@ -93,20 +122,7 @@ export function readCart(storage: CartStorage): Cart {
 	const parsed = parseCartPersistenceContent(stored)
 	if (!parsed) return EMPTY_CART
 
-	const lines: CartLine[] = []
-	for (const item of parsed.items) {
-		const parts = splitProductRef(item.productRef)
-		if (!parts) continue
-		lines.push({
-			productRef: item.productRef,
-			id: parts.id,
-			sellerPubkey: parts.sellerPubkey,
-			amount: item.quantity,
-			shippingMethodId: item.shippingRef ?? null,
-		})
-	}
-
-	return { lines }
+	return cartFromPersistedContent(parsed)
 }
 
 /** How many items the cart holds. Quantities are the SDK's clamped integers, so this sums. */
@@ -153,6 +169,17 @@ export function addLineToCart(cart: Cart, line: CartLine): Cart {
 }
 
 /**
+ * The SDK's own persisted record for a cart, stamped with the caller's clock.
+ *
+ * One definition, used by the write path **and** by the checkout's submission: the bytes
+ * the browser stores and the bytes it submits to place an order are the same bytes,
+ * because both are `createCartIntent`'s answer rather than two spellings of the cart.
+ */
+export function cartIntentOf(cart: Cart, updatedAtMs: number): PersistedCartContent {
+	return createCartIntent(cart.lines, updatedAtMs)
+}
+
+/**
  * Write the cart, through the SDK's builder.
  *
  * `createCartIntent` is given the lines and the clock the caller owns, and its
@@ -161,7 +188,7 @@ export function addLineToCart(cart: Cart, line: CartLine): Cart {
  * store at all.
  */
 export function writeCart(storage: CartStorage, cart: Cart, updatedAtMs: number): void {
-	storage.write(JSON.stringify(createCartIntent(cart.lines, updatedAtMs)))
+	storage.write(JSON.stringify(cartIntentOf(cart, updatedAtMs)))
 }
 
 /**
