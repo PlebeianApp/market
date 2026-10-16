@@ -2,42 +2,32 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '@ui/primitives/textarea'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
-import { MessageSquare } from 'lucide-react'
-import { useRef, useState, type ReactNode } from 'react'
+import { useState, type MouseEvent, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
-import { TooltipButton, type TooltipButtonProps } from '@ui/components/TooltipButton'
+import type { ButtonProps } from '@ui/components/ButtonProps'
+import { CommentButtonView } from '@ui/components/SocialButtons'
 import { Button } from '@ui/primitives/button'
 
-interface CommentButtonProps extends TooltipButtonProps {
+interface CommentButtonProps extends ButtonProps {
 	event: NDKEvent
-	icon: ReactNode
+	icon?: ReactNode
+	tooltip?: string
 }
 
-export function CommentButton({ event, className, onClick, onPointerDown, variant, ...props }: CommentButtonProps) {
+export function CommentButton({ event, onClick, ...props }: CommentButtonProps) {
 	const [dialogOpen, setDialogOpen] = useState(false)
 	const [isPosting, setIsPosting] = useState(false)
 	const { isAuthenticated } = useStore(authStore)
 
-	const handleButtonInteraction = (e: React.MouseEvent<HTMLButtonElement>) => {
-		e.preventDefault()
-		e.stopPropagation()
-
+	const handlePress = (e: MouseEvent<HTMLButtonElement>) => {
 		if (onClick) {
-			onClick?.(e)
+			onClick(e)
+		} else if (isAuthenticated) {
+			setDialogOpen(true)
 		} else {
-			if (isAuthenticated) {
-				setDialogOpen(true)
-			} else {
-				toast.error('Please log in to comment')
-			}
+			toast.error('Please log in to comment')
 		}
-	}
-
-	const handleButtonPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-		e.stopPropagation()
-		onPointerDown?.(e)
 	}
 
 	const handlePostComment = async () => {
@@ -49,28 +39,9 @@ export function CommentButton({ event, className, onClick, onPointerDown, varian
 		// TODO
 	}
 
-	// Default values for props
-	const icon = props.icon ?? <MessageSquare className="size-6" strokeWidth={2} />
-	const tooltip = props.tooltip ?? 'Comment'
-
 	return (
 		<>
-			<TooltipButton
-				variant={variant ?? 'outline'}
-				size="icon"
-				className={'border-foreground rounded border-2 bg-transparent hover:bg-foreground hover:text-background ' + className}
-				type="button"
-				{...props}
-				tooltip={tooltip}
-				data-testid="comment-button"
-				onClick={(e) => {
-					handleButtonInteraction(e)
-				}}
-				onPointerDown={handleButtonPointerDown}
-				disabled={props.disabled || !event.ndk}
-			>
-				{icon}
-			</TooltipButton>
+			<CommentButtonView {...props} onPress={handlePress} disabled={props.disabled || !event.ndk} />
 
 			{/* Comment Dialog */}
 			<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

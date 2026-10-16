@@ -26,7 +26,8 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { OrderActions } from './OrderActions'
 import { PrivateOrderDetailsCard } from './PrivateOrderDetailsCard'
-import { TimelineEventCard } from './TimelineEventCard'
+import { TimelineEventCard } from '@ui/components/TimelineEventCard'
+import { copyToClipboard } from '@/lib/utils'
 import { OrderBuyerContactCard, OrderDetailHeader, OrderShippingCard, PrivateAuctionClaimCard } from '@ui/components/OrderDetailSections'
 
 // Imported helpers and components
@@ -436,6 +437,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 									title={title}
 									icon={icon}
 									timelineIndex={allEvents.length - index}
+									onCopyPreimage={(preimage) => copyToClipboard(preimage)}
 								/>
 							))}
 						</div>

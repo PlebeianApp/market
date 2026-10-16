@@ -2,33 +2,28 @@ import { useState } from 'react'
 import { ShareProductDialog } from '../dialogs/ShareProductDialog'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { ButtonProps } from '@ui/components/ButtonProps'
-import { TooltipButton } from '@ui/components/TooltipButton'
+import { ShareButtonView } from '@ui/components/SocialButtons'
 
 interface ShareButtonProps extends ButtonProps {
 	event: NDKEvent
 	itemName?: string
 }
 
-export const ShareButton = ({ event, itemName: itemNameProp, className, onClick, onPointerDown, variant, ...props }: ShareButtonProps) => {
+export const ShareButton = ({
+	event,
+	itemName: itemNameProp,
+	onClick: _onClick,
+	onPointerDown: _onPointerDown,
+	...props
+}: ShareButtonProps) => {
 	const [shareDialogOpen, setShareDialogOpen] = useState(false)
 
 	const itemName = itemNameProp ?? event.tags.find((v) => v[0] === 'title')?.[1] ?? 'Unknown'
 
 	return (
 		<>
-			<TooltipButton
-				variant={variant ?? 'outline'}
-				size="icon"
-				className={'border-foreground rounded border-2 bg-transparent hover:bg-foreground hover:text-background ' + className}
-				tooltip="Share"
-				{...props}
-				onClick={() => setShareDialogOpen(true)}
-				data-testid="share-button"
-			>
-				<span className="w-6 h-6 i-sharing" />
-			</TooltipButton>
+			<ShareButtonView {...props} onPress={() => setShareDialogOpen(true)} />
 
-			{/* Share Dialog */}
 			<ShareProductDialog
 				open={shareDialogOpen}
 				onOpenChange={setShareDialogOpen}
