@@ -207,230 +207,35 @@ export const shippingOptionsByPubkeyQueryOptions = (pubkey: string) =>
 
 // --- HELPER FUNCTIONS (DATA EXTRACTION) ---
 
-/**
- * Gets the shipping option title from a shipping event
- * @param event The shipping event
- * @returns The shipping option title string
- */
-export const getShippingTitle = (event: NDKEvent): string => event.tags.find((t) => t[0] === 'title')?.[1] || 'Standard Shipping'
+import {
+	getShippingCountry,
+	getShippingDescription,
+	getShippingInfo,
+	getShippingPrice,
+	getShippingService,
+	getShippingTitle,
+} from '@sdk/commerce/shipping'
 
-/**
- * Gets the shipping option description from a shipping event
- * @param event The shipping event
- * @returns The shipping option description string
- */
-export const getShippingDescription = (event: NDKEvent): string => event.content || ''
-
-/**
- * Gets the price tag from a shipping event
- * @param event The shipping event
- * @returns A tuple with the format:
- * - [0]: 'price' (literal)
- * - [1]: amount (string)
- * - [2]: currency (string)
- */
-export const getShippingPrice = (event: NDKEvent) => {
-	const priceTag = event.tags.find((t) => t[0] === 'price')
-	if (!priceTag) return undefined
-
-	return priceTag
-}
-
-/**
- * Gets the country tag from a shipping event
- * @param event The shipping event
- * @returns The country code or array of country codes
- */
-export const getShippingCountry = (event: NDKEvent) => {
-	const countryTag = event.tags.find((t) => t[0] === 'country')
-	if (!countryTag) return undefined
-
-	return countryTag
-}
-
-/**
- * Gets the service tag from a shipping event
- * @param event The shipping event
- * @returns The shipping service type
- */
-export const getShippingService = (event: NDKEvent) => {
-	const serviceTag = event.tags.find((t) => t[0] === 'service')
-	if (!serviceTag) return undefined
-
-	return serviceTag
-}
-
-/**
- * Gets the carrier tag from a shipping event
- * @param event The shipping event
- * @returns The carrier name
- */
-export const getShippingCarrier = (event: NDKEvent) => {
-	const carrierTag = event.tags.find((t) => t[0] === 'carrier')
-	if (!carrierTag) return undefined
-
-	return carrierTag
-}
-
-/**
- * Gets the location tag from a shipping event
- * @param event The shipping event
- * @returns The location string
- */
-export const getShippingLocation = (event: NDKEvent) => {
-	const locationTag = event.tags.find((t) => t[0] === 'location')
-	if (!locationTag) return undefined
-
-	return locationTag
-}
-
-/**
- * Gets the duration tag from a shipping event
- * @param event The shipping event
- * @returns The duration information
- */
-export const getShippingDuration = (event: NDKEvent) => {
-	const durationTag = event.tags.find((t) => t[0] === 'duration')
-	if (!durationTag) return undefined
-
-	return durationTag
-}
-
-/**
- * Gets the pickup address from a shipping event
- * @param event The shipping event
- * @returns The pickup address string or undefined
- */
-export const getShippingPickupAddress = (event: NDKEvent) => {
-	// Try to get structured address first
-	const street = event.tags.find((t) => t[0] === 'pickup-street')?.[1]
-	const city = event.tags.find((t) => t[0] === 'pickup-city')?.[1]
-	const state = event.tags.find((t) => t[0] === 'pickup-state')?.[1]
-	const postalCode = event.tags.find((t) => t[0] === 'pickup-postal-code')?.[1]
-	const country = event.tags.find((t) => t[0] === 'pickup-country')?.[1]
-
-	// If we have structured data, return it
-	if (street || city || state || postalCode || country) {
-		return {
-			street: street || '',
-			city: city || '',
-			state: state || '',
-			postalCode: postalCode || '',
-			country: country || '',
-		}
-	}
-
-	// Fallback to legacy pickup-address tag for backward compatibility
-	const legacyAddress = event.tags.find((t) => t[0] === 'pickup-address')?.[1]
-	if (legacyAddress) {
-		// Return as a structured object with the full address in street field
-		return {
-			street: legacyAddress,
-			city: '',
-			state: '',
-			postalCode: '',
-			country: '',
-		}
-	}
-
-	return null
-}
-
-/**
- * Get pickup address as a formatted string
- */
-export const getShippingPickupAddressString = (event: NDKEvent) => {
-	const address = getShippingPickupAddress(event)
-	if (!address) return null
-
-	// If it's legacy format (all in street field), return as is
-	if (address.street && !address.city && !address.state && !address.postalCode && !address.country) {
-		return address.street
-	}
-
-	// Format structured address
-	return [address.street, address.city, address.state, address.postalCode, address.country].filter(Boolean).join(', ')
-}
-
-/**
- * Gets the weight min/max limits from a shipping event
- * @param event The shipping event
- * @returns Object with min and max weight limits
- */
-export const getShippingWeightLimits = (event: NDKEvent) => {
-	const minTag = event.tags.find((t) => t[0] === 'weight-min')
-	const maxTag = event.tags.find((t) => t[0] === 'weight-max')
-
-	return {
-		min: minTag,
-		max: maxTag,
-	}
-}
-
-/**
- * Gets the dimension min/max limits from a shipping event
- * @param event The shipping event
- * @returns Object with min and max dimension limits
- */
-export const getShippingDimensionLimits = (event: NDKEvent) => {
-	const minTag = event.tags.find((t) => t[0] === 'dim-min')
-	const maxTag = event.tags.find((t) => t[0] === 'dim-max')
-
-	return {
-		min: minTag,
-		max: maxTag,
-	}
-}
-
-/**
- * Gets the creation timestamp from a shipping event
- * @param event The shipping event
- * @returns The creation timestamp (number)
- */
-export const getShippingCreatedAt = (event: NDKEvent): number => event.created_at || 0
-
-/**
- * Gets the pubkey from a shipping event
- * @param event The shipping event
- * @returns The pubkey (string)
- */
-export const getShippingPubkey = (event: NDKEvent): string => event.pubkey
-
-/**
- * Gets the event ID (d tag) from a shipping event
- * @param event The shipping event
- * @returns The d tag value
- */
-export const getShippingId = (event: NDKEvent): string | undefined => {
-	return event.tags.find((t) => t[0] === 'd')?.[1]
-}
-
-/**
- * Creates a reference to a shipping option using the standard format
- * @param pubkey The pubkey of the seller
- * @param id The ID of the shipping option (d tag)
- * @returns A string in the format "30406:pubkey:id"
- */
-export const createShippingReference = (pubkey: string, id: string): string => {
-	return `${SHIPPING_KIND}:${pubkey}:${id}`
-}
-
-/**
- * Parses a shipping reference to extract the event ID
- * @param reference The shipping reference (either composite "30406:pubkey:id" or direct ID)
- * @returns The event ID (d tag value)
- */
-export const parseShippingReference = (reference: string): string => {
-	// If it's a composite reference (contains colons), extract the ID part
-	if (reference.includes(':')) {
-		const parts = reference.split(':')
-		if (parts.length === 3 && parts[0] === SHIPPING_KIND.toString()) {
-			return parts[2] // Return the ID part
-		}
-	}
-	// Otherwise, assume it's already a direct ID
-	return reference
-}
+export {
+	createShippingReference,
+	getShippingCarrier,
+	getShippingCountry,
+	getShippingCreatedAt,
+	getShippingDescription,
+	getShippingDimensionLimits,
+	getShippingDuration,
+	getShippingId,
+	getShippingInfo,
+	getShippingLocation,
+	getShippingPickupAddress,
+	getShippingPickupAddressString,
+	getShippingPrice,
+	getShippingPubkey,
+	getShippingService,
+	getShippingTitle,
+	getShippingWeightLimits,
+	parseShippingReference,
+} from '@sdk/commerce/shipping'
 
 export type ShippingUpdateParams = {
 	orderEventId: string
@@ -553,64 +358,6 @@ export const useUpdateShippingStatusMutation = () => {
 			toast.error('Failed to update shipping status')
 		},
 	})
-}
-
-/**
- * Extracts full shipping information in a user-friendly format
- * @param event The shipping event
- * @returns A structured object with all shipping details
- */
-export const getShippingInfo = (event: NDKEvent) => {
-	if (!event) return null
-
-	const id = getShippingId(event)
-	const title = getShippingTitle(event)
-	const priceTag = getShippingPrice(event)
-	const countryTag = getShippingCountry(event) || ['country']
-	const serviceTag = getShippingService(event)
-
-	// Return null if any required field is missing (country is optional - empty means worldwide)
-	if (!id || !title || !priceTag || !serviceTag) {
-		return null
-	}
-
-	// Country tag is optional - empty/missing means worldwide shipping
-	const countries = countryTag ? countryTag.slice(1) : [] // Remove the 'country' tag name, get all country codes
-
-	return {
-		id,
-		title,
-		description: getShippingDescription(event),
-		price: {
-			amount: priceTag[1],
-			currency: priceTag[2],
-		},
-		countries,
-		service: serviceTag[1],
-		carrier: getShippingCarrier(event)?.[1],
-		location: getShippingLocation(event)?.[1],
-		duration: getShippingDuration(event)
-			? {
-					min: getShippingDuration(event)?.[1],
-					max: getShippingDuration(event)?.[2],
-					unit: getShippingDuration(event)?.[3],
-				}
-			: undefined,
-		weightLimits: {
-			min: getShippingWeightLimits(event).min?.[1],
-			minUnit: getShippingWeightLimits(event).min?.[2],
-			max: getShippingWeightLimits(event).max?.[1],
-			maxUnit: getShippingWeightLimits(event).max?.[2],
-		},
-		dimensionLimits: {
-			min: getShippingDimensionLimits(event).min?.[1],
-			minUnit: getShippingDimensionLimits(event).min?.[2],
-			max: getShippingDimensionLimits(event).max?.[1],
-			maxUnit: getShippingDimensionLimits(event).max?.[2],
-		},
-		sellerPubkey: getShippingPubkey(event),
-		createdAt: getShippingCreatedAt(event),
-	}
 }
 
 /**

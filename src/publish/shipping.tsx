@@ -1,13 +1,14 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import { SHIPPING_OPTION_KIND } from '@sdk/commerce/shipping'
 import { shippingKeys } from '@/queries/queryKeyFactory'
 import { createShippingReference, markShippingAsDeleted } from '@/queries/shipping'
-import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
+import type NDK from '@nostr-dev-kit/ndk'
+import type { NDKEvent, NDKSigner } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
 import {
-	buildShippingOptionEventData,
-	prepareShippingOptionForPublish,
+	deleteShippingOptionWorkflow,
+	publishShippingOptionWorkflow,
 	type ShippingOptionFormInput,
 	type ShippingPublishValidationIssue,
 } from '@sdk/commerce/shipping'
@@ -45,52 +46,24 @@ export const buildPublishedShippingOption = (eventId: string, pubkey: string, sh
 	shippingRef: createShippingReference(pubkey, shippingDTag),
 })
 
-/**
- * Creates a new shipping option event (kind 30406)
- */
-export const createShippingEvent = (
-	formData: ShippingFormData,
-	signer: NDKSigner,
-	ndk: NDK,
-	shippingId?: string, // Optional for updates
-): NDKEvent => {
-	const event = new NDKEvent(ndk)
-	// Generate a unique ID if not provided (for new shipping options)
-	const id = shippingId || `shipping_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
-	const eventData = buildShippingOptionEventData(formData, id)
-	event.kind = eventData.kind as typeof event.kind
-	event.content = eventData.content
-	event.tags = eventData.tags as NDKTag[]
+const createShippingId = () => `shipping_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 
-	return event
+async function publishShippingForm(formData: ShippingFormData, signer: NDKSigner, ndk: NDK, shippingDTag?: string) {
+	if (formData.service === 'pickup' && formData.price !== '0') {
+		console.warn('Pickup service price should be 0, adjusting automatically')
+	}
+	const context = await createNdkPublishContext(ndk, signer)
+	const outcome = await publishShippingOptionWorkflow({ ...context, createShippingId }, formData, shippingDTag)
+	if (!outcome.ok) throw new Error(shippingPublishIssueMessage(outcome.issue))
+	return { outcome, authorPubkey: context.authorPubkey }
 }
 
 /**
  * Publishes a new shipping option
  */
 export const publishShippingOption = async (formData: ShippingFormData, signer: NDKSigner, ndk: NDK): Promise<PublishedShippingOption> => {
-	const prepared = prepareShippingOptionForPublish(formData)
-	if (!prepared.ok) throw new Error(shippingPublishIssueMessage(prepared.issue))
-	if (formData.service === 'pickup' && formData.price !== '0') {
-		console.warn('Pickup service price should be 0, adjusting automatically')
-	}
-	const publishData = prepared.form
-	console.log('✓ Service validation passed')
-
-	if (publishData.service === 'pickup') console.log('✓ Pickup address validation passed')
-
-	const event = createShippingEvent(publishData, signer, ndk)
-
-	await event.sign(signer)
-	await ndkActions.publishEvent(event)
-
-	const shippingDTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
-	if (!shippingDTag) {
-		throw new Error('Published shipping option is missing d tag')
-	}
-
-	const user = await signer.user()
-	return buildPublishedShippingOption(event.id, user.pubkey, shippingDTag)
+	const { outcome, authorPubkey } = await publishShippingForm(formData, signer, ndk)
+	return buildPublishedShippingOption(outcome.event.id, authorPubkey, outcome.shippingDTag)
 }
 
 /**
@@ -105,20 +78,8 @@ export const updateShippingOption = async (
 	if (!shippingDTag) {
 		throw new Error('Shipping d tag is required for updates')
 	}
-	const prepared = prepareShippingOptionForPublish(formData)
-	if (!prepared.ok) throw new Error(shippingPublishIssueMessage(prepared.issue))
-	if (formData.service === 'pickup' && formData.price !== '0') {
-		console.warn('Pickup service price should be 0, adjusting automatically')
-	}
-	const publishData = prepared.form
-
-	// Create event with the same d tag to update the existing shipping option
-	const event = createShippingEvent(publishData, signer, ndk, shippingDTag)
-
-	await event.sign(signer)
-	await ndkActions.publishEvent(event)
-
-	return event.id
+	const { outcome } = await publishShippingForm(formData, signer, ndk, shippingDTag)
+	return outcome.event.id
 }
 
 /**
@@ -126,18 +87,7 @@ export const updateShippingOption = async (
  */
 export const deleteShippingOption = async (shippingDTag: string, signer: NDKSigner, ndk: NDK): Promise<boolean> => {
 	try {
-		// Create a deletion event (kind 5)
-		const deleteEvent = new NDKEvent(ndk)
-		deleteEvent.kind = 5
-		deleteEvent.content = 'Shipping option deleted'
-
-		// Reference the shipping option to delete
-		const pubkey = await signer.user().then((user) => user.pubkey)
-		deleteEvent.tags = [['a', `${SHIPPING_OPTION_KIND}:${pubkey}:${shippingDTag}`]]
-
-		await deleteEvent.sign(signer)
-		await ndkActions.publishEvent(deleteEvent)
-
+		await deleteShippingOptionWorkflow(await createNdkPublishContext(ndk, signer), shippingDTag)
 		return true
 	} catch (error) {
 		console.error('Error deleting shipping option:', error)
