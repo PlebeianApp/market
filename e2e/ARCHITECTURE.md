@@ -396,6 +396,76 @@ Since `nak serve` stores data in memory, the relay starts empty on each Playwrig
 
 For CI, the relay always starts fresh. For local dev, `reuseExistingServer: true` means the relay might have stale data from previous runs - this is generally fine since events are idempotent (replaceable events with same `d` tag get overwritten).
 
+### Production-Valid Fixture Chains
+
+A multi-event fixture must be something a real client could have published.
+`buildAuctionOrderFixture()` (`src/lib/auction/auctionOrderFixture.ts`) therefore
+returns only after `assertAuctionOrderFixtureValid()` has pushed every seeded
+event through
+the **production** parsers (`parseAuctionEvent`, `parseBidEvent`,
+`parseValidatorVerdictEvent`, `parsePathReleaseEvent`, `parseSettlementEvent`)
+and the production **cross-event** validators (`computeValidatedBids`,
+`validatePathRelease`, `validateSettlementCompleteness`). A fixture that cannot
+represent a real relay history throws while it is being built.
+
+Two arguments make this gate slightly narrower than the production paths, and
+both are deliberate: the gate's `validatePathRelease` call passes
+`skipCashuTokenCheck: true` (the same skip the production validator service
+uses, and the settlement-completeness validator re-decodes the token anyway),
+and the gate declares `winningBidNut7State: 'spent'` instead of waiting for mint
+evidence. The keyset injection point is used, so the gate never contacts a mint
+URL.
+
+This matters because a green E2E run over impossible relay data - an auction
+that is still open, a settlement below the reserve, a placeholder bid
+reference - proves only that the UI reacts to events no client would publish.
+The fixture asserts against the parsers and validators production uses, not a
+hand-rolled copy, so parser drift fails the fixture instead of silently
+weakening the test. Follow the same shape for any new multi-event fixture;
+`src/lib/__tests__/auctionOrderFixture.test.ts` covers both the valid chain and
+the gate's rejections.
+
+The fixture is only half of the chain: a valid bid → path release → settlement
+proves the _auction_ is real, not that the _order_ on top of it is. `seedOrder('auction', …)`
+therefore publishes the order with the canonical claim marker
+(`buildAuctionClaimOrderTags()`, mirroring `buildAuctionClaimPublicMarkerTags()`)
+bound to the fixture's settlement event id, which is what gives the order
+fulfillment authority and its Auction type chip. Auction stage-local settlement
+events are NOT re-published per stage — the fixture is the single source of the
+auction chain. A claim marker naming an unresolved settlement grants no
+authority, and `auctionOrderFixture.test.ts` asserts both directions through
+`getAuctionClaimPublicMarkerFields()` and `getAuctionFulfillmentAuthority()`.
+
+The same rule applies to the seeded order's _status_ events. `advanceStage()`
+publishes the generic `CONFIRMED` status update for **product orders only**: a
+payment confirmation is a product-flow event, and the auction flow never
+publishes one (AUCTIONS.md 4.3.3) — an auction claim order is fulfillment-ready
+while still `PENDING`, authorized by the validated settlement + canonical claim.
+Seeding `CONFIRMED` on an auction order would manufacture a status no auction
+client produces _and_ let the auction e2e pass through the generic
+`isSeller && CONFIRMED` gate instead of the authority path.
+`seedOrder('auction', 'confirmed')` therefore deliberately leaves the order
+`PENDING`, and `Order Details - Seller View - Auctions` asserts exactly that,
+with `Process Order` reachable at `PENDING`.
+
+### Where the fixture lives
+
+The fixture builder is pure event construction: it signs and validates locally,
+opens no relay, and never reads the e2e test config
+(`e2e/test-config.ts`). It therefore lives outside the e2e harness, in
+`src/lib/auction/auctionOrderFixture.ts`, beside the production builders and
+validators it is written against, and `e2e/scenarios/index.ts` imports it. That
+keeps the dependency pointing the right way: `e2e/` consumes `src/`, never the
+reverse. It also keeps the fixture reachable from the unit suite without
+importing `e2e/scenarios/index.ts`, which installs a global `ws` WebSocket
+implementation for `nostr-tools` at module scope — a process-wide side effect
+that does not belong in the unit run.
+
+The gate test is `src/lib/__tests__/auctionOrderFixture.test.ts`. Because the
+unit glob already covers everything under `src/`, the publish-time gate runs on
+every PR (`bun run test:unit`) with no change to `package.json`, rather than
+only when the Playwright suite happens to execute.
+
 ---
 
 ## 3. Auth Layer

@@ -658,18 +658,25 @@ export async function seedAuction(
 
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND, SHIPPING_STATUS } from '@/lib/schemas/order'
 
+// The auction order fixture lives in src/lib/auction/auctionOrderFixture.ts.
+// It is pure event construction + production cross-event validation, so it is
+// kept beside the auction code it builds against rather than in the e2e harness;
+// `src/lib/__tests__/auctionOrderFixture.test.ts` is its gate in the unit suite.
+import { type AuctionOrderFixture, buildAuctionClaimOrderTags, buildAuctionOrderFixture } from '@/lib/auction/auctionOrderFixture'
+
 export type OrderStage = 'pending-payment' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'completed'
-export type OrderType = 'product'
+export type OrderType = 'product' | 'auction'
 
 export interface SeededOrderResult {
 	orderEvent: VerifiedEvent
 	orderId: string
 	productEvent?: VerifiedEvent
+	auctionEvent?: VerifiedEvent
 }
 
 /**
  * Master seeding function to create orders in specific states.
- * Handles Product (Invoice flow).
+ * Handles both Product (Invoice flow) and Auction (Settlement flow) differences.
  */
 export async function seedOrder(type: OrderType, stage: OrderStage): Promise<SeededOrderResult> {
 	let relay: Relay | null = null
@@ -683,11 +690,13 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 		const now = Math.floor(Date.now() / 1000)
 
 		let productEvent: VerifiedEvent | undefined
+		let auctionEvent: VerifiedEvent | undefined
+		let auctionFixture: AuctionOrderFixture | undefined
 		let itemTagValue = ''
 		let orderAmount = '1000'
 		const shippingOptionCoords = '30406:' + devUser1.pk + ':shippingdtag123'
 
-		// 1. Create the underlying item (Product)
+		// 1. Create the underlying item (Product or Auction)
 		if (type === 'product') {
 			const productId = `prod_${now}_${uuidv4().slice(0, 8)}`
 			productEvent = finalizeEvent(
@@ -710,18 +719,46 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 			)
 			await relay.publish(productEvent)
 			itemTagValue = `30402:${devUser1.pk}:${productId}`
+		} else {
+			// Production-valid auction chain: a *closed* kind-30408 listing, the
+			// real kind-1023 winning bid, the auditor confirmation that makes it
+			// the canonical winner, the winner's kind-1025 path release
+			// (referencing that bid event id), and the seller's settled kind-1024
+			// (final_amount >= reserve, close_at after max_end_at). Published
+			// before the claim order so the order can reference the real
+			// settlement event id.
+			auctionFixture = buildAuctionOrderFixture({ now })
+			for (const event of [
+				auctionFixture.auctionEvent,
+				auctionFixture.bidEvent,
+				auctionFixture.verdictEvent,
+				auctionFixture.pathReleaseEvent,
+				auctionFixture.settlementEvent,
+			]) {
+				await relay.publish(event)
+			}
+			auctionEvent = auctionFixture.auctionEvent
+			itemTagValue = auctionFixture.itemTagValue
+			orderAmount = String(auctionFixture.amount)
 		}
 
-		// 2. Construct Base Tags Array (MUTABLE)
-		// FIX: Build tags array as a mutable variable first
-		const baseTags: string[][] = [
-			['p', devUser1.pk], // Seller
-			['subject', `Order #${orderId}`],
-			['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
-			['order', orderId],
-			['amount', orderAmount],
-			['item', itemTagValue, '1'],
-		]
+		// 2. Construct Base Tags Array
+		// Auction orders ARE the claim order: they carry the canonical claim
+		// marker (the same tags `buildAuctionClaimPublicMarkerTags` emits in
+		// production) bound to the seeded settlement event id. Without it the
+		// order is only auction-associated and never reaches the validated
+		// fulfillment authority the order surfaces require.
+		const baseTags: string[][] =
+			type === 'auction' && auctionFixture
+				? buildAuctionClaimOrderTags(auctionFixture, orderId)
+				: [
+						['p', devUser1.pk], // Seller
+						['subject', `Order #${orderId}`],
+						['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
+						['order', orderId],
+						['amount', orderAmount],
+						['item', itemTagValue, '1'],
+					]
 
 		// 3. Create Order Event Data Object
 		const orderEventData: EventTemplate = {
@@ -741,8 +778,19 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 			// Stage: Pending Payment (Base case - just the order creation exists)
 			if (stage === 'pending-payment') return
 
-			// Common to all: Status Update to 'confirmed'
-			if (['confirmed', 'processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
+			// Status update to 'confirmed' — PRODUCT ONLY.
+			//
+			// A generic payment confirmation is a product-flow event: the seller
+			// confirms they received payment. The auction flow never publishes
+			// one (AUCTIONS.md 4.3.3): the buyer's payment is the settled
+			// kind-1024 settlement, and fulfillment is authorized by the
+			// validated settlement + canonical claim while the order is still
+			// PENDING. Seeding `CONFIRMED` for an auction order would
+			// manufacture relay data no auction client can produce, and would
+			// let an e2e pass through the generic `isSeller && CONFIRMED` gate
+			// instead of exercising the auction authority path. Auction orders
+			// therefore stay PENDING until the seller processes them.
+			if (type === 'product' && ['confirmed', 'processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
 				const statusUpdate = finalizeEvent(
 					{
 						kind: ORDER_PROCESS_KIND,
@@ -866,12 +914,28 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 						await relay.publish(receipt)
 					}
 				}
+			} else if (type === 'auction') {
+				// The auction chain is published up front by
+				// buildAuctionOrderFixture(): the real kind-1023 winning bid,
+				// the auditor verdict, the winner's kind-1025 path release and
+				// the seller's settled kind-1024 settlement. No stage-local
+				// auction events belong here — the placeholder release
+				// (`winning_bid = bid_event_id_placeholder`) and the
+				// `final_amount 500` settlement that used to live in this
+				// branch are exactly the impossible relay data this fixture
+				// exists to avoid (R1).
+				//
+				// The generic CONFIRMED status update is skipped above for the
+				// same reason: an auction order's payment is the settlement,
+				// not a seller-authored confirmation, and its fulfillment
+				// authority is the validated settlement + canonical claim
+				// while the order is still PENDING.
 			}
 		}
 
 		await advanceStage()
 
-		return { orderEvent, orderId, productEvent }
+		return { orderEvent, orderId, auctionEvent, productEvent }
 	} finally {
 		if (relay) {
 			relay.close()
