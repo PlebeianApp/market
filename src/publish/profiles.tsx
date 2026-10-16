@@ -1,8 +1,17 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { profileKeys } from '@/queries/queryKeyFactory'
-import { NDKEvent, type NDKUserProfile } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
+import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
+import { mergeProfileField, publishProfileWorkflow, type ProfileMetadata } from '@sdk/core/profile'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+
+async function publishToAnyRelay(event: NDKEvent): Promise<void> {
+	const publishedRelays = await ndkActions.publishEvent(event)
+	if (publishedRelays.size === 0) {
+		throw new Error('Profile was not published to any relays. Check your relay connections.')
+	}
+}
 
 /**
  * Updates the user's profile on the Nostr network.
@@ -10,14 +19,11 @@ import { toast } from 'sonner'
  * @param profile The profile data to publish
  * @returns Promise that resolves when the profile is published
  */
-export const updateProfile = async (profile: NDKUserProfile): Promise<void> => {
+export const updateProfile = async (profile: ProfileMetadata): Promise<void> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	if (!ndk.signer) throw new Error('No signer available')
-
-	const user = await ndk.signer.user()
-	if (!user) throw new Error('No active user')
 
 	if (!profile) throw new Error('Profile data is required')
 	const connectedRelays = ndk.pool?.connectedRelays() || []
@@ -25,21 +31,8 @@ export const updateProfile = async (profile: NDKUserProfile): Promise<void> => {
 		throw new Error('No connected relays. Please check your relay connections and try again.')
 	}
 
-	// Create a kind 0 (metadata) event manually
-	const profileEvent = new NDKEvent(ndk)
-	profileEvent.kind = 0
-	profileEvent.content = JSON.stringify(profile)
-	profileEvent.created_at = Math.floor(Date.now() / 1000)
-	profileEvent.pubkey = user.pubkey
-
 	try {
-		// Sign the event
-		await profileEvent.sign(ndk.signer)
-		const publishedRelays = await ndkActions.publishEvent(profileEvent)
-
-		if (publishedRelays.size === 0) {
-			throw new Error('Profile was not published to any relays. Check your relay connections.')
-		}
+		await publishProfileWorkflow(await createNdkPublishContext(ndk, ndk.signer, publishToAnyRelay), profile)
 	} catch (error) {
 		console.error('❌ Error during profile publish:', error)
 		console.error('Connected relays at time of error:', ndk.pool?.connectedRelays()?.map((r) => r.url) || [])
@@ -56,7 +49,7 @@ export const useUpdateProfileMutation = () => {
 
 	return useMutation({
 		mutationFn: updateProfile,
-		onSuccess: async (_, profile) => {
+		onSuccess: async () => {
 			// Get the pubkey of the active user
 			const ndk = ndkActions.getNDK()
 			const pubkey = ndk?.activeUser?.pubkey
@@ -89,22 +82,14 @@ export const useUpdateProfileFieldMutation = () => {
 		mutationFn: async ({ field, value }: { field: string; value: string | undefined }) => {
 			const ndk = ndkActions.getNDK()
 			if (!ndk) throw new Error('NDK not initialized')
+			if (!ndk.signer) throw new Error('No signer available')
 
 			const user = ndk.activeUser
 			if (!user) throw new Error('No active user')
 
-			// Fetch current profile
-			const currentProfile = user.profile || {}
-
-			// Update the specific field
-			const updatedProfile = {
-				...currentProfile,
-				[field]: value,
-			}
-
-			// Update the user's profile and publish
+			const updatedProfile = mergeProfileField(user.profile || {}, field, value)
+			await publishProfileWorkflow(await createNdkPublishContext(ndk, ndk.signer), updatedProfile)
 			user.profile = updatedProfile
-			await user.publish()
 
 			return updatedProfile
 		},

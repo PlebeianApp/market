@@ -15,8 +15,8 @@ import {
 	type PersistedCartItem,
 } from '@sdk/commerce/cart/cartIntent'
 
-export const CART_PERSISTENCE_KIND = 30078
-export const CART_PERSISTENCE_D_TAG = 'plebeian-market-cart'
+export { CART_PERSISTENCE_D_TAG, CART_PERSISTENCE_KIND } from '@sdk/commerce/cart/cartSnapshotPublish'
+import { CART_PERSISTENCE_D_TAG, CART_PERSISTENCE_KIND } from '@sdk/commerce/cart/cartSnapshotPublish'
 
 export {
 	CART_PERSISTENCE_VERSION,

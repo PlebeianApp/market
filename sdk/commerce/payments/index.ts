@@ -1,3 +1,5 @@
 export { paymentProofToReceiptPreimage } from './proof'
 export type { PaymentProof, WalletPaymentMethod } from './proof'
 export * from './cashu'
+export { publishNwcWalletListWorkflow, USER_NWC_WALLET_LIST_KIND, USER_NWC_WALLET_LIST_LABEL } from './nwcWalletList'
+export type { NwcWalletListPublishContext } from './nwcWalletList'

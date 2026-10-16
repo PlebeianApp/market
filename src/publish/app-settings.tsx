@@ -1,11 +1,21 @@
-import { submitAppSettings } from '@/lib/appSettings'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { ndkActions } from '@/lib/stores/ndk'
 import { fetchAdminSettings, fetchEditorSettings } from '@/queries/app-settings'
 import { configKeys } from '@/queries/queryKeyFactory'
-import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
+import type { NDKSigner } from '@/lib/nostr/ndk-events'
+import {
+	CURATION_LISTS,
+	planRoleChange,
+	publishCurationListWorkflow,
+	publishRoleChangeWorkflow,
+	readCurationListItems,
+	type RoleChange,
+	type RoleChangeIssue,
+	type RoleListsState,
+} from '@sdk/commerce/curation'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { createAppSettingsPublishContext, curationIssueMessage, resolveListOwner, type NdkClient as NDK } from './curationContext'
 
 export interface AdminListData {
 	admins: string[] // Array of admin pubkeys in hex format
@@ -15,142 +25,84 @@ export interface EditorListData {
 	editors: string[] // Array of editor pubkeys in hex format
 }
 
-/**
- * Creates a Kind 30000 admin list event
- */
-const createAdminListEvent = (adminData: AdminListData, signer: NDKSigner, ndk: NDK): NDKEvent => {
-	const event = new NDKEvent(ndk)
-	event.kind = 30000
-	event.content = ''
-
-	// Build tags
-	const tags: NDKTag[] = [['d', 'admins']]
-
-	// Add admin pubkeys as 'p' tags
-	for (const pubkey of adminData.admins) {
-		tags.push(['p', pubkey])
-	}
-
-	event.tags = tags
-	return event
+const ROLE_ISSUE_MESSAGES: Record<RoleChangeIssue, string> = {
+	'no-admin-list': 'No admin list found',
+	'no-editor-list': 'No editor list found',
+	'already-admin': 'User is already an admin',
+	'already-editor': 'User is already an editor',
+	'not-admin': 'User is not an admin',
+	'not-editor': 'User is not an editor',
+	'last-admin': 'Cannot remove the last admin',
+	'owner-protected': 'Cannot remove the owner',
+	'no-roles': 'User is not in any role lists',
 }
 
-/**
- * Creates a Kind 30000 editor list event
- */
-const createEditorListEvent = (editorData: EditorListData, signer: NDKSigner, ndk: NDK): NDKEvent => {
-	const event = new NDKEvent(ndk)
-	event.kind = 30000
-	event.content = ''
+const ROLE_ISSUE_OVERRIDES: Partial<Record<RoleChange, Partial<Record<RoleChangeIssue, string>>>> = {
+	promoteEditorToAdmin: { 'not-editor': 'User is not currently an editor' },
+	demoteAdminToEditor: {
+		'not-admin': 'User is not currently an admin',
+		'owner-protected': 'Cannot demote the owner',
+		'last-admin': 'Cannot demote the last admin',
+	},
+	demoteEditorToUser: { 'not-editor': 'User is not currently an editor' },
+}
 
-	// Build tags
-	const tags: NDKTag[] = [['d', 'editors']]
+async function publishRoleList(list: 'admins' | 'editors', items: string[], signer: NDKSigner, ndk: NDK): Promise<string> {
+	const outcome = await publishCurationListWorkflow(await createAppSettingsPublishContext(ndk, signer), list, items)
+	if (!outcome.ok) throw new Error(curationIssueMessage(outcome))
+	return outcome.event.id
+}
 
-	// Add editor pubkeys as 'p' tags
-	for (const pubkey of editorData.editors) {
-		tags.push(['p', pubkey])
-	}
+/** Reads one role list by its NIP-33 address; `null` when no list event exists. */
+async function fetchRoleList(ndk: NDK, owner: string, list: 'admins' | 'editors'): Promise<string[] | null> {
+	const event = await ndk.fetchEvent(naddrFromAddress(CURATION_LISTS[list].kind, owner, CURATION_LISTS[list].dTag))
+	return event ? readCurationListItems(list, event.tags) : null
+}
 
-	event.tags = tags
-	return event
+async function fetchRoleState(owner: string): Promise<RoleListsState> {
+	const adminSettings = await fetchAdminSettings(owner)
+	const editorSettings = await fetchEditorSettings(owner)
+	return { admins: adminSettings?.admins ?? null, editors: editorSettings?.editors ?? null, owner: adminSettings?.owner }
+}
+
+/** Plans the change with the SDK role rules, then publishes the admin list before the editor list. */
+async function applyRoleChange(
+	change: RoleChange,
+	state: RoleListsState,
+	userPubkey: string,
+	signer: NDKSigner,
+	ndk: NDK,
+): Promise<{ adminEventId?: string; editorEventId?: string }> {
+	const plan = planRoleChange(change, state, userPubkey)
+	if (!plan.ok) throw new Error(ROLE_ISSUE_OVERRIDES[change]?.[plan.error] ?? ROLE_ISSUE_MESSAGES[plan.error])
+
+	const outcome = await publishRoleChangeWorkflow(await createAppSettingsPublishContext(ndk, signer), plan.value)
+	if (!outcome.ok) throw new Error(curationIssueMessage(outcome))
+	return { adminEventId: outcome.adminEvent?.id, editorEventId: outcome.editorEvent?.id }
 }
 
 /**
  * Publishes an updated admin list through WebSocket interface
  */
-export const publishAdminList = async (adminData: AdminListData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	// Validation
-	if (!adminData.admins || adminData.admins.length === 0) {
-		throw new Error('At least one admin is required')
-	}
-
-	// Validate all pubkeys are valid hex strings
-	for (const pubkey of adminData.admins) {
-		if (!/^[0-9a-f]{64}$/i.test(pubkey)) {
-			throw new Error(`Invalid pubkey format: ${pubkey}`)
-		}
-	}
-
-	// Create and sign the event normally
-	const event = createAdminListEvent(adminData, signer, ndk)
-	await event.sign(signer)
-
-	// Submit through WebSocket interface (will be re-signed with app pubkey)
-	await submitAppSettings(event.rawEvent())
-
-	return event.id
-}
+export const publishAdminList = (adminData: AdminListData, signer: NDKSigner, ndk: NDK): Promise<string> =>
+	publishRoleList('admins', adminData.admins ?? [], signer, ndk)
 
 /**
  * Adds an admin to the existing admin list
  */
 export const addAdmin = async (newAdminPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
-	// Get current user's pubkey (should be an existing admin)
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise fallback to current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch current admin list using naddr for NIP-33 addressable event
-	const naddr = naddrFromAddress(30000, targetAppPubkey, 'admins')
-	const latestEvent = await ndk.fetchEvent(naddr)
-
-	let currentAdmins: string[] = []
-	if (latestEvent) {
-		currentAdmins = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
-	}
-
-	// Check if admin already exists
-	if (currentAdmins.includes(newAdminPubkey)) {
-		throw new Error('User is already an admin')
-	}
-
-	// Add new admin to the list
-	const updatedAdmins = [...currentAdmins, newAdminPubkey]
-
-	return publishAdminList({ admins: updatedAdmins }, signer, ndk)
+	const owner = await resolveListOwner(signer, appPubkey)
+	const state = { admins: await fetchRoleList(ndk, owner, 'admins'), editors: null }
+	return (await applyRoleChange('addAdmin', state, newAdminPubkey, signer, ndk)).adminEventId!
 }
 
 /**
  * Removes an admin from the existing admin list
  */
 export const removeAdmin = async (adminPubkeyToRemove: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
-	// Get current user's pubkey
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise fallback to current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch current admin list using naddr for NIP-33 addressable event
-	const naddr = naddrFromAddress(30000, targetAppPubkey, 'admins')
-	const latestEvent = await ndk.fetchEvent(naddr)
-
-	if (!latestEvent) {
-		throw new Error('No admin list found')
-	}
-
-	const currentAdmins = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
-
-	// Check if admin exists
-	if (!currentAdmins.includes(adminPubkeyToRemove)) {
-		throw new Error('User is not an admin')
-	}
-
-	// Don't allow removing the last admin
-	if (currentAdmins.length === 1) {
-		throw new Error('Cannot remove the last admin')
-	}
-
-	// Remove admin from the list
-	const updatedAdmins = currentAdmins.filter((pubkey) => pubkey !== adminPubkeyToRemove)
-
-	return publishAdminList({ admins: updatedAdmins }, signer, ndk)
+	const owner = await resolveListOwner(signer, appPubkey)
+	const state = { admins: await fetchRoleList(ndk, owner, 'admins'), editors: null }
+	return (await applyRoleChange('removeAdmin', state, adminPubkeyToRemove, signer, ndk)).adminEventId!
 }
 
 /**
@@ -267,90 +219,25 @@ export const useRemoveAdminMutation = () => {
 /**
  * Publishes an updated editor list through WebSocket interface
  */
-export const publishEditorList = async (editorData: EditorListData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	// Validate all pubkeys are valid hex strings (if any)
-	for (const pubkey of editorData.editors) {
-		if (!/^[0-9a-f]{64}$/i.test(pubkey)) {
-			throw new Error(`Invalid pubkey format: ${pubkey}`)
-		}
-	}
-
-	// Create and sign the event normally
-	const event = createEditorListEvent(editorData, signer, ndk)
-	await event.sign(signer)
-
-	// Submit through WebSocket interface (will be re-signed with app pubkey)
-	await submitAppSettings(event.rawEvent())
-
-	return event.id
-}
+export const publishEditorList = (editorData: EditorListData, signer: NDKSigner, ndk: NDK): Promise<string> =>
+	publishRoleList('editors', editorData.editors, signer, ndk)
 
 /**
  * Adds an editor to the existing editor list
  */
 export const addEditor = async (newEditorPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
-	// Get current user's pubkey (should be an existing admin)
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise fallback to current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch current editor list using naddr for NIP-33 addressable event
-	const naddr = naddrFromAddress(30000, targetAppPubkey, 'editors')
-	const latestEvent = await ndk.fetchEvent(naddr)
-
-	let currentEditors: string[] = []
-	if (latestEvent) {
-		currentEditors = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
-	}
-
-	// Check if editor already exists
-	if (currentEditors.includes(newEditorPubkey)) {
-		throw new Error('User is already an editor')
-	}
-
-	// Add new editor to the list
-	const updatedEditors = [...currentEditors, newEditorPubkey]
-
-	return publishEditorList({ editors: updatedEditors }, signer, ndk)
+	const owner = await resolveListOwner(signer, appPubkey)
+	const state = { admins: null, editors: await fetchRoleList(ndk, owner, 'editors') }
+	return (await applyRoleChange('addEditor', state, newEditorPubkey, signer, ndk)).editorEventId!
 }
 
 /**
- * Removes an editor from the existing editor list
+ * Removes an editor from the existing editor list; the editor list may become empty.
  */
 export const removeEditor = async (editorPubkeyToRemove: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
-	// Get current user's pubkey
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise fallback to current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch current editor list using naddr for NIP-33 addressable event
-	const naddr = naddrFromAddress(30000, targetAppPubkey, 'editors')
-	const latestEvent = await ndk.fetchEvent(naddr)
-
-	if (!latestEvent) {
-		throw new Error('No editor list found')
-	}
-
-	const currentEditors = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
-
-	// Check if editor exists
-	if (!currentEditors.includes(editorPubkeyToRemove)) {
-		throw new Error('User is not an editor')
-	}
-
-	// Remove editor from the list
-	const updatedEditors = currentEditors.filter((pubkey) => pubkey !== editorPubkeyToRemove)
-
-	// Allow removing all editors (unlike admins, editors list can be empty)
-	return publishEditorList({ editors: updatedEditors }, signer, ndk)
+	const owner = await resolveListOwner(signer, appPubkey)
+	const state = { admins: null, editors: await fetchRoleList(ndk, owner, 'editors') }
+	return (await applyRoleChange('removeEditor', state, editorPubkeyToRemove, signer, ndk)).editorEventId!
 }
 
 /**
@@ -473,49 +360,9 @@ export const promoteEditorToAdmin = async (
 	ndk: NDK,
 	appPubkey?: string,
 ): Promise<{ adminEventId: string; editorEventId: string }> => {
-	// Get current user's pubkey (should be the app pubkey or an existing admin)
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise use current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch latest admin settings using app pubkey
-	const adminSettings = await fetchAdminSettings(targetAppPubkey)
-	const editorSettings = await fetchEditorSettings(targetAppPubkey)
-
-	if (!adminSettings) {
-		throw new Error('No admin list found')
-	}
-
-	// Check if user is already an admin
-	if (adminSettings.admins.includes(userPubkey)) {
-		throw new Error('User is already an admin')
-	}
-
-	// Check if user is currently an editor
-	if (!editorSettings || !editorSettings.editors.includes(userPubkey)) {
-		throw new Error('User is not currently an editor')
-	}
-
-	// Remove from editors list
-	const updatedEditors = editorSettings.editors.filter((pubkey) => pubkey !== userPubkey)
-
-	// Add to admins list
-	const updatedAdmins = [...adminSettings.admins, userPubkey]
-
-	// Publish both events
-	console.log('Publishing admin list update...', { updatedAdmins })
-	const adminEventId = await publishAdminList({ admins: updatedAdmins }, signer, ndk)
-	console.log('Admin list published successfully:', adminEventId)
-
-	console.log('Publishing editor list update...', { updatedEditors })
-	const editorEventId = await publishEditorList({ editors: updatedEditors }, signer, ndk)
-	console.log('Editor list published successfully:', editorEventId)
-
-	return { adminEventId, editorEventId }
+	const state = await fetchRoleState(await resolveListOwner(signer, appPubkey))
+	const { adminEventId, editorEventId } = await applyRoleChange('promoteEditorToAdmin', state, userPubkey, signer, ndk)
+	return { adminEventId: adminEventId!, editorEventId: editorEventId! }
 }
 
 /**
@@ -527,119 +374,25 @@ export const demoteAdminToEditor = async (
 	ndk: NDK,
 	appPubkey?: string,
 ): Promise<{ adminEventId: string; editorEventId: string }> => {
-	// Get current user's pubkey
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise use current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch latest settings using app pubkey
-	const adminSettings = await fetchAdminSettings(targetAppPubkey)
-	const editorSettings = await fetchEditorSettings(targetAppPubkey)
-
-	if (!adminSettings) {
-		throw new Error('No admin list found')
-	}
-
-	// Check if user is currently an admin
-	if (!adminSettings.admins.includes(userPubkey)) {
-		throw new Error('User is not currently an admin')
-	}
-
-	// Don't allow demoting the owner
-	if (adminSettings.owner === userPubkey) {
-		throw new Error('Cannot demote the owner')
-	}
-
-	// Don't allow removing the last admin
-	if (adminSettings.admins.length === 1) {
-		throw new Error('Cannot demote the last admin')
-	}
-
-	// Remove from admins list
-	const updatedAdmins = adminSettings.admins.filter((pubkey) => pubkey !== userPubkey)
-
-	// Add to editors list (if not already there)
-	const currentEditors = editorSettings?.editors || []
-	const updatedEditors = currentEditors.includes(userPubkey) ? currentEditors : [...currentEditors, userPubkey]
-
-	// Publish both events
-	console.log('Publishing admin list update (demote)...', { updatedAdmins })
-	const adminEventId = await publishAdminList({ admins: updatedAdmins }, signer, ndk)
-	console.log('Admin list published successfully (demote):', adminEventId)
-
-	console.log('Publishing editor list update (demote)...', { updatedEditors })
-	const editorEventId = await publishEditorList({ editors: updatedEditors }, signer, ndk)
-	console.log('Editor list published successfully (demote):', editorEventId)
-
-	return { adminEventId, editorEventId }
+	const state = await fetchRoleState(await resolveListOwner(signer, appPubkey))
+	const { adminEventId, editorEventId } = await applyRoleChange('demoteAdminToEditor', state, userPubkey, signer, ndk)
+	return { adminEventId: adminEventId!, editorEventId: editorEventId! }
 }
 
 /**
  * Promotes a regular user to editor (pessimistic update)
  */
 export const promoteUserToEditor = async (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
-	// Get current user's pubkey
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise use current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch latest editor settings using app pubkey
-	const editorSettings = await fetchEditorSettings(targetAppPubkey)
-	const adminSettings = await fetchAdminSettings(targetAppPubkey)
-
-	// Check if user is already an admin or editor
-	if (adminSettings?.admins.includes(userPubkey)) {
-		throw new Error('User is already an admin')
-	}
-
-	const currentEditors = editorSettings?.editors || []
-	if (currentEditors.includes(userPubkey)) {
-		throw new Error('User is already an editor')
-	}
-
-	// Add to editors list
-	const updatedEditors = [...currentEditors, userPubkey]
-
-	return publishEditorList({ editors: updatedEditors }, signer, ndk)
+	const state = await fetchRoleState(await resolveListOwner(signer, appPubkey))
+	return (await applyRoleChange('promoteUserToEditor', state, userPubkey, signer, ndk)).editorEventId!
 }
 
 /**
  * Demotes an editor to regular user (pessimistic update)
  */
 export const demoteEditorToUser = async (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
-	// Get current user's pubkey
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise use current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch latest editor settings using app pubkey
-	const editorSettings = await fetchEditorSettings(targetAppPubkey)
-
-	if (!editorSettings) {
-		throw new Error('No editor list found')
-	}
-
-	// Check if user is currently an editor
-	if (!editorSettings.editors.includes(userPubkey)) {
-		throw new Error('User is not currently an editor')
-	}
-
-	// Remove from editors list
-	const updatedEditors = editorSettings.editors.filter((pubkey) => pubkey !== userPubkey)
-
-	return publishEditorList({ editors: updatedEditors }, signer, ndk)
+	const state = await fetchRoleState(await resolveListOwner(signer, appPubkey))
+	return (await applyRoleChange('demoteEditorToUser', state, userPubkey, signer, ndk)).editorEventId!
 }
 
 /**
@@ -651,48 +404,8 @@ export const removeUserFromAllRoles = async (
 	ndk: NDK,
 	appPubkey?: string,
 ): Promise<{ adminEventId?: string; editorEventId?: string }> => {
-	// Get current user's pubkey
-	const currentUser = await signer.user()
-	if (!currentUser || !currentUser.pubkey) {
-		throw new Error('Unable to get current user pubkey')
-	}
-
-	// Use app pubkey if provided, otherwise use current user's pubkey
-	const targetAppPubkey = appPubkey || currentUser.pubkey
-
-	// Fetch latest settings using app pubkey
-	const adminSettings = await fetchAdminSettings(targetAppPubkey)
-	const editorSettings = await fetchEditorSettings(targetAppPubkey)
-
-	const results: { adminEventId?: string; editorEventId?: string } = {}
-
-	// Remove from admin list if present
-	if (adminSettings && adminSettings.admins.includes(userPubkey)) {
-		// Don't allow removing the owner
-		if (adminSettings.owner === userPubkey) {
-			throw new Error('Cannot remove the owner')
-		}
-
-		// Don't allow removing the last admin
-		if (adminSettings.admins.length === 1) {
-			throw new Error('Cannot remove the last admin')
-		}
-
-		const updatedAdmins = adminSettings.admins.filter((pubkey) => pubkey !== userPubkey)
-		results.adminEventId = await publishAdminList({ admins: updatedAdmins }, signer, ndk)
-	}
-
-	// Remove from editor list if present
-	if (editorSettings && editorSettings.editors.includes(userPubkey)) {
-		const updatedEditors = editorSettings.editors.filter((pubkey) => pubkey !== userPubkey)
-		results.editorEventId = await publishEditorList({ editors: updatedEditors }, signer, ndk)
-	}
-
-	if (!results.adminEventId && !results.editorEventId) {
-		throw new Error('User is not in any role lists')
-	}
-
-	return results
+	const state = await fetchRoleState(await resolveListOwner(signer, appPubkey))
+	return applyRoleChange('removeFromAllRoles', state, userPubkey, signer, ndk)
 }
 
 /**

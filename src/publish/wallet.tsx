@@ -1,10 +1,10 @@
 import { ndkActions } from '../lib/stores/ndk'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { NIP89_CLIENT_SOFTWARE_NAME } from './nip89'
+import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
+import { publishNwcWalletListWorkflow } from '@sdk/commerce/payments'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { walletKeys } from '../queries/queryKeyFactory'
-import { USER_NWC_WALLET_LIST_KIND, USER_NWC_WALLET_LIST_LABEL } from '../queries/wallet'
 import type { Wallet as UserNwcWallet } from '../lib/stores/wallet' // Using Wallet directly and aliasing
 
 /**
@@ -40,27 +40,14 @@ export const saveUserNwcWallets = async (params: SaveUserNwcWalletsParams): Prom
 	}
 
 	// Ensure wallets are correctly structured for storage, marking them as stored on Nostr.
-	const walletsToStore = params.wallets.map((wallet) => {
-		const { ...rest } = wallet
-		return { ...rest, storedOnNostr: true } // Explicitly mark/ensure storedOnNostr is true
+	const context = await createNdkPublishContext(ndk, signer, async (event: NDKEvent) => {
+		const publishedToRelays = await ndkActions.publishEvent(event)
+		if (publishedToRelays.size === 0) throw new Error('Failed to publish NWC wallet list event to any relay.')
 	})
-	const content = JSON.stringify(walletsToStore)
-	const encryptedContent = await signer.encrypt(user, content)
-
-	const event = new NDKEvent(ndk)
-	event.kind = USER_NWC_WALLET_LIST_KIND
-	event.created_at = Math.floor(Date.now() / 1000)
-	event.content = encryptedContent
-	event.tags = [
-		['l', USER_NWC_WALLET_LIST_LABEL],
-		// Frozen software identity (ADR-018), not instance branding — see nip89.ts.
-		['client', NIP89_CLIENT_SOFTWARE_NAME],
-	]
-
-	await event.sign(signer)
-	const publishedToRelays = await ndkActions.publishEvent(event)
-
-	if (publishedToRelays.size === 0) throw new Error('Failed to publish NWC wallet list event to any relay.')
+	const event = await publishNwcWalletListWorkflow(
+		{ ...context, encryptToSelf: (plaintext) => signer.encrypt(user, plaintext) },
+		params.wallets,
+	)
 
 	return event.id // Return the ID of the event that was constructed and published
 }

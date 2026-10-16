@@ -26,3 +26,9 @@ export {
 	updateCartProductQuantity,
 } from './cartOperations'
 export type { BuyerCartTotals, CartDisplayTotals, CartProductEntry, CartProductTotalsInput, CartQuantityAction } from './cartOperations'
+export {
+	buildCartSnapshotEventData,
+	CART_PERSISTENCE_D_TAG,
+	CART_PERSISTENCE_KIND,
+	publishCartSnapshotWorkflow,
+} from './cartSnapshotPublish'

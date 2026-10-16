@@ -1,11 +1,14 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
+import {
+	DEFAULT_RELAY_PREFERENCES,
+	publishRelayPreferencesWorkflow,
+	RELAY_PREFERENCES_D_TAG,
+	type RelayPreferencesSettings,
+} from '@sdk/core/relays'
 
-export interface RelayPreferencesSettings {
-	includeAppDefaults: boolean
-}
-
-const RELAY_PREFERENCES_D_TAG = 'plebeian-market-relay-preferences'
+export { DEFAULT_RELAY_PREFERENCES }
+export type { RelayPreferencesSettings }
 
 /**
  * Publishes user's relay preferences as a kind 30078 event (NIP-78 Application Specific Data)
@@ -23,14 +26,7 @@ export async function publishRelayPreferences(preferences: RelayPreferencesSetti
 	const signer = ndkActions.getSigner()
 	if (!signer) throw new Error('User signer not available')
 
-	const event = new NDKEvent(ndk)
-	event.kind = 30078 // NIP-78 Application Specific Data
-	event.content = JSON.stringify(preferences)
-	event.tags = [['d', RELAY_PREFERENCES_D_TAG]]
-
-	await event.sign(signer)
-	await ndkActions.publishEvent(event)
-
+	const event = await publishRelayPreferencesWorkflow(await createNdkPublishContext(ndk, signer), preferences)
 	return event.id
 }
 
@@ -40,11 +36,4 @@ export async function publishRelayPreferences(preferences: RelayPreferencesSetti
  */
 export function getRelayPreferencesDTag(): string {
 	return RELAY_PREFERENCES_D_TAG
-}
-
-/**
- * Default preferences when no saved preferences exist
- */
-export const DEFAULT_RELAY_PREFERENCES: RelayPreferencesSettings = {
-	includeAppDefaults: true,
 }

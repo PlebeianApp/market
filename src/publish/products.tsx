@@ -17,7 +17,7 @@ import { createClientTag } from './nip89'
 
 export type ProductFormData = SellerProductListingInput
 
-function productPublishIssueMessage(issue: SellerProductPublishValidationIssue): string {
+export function productPublishIssueMessage(issue: SellerProductPublishValidationIssue): string {
 	switch (issue) {
 		case 'product-name-required':
 			return 'Product name is required'
