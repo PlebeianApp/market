@@ -7,8 +7,7 @@ import {
 import { getDecodedToken, type MintKeyset } from '@cashu/cashu-ts'
 import { AUCTION_MIN_BID_LEG_SATS } from './constants'
 
-/** Local pure copy — avoids importing `@/lib/wallet`, which pulls in wallet/NDK state. */
-const normalizeMintUrl = (mintUrl: string): string => mintUrl.trim().replace(/\/+$/, '')
+import { normalizeMintUrl } from '../payments/display'
 
 export interface AuctionSettlementP2pkPreflightInput {
 	auctionP2pkXpub: string
