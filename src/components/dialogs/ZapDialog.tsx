@@ -1,9 +1,4 @@
 import { LightningPaymentProcessor, type LightningPaymentData, type PaymentResult } from '@/components/lightning/LightningPaymentProcessor'
-import { Button } from '@ui/primitives/button'
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
-import { Input } from '@ui/primitives/input'
-import { Label } from '@ui/primitives/label'
-import { Switch } from '@ui/primitives/switch'
 import { DEFAULT_ZAP_AMOUNTS } from '@/lib/constants'
 import { useNDK } from '@/lib/stores/ndk'
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
@@ -12,9 +7,9 @@ import { profileKeys, zapKeys } from '@/queries/queryKeyFactory'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
-import { Loader2, Zap } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { parseZapAmount, ZapDialogView, type ZapRecipientSupport } from '@ui/components/ZapDialogView'
 
 interface ZapDialogProps {
 	isOpen: boolean
@@ -23,13 +18,7 @@ interface ZapDialogProps {
 	onZapComplete?: (zapEvent?: NDKEvent) => void
 }
 
-interface RecipientZapSupport {
-	canReceiveZaps: boolean
-	hasNip57: boolean
-	hasNip61: boolean
-}
-
-const EMPTY_ZAP_SUPPORT: RecipientZapSupport = {
+const EMPTY_ZAP_SUPPORT: ZapRecipientSupport = {
 	canReceiveZaps: false,
 	hasNip57: false,
 	hasNip61: false,
@@ -61,7 +50,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	// Fetch recipient zap methods (NIP-57/NIP-61)
 	const { data: recipientZapSupport = EMPTY_ZAP_SUPPORT, isLoading: isLoadingZapSupport } = useQuery({
 		queryKey: [...profileKeys.zapCapability(recipientPubkey), 'methods'],
-		queryFn: async (): Promise<RecipientZapSupport> => {
+		queryFn: async (): Promise<ZapRecipientSupport> => {
 			if (!ndkState.ndk) return EMPTY_ZAP_SUPPORT
 
 			const baseUser = event instanceof NDKUser ? event : event.author
@@ -92,10 +81,9 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	const hasNwc = !!ndkState.activeNwcWalletUri
 
 	// Parse amount to number, handle empty/invalid values
-	const numericAmount = parseInt(amount, 10)
-	const isValidAmount = !isNaN(numericAmount) && numericAmount > 0
-	const canProceedToPayment = isValidAmount && recipientZapSupport.hasNip57
-	const canSendNutzap = isValidAmount && hasNip60Wallet && recipientZapSupport.hasNip61 && !isSubmittingNutzap
+	const parsedAmount = parseZapAmount(amount)
+	const isValidAmount = parsedAmount !== null
+	const numericAmount = parsedAmount ?? 0
 
 	// Create payment data for the processor
 	const paymentData: LightningPaymentData = useMemo(
@@ -109,16 +97,6 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 		}),
 		[numericAmount, effectiveZapMessage, event, isValidAmount, recipientPubkey, paymentSessionId],
 	)
-
-	const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		// Keep only digits so paste/input methods like "1,000" still work.
-		const digitsOnly = e.target.value.replace(/\D/g, '')
-		setAmount(digitsOnly)
-	}
-
-	const handleAmountButtonClick = (presetAmount: number) => {
-		setAmount(presetAmount.toString())
-	}
 
 	const handlePaymentComplete = useCallback(
 		(result: PaymentResult) => {
@@ -209,157 +187,36 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 		setStep('generateInvoice')
 	}
 
-	// Show loading state while profile/zap support is being fetched
-	if (isOpen && (isLoadingProfile || isLoadingZapSupport)) {
-		return (
-			<Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
-				<DialogContent className="max-w-[425px]">
-					<DialogHeader>
-						<DialogTitle>Loading Zap Information...</DialogTitle>
-					</DialogHeader>
-					<div className="flex justify-center items-center py-8">
-						<Loader2 className="w-8 h-8 animate-spin" />
-						<span className="ml-2">Fetching zap data...</span>
-					</div>
-					<DialogFooter>
-						<DialogClose asChild>
-							<Button type="button" variant="secondary">
-								Cancel
-							</Button>
-						</DialogClose>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
-		)
-	}
-
 	return (
-		<Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
-			<DialogContent className="max-w-[425px]">
-				<DialogHeader>
-					<DialogTitle>
-						Zap {recipientName} {lightningAddress && <small>({lightningAddress})</small>}
-					</DialogTitle>
-					<DialogDescription className="sr-only">Send a lightning zap to {recipientName}</DialogDescription>
-				</DialogHeader>
-
-				{step === 'amount' && (
-					<div className="space-y-4">
-						{/* Amount Selection */}
-						<div className="py-2">
-							<div className="space-y-2">
-								<Label className="font-bold">Amount</Label>
-								<div className="gap-2 grid grid-cols-3">
-									{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
-										<Button
-											key={presetAmount}
-											variant={numericAmount === presetAmount ? 'default' : 'outline'}
-											onClick={() => handleAmountButtonClick(presetAmount)}
-										>
-											{displayText}
-										</Button>
-									))}
-								</div>
-							</div>
-						</div>
-
-						{/* Message Input */}
-						<div className="py-2">
-							<div className="space-y-2">
-								<Label htmlFor="zapMessage" className="font-bold">
-									Message
-								</Label>
-								<Input id="zapMessage" type="text" value={zapMessage} onChange={(e) => setZapMessage(e.target.value)} className="w-full" />
-							</div>
-						</div>
-
-						{/* Advanced Settings */}
-						<div className="py-2">
-							<div className="space-y-4">
-								<div className="space-y-2">
-									<Label htmlFor="zapAmount" className="font-bold">
-										Manual zap amount
-									</Label>
-									<Input
-										id="zapAmount"
-										type="text"
-										value={amount}
-										onChange={handleAmountChange}
-										inputMode="numeric"
-										pattern="[0-9]*"
-										className="w-full"
-										placeholder="Enter amount in sats"
-									/>
-									{!isValidAmount && amount !== '' && <span className="text-red-500 text-sm">Please enter a valid amount</span>}
-									{amount === '' && <span className="text-red-500 text-sm">Amount is required</span>}
-								</div>
-
-								<div className="flex justify-between items-center gap-4">
-									<Label htmlFor="isAnonymousZap" className="font-bold">
-										Anonymous zap
-									</Label>
-									<Switch id="isAnonymousZap" checked={isAnonymousZap} onCheckedChange={setIsAnonymousZap} />
-								</div>
-							</div>
-						</div>
-
-						{/* Footer */}
-						<div className="py-2">
-							<div className="flex flex-col gap-2">
-								{hasNip60Wallet && recipientZapSupport.hasNip61 && (
-									<Button onClick={handleSendNutzap} className="w-full" variant="secondary" disabled={!canSendNutzap}>
-										{isSubmittingNutzap ? <Loader2 className="mr-2 w-4 h-4 animate-spin" /> : <Zap className="mr-2 w-4 h-4" />}
-										Zap with Nutzap (NIP-60)
-									</Button>
-								)}
-								<Button onClick={handleContinueToPayment} className="w-full" disabled={!canProceedToPayment}>
-									<Zap className="mr-2 w-4 h-4" />
-									Continue to payment
-								</Button>
-							</div>
-							<div className="mt-2 text-muted-foreground text-xs">
-								{!recipientZapSupport.canReceiveZaps
-									? 'This user does not advertise zap methods.'
-									: !recipientZapSupport.hasNip57
-										? 'Lightning zaps are unavailable for this user. Nutzap may still be available.'
-										: hasNwc
-											? 'Lightning zap available — you can pay via NIP-60, NWC, WebLN, or QR in the next step.'
-											: 'Lightning zap available — you can pay via NIP-60, WebLN, or QR in the next step.'}
-							</div>
-						</div>
-					</div>
-				)}
-
-				{step === 'generateInvoice' && (
-					<>
-						{/* Amount and Message Info */}
-						<div className="mb-4 text-center">
-							<p className="font-medium text-sm">
-								Amount: <span className="font-bold">{isValidAmount ? numericAmount : '0'} sats</span>
-							</p>
-							{effectiveZapMessage && <p className="mt-1 text-muted-foreground text-sm">Message: "{effectiveZapMessage}"</p>}
-						</div>
-
-						{/* Payment Processor Section */}
-						{recipientZapSupport.hasNip57 ? (
-							<div className="w-full overflow-hidden">
-								<LightningPaymentProcessor
-									key={paymentSessionId}
-									data={paymentData}
-									onPaymentComplete={handlePaymentComplete}
-									onPaymentFailed={handlePaymentFailed}
-									showManualVerification={true}
-								/>
-							</div>
-						) : (
-							<div className="py-8 text-muted-foreground text-center">
-								<p>Lightning zap method unavailable</p>
-								<p className="text-sm">This user does not advertise a NIP-57 zap endpoint.</p>
-							</div>
-						)}
-					</>
-				)}
-			</DialogContent>
-		</Dialog>
+		<ZapDialogView
+			open={isOpen}
+			onOpenChange={handleDialogOpenChange}
+			isLoading={isLoadingProfile || isLoadingZapSupport}
+			recipientName={recipientName}
+			lightningAddress={lightningAddress}
+			step={step}
+			presets={DEFAULT_ZAP_AMOUNTS}
+			amount={amount}
+			onAmountChange={setAmount}
+			zapMessage={zapMessage}
+			onZapMessageChange={setZapMessage}
+			isAnonymous={isAnonymousZap}
+			onAnonymousChange={setIsAnonymousZap}
+			support={recipientZapSupport}
+			hasNip60Wallet={hasNip60Wallet}
+			hasNwc={hasNwc}
+			isSubmittingNutzap={isSubmittingNutzap}
+			onSendNutzap={handleSendNutzap}
+			onContinueToPayment={handleContinueToPayment}
+			renderPaymentProcessor={() => (
+				<LightningPaymentProcessor
+					key={paymentSessionId}
+					data={paymentData}
+					onPaymentComplete={handlePaymentComplete}
+					onPaymentFailed={handlePaymentFailed}
+					showManualVerification={true}
+				/>
+			)}
+		/>
 	)
 }

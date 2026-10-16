@@ -51,6 +51,24 @@ export {
 	type ShareButtonViewProps,
 	type ZapButtonViewProps,
 } from './components/SocialButtons'
+export { ReactionsListView, ZapsListView, type ReactionGroup, type ZapListItem } from './components/SocialLists'
+export { ShareProductDialogView, type ShareProductDialogViewProps } from './components/ShareProductDialogView'
+export { parseZapAmount, ZapDialogView, type ZapDialogViewProps, type ZapRecipientSupport } from './components/ZapDialogView'
+export {
+	ProductCategoryView,
+	ProductImagesView,
+	ProductPricingView,
+	ProductShippingView,
+	ProductSpecsView,
+} from './components/ProductEditorTabs'
+export {
+	AuctionShippingView,
+	AuctionTabContent,
+	CategoryTab as AuctionCategoryTab,
+	ImagesTab as AuctionImagesTab,
+	NameTab as AuctionNameTab,
+	SpecTab as AuctionSpecTab,
+} from './components/auction-editor/AuctionEditorTabs'
 export { Media, type MediaProps } from './components/Media'
 export { ImageCarousel } from './components/ImageCarousel'
 export { ImageViewerModal } from './components/ImageViewerModal'
