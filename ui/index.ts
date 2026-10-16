@@ -69,6 +69,31 @@ export {
 	NameTab as AuctionNameTab,
 	SpecTab as AuctionSpecTab,
 } from './components/auction-editor/AuctionEditorTabs'
+export {
+	DecryptPasswordDialogView,
+	MigratePrivateKeyDialogView,
+	type DecryptPasswordDialogViewProps,
+	type MigratePrivateKeyDialogViewProps,
+} from './components/auth/AuthKeyDialogs'
+export { BunkerConnectView, type BunkerConnectViewProps } from './components/auth/BunkerConnectView'
+export { LoginDialogView, type LoginDialogViewProps } from './components/auth/LoginDialogView'
+export { CUSTOM_RELAY_OPTION, NostrConnectQRView, type NostrConnectQRViewProps } from './components/auth/NostrConnectQRView'
+export { PrivateKeyLoginView, type PrivateKeyLoginStep, type PrivateKeyLoginViewProps } from './components/auth/PrivateKeyLoginView'
+export { OnChainPaymentView, type OnChainPaymentStatus, type OnChainPaymentViewProps } from './components/checkout/OnChainPaymentView'
+export { OrderFinalizeView, type OrderFinalizeViewProps } from './components/checkout/OrderFinalizeView'
+export { PaymentContentView, type PaymentContentViewProps } from './components/checkout/PaymentContentView'
+export {
+	formatPaymentMethodLabel,
+	getPaymentMethodByType,
+	PaymentMethodSelector,
+	type PaymentMethodOption,
+} from './components/checkout/PaymentMethodSelector'
+export { PaymentDialogView, WalletSelectorView, type WalletSelectorOption } from './components/checkout/PaymentViews'
+export {
+	ShippingAddressFormView,
+	type CheckoutFieldBinding,
+	type ShippingAddressFormViewProps,
+} from './components/checkout/ShippingAddressFormView'
 export { Media, type MediaProps } from './components/Media'
 export { ImageCarousel } from './components/ImageCarousel'
 export { ImageViewerModal } from './components/ImageViewerModal'

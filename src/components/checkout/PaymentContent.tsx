@@ -4,13 +4,11 @@ import {
 	type LightningPaymentProcessorRef,
 	type PaymentResult,
 } from '@/components/lightning/LightningPaymentProcessor'
-import { Button } from '@ui/primitives/button'
-import { Progress } from '@ui/primitives/progress'
 import { WalletSelector } from '@/components/checkout/WalletSelector'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
+import { PaymentContentView } from '@ui/components/checkout/PaymentContentView'
 
 export interface PaymentContentRef {
 	payAllWithNwc: () => Promise<void>
@@ -249,96 +247,42 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		const isMerchantInvoice = currentInvoice.type === 'merchant'
 
 		return (
-			<div className="space-y-6 lg:px-6 lg:pb-6">
-				{/* Progress bar */}
-				{invoices.length > 1 && (
-					<div className="space-y-2">
-						<div className="flex justify-between text-sm">
-							<span>Payment Progress</span>
-							<span>
-								{completedCount} of {invoices.length} completed
-							</span>
-						</div>
-						<Progress value={(completedCount / invoices.length) * 100} className="w-full" />
-					</div>
-				)}
-
-				{/* Navigation header */}
-				{showNavigation && invoices.length > 1 && (
-					<div className="flex items-center justify-between">
-						<h3 className="text-lg font-semibold">
-							Payment {activeIndex + 1} of {invoices.length}
-						</h3>
-						<div className="flex items-center gap-2">
-							<Button variant="ghost" size="sm" onClick={() => handleNavigate(activeIndex - 1)} disabled={activeIndex === 0}>
-								<ChevronLeft className="w-4 h-4" />
-							</Button>
-							<span className="text-sm text-gray-500">
-								{activeIndex + 1} / {invoices.length}
-							</span>
-							<Button
-								variant="ghost"
-								size="sm"
-								onClick={() => handleNavigate(activeIndex + 1)}
-								disabled={activeIndex === invoices.length - 1}
-							>
-								<ChevronRight className="w-4 h-4" />
-							</Button>
-						</div>
-					</div>
-				)}
-
-				{/* Show completed message if current invoice is done */}
-				{isCurrentCompleted ? (
-					<div className="text-center py-8">
-						<div className="text-green-600 font-medium mb-2">
-							{currentInvoice.status === 'paid'
-								? '✓ Payment Complete'
-								: currentInvoice.status === 'skipped'
-									? '⏭️ Payment Skipped'
-									: '⏰ Invoice Expired'}
-						</div>
-						<p className="text-sm text-gray-600 mb-4">
-							{currentInvoice.recipientName} - {currentInvoice.amount} sats
-						</p>
-						{activeIndex < invoices.length - 1 && (
-							<Button onClick={() => handleNavigate(activeIndex + 1)} variant="outline">
-								Next Payment <ChevronRight className="w-4 h-4 ml-1" />
-							</Button>
-						)}
-					</div>
-				) : (
-					<>
-						{/* Wallet selector for merchant invoices */}
-						{isMerchantInvoice && availableWallets.length > 0 && onWalletChange && (
-							<div className="mb-4">
-								<WalletSelector
-									wallets={availableWallets.map((w) => ({ ...w, displayName: w.paymentDetail }))}
-									selectedWalletId={selectedWalletId}
-									onSelect={(walletId) => onWalletChange(sellerPubkey, walletId)}
-									sellerName={currentInvoice.recipientName}
-								/>
-							</div>
-						)}
-
-						{/* Single payment processor - key forces remount on invoice change */}
-						<LightningPaymentProcessor
-							key={`processor-${currentInvoice.id}-${activeIndex}`}
-							ref={processorRef}
-							data={currentPaymentData}
-							onPaymentComplete={handlePaymentComplete}
-							onPaymentFailed={handlePaymentFailed}
-							onSkipPayment={handleSkipPayment}
-							className="shadow-none border-0"
-							showManualVerification={true}
-							active={true}
-							showNavigation={false}
-							skippable={true}
-							nwcWalletUri={nwcWalletUri}
+			<PaymentContentView
+				invoiceCount={invoices.length}
+				completedCount={completedCount}
+				activeIndex={activeIndex}
+				showNavigation={showNavigation}
+				onNavigate={handleNavigate}
+				current={currentInvoice}
+				isCurrentCompleted={isCurrentCompleted}
+				walletSelector={
+					isMerchantInvoice && availableWallets.length > 0 && onWalletChange ? (
+						<WalletSelector
+							wallets={availableWallets.map((w) => ({ ...w, displayName: w.paymentDetail }))}
+							selectedWalletId={selectedWalletId}
+							onSelect={(walletId) => onWalletChange(sellerPubkey, walletId)}
+							sellerName={currentInvoice.recipientName}
 						/>
-					</>
-				)}
-			</div>
+					) : undefined
+				}
+				processor={
+					// Key forces a remount on invoice change.
+					<LightningPaymentProcessor
+						key={`processor-${currentInvoice.id}-${activeIndex}`}
+						ref={processorRef}
+						data={currentPaymentData}
+						onPaymentComplete={handlePaymentComplete}
+						onPaymentFailed={handlePaymentFailed}
+						onSkipPayment={handleSkipPayment}
+						className="shadow-none border-0"
+						showManualVerification={true}
+						active={true}
+						showNavigation={false}
+						skippable={true}
+						nwcWalletUri={nwcWalletUri}
+					/>
+				}
+			/>
 		)
 	},
 )

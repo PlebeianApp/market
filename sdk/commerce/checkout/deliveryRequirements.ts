@@ -20,6 +20,26 @@ export type CheckoutDeliveryRequirements = {
 
 const PHYSICAL_SERVICES = new Set(['standard', 'express', 'overnight'])
 
+export type CheckoutDeliverySummary = {
+	isAllPickup: boolean
+	isAllDigital: boolean
+	noAddressRequired: boolean
+	/** Unresolved requirements default to asking for an address. */
+	needsPhysicalAddress: boolean
+	needsDigitalDeliveryContact: boolean
+}
+
+export function summarizeCheckoutDelivery(requirements: CheckoutDeliveryRequirements): CheckoutDeliverySummary {
+	const { isResolved, hasPickupDelivery, hasDigitalDelivery, hasPhysicalDelivery } = requirements
+	return {
+		isAllPickup: isResolved && hasPickupDelivery && !hasDigitalDelivery && !hasPhysicalDelivery,
+		isAllDigital: isResolved && hasDigitalDelivery && !hasPickupDelivery && !hasPhysicalDelivery,
+		noAddressRequired: isResolved && !requirements.needsPhysicalAddress,
+		needsPhysicalAddress: isResolved ? requirements.needsPhysicalAddress : true,
+		needsDigitalDeliveryContact: isResolved && requirements.needsDigitalDeliveryContact,
+	}
+}
+
 export function getCheckoutDeliveryMode(service: string | null | undefined): CheckoutDeliveryMode | null {
 	if (service === 'digital') return 'digital'
 	if (service === 'pickup') return 'pickup'

@@ -1,5 +1,5 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@ui/primitives/dialog'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
+import { PaymentDialogView } from '@ui/components/checkout/PaymentViews'
 import { PaymentContent } from './PaymentContent'
 
 interface PaymentDialogProps {
@@ -35,26 +35,22 @@ export function PaymentDialog({
 	const currentInvoice = invoices[currentIndex] || invoices[0]
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-lg">
-				<DialogHeader>
-					<DialogTitle className="flex items-center justify-between">{title}</DialogTitle>
-					<DialogDescription>
-						Complete payment for {currentInvoice.description}.{invoices.length > 1 && ` Payment ${currentIndex + 1} of ${invoices.length}.`}
-					</DialogDescription>
-				</DialogHeader>
-
-				<PaymentContent
-					invoices={invoices}
-					currentIndex={currentIndex}
-					onPaymentComplete={onPaymentComplete}
-					onPaymentFailed={onPaymentFailed}
-					showNavigation={showNavigation}
-					nwcEnabled={nwcEnabled}
-					nwcWalletUri={nwcWalletUri}
-					mode={mode}
-				/>
-			</DialogContent>
-		</Dialog>
+		<PaymentDialogView
+			open={open}
+			onOpenChange={onOpenChange}
+			title={title}
+			description={`Complete payment for ${currentInvoice.description}.${invoices.length > 1 ? ` Payment ${currentIndex + 1} of ${invoices.length}.` : ''}`}
+		>
+			<PaymentContent
+				invoices={invoices}
+				currentIndex={currentIndex}
+				onPaymentComplete={onPaymentComplete}
+				onPaymentFailed={onPaymentFailed}
+				showNavigation={showNavigation}
+				nwcEnabled={nwcEnabled}
+				nwcWalletUri={nwcWalletUri}
+				mode={mode}
+			/>
+		</PaymentDialogView>
 	)
 }

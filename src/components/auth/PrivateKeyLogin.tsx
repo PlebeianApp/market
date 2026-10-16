@@ -1,15 +1,54 @@
-import { Button } from '@ui/primitives/button'
-import { Input } from '@ui/primitives/input'
-import { Label } from '@ui/primitives/label'
 import { authActions, NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY } from '@/lib/stores/auth'
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
-import { useEffect, useRef, useState } from 'react'
-import { Copy, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
+import { useEffect, useState } from 'react'
+import { PrivateKeyLoginView, type PrivateKeyLoginStep } from '@ui/components/auth/PrivateKeyLoginView'
 
 interface PrivateKeyLoginProps {
 	onError?: (error: string) => void
 	onSuccess?: () => void
+}
+
+/**
+ * Validates and normalizes a private key: accepts an nsec1... string or a
+ * 64-character hex key (converted to nsec). Throws with a user-facing message.
+ */
+function normalizePrivateKey(key: string): string {
+	const trimmedKey = key.trim()
+
+	if (!trimmedKey) {
+		throw new Error('Private key cannot be empty')
+	}
+
+	if (trimmedKey.startsWith('nsec1')) {
+		try {
+			const decoded = nip19.decode(trimmedKey)
+			if (decoded.type !== 'nsec') {
+				throw new Error('Invalid nsec format')
+			}
+			return trimmedKey
+		} catch {
+			throw new Error('Invalid nsec format: Failed to decode')
+		}
+	}
+
+	if (/^[0-9a-fA-F]{64}$/.test(trimmedKey)) {
+		try {
+			const hexBytes = new Uint8Array(32)
+			for (let i = 0; i < 32; i++) {
+				hexBytes[i] = parseInt(trimmedKey.slice(i * 2, i * 2 + 2), 16)
+			}
+			return nip19.nsecEncode(hexBytes)
+		} catch {
+			throw new Error('Failed to convert hex to nsec')
+		}
+	}
+
+	if (trimmedKey.length === 64) {
+		throw new Error('Invalid hex key: Must contain only characters 0-9 and a-f')
+	}
+
+	throw new Error('Invalid format: Please enter a valid nsec1... key or a 64-character hex key')
 }
 
 export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
@@ -17,111 +56,27 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	const [encryptionPassword, setEncryptionPassword] = useState('')
 	const [confirmPassword, setConfirmPassword] = useState('')
 	const [passwordError, setPasswordError] = useState('')
-	const [keyError, setKeyError] = useState<string | null>(null) // New state for key validation
+	const [keyError, setKeyError] = useState<string | null>(null)
 	const [isLoading, setIsLoading] = useState(false)
 	const [hasStoredKey, setHasStoredKey] = useState(false)
 	const [storedPubkey, setStoredPubkey] = useState<string | null>(null)
 	const [showPasswordInput, setShowPasswordInput] = useState(false)
-	const [showPrivateKey, setShowPrivateKey] = useState(false)
-	const [showGeneratedKeyWarning, setShowGeneratedKeyWarning] = useState(false)
-	const [acknowledgedWarning, setAcknowledgedWarning] = useState(false)
-	const [copied, setCopied] = useState(false)
-	const privateKeyInputRef = useRef<HTMLDivElement>(null)
+	const [isGeneratedKey, setIsGeneratedKey] = useState(false)
 
 	useEffect(() => {
 		const storedKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		if (storedKey) {
 			setHasStoredKey(true)
-			try {
-				const [pubkey] = storedKey.split(':')
-				setStoredPubkey(pubkey)
-			} catch (e) {
-				console.error('Failed to parse stored key:', e)
-			}
+			setStoredPubkey(storedKey.split(':')[0])
 		}
 	}, [])
 
-	useEffect(() => {
-		const handleClickOutside = (event: MouseEvent) => {
-			if (privateKeyInputRef.current && !privateKeyInputRef.current.contains(event.target as Node)) {
-				setShowPrivateKey(false)
-			}
-		}
-
-		if (showPrivateKey) {
-			document.addEventListener('mousedown', handleClickOutside)
-		}
-
-		return () => {
-			document.removeEventListener('mousedown', handleClickOutside)
-		}
-	}, [showPrivateKey])
-
-	/**
-	 * Validates and normalizes the private key input.
-	 * Accepts:
-	 * 1. Valid nsec1... string
-	 * 2. Valid 64-character hex string (converts to nsec)
-	 * Returns the normalized nsec string or throws an error.
-	 */
-	const normalizePrivateKey = (key: string): string => {
-		const trimmedKey = key.trim()
-
-		if (!trimmedKey) {
-			throw new Error('Private key cannot be empty')
-		}
-
-		// Case 1: Already in nsec format
-		if (trimmedKey.startsWith('nsec1')) {
-			try {
-				// Validate the bech32 encoding
-				const decoded = nip19.decode(trimmedKey)
-				if (decoded.type !== 'nsec') {
-					throw new Error('Invalid nsec format')
-				}
-				return trimmedKey
-			} catch (e) {
-				throw new Error('Invalid nsec format: Failed to decode')
-			}
-		}
-
-		// Case 2: Hex format
-		if (/^[0-9a-fA-F]{64}$/.test(trimmedKey)) {
-			try {
-				// Convert hex to Uint8Array
-				const hexBytes = new Uint8Array(32)
-				for (let i = 0; i < 32; i++) {
-					hexBytes[i] = parseInt(trimmedKey.slice(i * 2, i * 2 + 2), 16)
-				}
-				// Encode as nsec
-				return nip19.nsecEncode(hexBytes)
-			} catch (e) {
-				throw new Error('Failed to convert hex to nsec')
-			}
-		}
-
-		// Invalid format
-		if (trimmedKey.length === 64) {
-			throw new Error('Invalid hex key: Must contain only characters 0-9 and a-f')
-		}
-
-		throw new Error('Invalid format: Please enter a valid nsec1... key or a 64-character hex key')
-	}
-
-	// Encrypt and store key using nostr-tools encrypt function
+	// Stored as "pubkey:ncryptsec..." (NIP-49).
 	const encryptAndStoreKey = async (key: string, password: string) => {
 		try {
-			// Ensure we have a valid nsec before proceeding
-			const normalizedKey = normalizePrivateKey(key)
-			const { data: secretKeyBytes } = nip19.decode(normalizedKey) as { data: Uint8Array }
+			const { data: secretKeyBytes } = nip19.decode(normalizePrivateKey(key)) as { data: Uint8Array }
 			const pubkey = getPublicKey(secretKeyBytes)
-
-			// Use nostr-tools encrypt function
-			const encryptedKey = encrypt(secretKeyBytes, password) // Encrypt with default parameters
-
-			// Store in format: "pubkey:ncryptsec..."
-			const storedFormat = `${pubkey}:${encryptedKey}`
-			localStorage.setItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY, storedFormat)
+			localStorage.setItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY, `${pubkey}:${encrypt(secretKeyBytes, password)}`)
 			setHasStoredKey(true)
 			setStoredPubkey(pubkey)
 		} catch (error) {
@@ -133,9 +88,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 		try {
 			setIsLoading(true)
 			setKeyError(null)
-
-			const normalizedKey = normalizePrivateKey(privateKey)
-			await authActions.loginWithPrivateKey(normalizedKey)
+			await authActions.loginWithPrivateKey(normalizePrivateKey(privateKey))
 			setPrivateKey('')
 			onSuccess?.()
 		} catch (error) {
@@ -149,24 +102,12 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	const handleContinue = () => {
 		if (!privateKey) return
 
-		// Validate before showing password input
 		try {
 			normalizePrivateKey(privateKey)
 			setKeyError(null)
 			setShowPasswordInput(true)
 		} catch (error) {
 			setKeyError(error instanceof Error ? error.message : 'Invalid key format')
-		}
-	}
-
-	const handleCopyToClipboard = async () => {
-		if (!privateKey) return
-		try {
-			await navigator.clipboard.writeText(privateKey)
-			setCopied(true)
-			setTimeout(() => setCopied(false), 2000)
-		} catch (error) {
-			console.error('Failed to copy to clipboard:', error)
 		}
 	}
 
@@ -191,7 +132,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 			setPasswordError('')
 			await encryptAndStoreKey(privateKey, encryptionPassword)
 			await handleValidatePrivateKey()
-		} catch (error) {
+		} catch {
 			setPasswordError('Failed to encrypt and store key')
 		} finally {
 			setIsLoading(false)
@@ -214,15 +155,13 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 			}
 
 			const [, encryptedKey] = storedKey.split(':')
-			const decryptedBytes = decrypt(encryptedKey, encryptionPassword)
-
-			const privateKeyHex = Array.from(decryptedBytes)
+			const privateKeyHex = Array.from(decrypt(encryptedKey, encryptionPassword))
 				.map((byte) => byte.toString(16).padStart(2, '0'))
 				.join('')
 
 			await authActions.loginWithPrivateKey(privateKeyHex)
 			onSuccess?.()
-		} catch (error) {
+		} catch {
 			setPasswordError('Failed to decrypt key. Please check your password.')
 		} finally {
 			setIsLoading(false)
@@ -239,182 +178,34 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 		setKeyError(null)
 	}
 
-	// Helper to check if current input is valid for enabling the button
-	const isKeyValid = () => {
-		if (!privateKey) return false
-		try {
-			normalizePrivateKey(privateKey)
-			return true
-		} catch {
-			return false
-		}
-	}
-
-	if (hasStoredKey) {
-		return (
-			<div className="space-y-4 py-4 w-full max-w-full overflow-hidden">
-				<div className="space-y-2 max-w-full">
-					<Label htmlFor="stored-password">Enter Password</Label>
-					<p className="text-sm text-muted-foreground">Enter your password to decrypt your stored private key.</p>
-					<p className="text-sm font-medium">Pubkey: {storedPubkey ? `${storedPubkey.slice(0, 8)}...` : 'Unknown'}</p>
-					<Input
-						id="stored-password"
-						type="password"
-						placeholder="Password"
-						value={encryptionPassword}
-						onChange={(e) => setEncryptionPassword(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === 'Enter' && encryptionPassword) {
-								handleStoredKeyLogin()
-							}
-						}}
-						data-testid="stored-password-input"
-					/>
-					{passwordError && <p className="text-sm text-red-500">{passwordError}</p>}
-				</div>
-				<Button onClick={handleStoredKeyLogin} disabled={isLoading} className="w-full" data-testid="stored-key-login-button">
-					{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Login'}
-				</Button>
-
-				<div className="flex items-center my-4">
-					<div className="flex-grow h-px bg-muted"></div>
-					<span className="px-2 text-xs text-muted-foreground">OR</span>
-					<div className="flex-grow h-px bg-muted"></div>
-				</div>
-
-				<Button onClick={clearStoredKey} variant="outline" className="w-full" data-testid="clear-stored-key-button">
-					Remove Stored Key & Continue Anonymously
-				</Button>
-			</div>
-		)
-	}
-
-	if (showPasswordInput) {
-		return (
-			<div className="space-y-4 py-4 w-full max-w-full overflow-hidden">
-				<div className="space-y-2 max-w-full">
-					<Label htmlFor="password">Set Password</Label>
-					<p className="text-sm text-muted-foreground">Set a password to encrypt your private key.</p>
-					<Input
-						id="password"
-						type="password"
-						placeholder="Password"
-						value={encryptionPassword}
-						onChange={(e) => setEncryptionPassword(e.target.value)}
-						data-testid="new-password-input"
-					/>
-					<Input
-						id="confirm-password"
-						type="password"
-						placeholder="Confirm Password"
-						value={confirmPassword}
-						onChange={(e) => setConfirmPassword(e.target.value)}
-						data-testid="confirm-password-input"
-					/>
-					{passwordError && <p className="text-sm text-red-500">{passwordError}</p>}
-				</div>
-				<Button onClick={handleEncryptAndStore} disabled={isLoading} className="w-full" data-testid="encrypt-continue-button">
-					{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Encrypt & Continue'}
-				</Button>
-			</div>
-		)
-	}
+	const step: PrivateKeyLoginStep = hasStoredKey ? 'stored-key' : showPasswordInput ? 'set-password' : 'enter-key'
 
 	return (
-		<div className="space-y-4 py-4 w-full max-w-full overflow-hidden">
-			<div className="space-y-2 max-w-full">
-				<div className="flex justify-between items-center gap-2 flex-wrap">
-					<Label htmlFor="private-key">Private Key (nsec or hex)</Label>
-					<Button
-						variant="outline"
-						size="sm"
-						onClick={() => {
-							const newPrivateKey = generateSecretKey()
-							setPrivateKey(nip19.nsecEncode(newPrivateKey))
-							setShowPrivateKey(true)
-							setShowGeneratedKeyWarning(true)
-							setKeyError(null) // Clear errors on generation
-						}}
-						data-testid="generate-key-button"
-					>
-						Generate New Key
-					</Button>
-				</div>
-				<div className="relative max-w-full" ref={privateKeyInputRef}>
-					<Input
-						id="private-key"
-						type={showPrivateKey ? 'text' : 'password'}
-						placeholder="nsec1... or 64-char hex"
-						value={privateKey}
-						onChange={(e) => {
-							setPrivateKey(e.target.value)
-							if (keyError) setKeyError(null) // Clear error on change
-						}}
-						onKeyDown={(e) => {
-							if (e.key === 'Enter') {
-								handleContinue()
-							}
-						}}
-						className={`pr-20 min-w-0 ${keyError ? 'border-red-500 focus-visible:ring-red-500' : ''} ${showPrivateKey ? 'text-red-500' : ''}`}
-						data-testid="private-key-input"
-					/>
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						className={`absolute right-10 top-0 h-full px-3 py-2 hover:bg-transparent ${showGeneratedKeyWarning && !copied ? 'animate-pulse' : ''}`}
-						onClick={handleCopyToClipboard}
-						data-testid="copy-private-key-button"
-						title={copied ? 'Copied!' : 'Copy to clipboard'}
-					>
-						<Copy className={`h-4 w-4 ${copied ? 'text-green-500' : showGeneratedKeyWarning ? 'text-red-500' : 'text-gray-500'}`} />
-					</Button>
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-						onClick={() => setShowPrivateKey(!showPrivateKey)}
-						data-testid="toggle-private-key-visibility"
-					>
-						{showPrivateKey ? <EyeOff className="h-4 w-4 text-gray-500" /> : <Eye className="h-4 w-4 text-gray-500" />}
-					</Button>
-				</div>
-
-				{keyError && (
-					<div className="flex items-center gap-2 text-sm text-red-500">
-						<span>{keyError}</span>
-					</div>
-				)}
-
-				{showGeneratedKeyWarning && (
-					<div className="space-y-2">
-						<p className="text-sm text-red-500 font-medium">⚠️ Copy this text and save it somewhere safe, it cannot be recovered.</p>
-						<p className="text-sm text-red-500 font-medium">It is the key to your new nostr identity.</p>
-						<div className="flex items-start space-x-2">
-							<input
-								type="checkbox"
-								id="acknowledge-warning"
-								checked={acknowledgedWarning}
-								onChange={(e) => setAcknowledgedWarning(e.target.checked)}
-								className="mt-1"
-								data-testid="acknowledge-warning-checkbox"
-							/>
-							<label htmlFor="acknowledge-warning" className="text-sm cursor-pointer">
-								I have saved my private key securely
-							</label>
-						</div>
-					</div>
-				)}
-			</div>
-			<Button
-				onClick={handleContinue}
-				disabled={isLoading || !privateKey || (showGeneratedKeyWarning && !acknowledgedWarning)}
-				className="w-full"
-				data-testid="continue-button"
-			>
-				{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Continue'}
-			</Button>
-		</div>
+		<PrivateKeyLoginView
+			step={step}
+			isLoading={isLoading}
+			storedPubkey={storedPubkey}
+			privateKey={privateKey}
+			onPrivateKeyChange={(value) => {
+				setPrivateKey(value)
+				if (keyError) setKeyError(null)
+			}}
+			keyError={keyError}
+			password={encryptionPassword}
+			onPasswordChange={setEncryptionPassword}
+			confirmPassword={confirmPassword}
+			onConfirmPasswordChange={setConfirmPassword}
+			passwordError={passwordError}
+			isGeneratedKey={isGeneratedKey}
+			onGenerateKey={() => {
+				setPrivateKey(nip19.nsecEncode(generateSecretKey()))
+				setIsGeneratedKey(true)
+				setKeyError(null)
+			}}
+			onContinue={handleContinue}
+			onEncryptAndStore={() => void handleEncryptAndStore()}
+			onStoredKeyLogin={() => void handleStoredKeyLogin()}
+			onClearStoredKey={clearStoredKey}
+		/>
 	)
 }
