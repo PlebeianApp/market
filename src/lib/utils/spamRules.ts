@@ -1,4 +1,4 @@
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 
 /**
  * A hardcoded spam rule matching a product listing by its raw `title` and

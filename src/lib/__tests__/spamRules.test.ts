@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { NDKEvent } from '@/lib/nostr/ndk-events'
 import { blacklistActions } from '@/lib/stores/blacklist'
 import { filterBlacklistedEvents, isProductEventBlacklisted } from '@/lib/utils/blacklistFilters'
 import { isSpamProduct } from '@/lib/utils/spamRules'
