@@ -255,11 +255,12 @@ export function readShippingOption(event: ShippingOptionReadEvent | null | undef
 			{ ref: id ? `${SHIPPING_REF_KIND}:${seller}:${id}` : null },
 		)
 	}
-	const ref = id ? `${SHIPPING_REF_KIND}:${seller}:${id}` : null
-
+	// Past the two guards, the ref is a string: the seller is 64-hex and the `d` id is present.
 	if (!id) {
 		return refused('missing-tag', 'the required `d` tag is missing or empty — a shipping option has no id', { ref: null, tag: 'd' })
 	}
+	const ref = `${SHIPPING_REF_KIND}:${seller}:${id}`
+
 	if (element(tags, 'title', 1) === undefined) {
 		return refused('missing-tag', 'the required `title` tag is missing or empty', { ref, tag: 'title' })
 	}
