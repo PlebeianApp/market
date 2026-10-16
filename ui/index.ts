@@ -133,4 +133,8 @@ export type { UiComponents, UiImageProps, UiLinkProps, UiProviderProps, UiTheme,
 export * from './components/dialogs/DialogViews'
 export * from './components/dialogs/PickupLocationDialogView'
 export * from './components/dialogs/TermsConditionsDialogView'
+export * from './components/lightning/LightningPaymentView'
+export * from './components/messages/ChatMessageBubbleView'
+export * from './components/messages/MessagingViews'
+export * from './components/migration/MigrationFormView'
 export { cn } from './utils/cn'
