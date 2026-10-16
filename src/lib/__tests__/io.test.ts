@@ -85,9 +85,6 @@ let poolSubscriptionController = (
 ): { unsubscribe: () => void } => ({ unsubscribe: () => {} })
 let poolPublishController = async (_urls: string[], _event: unknown): Promise<unknown> => []
 
-// Sentinel returned by the RelayGroup.completeOnAllEose() stub — the adapter
-// must forward it as request()'s `complete` option so fetchEvents waits for
-// every relay's EOSE instead of applesauce 6.2's first-relay-EOSE default.
 const completeOnAllEoseOperator = { marker: 'completeOnAllEose' }
 
 mock.module('applesauce-relay', () => ({
@@ -508,12 +505,7 @@ describe('applesauce adapter (io-applesauce)', () => {
 		expect(captured).toEqual(['wss://from-store'])
 	})
 
-	test('fetchEvents pins request() to all-relay EOSE completion (not the 6.2 first-EOSE default)', async () => {
-		// applesauce-relay 6.2's request() default completes via
-		// completeOnAny(completeAfterFirstRelay(5s), completeOnAllEose()) — the
-		// first relay's EOSE starts a 5s fuse that can end the fetch before
-		// slower relays deliver. The adapter must pass the group-completion
-		// operator explicitly.
+	test('fetchEvents pins request() to all-relay EOSE completion', async () => {
 		let capturedOpts: { complete?: unknown } | undefined
 		poolRequestController = (h, _urls, _filters, opts) => {
 			capturedOpts = opts as { complete?: unknown }

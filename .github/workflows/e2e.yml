@@ -183,8 +183,15 @@ jobs:
         # nak relay + dev server, so no new triggers, permissions, secrets, or
         # env are introduced. `src/lib/__tests__/e2e-workflow-gate-membership.test.ts`
         # fails if a describe in that spec stops matching this pattern.
-        #
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Collection Management|Lightning Mock|OG Meta Tags|Auction Bidding|Direct Lightning Bid Funding|Auction Settlement Descriptor|publish events to relay|Cross-client|Test listing labels — auctions' --repeat-each=2
+        # `Auction Claim Dialog` (e2e/tests/auction-settlement.spec.ts) is gated
+        # here because the winner's claim-form validation flow is new
+        # user-facing behavior and otherwise has no per-PR coverage. The spec
+        # records video at the family level and runs on the same local
+        # relay/dev server setup already used by this job, so no new triggers,
+        # permissions, secrets, or env are introduced.
+        # `src/lib/__tests__/e2e-workflow-gate-membership.test.ts` fails if the
+        # family title stops matching this pattern.
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Collection Management|Lightning Mock|OG Meta Tags|Auction Bidding|Direct Lightning Bid Funding|Auction Settlement Descriptor|Auction Claim Dialog|publish events to relay|Cross-client|Test listing labels — auctions' --repeat-each=2
 
       - name: Run self-hosted instance E2E test
         run: |
