@@ -1,6 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 import { createTestPublishContext } from '../../core/testing/publishContext'
-import { publishShareNoteWorkflow } from './shareNote'
+import { publishShareEventNoteWorkflow, publishShareNoteWorkflow } from './shareNote'
+
+describe('publishShareEventNoteWorkflow', () => {
+	test('references the shared event and its author', async () => {
+		const { context, published } = createTestPublishContext('me')
+		await publishShareEventNoteWorkflow(context, { content: 'gm', eventId: 'ev1', authorPubkey: 'alice' })
+		expect(published[0].tags).toEqual([
+			['e', 'ev1'],
+			['p', 'alice'],
+			['t', 'plebeian'],
+		])
+	})
+})
 
 describe('publishShareNoteWorkflow', () => {
 	test('publishes a kind-1 note tagged with the coordinate, url and hashtag', async () => {

@@ -27,7 +27,7 @@ const SRC_TO_PLATFORM_ALLOWLIST = new Set([
 	'src/publish/comments.tsx',
 	'src/publish/liveChat.tsx',
 	'src/publish/reactions.tsx',
-	'src/components/dialogs/ShareProductDialog.tsx',
+	'src/publish/shareNotes.ts',
 ])
 
 async function listSourceFiles(directory: string): Promise<string[]> {

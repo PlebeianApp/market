@@ -1,15 +1,9 @@
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { publishShareNoteWorkflow } from '@sdk/commerce/messaging'
+import type { ShareNoteInput } from '@sdk/commerce/messaging'
 import { ShareProductDialogView } from '@ui/components/ShareProductDialogView'
-import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
-
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-	return Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(message)), ms))])
-}
 
 interface ShareProductDialogProps {
 	open: boolean
@@ -17,9 +11,11 @@ interface ShareProductDialogProps {
 	productId: string
 	pubkey: string
 	title: string
+	/** Signs and publishes the share note; wired by the caller to the publish layer. */
+	onPost: (input: ShareNoteInput) => Promise<unknown>
 }
 
-export function ShareProductDialog({ open, onOpenChange, productId, pubkey, title }: ShareProductDialogProps) {
+export function ShareProductDialog({ open, onOpenChange, productId, pubkey, title, onPost }: ShareProductDialogProps) {
 	const { isAuthenticated } = useStore(authStore)
 	const [shareText, setShareText] = useState('')
 	const [isPosting, setIsPosting] = useState(false)
@@ -61,23 +57,7 @@ ${productUrl}
 
 		setIsPosting(true)
 		try {
-			const ndk = ndkActions.getNDK()
-			if (!ndk) {
-				throw new Error('NDK not initialized')
-			}
-
-			if (!ndk.signer) {
-				throw new Error('No signer available. Please log in with a signing method.')
-			}
-
-			const context = await createNdkPublishContext(ndk, ndk.signer, (event) =>
-				withTimeout(ndkActions.publishEvent(event), 10000, 'Publish timeout after 10 seconds').then(() => undefined),
-			)
-			const sign = context.signer.sign
-			await publishShareNoteWorkflow(
-				{ ...context, signer: { sign: (template) => withTimeout(sign(template), 30000, 'Sign timeout - signer not responding') } },
-				{ content: shareText, coordinate: `30402:${pubkey}:${productId}`, url: productUrl },
-			)
+			await onPost({ content: shareText, coordinate: `30402:${pubkey}:${productId}`, url: productUrl })
 
 			toast.success('Posted to Nostr successfully!')
 			onOpenChange(false)

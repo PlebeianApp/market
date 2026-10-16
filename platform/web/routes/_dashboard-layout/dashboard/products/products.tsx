@@ -1,4 +1,5 @@
 import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
+import { publishShareProductNote } from '@/publish/shareNotes'
 import { Media } from '@ui/components/Media'
 import { DashboardListItem } from '@ui/components/DashboardListItem'
 import { Button } from '@ui/primitives/button'
@@ -334,6 +335,7 @@ function ProductsOverviewComponent() {
 					productId={getProductId(productToShare) || productToShare.id}
 					pubkey={productToShare.pubkey}
 					title={getProductTitle(productToShare)}
+					onPost={publishShareProductNote}
 				/>
 			)}
 		</div>

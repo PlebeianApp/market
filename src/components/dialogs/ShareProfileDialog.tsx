@@ -1,10 +1,6 @@
-import { Button } from '@ui/primitives/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@ui/primitives/dialog'
-import { QRCode } from '@ui/primitives/qr-code'
 import { nip19 } from 'nostr-tools'
-import { Check, Copy } from 'lucide-react'
-import { useState } from 'react'
 import { toast } from 'sonner'
+import { ShareProfileDialogView } from '@ui/components/dialogs/DialogViews'
 
 interface ShareProfileDialogProps {
 	open: boolean
@@ -14,46 +10,13 @@ interface ShareProfileDialogProps {
 }
 
 export function ShareProfileDialog({ open, onOpenChange, pubkey, profileName }: ShareProfileDialogProps) {
-	const [isCopied, setIsCopied] = useState(false)
-
-	const npub = pubkey ? nip19.npubEncode(pubkey) : ''
-
-	const handleCopyNpub = async () => {
-		try {
-			await navigator.clipboard.writeText(npub)
-			setIsCopied(true)
-			toast.success('npub copied to clipboard!')
-			setTimeout(() => setIsCopied(false), 2000)
-		} catch (error) {
-			console.error('Failed to copy npub:', error)
-			toast.error('Failed to copy npub')
-		}
-	}
-
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="bg-white max-w-[calc(100%-2rem)] sm:max-w-md">
-				<DialogHeader>
-					<DialogTitle>Share Profile</DialogTitle>
-					<DialogDescription>
-						{profileName ? `Share ${profileName}'s profile` : 'Share this profile'} with others using the QR code or copy the npub.
-					</DialogDescription>
-				</DialogHeader>
-
-				<div className="flex flex-col items-center gap-6 py-4">
-					<QRCode value={npub} size={200} showBorder={false} />
-
-					<div className="space-y-2 w-full">
-						<p className="text-gray-500 text-xs text-center">npub</p>
-						<div className="flex items-center gap-2">
-							<code className="flex-1 bg-gray-100 p-2 rounded text-xs break-all select-all">{npub}</code>
-							<Button variant="outline" size="icon" onClick={handleCopyNpub} className="shrink-0">
-								{isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-							</Button>
-						</div>
-					</div>
-				</div>
-			</DialogContent>
-		</Dialog>
+		<ShareProfileDialogView
+			open={open}
+			onOpenChange={onOpenChange}
+			npub={pubkey ? nip19.npubEncode(pubkey) : ''}
+			profileName={profileName}
+			onCopyResult={(copied) => (copied ? toast.success('npub copied to clipboard!') : toast.error('Failed to copy npub'))}
+		/>
 	)
 }

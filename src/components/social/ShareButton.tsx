@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ShareProductDialog } from '../dialogs/ShareProductDialog'
+import { publishShareProductNote } from '@/publish/shareNotes'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { ButtonProps } from '@ui/components/ButtonProps'
 import { ShareButtonView } from '@ui/components/SocialButtons'
@@ -30,6 +31,7 @@ export const ShareButton = ({
 				productId={event.id}
 				pubkey={event.pubkey}
 				title={itemName}
+				onPost={publishShareProductNote}
 			/>
 		</>
 	)

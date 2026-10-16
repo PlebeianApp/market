@@ -33,3 +33,31 @@ export function publishShareNoteWorkflow<SignedEvent extends SignedEventLike>(
 ): Promise<SignedEvent> {
 	return signAndPublish(context, createShareNoteTemplate({ ...input, createdAt: context.now() }))
 }
+
+export interface ShareEventNoteInput {
+	content: string
+	eventId: string
+	authorPubkey: string
+	hashtag?: string
+}
+
+/** Kind-1 note referencing a shared regular event by id and author. */
+export function createShareEventNoteTemplate(input: ShareEventNoteInput & { createdAt: number }): EventTemplate {
+	return {
+		kind: SHARE_NOTE_KIND,
+		created_at: input.createdAt,
+		content: input.content,
+		tags: [
+			['e', input.eventId],
+			['p', input.authorPubkey],
+			['t', input.hashtag ?? 'plebeian'],
+		],
+	}
+}
+
+export function publishShareEventNoteWorkflow<SignedEvent extends SignedEventLike>(
+	context: EventPublishContext<SignedEvent>,
+	input: ShareEventNoteInput,
+): Promise<SignedEvent> {
+	return signAndPublish(context, createShareEventNoteTemplate({ ...input, createdAt: context.now() }))
+}
