@@ -5,7 +5,7 @@ import {
 	readBidSpamPolicyFromEnv,
 	recordAcceptedBid,
 	resolveBidSpamPolicy,
-} from '../../server/auction-validator/spamPolicy'
+} from '@platform/server/auction-validator/spamPolicy'
 import type { ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
 
 const auction = { rootEventId: 'a'.repeat(64) } as ParsedAuctionEvent

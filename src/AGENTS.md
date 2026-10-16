@@ -27,7 +27,7 @@ components, hooks, and the current Bun server entry area.
 
 ## Instructions
 
-- For route work, also read `src/routes/AGENTS.md`.
+- For route work, also read `platform/web/routes/AGENTS.md`.
 - For data fetching, also read `src/queries/AGENTS.md`.
 - For publishing or mutations, also read `src/publish/AGENTS.md`.
 - For shared utilities, stores, Nostr helpers, wallets, or payments, also read

@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { getPublicKey } from 'nostr-tools/pure'
 import { hexToBytes } from '@noble/hashes/utils.js'
-import { AdminManagerImpl } from '@/server/AdminManager'
-import { BootstrapManagerImpl } from '@/server/BootstrapManager'
-import { EditorManagerImpl } from '@/server/EditorManager'
-import { EventValidator } from '@/server/EventValidator'
+import { AdminManagerImpl } from '@platform/server/AdminManager'
+import { BootstrapManagerImpl } from '@platform/server/BootstrapManager'
+import { EditorManagerImpl } from '@platform/server/EditorManager'
+import { EventValidator } from '@platform/server/EventValidator'
 
 const APP_PRIVATE_KEY = 'a'.repeat(64)
 const OUTSIDER_PUBKEY = getPublicKey(hexToBytes('b'.repeat(64)))

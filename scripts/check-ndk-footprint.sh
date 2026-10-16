@@ -15,7 +15,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASELINE_FILE="$ROOT/scripts/ndk-baseline.txt"
 BASELINE="$(head -n1 "$BASELINE_FILE" | tr -dc '0-9')"
 
-matches="$(grep -rl "@nostr-dev-kit" --include="*.ts" --include="*.tsx" "$ROOT/src" "$ROOT/contextvm" 2>/dev/null || true)"
+matches="$(grep -rl "@nostr-dev-kit" --include="*.ts" --include="*.tsx" "$ROOT/src" "$ROOT/platform" "$ROOT/contextvm" 2>/dev/null || true)"
 if [ -z "$matches" ]; then
 	CURRENT="0"
 else

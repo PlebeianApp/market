@@ -15,9 +15,9 @@ import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '../auction/const
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { makeHonestDleqProof } from '../cashu/dleqFixture'
 import type { NostrEventLike } from '../nostr/eventLike'
-import { deriveVerdict, assignCloseRoles, pickWinningBid, verdictChanged } from '../../server/auction-validator/lifecycle'
-import type { ValidatorAuctionState, ValidatorBidState } from '../../server/auction-validator/state'
-import { MAX_REPLACEMENT_CHAIN_DEPTH, recordNut7State, recordSettlement } from '../../server/auction-validator/state'
+import { deriveVerdict, assignCloseRoles, pickWinningBid, verdictChanged } from '@platform/server/auction-validator/lifecycle'
+import type { ValidatorAuctionState, ValidatorBidState } from '@platform/server/auction-validator/state'
+import { MAX_REPLACEMENT_CHAIN_DEPTH, recordNut7State, recordSettlement } from '@platform/server/auction-validator/state'
 
 // ============================================================================
 // Fixtures — direct object construction (no Zod parser involvement)

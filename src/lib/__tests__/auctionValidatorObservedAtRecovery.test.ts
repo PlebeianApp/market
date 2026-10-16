@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { NostrEvent } from 'nostr-tools'
-import { buildObservedAtSeed, recoverObservedAt } from '../../server/auction-validator/observedAtRecovery'
+import { buildObservedAtSeed, recoverObservedAt } from '@platform/server/auction-validator/observedAtRecovery'
 
 const VALIDATOR_PK = 'd'.repeat(64)
 const BIDDER_PK = 'b'.repeat(64)

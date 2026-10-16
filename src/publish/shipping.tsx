@@ -1,11 +1,10 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { shippingKeys } from '@/queries/queryKeyFactory'
 import { createShippingReference, markShippingAsDeleted } from '@/queries/shipping'
-import type NDK from '@nostr-dev-kit/ndk'
-import type { NDKEvent, NDKSigner } from '@nostr-dev-kit/ndk'
+import type { NDKEvent, NDKSigner } from '@/lib/nostr/ndk-events'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { createNdkPublishContext } from '@platform/web/ndkPublishContext'
+import { createNdkPublishContext, type NdkClient as NDK } from '@platform/web/ndkPublishContext'
 import {
 	deleteShippingOptionWorkflow,
 	publishShippingOptionWorkflow,

@@ -1,6 +1,6 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test'
 import { getPublicKey } from 'nostr-tools/pure'
-import { resolveCvmServerPubkey } from '@/server/runtime'
+import { resolveCvmServerPubkey } from '@platform/server/runtime'
 import { hexToBytes } from '@noble/hashes/utils.js'
 
 const TEST_KEY = 'a'.repeat(64)

@@ -173,7 +173,7 @@ const main = async () => {
 	if (allUnspent) {
 		console.log('VERDICT: Mint says UNSPENT for every Y. The validator should be reporting')
 		console.log("         valid_bid_placed on the next poll. If it isn't, the bug is in the")
-		console.log('         validator polling loop (src/server/auction-validator/nut7Poller.ts)')
+		console.log('         validator polling loop (platform/server/auction-validator/nut7Poller.ts)')
 		console.log('         or the validator state-aggregation (aggregateProofStates).')
 	} else if (anyMissing) {
 		console.log('VERDICT: Mint omitted at least one Y from its response. NUT-7 spec says every')

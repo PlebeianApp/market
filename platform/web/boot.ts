@@ -6,6 +6,7 @@ import { authActions } from '@/lib/stores/auth'
 import { walletActions } from '@/lib/stores/wallet'
 import { configKeys } from '@/queries/queryKeyFactory'
 import type { PublicAppConfig } from '@/lib/instance-config'
+import { parsePublicConfigEnvelope } from '@sdk/core/publicConfig'
 
 /**
  * Web host bootstrap: loads this instance's runtime config, initializes its
@@ -123,7 +124,10 @@ async function fetchConfigOnce(): Promise<PublicAppConfig> {
 			throw new ConfigFetchError(`Failed to fetch config: ${response.status} ${response.statusText}`, response.status)
 		}
 
-		return await response.json()
+		const parsed = parsePublicConfigEnvelope<PublicAppConfig>(await response.json())
+		// A contract mismatch will not fix itself on retry.
+		if (!parsed.ok) throw new ConfigFetchError(`Invalid /api/config response: ${parsed.error.message}`, 422)
+		return parsed.value
 	} finally {
 		clearTimeout(timeout)
 	}

@@ -54,14 +54,14 @@ ALLOWLIST=(
 PINNED=(
 	"$ROOT/src/publish/auctions.tsx"
 	"$ROOT/src/queries/auctions.tsx"
-	"$ROOT/src/routes/_dashboard-layout/dashboard/products/bids.tsx"
+	"$ROOT/platform/web/routes/_dashboard-layout/dashboard/products/bids.tsx"
 )
 
 # Glob families that MUST each match at least one file. These are the
 # auction-owned production surfaces: public routes, components, the auction
 # library directories, hooks, schemas, and the server-side validator.
 GLOBS=(
-	"$ROOT"/src/routes/auctions.*.tsx
+	"$ROOT"/platform/web/routes/auctions.*.tsx
 	"$ROOT"/src/components/Auction*.tsx
 	"$ROOT"/src/lib/auction*.ts
 	"$ROOT"/src/lib/auction/*.ts
@@ -70,11 +70,11 @@ GLOBS=(
 	"$ROOT"/src/lib/stores/auction*.ts
 	"$ROOT"/src/hooks/useAuction*.ts
 	"$ROOT"/src/lib/schemas/auction/*.ts
-	"$ROOT"/src/server/auction-validator/*.ts
+	"$ROOT"/platform/server/auction-validator/*.ts
 	"$ROOT"/src/components/nostr/AuctionSectionGrid.tsx
 	"$ROOT"/src/components/sheet-contents/auctions/*.tsx
 	"$ROOT"/src/components/sheet-contents/NewAuction*.tsx
-	"$ROOT"/src/routes/_dashboard-layout/dashboard/products/auctions*.tsx
+	"$ROOT"/platform/web/routes/_dashboard-layout/dashboard/products/auctions*.tsx
 )
 
 shopt -s nullglob

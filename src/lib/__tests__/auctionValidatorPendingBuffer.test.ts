@@ -11,7 +11,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { createPendingBuffer, createPendingBufferBudget, type PendingBufferLimits } from '../../server/auction-validator/pendingBuffer'
+import { createPendingBuffer, createPendingBufferBudget, type PendingBufferLimits } from '@platform/server/auction-validator/pendingBuffer'
 
 const limits = (overrides: Partial<PendingBufferLimits> = {}): PendingBufferLimits => ({
 	maxPendingKeys: 100,

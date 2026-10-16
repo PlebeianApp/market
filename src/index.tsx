@@ -1,14 +1,14 @@
 /**
  * Bun server entrypoint. The actual server composition lives in
- * `src/server/` — this file just wires the SPA shell, kicks off
+ * `platform/server/` — this file just wires the SPA shell, kicks off
  * initialisation, and exports the resulting Bun server instance.
  *
  * Anything bigger than a few lines belongs in a domain module under
- * `src/server/` so this file stays a glance-able overview.
+ * `platform/server/` so this file stays a glance-able overview.
  */
 
 import index from './index.html'
-import { buildServer, initializeAppSettings, startEventHandlerInitialization } from './server'
+import { buildServer, initializeAppSettings, startEventHandlerInitialization } from '@platform/server'
 
 import.meta.hot.accept()
 

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { parseMarketConfig } from '@sdk/core'
+import { parseMarketConfig, type PublicConfigSchemaVersion } from '@sdk/core'
 import { BUG_RELAY, DEFAULT_PUBLIC_RELAYS, DEFAULT_TRUSTED_MINTS, type Stage } from './constants'
 import { RelayUrlSchema, SocialLinksSchema, WebUrlSchema, type AppSettings, type SocialLinks } from './schemas/app'
 
@@ -28,6 +28,7 @@ export interface InstanceConfig {
 export type InstanceConfigEnvironment = Partial<InstanceConfig>
 
 export interface PublicAppConfig extends InstanceConfig {
+	schemaVersion?: PublicConfigSchemaVersion
 	appRelay: string
 	stage: Stage
 	nip46Relay: string

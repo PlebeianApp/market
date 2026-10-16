@@ -45,7 +45,7 @@ mock.module('nostr-tools/pure', () => ({
 	verifyEvent: () => true,
 }))
 
-import { getProductOgMeta } from '../../server/ogMeta'
+import { getProductOgMeta } from '@platform/server/ogMeta'
 
 /** Drain the microtask queue so promise chains (race settlement, late-close handlers) complete. */
 const flushMicrotasks = async () => {

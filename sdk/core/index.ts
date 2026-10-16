@@ -17,6 +17,8 @@ export { EventSchemaRegistry, validateEventWithSchema, validateWithSchema } from
 export type { EventSchema, RuntimeSchema } from './validation'
 export { parseMarketConfig } from './marketConfig'
 export type { MarketConfig } from './marketConfig'
+export { parsePublicConfigEnvelope, PUBLIC_CONFIG_SCHEMA_VERSION } from './publicConfig'
+export type { PublicConfigEnvelope, PublicConfigSchemaVersion } from './publicConfig'
 export * from './extensions'
 export * from './geo'
 export * from './nostr/nip59'
