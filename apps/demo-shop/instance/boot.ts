@@ -17,7 +17,7 @@ import type { ProductReadEvent } from '@sdk/commerce/discovery'
 import { buildCatalogEvents } from './catalog'
 import { resolveInstanceConfig, type DemoShopInstanceConfig } from './config'
 import { buildProductListView, type ProductListView, type ProductListViewOptions } from './productListView'
-import { buildShippingCatalogEvents, buildShippingRead, type ShippingReadView } from './shippingSource'
+import { buildShippingRead, type ShippingReadView } from './shippingSource'
 import {
 	createFixtureProductSource,
 	createInstanceNostrIo,
@@ -96,13 +96,15 @@ export async function bootInstance(options: BootInstanceOptions = {}): Promise<I
 	const events = await source.listProducts()
 	const view = buildProductListView(events, options.view)
 
-	// The shipping edge. The fixture edge states its own kind-30406 record
-	// (`instance/shippingSource.ts`); the relay adapter of this slice reads kind-30402 and
-	// only that, so it composes **no** shipping corpus — `null`, which the view reports as
-	// "not read on this edge" rather than as an empty one.
-	const shipping = buildShippingRead(events, {
-		records: source.kind === 'fixture' ? buildShippingCatalogEvents() : null,
-	})
+	// The shipping edge is the **same edge** that answered the listings, read through the
+	// same port: the fixture source states the demo's own kind-30406 record, the relay
+	// source reads the kind-30406 corpus over its injected seam. `readBy` names that edge,
+	// so a relay answer can never be reported as the fixture catalog. `null` from the
+	// source means it performed **no** shipping read; an empty array means it read and the
+	// answer held no record — two different statements, and `buildShippingRead` says which
+	// (`instance/shippingSource.ts`).
+	const records = await source.listShippingRecords()
+	const shipping = buildShippingRead(events, { records, readBy: source.kind })
 
 	return {
 		config,

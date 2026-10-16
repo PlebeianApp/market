@@ -29,10 +29,22 @@
  *
  * A ref like `30406:…:standard` *looks* like it names its service, and reading it
  * that way is exactly the guess `instance/checkoutView.ts` refuses to make. The only
- * path from a ref to a service here is `readShippingOption` over the record — and
- * where the edge read **no** record (the relay adapter reads listings and only
- * listings), the read is not performed at all: `records: null` is a different
- * statement from `records: []`, and the view says which one it is.
+ * path from a ref to a service here is `readShippingOption` over the record.
+ *
+ * ## Three arms, and the view says which one it is
+ *
+ * Both edges now read their own kind-30406 corpus (`instance/productSource.ts`), so
+ * `records` is a corpus on either edge and `readBy` names which one it came from. What
+ * survives is the honest distinction the empty case needs, and it is three different
+ * statements rather than two:
+ *
+ * - `records === null` — the edge performed **no** shipping read. `edge` is
+ *   `not-read-on-this-edge` and the page says a chosen ref stays unresolved.
+ * - `records` is an **empty** array — the edge performed the read and the answer held no
+ *   record. `edge` names the edge, and the summary says the read answered no record
+ *   rather than reporting an empty set as a seller who published nothing.
+ * - `records` holds records — the read is performed and `edge` names the edge it came
+ *   from (`fixture-catalog` or `relay`).
  */
 
 import { getProductShippingOptions, type ProductReadEvent } from '@sdk/commerce/discovery'
@@ -109,8 +121,12 @@ export interface ShippingOptionRefView {
 
 /** The shipping edge, as the page and the checkout read it. */
 export interface ShippingReadView {
-	/** Which records this edge read — named, so a run cannot claim the other. */
-	readonly edge: 'fixture-catalog' | 'not-read-on-this-edge'
+	/**
+	 * Which corpus these records came from — named, so a run cannot claim the other.
+	 * `not-read-on-this-edge` is the one arm that is a *statement about the read itself*:
+	 * the edge performed none. Both reading edges have their own arm.
+	 */
+	readonly edge: 'fixture-catalog' | 'relay' | 'not-read-on-this-edge'
 	/** The map `resolveCheckoutDeliveryRequirements` resolves a chosen ref against. */
 	readonly servicesByShippingRef: Readonly<Record<string, string>>
 	/** Every shipping ref the listings publish, per seller, joined to the read. */
@@ -139,15 +155,18 @@ export function shippingRefSellerOf(ref: string): string | null {
  * Read the shipping edge.
  *
  * `records` is the corpus this edge read — `buildShippingCatalogEvents()` on the fixture
- * edge, `null` where the edge composes none. `null` is not an empty corpus: it means the
- * read was **not performed**, which is a different sentence on the page and a different
- * value on `edge`.
+ * edge, the relay's own kind-30406 answer on the relay edge, `null` where the edge
+ * composes none. `null` is not an empty corpus: it means the read was **not performed**,
+ * which is a different sentence on the page and a different value on `edge`. `readBy`
+ * names the edge those records came from, so a relay answer cannot be reported as the
+ * fixture catalog or the other way round.
  */
 export function buildShippingRead(
 	productEvents: readonly ProductReadEvent[],
-	options: { records?: readonly ShippingOptionReadEvent[] | null } = {},
+	options: { records?: readonly ShippingOptionReadEvent[] | null; readBy?: 'fixture' | 'relay' } = {},
 ): ShippingReadView {
 	const records = options.records === undefined ? buildShippingCatalogEvents() : options.records
+	const readBy = options.readBy ?? 'fixture'
 
 	const read = records === null ? null : readShippingOptions(records)
 	const serviceRecords: readonly ShippingOptionRecord[] = read?.services ?? []
@@ -197,13 +216,20 @@ export function buildShippingRead(
 	const published = byRef.size
 	const resolved = [...byRef.values()].filter((option) => option.known).length
 	const plural = published === 1 ? '' : 's'
+	const unresolved = `the ${published} shipping ref${plural} a listing publishes resolve${published === 1 ? 's' : ''} as unresolved`
+	// Three sentences for three different facts. `records === null` is a statement about the
+	// **read** ("this edge performed none"); an empty corpus is a statement about the
+	// **answer** ("the read found no record") and must not read as a statement about the
+	// seller ("the seller published nothing"); a non-empty corpus reports the join.
 	const summaryLine =
 		records === null
-			? `this edge read no kind-30406 record, so the ${published} shipping ref${plural} a listing publishes resolve${published === 1 ? 's' : ''} as unresolved`
-			: `${resolved} of the ${published} shipping ref${plural} a listing publishes resolved through the kind-30406 read`
+			? `this edge read no kind-30406 record, so ${unresolved}`
+			: records.length === 0
+				? `the kind-30406 read this edge performed answered no record, so ${unresolved}`
+				: `${resolved} of the ${published} shipping ref${plural} a listing publishes resolved through the kind-30406 read`
 
 	return {
-		edge: records === null ? 'not-read-on-this-edge' : 'fixture-catalog',
+		edge: records === null ? 'not-read-on-this-edge' : readBy === 'relay' ? 'relay' : 'fixture-catalog',
 		servicesByShippingRef,
 		optionsBySeller,
 		refusals: Object.freeze([...refusals]),

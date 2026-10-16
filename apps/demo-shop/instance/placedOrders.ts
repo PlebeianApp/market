@@ -61,7 +61,7 @@ export function instancePlacedOrders(): PlacedOrderStore {
 	}
 }
 
-/** Empty the instance's memory of placed orders. The server calls this once, at boot. */
+/** Empty the instance's memory of placed orders. Called at boot by `startDemoShop`. */
 export function forgetPlacedOrders(): void {
 	PLACED.clear()
 }

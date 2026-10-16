@@ -17,12 +17,31 @@
  * **admit before rendering** (AGENTS.md, "Event Validation Before Surfacing") and
  * **one head per addressable address** (a kind-30402 event is addressable, so a
  * stale revision must never be listed beside its own replacement).
+ *
+ * ## The kind-30406 read is a **method on this port**, not a second port
+ *
+ * `listShippingRecords()` is the kind-30406 corpus **this same edge** read. It is a
+ * method rather than a second port for one reason: the shipping corpus has to come from
+ * the edge that answered the listings. A second port could be resolved from a different
+ * edge, and a view would then join one edge's refs to another edge's records without
+ * being able to say which edge it read. `null` is emitted only where a source performs
+ * **no** shipping read at all; an empty array is a read that answered nothing. Those are
+ * two different statements, and `instance/shippingSource.ts` is where the view says which
+ * one it is.
+ *
+ * Neither adapter infers anything from a shipping ref's text: the corpus goes to
+ * `sdk/commerce/shipping/shippingRead.ts`, which resolves a record into a service or
+ * refuses it **by name** — a malformed kind-30406 event is never silently dropped
+ * (AGENTS.md: "a silent disappearance is not an acceptable outcome").
  */
 
 import { createNostrIo, type NostrIo, type NostrIoOptions } from '@sdk/core/nostr-io/ts/index'
 import { getProductCoordinates, type ProductReadEvent } from '@sdk/commerce/discovery'
+import type { ShippingOptionReadEvent } from '@sdk/commerce/shipping/shippingRead'
+import { SHIPPING_OPTION_KIND } from '@sdk/commerce/shipping/shippingWorkflow'
 
 import { admitProductListing } from './productAdmission'
+import { buildShippingCatalogEvents } from './shippingSource'
 
 /**
  * The transport type as the contract entry exposes it. `nostr-io`'s entry declares
@@ -40,6 +59,16 @@ export interface ProductSource {
 	/** Which edge answered, for the page's own honesty about its data. */
 	readonly kind: 'fixture' | 'relay'
 	listProducts(): Promise<ProductReadEvent[]>
+	/**
+	 * The kind-30406 records **this same edge** read, or `null` where the edge performed
+	 * no shipping read at all.
+	 *
+	 * `null` and `[]` are different statements and both are kept: `null` is "this edge
+	 * read no shipping corpus", `[]` is "it read, and the answer held no record". The
+	 * shipping view names which one (`instance/shippingSource.ts`), so an edge that read
+	 * nothing can never be reported as a seller who published nothing.
+	 */
+	listShippingRecords(): Promise<readonly ShippingOptionReadEvent[] | null>
 }
 
 /**
@@ -75,9 +104,20 @@ export function latestRevisionPerAddress(events: readonly ProductReadEvent[]): P
  */
 export function createFixtureProductSource(
 	events: readonly ProductReadEvent[],
-	options: { admit?: ((event: unknown) => ProductReadEvent | null) | null } = {},
+	options: {
+		admit?: ((event: unknown) => ProductReadEvent | null) | null
+		/**
+		 * The kind-30406 corpus this fixture edge read. Defaults to the demo's own record
+		 * (`instance/shippingSource.ts`), so a fixture boot resolves the demo seller's
+		 * published ref exactly as before. `null` states that this fixture edge reads no
+		 * shipping corpus at all — the one case the shipping view reports as
+		 * `not-read-on-this-edge`.
+		 */
+		shippingRecords?: readonly ShippingOptionReadEvent[] | null
+	} = {},
 ): ProductSource {
 	const admit = options.admit === undefined ? admitProductListing : options.admit
+	const shippingRecords = options.shippingRecords === undefined ? buildShippingCatalogEvents() : options.shippingRecords
 
 	return {
 		kind: 'fixture',
@@ -89,6 +129,10 @@ export function createFixtureProductSource(
 				if (item) admitted.push(item)
 			}
 			return latestRevisionPerAddress(admitted)
+		},
+		async listShippingRecords() {
+			if (shippingRecords === null) return null
+			return shippingRecords.map((record) => ({ ...record, tags: record.tags.map((tag) => [...tag]) }))
 		},
 	}
 }
@@ -112,6 +156,10 @@ export interface RelayProductSourceOptions {
 	deadlineMs?: number
 	/** Admission predicate, injected so a test can drive the drop path. */
 	admit?: (event: unknown) => ProductReadEvent | null
+	/** How many kind-30406 records to ask for in one read. Defaults to `limit`. */
+	shippingLimit?: number
+	/** Wall-clock budget on the shipping read. Defaults to `deadlineMs`. */
+	shippingDeadlineMs?: number
 }
 
 /**
@@ -120,11 +168,18 @@ export interface RelayProductSourceOptions {
  * A relay that refuses mid-read is a value on `WireResult.failures`, not a
  * thrown error (`nostr-io.md`), so the events that did arrive are still rendered
  * and the count of refusals is reported rather than swallowed.
+ *
+ * The same seam, over the same injected transport, reads the second kind this app
+ * needs: kind-30406 shipping records (`listShippingRecords`). That is the read that makes
+ * a **live** listing's shipping ref resolvable; before it, `servicesByShippingRef` was
+ * empty by construction on this edge and no chosen ref could resolve.
  */
 export function createRelayProductSource(options: RelayProductSourceOptions): ProductSource {
 	const limit = options.limit ?? 200
 	const deadlineMs = options.deadlineMs ?? 5_000
 	const admit = options.admit ?? admitProductListing
+	const shippingLimit = options.shippingLimit ?? limit
+	const shippingDeadlineMs = options.shippingDeadlineMs ?? deadlineMs
 
 	return {
 		kind: 'relay',
@@ -138,6 +193,19 @@ export function createRelayProductSource(options: RelayProductSourceOptions): Pr
 			}
 
 			return latestRevisionPerAddress(admitted)
+		},
+		async listShippingRecords() {
+			// Read, not guessed, and not admitted here: the admission for kind 30406 is
+			// `readShippingOptions` itself, which partitions the corpus into resolved records
+			// and **named refusals** rather than dropping a malformed event
+			// (`sdk/commerce/shipping/shippingRead.ts`, "A malformed event is REFUSED, never
+			// dropped"). An answer with no event is an empty corpus, not `null`: this edge
+			// performed the read, and the shipping view says exactly that.
+			const wire = await options.io.query(
+				{ kinds: [SHIPPING_OPTION_KIND], limit: shippingLimit },
+				{ deadlineMs: shippingDeadlineMs },
+			)
+			return wire.events
 		},
 	}
 }

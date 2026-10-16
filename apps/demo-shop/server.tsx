@@ -55,7 +55,7 @@ import {
 	type CheckoutSubmission,
 } from './instance/checkoutView'
 import { buildOrderView } from './instance/orderView'
-import { instancePlacedOrders, type PlacedOrderStore } from './instance/placedOrders'
+import { forgetPlacedOrders, instancePlacedOrders, type PlacedOrderStore } from './instance/placedOrders'
 import { findProductDetail } from './instance/productDetailView'
 import {
 	CART_PATH,
@@ -301,6 +301,7 @@ export interface StartDemoShopOptions extends BootInstanceOptions {
 }
 
 export async function startDemoShop(options: StartDemoShopOptions = {}): Promise<StartedDemoShop> {
+	forgetPlacedOrders()
 	const runtime = await bootInstance(options)
 	const clientJs = await bundleClient()
 	const stylesheet = Bun.file(join(HERE, 'styles.css'))
