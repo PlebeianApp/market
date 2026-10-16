@@ -3,6 +3,12 @@ import { ProductDisplayComponent } from '@/components/ProductDisplayComponent'
 import { UserDisplayComponent } from '@/components/UserDisplayComponent'
 import { Button } from '@ui/primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
+import {
+	SettingsAccessDenied,
+	SettingsLoadingSkeleton,
+	SettingsMobileHeader,
+	SettingsPageHeader,
+} from '@ui/components/OperatorSettingsViews'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
@@ -227,66 +233,25 @@ function BlacklistsComponent() {
 	}
 
 	if (isLoadingBlacklist || isLoadingPermissions) {
-		return (
-			<div className="space-y-6 p-6">
-				<div className="animate-pulse">
-					<div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
-					<div className="space-y-3">
-						<div className="h-4 bg-gray-200 rounded w-1/2"></div>
-						<div className="h-4 bg-gray-200 rounded w-1/3"></div>
-					</div>
-				</div>
-			</div>
-		)
+		return <SettingsLoadingSkeleton />
 	}
 
 	if (!amIAdmin && !amIEditor) {
 		return (
-			<div className="space-y-6 p-6">
-				<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
-					<div className="flex items-center gap-3">
-						<Shield className="w-6 h-6 text-muted-foreground" />
-						<div>
-							<h1 className="text-2xl font-bold">Blacklists</h1>
-							<p className="text-muted-foreground text-sm">Manage user blacklists</p>
-						</div>
-					</div>
-				</div>
-
-				<Card>
-					<CardContent className="p-6">
-						<div className="text-center">
-							<Shield className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-							<h3 className="text-lg font-medium mb-2">Access Denied</h3>
-							<p className="text-gray-600">You don't have permission to manage blacklists.</p>
-						</div>
-					</CardContent>
-				</Card>
-			</div>
+			<SettingsAccessDenied
+				header={{ icon: Shield, title: 'Blacklists', description: 'Manage user blacklists' }}
+				message="You don't have permission to manage blacklists."
+			/>
 		)
 	}
 
+	const header = { icon: Shield, title: 'Blacklists', description: 'Manage blacklisted users, products, and collections' }
+
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
-				<div className="flex items-center gap-3">
-					<Shield className="w-6 h-6 text-muted-foreground" />
-					<div>
-						<h1 className="text-2xl font-bold">Blacklists</h1>
-						<p className="text-muted-foreground text-sm">Manage blacklisted users, products, and collections</p>
-					</div>
-				</div>
-			</div>
+			<SettingsPageHeader {...header} />
 			<div className="space-y-6 p-4 lg:p-8">
-				<div className="lg:hidden mb-6">
-					<div className="flex items-center gap-3">
-						<Shield className="w-6 h-6 text-muted-foreground" />
-						<div>
-							<h1 className="text-2xl font-bold">Blacklists</h1>
-							<p className="text-muted-foreground text-sm">Manage blacklisted users, products, and collections</p>
-						</div>
-					</div>
-				</div>
+				<SettingsMobileHeader {...header} />
 
 				<Tabs defaultValue="users" className="w-full">
 					<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">

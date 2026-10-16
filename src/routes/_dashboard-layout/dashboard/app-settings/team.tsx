@@ -1,8 +1,16 @@
 import { UserDisplayComponent } from '@/components/UserDisplayComponent'
-import { Button } from '@ui/primitives/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/primitives/card'
-import { Label } from '@ui/primitives/label'
 import { ProfileSearch } from '@/components/v4v/ProfileSearch'
+import {
+	AddTeamMemberCard,
+	RoleActionButtons,
+	SettingsAccessDenied,
+	SettingsLoadingSkeleton,
+	SettingsMobileHeader,
+	SettingsPageHeader,
+	TeamPermissionsCard,
+	TeamRoleSection,
+	type RoleAction,
+} from '@ui/components/OperatorSettingsViews'
 import {
 	useAddAdminMutation,
 	useAddEditorMutation,
@@ -26,7 +34,7 @@ import { useConfigQuery } from '@/queries/config'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { npubToHex } from '@/routes/setup'
 import { createFileRoute } from '@tanstack/react-router'
-import { ArrowDown, ArrowUp, Edit, Globe, Shield, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
+import { ArrowDown, ArrowUp, Globe, Shield, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/team')({
@@ -141,58 +149,53 @@ function TeamComponent() {
 	}
 
 	// Helper function to get available actions for a user
-	const getAvailableActions = (targetPubkey: string) => {
+	const getAvailableActions = (targetPubkey: string): RoleAction[] => {
 		const targetRole = getUserRoleForPubkey(adminSettings, editorSettings, targetPubkey)
-		const actions = []
+		const actions: RoleAction[] = []
 
 		// Promote actions
 		if (targetRole === 'editor' && amIOwner) {
 			actions.push({
-				type: 'promote',
 				label: 'Promote to Admin',
-				handler: () => handlePromoteEditorToAdmin(targetPubkey),
+				onSelect: () => handlePromoteEditorToAdmin(targetPubkey),
 				icon: ArrowUp,
-				color: 'text-green-600',
+				tone: 'text-green-600',
 			})
 		}
 		if (targetRole === 'user' && amIAdmin) {
 			actions.push({
-				type: 'promote',
 				label: 'Promote to Editor',
-				handler: () => handlePromoteUserToEditor(targetPubkey),
+				onSelect: () => handlePromoteUserToEditor(targetPubkey),
 				icon: ArrowUp,
-				color: 'text-green-600',
+				tone: 'text-green-600',
 			})
 		}
 
 		// Demote actions
 		if (targetRole === 'admin' && amIOwner && targetPubkey !== adminSettings?.owner) {
 			actions.push({
-				type: 'demote',
 				label: 'Demote to Editor',
-				handler: () => handleDemoteAdminToEditor(targetPubkey),
+				onSelect: () => handleDemoteAdminToEditor(targetPubkey),
 				icon: ArrowDown,
-				color: 'text-orange-600',
+				tone: 'text-orange-600',
 			})
 		}
 		if (targetRole === 'editor' && amIAdmin) {
 			actions.push({
-				type: 'demote',
 				label: 'Demote to User',
-				handler: () => handleDemoteEditorToUser(targetPubkey),
+				onSelect: () => handleDemoteEditorToUser(targetPubkey),
 				icon: ArrowDown,
-				color: 'text-orange-600',
+				tone: 'text-orange-600',
 			})
 		}
 
 		// Remove actions
 		if (targetRole !== 'owner' && targetRole !== 'user' && amIAdmin) {
 			actions.push({
-				type: 'remove',
 				label: 'Remove All Roles',
-				handler: () => handleRemoveUserFromAllRoles(targetPubkey),
+				onSelect: () => handleRemoveUserFromAllRoles(targetPubkey),
 				icon: Trash2,
-				color: 'text-red-600',
+				tone: 'text-red-600',
 			})
 		}
 
@@ -200,246 +203,68 @@ function TeamComponent() {
 	}
 
 	if (isLoadingAdmins || isLoadingEditors || isLoadingPermissions) {
-		return (
-			<div className="space-y-6 p-6">
-				<div className="animate-pulse">
-					<div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
-					<div className="space-y-3">
-						<div className="h-4 bg-gray-200 rounded w-1/2"></div>
-						<div className="h-4 bg-gray-200 rounded w-1/3"></div>
-					</div>
-				</div>
-			</div>
-		)
+		return <SettingsLoadingSkeleton />
 	}
 
 	if (!amIAdmin) {
 		return (
-			<div className="space-y-6 p-6">
-				<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
-					<div className="flex items-center gap-3">
-						<Shield className="w-6 h-6 text-muted-foreground" />
-						<div>
-							<h1 className="text-2xl font-bold">Team</h1>
-							<p className="text-muted-foreground text-sm">Manage your team settings</p>
-						</div>
-					</div>
-				</div>
-
-				<Card>
-					<CardContent className="p-6">
-						<div className="text-center">
-							<Shield className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-							<h3 className="text-lg font-medium mb-2">Access Denied</h3>
-							<p className="text-gray-600">You don't have permission to manage team settings.</p>
-						</div>
-					</CardContent>
-				</Card>
-			</div>
+			<SettingsAccessDenied
+				header={{ icon: Shield, title: 'Team', description: 'Manage your team settings' }}
+				message="You don't have permission to manage team settings."
+			/>
 		)
 	}
 
+	const header = { icon: Globe, title: 'Team', description: 'Manage your team settings' }
+	const adminActionsPending =
+		removeAdminMutation.isPending ||
+		promoteEditorToAdminMutation.isPending ||
+		demoteAdminToEditorMutation.isPending ||
+		removeUserFromAllRolesMutation.isPending
+	const editorActionsPending =
+		removeEditorMutation.isPending ||
+		promoteEditorToAdminMutation.isPending ||
+		demoteEditorToUserMutation.isPending ||
+		removeUserFromAllRolesMutation.isPending
+
+	const toMemberRows = (members: { pubkey: string }[], disabled: boolean) =>
+		members.map((member, index) => {
+			const actions = getAvailableActions(member.pubkey)
+			return {
+				key: member.pubkey,
+				content: (
+					<UserDisplayComponent
+						userPubkey={member.pubkey}
+						index={index}
+						customActions={actions.length > 0 ? <RoleActionButtons actions={actions} disabled={disabled} /> : undefined}
+					/>
+				),
+			}
+		})
+
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
-				<div className="flex items-center gap-3">
-					<Globe className="w-6 h-6 text-muted-foreground" />
-					<div>
-						<h1 className="text-2xl font-bold">Team</h1>
-						<p className="text-muted-foreground text-sm">Manage your team settings</p>
-					</div>
-				</div>
-			</div>
+			<SettingsPageHeader {...header} />
 			<div className="space-y-6 p-4 lg:p-8">
-				<div className="lg:hidden mb-6">
-					<div className="flex items-center gap-3">
-						<Globe className="w-6 h-6 text-muted-foreground" />
-						<div>
-							<h1 className="text-2xl font-bold">Team</h1>
-							<p className="text-muted-foreground text-sm">Manage your team settings</p>
-						</div>
-					</div>
-				</div>
-				<Card>
-					<CardHeader>
-						<CardTitle className="flex items-center gap-2">
-							<ShieldCheck className="w-5 h-5" />
-							Administrators
-						</CardTitle>
-						<CardDescription>Users with administrative privileges can manage the marketplace, products, and settings.</CardDescription>
-					</CardHeader>
-					<CardContent className="space-y-4">
-						{formattedAdmins.length === 0 ? (
-							<div className="text-center py-8 text-gray-500">
-								<Shield className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-								<p>No administrators found</p>
-							</div>
-						) : (
-							<div className="space-y-3">
-								{formattedAdmins.map((admin, index) => {
-									const actions = getAvailableActions(admin.pubkey)
-									return (
-										<UserDisplayComponent
-											key={admin.pubkey}
-											userPubkey={admin.pubkey}
-											index={index}
-											customActions={
-												actions.length > 0 ? (
-													<>
-														{actions.map((action, actionIndex) => {
-															const Icon = action.icon
-															return (
-																<Button
-																	key={actionIndex}
-																	variant="outline"
-																	size="sm"
-																	onClick={action.handler}
-																	disabled={
-																		removeAdminMutation.isPending ||
-																		promoteEditorToAdminMutation.isPending ||
-																		demoteAdminToEditorMutation.isPending ||
-																		removeUserFromAllRolesMutation.isPending
-																	}
-																	title={action.label}
-																	className="h-8 w-8 p-0"
-																>
-																	<Icon className={`w-4 h-4 ${action.color}`} />
-																</Button>
-															)
-														})}
-													</>
-												) : undefined
-											}
-										/>
-									)
-								})}
-							</div>
-						)}
-					</CardContent>
-				</Card>
+				<SettingsMobileHeader {...header} />
+				<TeamRoleSection role="admin" members={toMemberRows(formattedAdmins, adminActionsPending)} />
+				<TeamRoleSection role="editor" members={toMemberRows(formattedEditors, editorActionsPending)} />
 
-				{/* Editors Section */}
-				<Card>
-					<CardHeader>
-						<CardTitle className="flex items-center gap-2">
-							<Edit className="w-5 h-5" />
-							Editors
-						</CardTitle>
-						<CardDescription>Users with editor privileges can manage content but have limited administrative access.</CardDescription>
-					</CardHeader>
-					<CardContent className="space-y-4">
-						{formattedEditors.length === 0 ? (
-							<div className="text-center py-8 text-gray-500">
-								<Edit className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-								<p>No editors found</p>
-							</div>
-						) : (
-							<div className="space-y-3">
-								{formattedEditors.map((editor, index) => {
-									const actions = getAvailableActions(editor.pubkey)
-									return (
-										<UserDisplayComponent
-											key={editor.pubkey}
-											userPubkey={editor.pubkey}
-											index={index}
-											customActions={
-												actions.length > 0 ? (
-													<>
-														{actions.map((action, actionIndex) => {
-															const Icon = action.icon
-															return (
-																<Button
-																	key={actionIndex}
-																	variant="outline"
-																	size="sm"
-																	onClick={action.handler}
-																	disabled={
-																		removeEditorMutation.isPending ||
-																		promoteEditorToAdminMutation.isPending ||
-																		demoteEditorToUserMutation.isPending ||
-																		removeUserFromAllRolesMutation.isPending
-																	}
-																	title={action.label}
-																	className="h-8 w-8 p-0"
-																>
-																	<Icon className={`w-4 h-4 ${action.color}`} />
-																</Button>
-															)
-														})}
-													</>
-												) : undefined
-											}
-										/>
-									)
-								})}
-							</div>
-						)}
-					</CardContent>
-				</Card>
-
-				{/* Add New Admin */}
 				{amIOwner && (
-					<Card>
-						<CardHeader>
-							<CardTitle className="flex items-center gap-2">
-								<UserPlus className="w-5 h-5" />
-								Add Administrator
-							</CardTitle>
-							<CardDescription>Search for a user to add as administrator.</CardDescription>
-						</CardHeader>
-						<CardContent className="space-y-4">
-							<div className="space-y-2">
-								<Label>Search for User</Label>
-								<ProfileSearch onSelect={handleAddAdmin} placeholder="Search profiles or paste npub..." />
-							</div>
-							<div className="text-xs text-gray-500">
-								Note: New administrators will have full access to manage the marketplace settings and content.
-							</div>
-						</CardContent>
-					</Card>
+					<AddTeamMemberCard
+						role="admin"
+						search={<ProfileSearch onSelect={handleAddAdmin} placeholder="Search profiles or paste npub..." />}
+					/>
 				)}
 
-				{/* Add New Editor */}
 				{amIAdmin && (
-					<Card>
-						<CardHeader>
-							<CardTitle className="flex items-center gap-2">
-								<UserPlus className="w-5 h-5" />
-								Add Editor
-							</CardTitle>
-							<CardDescription>Search for a user to add as editor.</CardDescription>
-						</CardHeader>
-						<CardContent className="space-y-4">
-							<div className="space-y-2">
-								<Label>Search for User</Label>
-								<ProfileSearch onSelect={handleAddEditor} placeholder="Search profiles or paste npub..." />
-							</div>
-							<div className="text-xs text-gray-500">
-								Note: New editors will have limited access to manage content but cannot modify administrative settings.
-							</div>
-						</CardContent>
-					</Card>
+					<AddTeamMemberCard
+						role="editor"
+						search={<ProfileSearch onSelect={handleAddEditor} placeholder="Search profiles or paste npub..." />}
+					/>
 				)}
 
-				{/* Permissions Info */}
-				<Card>
-					<CardHeader>
-						<CardTitle>Your Permissions</CardTitle>
-					</CardHeader>
-					<CardContent className="space-y-3">
-						<div className="flex items-center gap-3">
-							{amIOwner ? <ShieldCheck className="w-5 h-5 text-green-600" /> : <Shield className="w-5 h-5 text-blue-600" />}
-							<div>
-								<div className="font-medium">{amIOwner ? 'Owner' : 'Administrator'}</div>
-								<div className="text-sm text-gray-600">
-									{amIOwner
-										? 'You have full control over the marketplace and can manage all administrators.'
-										: 'You can manage marketplace settings and content but cannot add/remove administrators.'}
-								</div>
-							</div>
-						</div>
-					</CardContent>
-				</Card>
+				<TeamPermissionsCard isOwner={amIOwner} />
 			</div>
 		</div>
 	)

@@ -1,5 +1,5 @@
-import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
+import { EditorTextField } from '@ui/components/EditorFields'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/primitives/select'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions, productFormStore } from '@/lib/stores/product'
@@ -70,49 +70,38 @@ export function NameTab() {
 				}}
 			>
 				{(field) => (
-					<div className="grid w-full gap-1.5">
-						<Label htmlFor={field.name}>
-							<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Title</span>
-						</Label>
-						<Input
-							id={field.name}
-							name={field.name}
-							value={field.state.value}
-							onBlur={field.handleBlur}
-							onChange={(e) => {
-								field.handleChange(e.target.value)
-								productFormActions.updateValues({ name: e.target.value })
-							}}
-							className="border-2"
-							placeholder="e.g Art Print"
-							data-testid="product-name-input"
-							required
-						/>
-						{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-							<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
-						)}
-					</div>
+					<EditorTextField
+						id={field.name}
+						label="Title"
+						required
+						value={field.state.value}
+						onBlur={field.handleBlur}
+						onChange={(value) => {
+							field.handleChange(value)
+							productFormActions.updateValues({ name: value })
+						}}
+						placeholder="e.g Art Print"
+						errors={field.state.meta.errors}
+						touched={field.state.meta.isTouched}
+						data-testid="product-name-input"
+					/>
 				)}
 			</form.Field>
 			<form.Field name="summary">
 				{(field) => (
-					<div className="grid w-full gap-1.5">
-						<Label htmlFor={field.name}>Summary (Optional)</Label>
-						<Input
-							id={field.name}
-							name={field.name}
-							value={field.state.value}
-							onBlur={field.handleBlur}
-							onChange={(e) => {
-								field.handleChange(e.target.value)
-								productFormActions.updateValues({ summary: e.target.value })
-							}}
-							className="border-2"
-							placeholder="A short summary of your product"
-							data-testid="product-summary-input"
-						/>
-						<p className="text-xs text-gray-500">A brief one-line summary displayed in product listings</p>
-					</div>
+					<EditorTextField
+						id={field.name}
+						label="Summary (Optional)"
+						value={field.state.value}
+						onBlur={field.handleBlur}
+						onChange={(value) => {
+							field.handleChange(value)
+							productFormActions.updateValues({ summary: value })
+						}}
+						placeholder="A short summary of your product"
+						hint="A brief one-line summary displayed in product listings"
+						data-testid="product-summary-input"
+					/>
 				)}
 			</form.Field>
 			<form.Field
@@ -122,28 +111,22 @@ export function NameTab() {
 				}}
 			>
 				{(field) => (
-					<div className="grid w-full gap-1.5">
-						<Label htmlFor={field.name}>
-							<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Description</span>
-						</Label>
-						<textarea
-							id={field.name}
-							name={field.name}
-							value={field.state.value}
-							onBlur={field.handleBlur}
-							onChange={(e) => {
-								field.handleChange(e.target.value)
-								productFormActions.updateValues({ description: e.target.value })
-							}}
-							className="border-2 min-h-24 p-2 rounded-md"
-							placeholder="More information about your product to help your customers"
-							data-testid="product-description-input"
-							required
-						/>
-						{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-							<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
-						)}
-					</div>
+					<EditorTextField
+						id={field.name}
+						label="Description"
+						required
+						multiline
+						value={field.state.value}
+						onBlur={field.handleBlur}
+						onChange={(value) => {
+							field.handleChange(value)
+							productFormActions.updateValues({ description: value })
+						}}
+						placeholder="More information about your product to help your customers"
+						errors={field.state.meta.errors}
+						touched={field.state.meta.isTouched}
+						data-testid="product-description-input"
+					/>
 				)}
 			</form.Field>
 		</div>

@@ -1,11 +1,17 @@
 import CartItem from '@/components/CartItem'
-import { Separator } from '@ui/primitives/separator'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
-import { ChevronDown } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
+import { CartSellerCard, CartShippingReminder, CartTotals, CartTotalsDetails, type CartSellerTotals } from '@ui/components/CartViews'
 import { UserCard } from './UserCard'
+
+const EMPTY_SELLER_TOTALS: CartSellerTotals = {
+	satsTotal: 0,
+	currencyTotals: {},
+	shares: { sellerAmount: 0, communityAmount: 0, sellerPercentage: 90 },
+	shippingSats: 0,
+}
 
 interface CartSummaryProps {
 	className?: string
@@ -23,23 +29,10 @@ export function CartSummary({
 	const { cart, sellerData, productsBySeller, totalInSats, totalShippingInSats, totalByCurrency, shippingByCurrency } = useStore(cartStore)
 
 	const [parent, enableAnimations] = useAutoAnimate()
-	const [detailsExpanded, setDetailsExpanded] = useState(showExpandedDetails)
-
-	const totalItems = useMemo(() => {
-		return Object.values(cart.products).reduce((sum, product) => sum + product.amount, 0)
-	}, [cart.products])
-
-	const hasAllShippingMethods = useMemo(() => {
-		return Object.values(cart.products).every((product) => product.shippingMethodId !== null)
-	}, [cart.products])
 
 	const missingShippingCount = useMemo(() => {
 		return Object.values(cart.products).filter((product) => !product.shippingMethodId).length
 	}, [cart.products])
-
-	const formatSats = (sats: number): string => {
-		return Math.round(sats).toLocaleString()
-	}
 
 	useEffect(() => {
 		if (Object.keys(cart.products).length > 0) {
@@ -66,156 +59,42 @@ export function CartSummary({
 
 	return (
 		<div className={`${className}`}>
-			{missingShippingCount > 0 && (
-				<div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-					<div className="flex">
-						<div className="ml-3">
-							<p className="text-sm text-yellow-700">
-								Please select shipping for {missingShippingCount} {missingShippingCount === 1 ? 'item' : 'items'} before checkout.
-							</p>
-						</div>
-					</div>
-				</div>
-			)}
+			<CartShippingReminder count={missingShippingCount} context="checkout" />
 
 			<div className="space-y-6" ref={parent}>
-				{Object.entries(productsBySeller).map(([sellerPubkey, products]) => {
-					const data = sellerData[sellerPubkey] || {
-						satsTotal: 0,
-						currencyTotals: {},
-						shares: { sellerAmount: 0, communityAmount: 0, sellerPercentage: 90 },
-						shippingSats: 0,
-					}
-
-					return (
-						<div key={sellerPubkey} className="p-4 rounded-lg border shadow-md bg-white">
-							<div className="mb-4">
-								<UserCard pubkey={sellerPubkey} size="sm" subtitle="nip-05" />
-							</div>
-
-							<ul className="space-y-6">
-								{products.map((product, index) => (
-									<div key={product.id} className={`p-3 rounded-lg ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}>
-										<CartItem
-											productId={product.id}
-											sellerPubkey={product.sellerPubkey}
-											amount={product.amount}
-											onQuantityChange={handleQuantityChange}
-											onRemove={handleRemoveProduct}
-											hideShipping={!allowShippingChanges}
-											isEditable={allowQuantityChanges}
-										/>
-									</div>
-								))}
-							</ul>
-
-							{Object.entries(data.currencyTotals).map(([currency, amount]) => (
-								<div key={`${sellerPubkey}-${currency}`} className="flex justify-between mt-4">
-									<p className="text-sm">Products ({currency}):</p>
-									<p className="text-sm">
-										{amount.toFixed(2)} {currency}
-									</p>
-								</div>
-							))}
-
-							<div className="flex justify-between mt-1">
-								<p className="text-sm">Shipping:</p>
-								<p className="text-sm font-semibold">{formatSats(data.shippingSats)} sat</p>
-							</div>
-
-							<div className="flex justify-between mt-1 font-semibold">
-								<p className="text-sm">Total:</p>
-								<p className="text-sm">{formatSats(data.satsTotal)} sat</p>
-							</div>
-
-							<div className="mt-3">
-								<p className="text-sm font-semibold">Payment Breakdown</p>
-
-								<div className="h-2 w-full bg-gray-800 mt-1 rounded-full overflow-hidden">
-									<div className="h-full bg-blue-500" style={{ width: `${data.shares.sellerPercentage}%` }} />
-								</div>
-
-								<div className="flex justify-between mt-1">
-									<p className="text-sm">Merchant: </p>
-									<p className="text-sm">
-										{formatSats(data.shares.sellerAmount)} sat ({data.shares.sellerPercentage.toFixed(2)}%)
-									</p>
-								</div>
-
-								{data.shares.communityAmount > 0 && (
-									<div className="flex justify-between">
-										<p className="text-sm">Community Share: </p>
-										<p className="text-sm">
-											{formatSats(data.shares.communityAmount)} sat ({(100 - data.shares.sellerPercentage).toFixed(2)}%)
-										</p>
-									</div>
-								)}
-							</div>
-						</div>
-					)
-				})}
+				{Object.entries(productsBySeller).map(([sellerPubkey, products]) => (
+					<CartSellerCard
+						key={sellerPubkey}
+						seller={<UserCard pubkey={sellerPubkey} size="sm" subtitle="nip-05" />}
+						totals={sellerData[sellerPubkey] || EMPTY_SELLER_TOTALS}
+						items={products.map((product) => ({
+							key: product.id,
+							content: (
+								<CartItem
+									productId={product.id}
+									sellerPubkey={product.sellerPubkey}
+									amount={product.amount}
+									onQuantityChange={handleQuantityChange}
+									onRemove={handleRemoveProduct}
+									hideShipping={!allowShippingChanges}
+									isEditable={allowQuantityChanges}
+								/>
+							),
+						}))}
+					/>
+				))}
 			</div>
 
 			<div className="pt-4 mt-4">
 				<div className="space-y-3 w-full">
-					<div className="space-y-1 mb-2">
-						<div className="flex justify-between">
-							<p className="text-sm">Subtotal:</p>
-							<p className="text-sm">{formatSats(totalInSats - totalShippingInSats)} sat</p>
-						</div>
-						<div className="flex justify-between">
-							<p className="text-sm">Shipping:</p>
-							<p className="text-sm">{formatSats(totalShippingInSats)} sat</p>
-						</div>
-						<div className="flex justify-between text-lg font-bold">
-							<p>Total:</p>
-							<p>{formatSats(totalInSats)} sat</p>
-						</div>
-					</div>
-
-					<button
-						className="w-full flex items-center justify-between p-2 border rounded-lg bg-gray-50"
-						onClick={() => setDetailsExpanded(!detailsExpanded)}
-					>
-						<span className="text-sm">View Details</span>
-						<ChevronDown className={`w-4 h-4 transition-transform ${detailsExpanded ? 'rotate-180' : ''}`} />
-					</button>
-
-					{detailsExpanded && (
-						<div className="space-y-2 p-2 bg-gray-50 rounded-lg">
-							{Object.entries(totalByCurrency).map(([currency, amount]) => (
-								<div key={`total-${currency}`} className="flex justify-between">
-									<p className="text-sm">Products ({currency}):</p>
-									<p className="text-sm">{amount.toFixed(2)}</p>
-								</div>
-							))}
-
-							{Object.entries(shippingByCurrency).map(([currency, amount]) => (
-								<div key={`shipping-${currency}`} className="flex justify-between">
-									<p className="text-sm">Products ({currency}):</p>
-									<p className="text-sm">{amount.toFixed(2)}</p>
-								</div>
-							))}
-
-							<Separator className="my-2" />
-							<div className="flex justify-between">
-								<p className="text-sm">Subtotal:</p>
-								<p className="text-sm">{formatSats(totalInSats - totalShippingInSats)} sat</p>
-							</div>
-
-							<div className="flex justify-between">
-								<p className="text-sm">Shipping:</p>
-								<p className="text-sm">{formatSats(totalShippingInSats)} sat</p>
-							</div>
-
-							<Separator className="my-2" />
-
-							<div className="flex justify-between font-semibold">
-								<p className="text-sm">Grand Total:</p>
-								<p className="text-sm">{formatSats(totalInSats)} sat</p>
-							</div>
-						</div>
-					)}
+					<CartTotals totalSats={totalInSats} shippingSats={totalShippingInSats} />
+					<CartTotalsDetails
+						totalSats={totalInSats}
+						shippingSats={totalShippingInSats}
+						totalByCurrency={totalByCurrency}
+						shippingByCurrency={shippingByCurrency}
+						defaultExpanded={showExpandedDetails}
+					/>
 				</div>
 			</div>
 		</div>

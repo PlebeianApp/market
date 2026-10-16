@@ -1,6 +1,5 @@
 import { Badge } from '@ui/primitives/badge'
 import { Button } from '@ui/primitives/button'
-import { Card, CardContent } from '@ui/primitives/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@ui/primitives/collapsible'
 import { Input } from '@ui/primitives/input'
 import { Label } from '@ui/primitives/label'
@@ -37,6 +36,12 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { DashboardListItem } from '@ui/components/DashboardListItem'
+import {
+	ShippingOptionsEmptyState,
+	ShippingOptionsLoading,
+	ShippingOptionsMobileToolbar,
+	ShippingOptionsToolbar,
+} from '@ui/components/ShippingOptionsViews'
 import { Checkbox } from '@ui/primitives/checkbox'
 import { AlertCircleIcon, ChevronLeftIcon, DownloadIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon, XIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
@@ -1138,66 +1143,18 @@ function ShippingOptionsComponent() {
 		setOpenShippingOptionId(open ? shippingOptionId : null)
 	}
 
+	const toolbarProps = {
+		serviceFilter,
+		onServiceFilterChange: setServiceFilter,
+		serviceTypes: SERVICE_TYPES,
+		onAdd: () => handleOpenChange('new', true),
+	}
+
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
-				<h1 className="text-2xl font-bold">Shipping Options</h1>
-				<div className="flex items-center gap-4">
-					<div className="flex items-center gap-2">
-						<Label htmlFor="service-filter" className="text-sm font-medium">
-							Filter:
-						</Label>
-						<Select value={serviceFilter} onValueChange={setServiceFilter}>
-							<SelectTrigger className="w-[180px]">
-								<SelectValue placeholder="All services" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All services</SelectItem>
-								{SERVICE_TYPES.map((service) => (
-									<SelectItem key={service.value} value={service.value}>
-										{service.label}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
-					<Button
-						onClick={() => handleOpenChange('new', true)}
-						className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
-					>
-						<PlusIcon className="w-5 h-5" />
-						Add Shipping Option
-					</Button>
-				</div>
-			</div>
+			<ShippingOptionsToolbar {...toolbarProps} />
 			<div className="space-y-6 p-4 lg:p-6">
-				<div className="lg:hidden space-y-4">
-					<div>
-						<p className="text-muted-foreground">Manage your shipping options for customers</p>
-					</div>
-
-					<Select value={serviceFilter} onValueChange={setServiceFilter}>
-						<SelectTrigger className="w-full">
-							<SelectValue placeholder="Filter by service type" />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="all">All services</SelectItem>
-							{SERVICE_TYPES.map((service) => (
-								<SelectItem key={service.value} value={service.value}>
-									{service.label}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-
-					<Button
-						onClick={() => handleOpenChange('new', true)}
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
-					>
-						<PlusIcon className="w-5 h-5" />
-						Add Shipping Option
-					</Button>
-				</div>
+				<ShippingOptionsMobileToolbar {...toolbarProps} />
 
 				{/* Shipping option form - shows at top when opened */}
 				{openShippingOptionId === 'new' && (
@@ -1225,24 +1182,10 @@ function ShippingOptionsComponent() {
 						)
 					})}
 
-					{shippingOptionsQuery.isLoading && (
-						<div className="flex items-center justify-center p-8">
-							<Spinner />
-							<span className="ml-2">Loading shipping options...</span>
-						</div>
-					)}
+					{shippingOptionsQuery.isLoading && <ShippingOptionsLoading />}
 
 					{filteredShippingOptions.length === 0 && !shippingOptionsQuery.isLoading && (
-						<Card>
-							<CardContent className="py-10 flex flex-col items-center justify-center">
-								<TruckIcon className="w-16 h-16 text-muted-foreground mb-4" />
-								<p className="text-center text-muted-foreground mb-4">
-									{serviceFilter === 'all'
-										? 'No shipping options configured yet. Add a shipping option to start offering delivery to your customers.'
-										: `No ${SERVICE_TYPES.find((s) => s.value === serviceFilter)?.label.toLowerCase()} shipping options found.`}
-								</p>
-							</CardContent>
-						</Card>
+						<ShippingOptionsEmptyState serviceFilter={serviceFilter} serviceTypes={SERVICE_TYPES} />
 					)}
 				</div>
 			</div>

@@ -1,14 +1,23 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@ui/primitives/card'
-import { Check, Clock, Zap, Users, CreditCard, SkipForward } from 'lucide-react'
-import type { PaymentInvoiceData } from '@/lib/types/invoice'
+import { Card, CardContent, CardHeader, CardTitle } from '../primitives/card'
+import { Check, Clock, Users, CreditCard, SkipForward } from 'lucide-react'
+
+/** Display fields only; invoice lifecycle is decided by the host checkout flow. */
+export interface CheckoutInvoiceSummaryItem {
+	id: string
+	amount: number
+	recipientName: string
+	status: string
+	type: string
+	expiresAt?: number
+}
 
 interface PaymentSummaryProps {
-	invoices: PaymentInvoiceData[]
+	invoices: readonly CheckoutInvoiceSummaryItem[]
 	currentIndex: number
 	onSelectInvoice: (index: number) => void
 }
 
-export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: PaymentSummaryProps) {
+export function CheckoutPaymentSummary({ invoices, currentIndex, onSelectInvoice }: PaymentSummaryProps) {
 	const formatSats = (sats: number) => Math.round(sats).toLocaleString()
 
 	const paidCount = invoices.filter((inv) => inv.status === 'paid').length

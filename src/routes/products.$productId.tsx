@@ -6,10 +6,14 @@ import { PriceDisplay } from '@/components/PriceDisplay'
 import { ProductCard } from '@/components/ProductCard'
 import { Comments } from '@/components/Comments'
 import { ShippingSelector } from '@/components/ShippingSelector'
-import { Badge } from '@ui/primitives/badge'
-import { Button } from '@ui/primitives/button'
-import { Input } from '@ui/primitives/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/primitives/tabs'
+import {
+	AdultContentGate,
+	ProductLoadErrorState,
+	ProductLoadingState,
+	ProductNotFoundState,
+	ProductPurchasePanel,
+} from '@ui/components/ProductPageViews'
 import { UserCard } from '@/components/UserCard'
 import { ZapButton } from '@/components/social/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
@@ -53,9 +57,9 @@ import {
 } from '@/queries/products'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { AlertTriangle, ArrowLeft, Edit, Minus, Plus, Truck } from 'lucide-react'
+import { ArrowLeft, Truck } from 'lucide-react'
 import {
 	useEffect,
 	useMemo,
@@ -530,68 +534,28 @@ function RouteComponent() {
 
 	// Keep this route resilient during relay warmup: don't error-boundary the whole page for transient misses.
 	if (!product && (productQuery.isLoading || productQuery.isFetching)) {
-		return (
-			<div className="flex flex-col justify-center items-center gap-3 px-4 h-[50vh] text-center">
-				<div className="border-4 border-primary border-t-transparent rounded-full w-8 h-8 animate-spin" />
-				<p className="text-muted-foreground">Loading product…</p>
-			</div>
-		)
+		return <ProductLoadingState />
 	}
 
 	if (!product && productQuery.isError) {
 		return (
-			<div className="flex flex-col justify-center items-center gap-4 px-4 h-[50vh] text-center">
-				<h1 className="font-bold text-2xl">Still loading product</h1>
-				<p className="text-gray-600">{productQuery.error instanceof Error ? productQuery.error.message : 'Please try again.'}</p>
-				<div className="flex flex-wrap justify-center items-center gap-2">
-					<Button
-						variant="secondary"
-						onClick={() => {
-							queryClient.invalidateQueries({ queryKey: productQueryOptions(productId).queryKey })
-						}}
-					>
-						Retry
-					</Button>
-					<Link to="/products" className="inline-flex">
-						<Button variant="outline">Back to products</Button>
-					</Link>
-				</div>
-			</div>
+			<ProductLoadErrorState
+				message={productQuery.error instanceof Error ? productQuery.error.message : 'Please try again.'}
+				onRetry={() => {
+					queryClient.invalidateQueries({ queryKey: productQueryOptions(productId).queryKey })
+				}}
+			/>
 		)
 	}
 
 	if (!product) {
-		return (
-			<div className="flex flex-col justify-center items-center gap-4 px-4 h-[50vh] text-center">
-				<h1 className="font-bold text-2xl">Product Not Found</h1>
-				<p className="text-gray-600">The product you're looking for doesn't exist (or hasn't propagated to relays yet).</p>
-				<Link to="/products" className="inline-flex">
-					<Button variant="outline">Back to products</Button>
-				</Link>
-			</div>
-		)
+		return <ProductNotFoundState />
 	}
 
 	// Adult content gate: product is NSFW and the user hasn't enabled viewing.
 	// (productIsNSFW/nsfwGated are computed before the head-injecting hooks above)
 	if (nsfwGated) {
-		return (
-			<div className="flex flex-col justify-center items-center gap-4 px-4 h-[50vh] text-center">
-				<AlertTriangle className="w-16 h-16 text-amber-500" />
-				<h1 className="font-bold text-2xl">Adult Content</h1>
-				<p className="max-w-md text-gray-600">
-					This product contains adult or sensitive content. To view it, you need to enable adult content viewing in your settings.
-				</p>
-				<div className="flex gap-3">
-					<Link to="/products" className="inline-flex">
-						<Button variant="outline">Back to products</Button>
-					</Link>
-					<Button onClick={() => uiActions.openNSFWConfirmation()} className="bg-amber-600 hover:bg-amber-700">
-						Enable adult content
-					</Button>
-				</div>
-			</div>
-		)
+		return <AdultContentGate onEnable={() => uiActions.openNSFWConfirmation()} />
 	}
 
 	// Handle adding product to cart
@@ -774,95 +738,19 @@ function RouteComponent() {
 								showRootCurrency={true}
 							/>
 
-							{visibility === 'pre-order' ? (
-								<Badge className="bg-blue-500">Pre-order</Badge>
-							) : (
-								<Badge>{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
-							)}
-
-							{/* ADR-0009: a curated item is absent from the feed but reachable here
-							    by direct link, so explain the label and offer an appeal path. */}
-							<TestListingNotice coordinate={productCoords} itemLabel="Product" />
-
-							{(() => {
-								switch (productType?.product) {
-									case 'simple':
-										return (
-											<div>
-												{productType.product.charAt(0).toUpperCase() + productType.product.slice(1)} /{' '}
-												{productType.delivery.charAt(0).toUpperCase() + productType.delivery.slice(1)}
-											</div>
-										)
-									case 'variable':
-										return (
-											<div>
-												{productType.product.charAt(0).toUpperCase() + productType.product.slice(1)} /{' '}
-												{productType.delivery.charAt(0).toUpperCase() + productType.delivery.slice(1)}
-											</div>
-										)
-									default:
-										return null
-								}
-							})()}
-
-							{stock !== undefined && (
-								<div className="flex items-center gap-4">
-									{/* Show cart controls for non-owners */}
-									{permissions.canAddToCart && (
-										<div className="flex flex-wrap items-center gap-2">
-											<div className="flex flex-shrink-0 items-center gap-2">
-												<Button
-													variant="outline"
-													className="text-foreground"
-													size="icon"
-													onClick={() => setQuantity(Math.max(1, quantity - 1))}
-													disabled={quantity <= 1}
-												>
-													<Minus className="w-6 h-6" />
-												</Button>
-												<Input
-													className="bg-white w-12 font-medium text-black text-center"
-													value={quantity}
-													onChange={(e) => {
-														const value = parseInt(e.target.value)
-														if (!isNaN(value) && value > 0 && value <= (stock || Infinity)) {
-															setQuantity(value)
-														}
-													}}
-													min={1}
-													max={stock}
-													type="number"
-												/>
-												<Button
-													variant="outline"
-													className="text-foreground"
-													size="icon"
-													onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
-													disabled={quantity >= (stock || quantity)}
-												>
-													<Plus className="w-6 h-6" />
-												</Button>
-											</div>
-											<Button variant="secondary" onClick={handleAddToCartClick} disabled={isOutOfStock || visibility === 'hidden'}>
-												{visibility === 'hidden'
-													? 'Not Available'
-													: isOutOfStock
-														? 'Out of Stock'
-														: visibility === 'pre-order'
-															? 'Pre-order'
-															: 'Add to cart'}
-											</Button>
-										</div>
-									)}
-									{/* Show edit button for owners */}
-									{permissions.canEdit && (
-										<Button variant="secondary" onClick={handleEdit} className="flex items-center gap-2">
-											<Edit className="w-5 h-5" />
-											<span>Edit Product</span>
-										</Button>
-									)}
-								</div>
-							)}
+							<ProductPurchasePanel
+								visibility={visibility}
+								stock={stock}
+								productType={productType}
+								quantity={quantity}
+								onQuantityChange={setQuantity}
+								isOutOfStock={isOutOfStock}
+								canAddToCart={permissions.canAddToCart}
+								canEdit={permissions.canEdit}
+								onAddToCart={handleAddToCartClick}
+								onEdit={handleEdit}
+								notice={<TestListingNotice coordinate={productCoords} itemLabel="Product" />}
+							/>
 
 							<span>Sold by:</span>
 							<UserCard pubkey={pubkey} size="md" />
