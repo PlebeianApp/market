@@ -4,9 +4,11 @@ This directory follows the repository-level AGENTS.md and `src/AGENTS.md`.
 
 ## Context
 
-`src/components/` contains reusable UI components, feature components, dialogs,
-wallet UI, product/profile display components, and shadcn/Radix-style primitives
-under `src/components/ui/`.
+`src/components/` contains app-coupled UI: feature components, dialogs, wallet
+UI, and the hosts that wire queries, stores, and routing into presentational
+views. Shadcn/Radix primitives live in `ui/primitives/` and reusable,
+props-only views live in `ui/components/` (ADR-0021); `src/components/ui/`
+now holds only the app-coupled `image-uploader/` and `relay-manager/`.
 
 ## Constraints
 
@@ -23,7 +25,8 @@ under `src/components/ui/`.
 
 ```
 src/components/
-  ui/              ← Shadcn primitives (generated, unmodified)
+  ui/              ← App-coupled leftovers only (image-uploader, relay-manager);
+                     Shadcn primitives moved to `ui/primitives/` (import `@ui/primitives/*`)
   ui-wrappers/     ← Wrappers around ui/ primitives with custom styling/behavior
   shared/          ← General-purpose reusable components (non-domain-specific)
   nostr/           ← Nostr-domain components (users, products, auctions, profiles)
@@ -64,8 +67,13 @@ source for its import rules and narrowly-scoped exceptions.
 
 ### Canonical import alias
 
-`@/components/{directory}/{component}`. Barrel exports per directory allowed.
-Routes must import UI exclusively from `src/components/`.
+`@/components/{directory}/{component}` for app components; `@ui/primitives/*`
+for Shadcn primitives and `@ui/components/*` for props-only views. Barrel
+exports per directory allowed.
+
+When a component needs no queries, stores, routing, or relay access, place it
+in `ui/components/` instead (see `ui/boundary.test.ts`); keep the data-wiring
+host here.
 
 ## Instructions
 
@@ -75,9 +83,9 @@ Routes must import UI exclusively from `src/components/`.
   when a component depends on Nostr data.
 - Use icons and controls consistently with the surrounding UI.
 - **Ref convention (React 19 ref-as-prop, per ADR-0007: Component UI Migration):**
-  - `src/components/ui/` holds generated Shadcn primitives. Leave them **as-is,
-    no diffs** — do not modify them. They use the modern
-    `React.ComponentProps` + `data-slot` style.
+  - `ui/primitives/` holds generated Shadcn primitives (pulled via
+    `components.json`). Leave them **as-is, no diffs** — do not modify them.
+    They use the modern `React.ComponentProps` + `data-slot` style.
   - Components authored by us (in `ui-wrappers/`, `shared/`, `nostr/`,
     `layout/`, `dialogs/`, and feature directories) **must expose `ref`** to
     their root DOM element. **Prefer React 19 ref-as-prop** (accept `ref` as a

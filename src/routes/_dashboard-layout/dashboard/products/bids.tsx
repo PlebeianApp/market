@@ -2,6 +2,8 @@ import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { AvatarUser } from '@/components/AvatarUser'
 import { ProfileName } from '@/components/ProfileName'
 import { DashboardListItem } from '@ui/components/DashboardListItem'
+import { BidStatusBanner, BidStatusPill, getBidStatusCopy } from '@ui/components/BidStatusViews'
+import { resolveBidGroupStatus } from '@sdk/commerce/auctions/bidGroupStatus'
 import { Badge } from '@ui/primitives/badge'
 import { Button } from '@ui/primitives/button'
 import { authStore } from '@/lib/stores/auth'
@@ -52,8 +54,6 @@ const formatMaybeDate = (timestamp: number): string => {
 const getPendingAuctionBidTokens = (tokens: PendingNip60Token[]): PendingNip60Token[] =>
 	tokens.filter((token) => token.context?.kind === 'auction_bid')
 
-const getPendingTokenLocktime = (token: PendingNip60Token): number => token.context?.locktime ?? 0
-
 /**
  * Earliest timestamp at which this pending bid token can actually be reclaimed,
  * accounting for both the authoritative proof-secret locktime and the ~30s
@@ -62,12 +62,6 @@ const getPendingTokenLocktime = (token: PendingNip60Token): number => token.cont
  * (so users don't see "Reclaim available" and then "Bid refund opens in …").
  */
 const getPendingTokenReclaimReadyAt = (token: PendingNip60Token): number => getAuctionReclaimReadyAt(token.token, token.context?.locktime)
-
-const getBidGroupReclaimReadyAt = (tokens: PendingNip60Token[]): number =>
-	tokens.reduce((max, token) => {
-		const readyAt = getPendingTokenReclaimReadyAt(token)
-		return readyAt > max ? readyAt : max
-	}, 0)
 
 const getLatestBidForGroup = (bids: NDKEvent[]): NDKEvent =>
 	[...bids].sort((a, b) => {
@@ -78,142 +72,26 @@ const getLatestBidForGroup = (bids: NDKEvent[]): NDKEvent =>
 		return b.id.localeCompare(a.id)
 	})[0]
 
-const getBidGroupState = (
-	group: BidGroup,
-	settlementEvent: NDKEvent | null,
-	userPubkey: string,
-	now: number,
-): {
-	label: string
-	helper: string
-	toneClass: string
-	reclaimableTokens: PendingNip60Token[]
-	reclaimReadyAt: number
-} => {
-	// Gate on the same readyAt the wallet will check — including the skew buffer —
-	// so "Reclaim available" never precedes "Bid refund opens in X" again.
-	const reclaimableTokens = group.pendingTokens.filter((token) => token.status === 'pending' && getPendingTokenReclaimReadyAt(token) <= now)
-	const pendingTokens = group.pendingTokens.filter((token) => token.status === 'pending')
-	const reclaimReadyAt = getBidGroupReclaimReadyAt(pendingTokens)
-	const trackedTokens = group.pendingTokens.length
-	const allClaimed = trackedTokens > 0 && group.pendingTokens.every((token) => token.status === 'claimed')
-	const allReclaimed = trackedTokens > 0 && group.pendingTokens.every((token) => token.status === 'reclaimed')
-	const settlementStatus = getAuctionSettlementStatus(settlementEvent)
-	const winningBidId = getAuctionSettlementWinningBid(settlementEvent)
-	const winnerPubkey = getAuctionSettlementWinner(settlementEvent)
-
-	if (winningBidId === group.latestBid.id && winnerPubkey === userPubkey) {
-		return {
-			label: 'Winning bid',
-			helper: 'This bid won the auction. Submit your shipping address from the auction page.',
-			toneClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-			reclaimableTokens: [],
-			reclaimReadyAt,
-		}
-	}
-
-	if (allClaimed) {
-		return {
-			label: 'Refund received',
-			helper: 'The seller settlement refund has already been claimed into your wallet.',
-			toneClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-			reclaimableTokens: [],
-			reclaimReadyAt,
-		}
-	}
-
-	if (allReclaimed) {
-		return {
-			label: 'Reclaimed',
-			helper: 'You reclaimed this locked bid chain back into your wallet after locktime.',
-			toneClass: 'border-sky-200 bg-sky-50 text-sky-700',
-			reclaimableTokens: [],
-			reclaimReadyAt,
-		}
-	}
-
-	if (reclaimableTokens.length > 0) {
-		return {
-			label: 'Reclaim available',
-			helper: `${reclaimableTokens.length} locked bid ${reclaimableTokens.length === 1 ? 'part is' : 'parts are'} past locktime and can be reclaimed now.`,
-			toneClass: 'border-amber-200 bg-amber-50 text-amber-700',
-			reclaimableTokens,
-			reclaimReadyAt,
-		}
-	}
-
-	const waitingForReclaim = pendingTokens.length > 0 && reclaimReadyAt > now
-	const countdownHelper = `__COUNTDOWN__:${reclaimReadyAt}`
-
-	if (settlementStatus === 'settled') {
-		return {
-			label: 'Outbid',
-			helper: waitingForReclaim
-				? countdownHelper
-				: trackedTokens > 0
-					? 'Your bid stays timelocked until reclaim opens after locktime.'
-					: 'This device has no tracked reclaim token for the bid chain.',
-			toneClass: 'border-zinc-200 bg-zinc-50 text-zinc-700',
-			reclaimableTokens: [],
-			reclaimReadyAt,
-		}
-	}
-
-	if (settlementStatus === 'reserve_not_met') {
-		return {
-			label: 'Reserve not met',
-			helper: waitingForReclaim
-				? countdownHelper
-				: trackedTokens > 0
-					? 'Reclaim opens automatically after the bid locktime.'
-					: 'This device has no tracked reclaim token for the bid chain.',
-			toneClass: 'border-violet-200 bg-violet-50 text-violet-700',
-			reclaimableTokens: [],
-			reclaimReadyAt,
-		}
-	}
-
-	if (settlementStatus === 'cancelled') {
-		return {
-			label: 'Auction cancelled',
-			helper: waitingForReclaim
-				? countdownHelper
-				: trackedTokens > 0
-					? 'Reclaim opens automatically after the bid locktime.'
-					: 'This device has no tracked reclaim token for the bid chain.',
-			toneClass: 'border-rose-200 bg-rose-50 text-rose-700',
-			reclaimableTokens: [],
-			reclaimReadyAt,
-		}
-	}
-
-	const latestLocktime = group.pendingTokens.reduce(
-		(max, token) => Math.max(max, getPendingTokenLocktime(token)),
-		getBidLocktime(group.latestBid),
-	)
-	if (latestLocktime > now) {
-		return {
-			label: 'Locked',
-			helper: waitingForReclaim
-				? countdownHelper
-				: `No settlement refund yet. Manual reclaim opens after ${formatMaybeDate(latestLocktime)}.`,
-			toneClass: 'border-blue-200 bg-blue-50 text-blue-700',
-			reclaimableTokens: [],
-			reclaimReadyAt,
-		}
-	}
-
-	return {
-		label: 'Bid recorded',
-		helper:
-			trackedTokens > 0
-				? 'Waiting for settlement or for locktime reclaim to open.'
-				: 'This device is missing the local reclaim token for this bid.',
-		toneClass: 'border-zinc-200 bg-zinc-50 text-zinc-700',
-		reclaimableTokens: [],
-		reclaimReadyAt,
-	}
-}
+const getBidGroupState = (group: BidGroup, settlementEvent: NDKEvent | null, userPubkey: string, now: number) =>
+	resolveBidGroupStatus<PendingNip60Token>({
+		latestBidId: group.latestBid.id,
+		latestBidLocktime: getBidLocktime(group.latestBid),
+		tokens: group.pendingTokens.map((token) => ({
+			token,
+			status: token.status,
+			reclaimReadyAt: getPendingTokenReclaimReadyAt(token),
+			locktime: token.context?.locktime ?? 0,
+		})),
+		settlement: settlementEvent
+			? {
+					status: getAuctionSettlementStatus(settlementEvent) ?? null,
+					winningBidId: getAuctionSettlementWinningBid(settlementEvent) ?? null,
+					winnerPubkey: getAuctionSettlementWinner(settlementEvent) ?? null,
+				}
+			: null,
+		userPubkey,
+		now,
+	})
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/products/bids')({
 	component: BidsOverviewComponent,
@@ -462,14 +340,19 @@ function BidsOverviewComponent() {
 							const settlement = settlementResults[index]?.data?.[0] ?? null
 							const now = nowTick
 							const state = getBidGroupState(group, settlement, user.pubkey, now)
-							const helperText = state.helper.startsWith('__COUNTDOWN__:')
-								? `Reclaim opens in ${formatReclaimWaitSeconds(state.reclaimReadyAt - now)}`
-								: state.helper
+							const copy = getBidStatusCopy({
+								status: state.status,
+								reclaimableCount: state.reclaimable.length,
+								waitingForReclaim: state.waitingForReclaim,
+								hasTrackedTokens: state.hasTrackedTokens,
+								latestLocktime: state.latestLocktime,
+								reclaimCountdownLabel: `Reclaim opens in ${formatReclaimWaitSeconds(state.reclaimReadyAt - now)}`,
+							})
 							const totalTrackedAmount = group.pendingTokens.reduce((sum, token) => sum + token.amount, 0)
 							const latestBidAmount = getBidAmount(group.latestBid)
 							const mintLabel = getMintHostname(getBidMint(group.latestBid) || group.pendingTokens[0]?.mintUrl || '') || 'Unknown mint'
 
-							const isWinningBid = state.label === 'Winning bid'
+							const isWinningBid = state.status === 'winning'
 							const claimOrders = claimOrderResults[index]?.data ?? []
 							const myClaimOrder = claimOrders.find((o) => o.pubkey === user.pubkey)
 							const hasClaimed = !!myClaimOrder
@@ -498,11 +381,7 @@ function BidsOverviewComponent() {
 													</div>
 												</div>
 												<div className="flex flex-wrap items-center gap-1.5 shrink-0">
-													<span
-														className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${state.toneClass}`}
-													>
-														{state.label}
-													</span>
+													<BidStatusPill copy={copy} />
 													{isWinningBid && (
 														<Badge
 															variant="outline"
@@ -543,9 +422,9 @@ function BidsOverviewComponent() {
 													size="sm"
 													onClick={(e) => {
 														e.stopPropagation()
-														void handleReclaimBidGroup(group, state.reclaimableTokens)
+														void handleReclaimBidGroup(group, state.reclaimable)
 													}}
-													disabled={state.reclaimableTokens.length === 0 || reclaimingGroup === group.key}
+													disabled={state.reclaimable.length === 0 || reclaimingGroup === group.key}
 													aria-label={`Reclaim bid for ${getAuctionTitle(auction) || 'auction'}`}
 												>
 													{reclaimingGroup === group.key ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
@@ -555,10 +434,7 @@ function BidsOverviewComponent() {
 									>
 										<div className="space-y-4 p-4 bg-gray-50 border-t">
 											{/* Status banner with countdown if applicable */}
-											<div className={`rounded-lg border px-3 py-2 text-sm ${state.toneClass}`}>
-												<p className="font-semibold">{state.label}</p>
-												<p className="mt-1 text-xs">{helperText}</p>
-											</div>
+											<BidStatusBanner copy={copy} />
 
 											{/* Compact auction info — full detail lives on the auction route */}
 											<div className="grid grid-cols-2 gap-3 text-sm">
@@ -637,8 +513,8 @@ function BidsOverviewComponent() {
 													variant="outline"
 													size="sm"
 													className="gap-2"
-													onClick={() => void handleReclaimBidGroup(group, state.reclaimableTokens)}
-													disabled={state.reclaimableTokens.length === 0 || reclaimingGroup === group.key}
+													onClick={() => void handleReclaimBidGroup(group, state.reclaimable)}
+													disabled={state.reclaimable.length === 0 || reclaimingGroup === group.key}
 												>
 													{reclaimingGroup === group.key ? (
 														<Loader2 className="w-3.5 h-3.5 animate-spin" />

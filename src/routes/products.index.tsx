@@ -1,6 +1,6 @@
 import { InfiniteProductList } from '@/components/InfiniteProductList'
 import { Media } from '@ui/components/Media'
-import { ProductFilters, defaultProductFilters, type ProductFilterState } from '@/components/ProductFilters'
+import { ProductFilters, defaultProductFilters, type ProductFilterState } from '@ui/components/ProductFilters'
 import { Badge } from '@ui/primitives/badge'
 import { Button } from '@ui/primitives/button'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'

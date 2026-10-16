@@ -6,13 +6,16 @@ This directory follows `src/components/AGENTS.md` and the repository-level
 ## Purpose
 
 `ui-wrappers/` contains wrapper components built on top of Shadcn primitives
-from `src/components/ui/`. Wrappers add custom styling, behavior, and variant
+from `ui/primitives/`. Wrappers add custom styling, behavior, and variant
 systems while keeping the import hierarchy clean: `ui` → `ui-wrappers` →
 `shared` / `nostr` / `layout` / `dialogs`.
 
+Wrappers that need no app modules (`@/lib`, `@/hooks`) belong in
+`ui/components/` instead, where `ui/boundary.test.ts` enforces that.
+
 ## Import rules
 
-- **May import from:** `@/components/ui/*` (Shadcn primitives), `@/lib/utils`,
+- **May import from:** `@ui/primitives/*` (Shadcn primitives), `@ui/utils/cn`,
   `@/lib/*` (utility hooks/helpers), `@/hooks/*`.
 - **May NOT import from:** `shared/`, `nostr/`, `layout/`, `dialogs/`, or any
   feature directory. Wrappers are low-level — they must not depend on

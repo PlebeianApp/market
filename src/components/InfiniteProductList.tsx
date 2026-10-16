@@ -10,7 +10,7 @@ import { Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import type { ReactNode } from 'react'
-import type { SortOption } from '@/components/ProductFilters'
+import type { SortOption } from '@ui/components/ProductFilters'
 
 interface InfiniteProductListProps {
 	/** Title to display above the product grid */
