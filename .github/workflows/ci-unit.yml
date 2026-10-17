@@ -6,8 +6,10 @@ on:
       - main
       - master
       - 'feature/**'
+  # No base-branch filter: PRs whose base is not `main`/`master` (stacked PRs
+  # based on `auctions`, `security/**`, `pr/**`) were getting no check-suite at
+  # all, because `pull_request.branches` matches the BASE ref of the PR.
   pull_request:
-    branches: [main, master]
   workflow_dispatch:
 
 jobs:
