@@ -1,16 +1,20 @@
 import { blacklistActions } from '@/lib/stores/blacklist'
 import { getATagFromCoords } from './coords'
+import { isSpamProduct } from './spamRules'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 
 /**
  * Filter out blacklisted items from an array of events
  */
 export const filterBlacklistedEvents = <T extends NDKEvent>(events: T[]): T[] => {
+	// Hardcoded spam rules always apply, even before the blacklist is loaded.
+	const nonSpamEvents = events.filter((event) => !isSpamProduct(event))
+
 	if (!blacklistActions.isBlacklistLoaded()) {
-		return events // Return all if blacklist not loaded yet
+		return nonSpamEvents // Return all remaining if blacklist not loaded yet
 	}
 
-	return events.filter((event) => {
+	return nonSpamEvents.filter((event) => {
 		// Check if author is blacklisted
 		if (blacklistActions.isPubkeyBlacklisted(event.pubkey)) {
 			return false
@@ -44,6 +48,10 @@ export const filterBlacklistedEvents = <T extends NDKEvent>(events: T[]): T[] =>
  * Check if a product event is blacklisted
  */
 export const isProductEventBlacklisted = (event: NDKEvent): boolean => {
+	if (isSpamProduct(event)) {
+		return true
+	}
+
 	// Check author
 	if (blacklistActions.isPubkeyBlacklisted(event.pubkey)) {
 		return true
