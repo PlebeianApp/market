@@ -1,0 +1,1554 @@
+diff --git a/cashu-wrapper/ts/demo-maintainer-offline.ts b/cashu-wrapper/ts/demo-maintainer-offline.ts
+index ed507c3..1a71ad3 100644
+--- a/cashu-wrapper/ts/demo-maintainer-offline.ts
++++ b/cashu-wrapper/ts/demo-maintainer-offline.ts
+@@ -14,14 +14,14 @@ import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
+ 
+ import {
+ 	readDemoSigAllTerminal,
+-	reconcileDemoSigAllSwap,
++	reconcileDemoSigAllSwapV2,
+ 	restoreDemoSigAllTerminalByIdentity,
+ 	restoreDemoSigAllTerminalResponse,
+ 	submitDemoSigAllRefundSwap,
+ 	submitDemoSigAllSwap,
+ 	type DemoSigAllDurableRequest,
+ 	type DemoSigAllRecoveryMintStatePort,
+-	type DemoSigAllRecoveryResult,
++	type DemoSigAllRecoveryResultV2,
+ 	type DemoSigAllRecoveryStore,
+ 	type DemoSigAllTerminalMetadata,
+ 	type DemoSigAllTerminalResponsePort,
+@@ -233,7 +233,7 @@ export interface DemoMaintainerOfflineDeferred {
+ export type DemoMaintainerOfflineExecutionResult = DemoMaintainerOfflineSuccess | DemoMaintainerOfflineDeferred
+ 
+ export type DemoMaintainerOfflineRecoveryResult = DemoMaintainerOfflineSuccess | Exclude<
+-	DemoSigAllRecoveryResult,
++	DemoSigAllRecoveryResultV2,
+ 	{ status: 'recovered' | 'terminal_replay' }
+ >
+ 
+@@ -980,7 +980,7 @@ export function createDemoMaintainerOfflineExecutor(options: {
+ 			const refundPath = record.authorization === undefined && branch.role === 'refund' && nowSeconds() >= branch.locktime
+ 			if (!refundPath && record.authorization === undefined) refuse('DEMO_MAINTAINER_AUTHORIZATION', 'no pre-cutoff durable MAIN authorization exists to recover')
+ 			const value = durableRequest(refundPath ? { ...record, authorization: undefined } : record)
+-			const result = await reconcileDemoSigAllSwap({ store: recoveryStore, recovery, value, now })
++			const result = await reconcileDemoSigAllSwapV2({ store: recoveryStore, recovery, value, now })
+ 			if (result.status === 'recovered') return deliver(record, result.signatures, 'exact_recovery', result.terminal)
+ 			if (result.status === 'terminal_replay') {
+ 				const signatures = await restoreDemoSigAllTerminalResponse({ store: recoveryStore, recovery: terminalResponse, value, now })
+diff --git a/cashu-wrapper/ts/demo-sigall-recovery.test.ts b/cashu-wrapper/ts/demo-sigall-recovery.test.ts
+index 68d7553..95147c8 100644
+--- a/cashu-wrapper/ts/demo-sigall-recovery.test.ts
++++ b/cashu-wrapper/ts/demo-sigall-recovery.test.ts
+@@ -5,6 +5,7 @@ import {
+ 	demoSigAllExactRequestDigest,
+ 	demoSigAllResponseDigest,
+ 	reconcileDemoSigAllSwap,
++	reconcileDemoSigAllSwapV2,
+ 	restoreDemoSigAllTerminalResponse,
+ 	submitDemoSigAllSwap,
+ 	type DemoSigAllRecoveryMintStatePort,
+@@ -273,10 +274,10 @@ describe('durable demo SIG_ALL recovery', () => {
+ 			mint: { async swapExact() { mintCalls += 1; return { signatures: signatures() } } },
+ 		})).rejects.toMatchObject({ code: 'DEMO_SIGALL_RECOVERY_CUTOFF' })
+ 		expect(mintCalls).toBe(0)
+-		expect(backing.rows.get(value().scope)?.state).toBe('retry_ready')
++		expect(backing.rows.get(value().scope)?.state).toBe('ambiguous')
+ 	})
+ 
+-	test('safe reconciliation is persisted separately, then permits exactly one explicit retry', async () => {
++	test('opaque safe-to-retry reconciliation fails closed and never permits resubmission', async () => {
+ 		const rows = new Map<string, DemoSigAllRecoveryRecord>()
+ 		let calls = 0
+ 		await expect(submitDemoSigAllSwap({
+@@ -290,16 +291,58 @@ describe('durable demo SIG_ALL recovery', () => {
+ 				return { status: 'safe_to_retry', reconciliationId: 'authoritative-fence-17' }
+ 			},
+ 		}
+-		const authorized = await reconcileDemoSigAllSwap({ store: durableStore(rows), recovery, value: value() })
+-		expect(authorized.status).toBe('retry_authorized')
++		const authorized = await reconcileDemoSigAllSwapV2({ store: durableStore(rows), recovery, value: value() })
++		expect(authorized).toEqual({ status: 'manual_intervention_required', operationId: request().operationId, reason: 'unverified_retry_fence' })
+ 		expect(calls).toBe(1)
+-		const retried = await submitDemoSigAllSwap({
++		await expect(submitDemoSigAllSwap({
+ 			store: durableStore(rows), value: value(),
+ 			mint: { async swapExact() { calls += 1; return { signatures: signatures() } } },
++		})).rejects.toMatchObject({ code: 'DEMO_SIGALL_RECOVERY_AMBIGUOUS' })
++		expect(calls).toBe(1)
++		expect(rows.get(value().scope)?.attemptNumber).toBe(1)
++		expect(rows.get(value().scope)?.state).toBe('ambiguous')
++	})
++
++	test('legacy durable retry-ready evidence is byte-preserved and maps to manual intervention', async () => {
++		const rows = new Map<string, DemoSigAllRecoveryRecord>()
++		await expect(submitDemoSigAllSwap({
++			store: durableStore(rows), value: value(),
++			mint: { async swapExact() { throw new Error('timeout') } },
++		})).rejects.toMatchObject({ code: 'DEMO_SIGALL_RECOVERY_AMBIGUOUS' })
++		const legacy = rows.get(value().scope)!
++		legacy.state = 'retry_ready'
++		legacy.reconciliationDigest = digest('a')
++		const before = JSON.stringify(legacy)
++		let recoveryCalls = 0
++		const result = await reconcileDemoSigAllSwapV2({
++			store: durableStore(rows), value: value(),
++			recovery: { async reconcileExact() { recoveryCalls += 1; return { status: 'indeterminate', reasonCode: 'still-unknown' } } },
+ 		})
+-		expect(retried.status).toBe('submitted')
+-		expect(calls).toBe(2)
+-		expect(rows.get(value().scope)?.attemptNumber).toBe(2)
++		expect(result).toEqual({ status: 'manual_intervention_required', operationId: request().operationId, reason: 'unverified_retry_fence' })
++		expect(recoveryCalls).toBe(1)
++		expect(JSON.stringify(rows.get(value().scope))).toBe(before)
++		let mintCalls = 0
++		await expect(submitDemoSigAllSwap({ store: durableStore(rows), value: value(), mint: { async swapExact() { mintCalls += 1; return { signatures: signatures() } } } })).rejects.toMatchObject({ code: 'DEMO_SIGALL_RECOVERY_AMBIGUOUS' })
++		expect(mintCalls).toBe(0)
++	})
++
++	test('legacy retry-ready may recover an exact already-established outcome without resubmission', async () => {
++		const rows = new Map<string, DemoSigAllRecoveryRecord>()
++		let mintCalls = 0
++		await expect(submitDemoSigAllSwap({
++			store: durableStore(rows), value: value(),
++			mint: { async swapExact() { mintCalls += 1; throw new Error('response lost') } },
++		})).rejects.toMatchObject({ code: 'DEMO_SIGALL_RECOVERY_AMBIGUOUS' })
++		const legacy = rows.get(value().scope)!
++		legacy.state = 'retry_ready'
++		legacy.reconciliationDigest = digest('b')
++		const recovered = await reconcileDemoSigAllSwapV2({
++			store: durableStore(rows), value: value(),
++			recovery: { async reconcileExact() { return { status: 'completed', signatures: signatures() } } },
++		})
++		expect(recovered.status).toBe('recovered')
++		expect(rows.get(value().scope)?.state).toBe('succeeded')
++		expect(mintCalls).toBe(1)
+ 	})
+ 
+ 	test('exact recovery terminalizes the operation without a second spend request', async () => {
+diff --git a/cashu-wrapper/ts/demo-sigall-recovery.ts b/cashu-wrapper/ts/demo-sigall-recovery.ts
+index b60a7c1..1ceac70 100644
+--- a/cashu-wrapper/ts/demo-sigall-recovery.ts
++++ b/cashu-wrapper/ts/demo-sigall-recovery.ts
+@@ -6,11 +6,10 @@
+  * outputs, but never proofs, witnesses, secrets, unblinding factors, or mint signatures. A response
+  * is represented durably only by a digest and non-bearer metadata.
+  *
+- * An uncertain call is never retried by `reconcileDemoSigAllSwap`. Reconciliation must first produce
+- * an authoritative, fenced `safe_to_retry` decision and persist `retry_ready`; only a later explicit
+- * `submitDemoSigAllSwap` call may make the next attempt. A live recovery adapter must not report
+- * `safe_to_retry` from a racy pair of ordinary reads: it must guarantee that the prior request cannot
+- * subsequently commit (for example through a mint-supported idempotency/fencing mechanism).
++ * An uncertain call is never retried. Accepted V2 recovery may terminalize only an exact completed
++ * response; `safe_to_retry` and legacy `retry_ready` evidence map to manual intervention because the
++ * accepted mint contract has no independently verified retry fence. This preserves old durable bytes
++ * without turning them into authority for a second mint submission.
+  */
+ import { schnorr } from '@noble/curves/secp256k1.js'
+ import { sha256 } from '@noble/hashes/sha2.js'
+@@ -127,6 +126,10 @@ export type DemoSigAllRecoveryResult =
+ 	| { status: 'terminal_replay'; terminal: DemoSigAllTerminalMetadata }
+ 	| { status: 'indeterminate'; reasonCode: string }
+ 
++export type DemoSigAllRecoveryResultV2 =
++	| Exclude<DemoSigAllRecoveryResult, { status: 'retry_ready' | 'retry_authorized' }>
++	| { status: 'manual_intervention_required'; operationId: string; reason: 'unverified_retry_fence' }
++
+ export interface DemoSigAllDurableRequest {
+ 	scope: string
+ 	operationRoot: string
+@@ -485,8 +488,9 @@ function validatedTerminal(record: DemoSigAllRecoveryRecord): DemoSigAllTerminal
+ }
+ 
+ /**
+- * Make one exact submission. `prepared` is the first attempt; `retry_ready` is reachable only after
+- * a separately persisted authoritative reconciliation. All uncertain failures become `ambiguous`.
++ * Make one exact submission. Only `prepared` admits the first attempt. Legacy `retry_ready` records
++ * remain readable for recovery, but never authorize a submission. All uncertain failures become
++ * `ambiguous`.
+  */
+ export async function submitDemoSigAllSwap(options: {
+ 	store: DemoSigAllRecoveryStore
+@@ -509,26 +513,23 @@ export async function submitDemoSigAllSwap(options: {
+ 	if (record.state === 'succeeded') {
+ 		return { status: 'terminal_replay', terminal: validatedTerminal(record) }
+ 	}
+-	if (record.state === 'attempting' || record.state === 'ambiguous') {
++	if (record.state === 'attempting' || record.state === 'ambiguous' || record.state === 'retry_ready') {
+ 		refuse('DEMO_SIGALL_RECOVERY_AMBIGUOUS', 'exact reconciliation is required before any resubmission')
+ 	}
+ 	const settlementCutoff = demoSigAllSettlementCutoff(value.request.locktime)
+ 	if (clockSeconds() >= settlementCutoff) {
+ 		refuse('DEMO_SIGALL_RECOVERY_CUTOFF', 'exact request reached the settlement safety cutoff before attempt admission')
+ 	}
+-	if (record.state !== 'prepared' && record.state !== 'retry_ready') refuse('DEMO_SIGALL_RECOVERY_CORRUPT', 'unsupported attempt state')
++	if (record.state !== 'prepared') refuse('DEMO_SIGALL_RECOVERY_CORRUPT', 'unsupported attempt state')
+ 	record = await cas(store, record, {
+ 		state: 'attempting',
+ 		attemptNumber: record.attemptNumber + 1,
+ 		reconciliationDigest: undefined,
+ 	}, clock())
+ 	if (clockSeconds() >= settlementCutoff) {
+-		// No mint I/O occurred, so a retry-ready record is safe; every later submission still
+-		// fails the immutable locktime check and cannot emit the expired main-path spend.
+-		await cas(store, record, {
+-			state: 'retry_ready',
+-			reconciliationDigest: hash('COCO_DEMO_SIGALL_EXPIRED_BEFORE_MINT_V1'),
+-		}, clock())
++		// No mint I/O occurred, but the accepted V2 policy has no retry fence. Preserve the
++		// admitted attempt as ambiguous rather than minting a local retry capability.
++		await cas(store, record, { state: 'ambiguous', reconciliationDigest: undefined }, clock())
+ 		refuse('DEMO_SIGALL_RECOVERY_CUTOFF', 'durable attempt preparation reached the settlement safety cutoff before mint I/O')
+ 	}
+ 	let signatures: BlindedSignature[]
+@@ -579,10 +580,10 @@ export async function submitDemoSigAllRefundSwap(options: {
+ 	if (record.state === 'succeeded') {
+ 		return { status: 'terminal_replay', terminal: validatedTerminal(record) }
+ 	}
+-	if (record.state === 'attempting' || record.state === 'ambiguous') {
++	if (record.state === 'attempting' || record.state === 'ambiguous' || record.state === 'retry_ready') {
+ 		refuse('DEMO_SIGALL_RECOVERY_AMBIGUOUS', 'exact reconciliation is required before any refund resubmission')
+ 	}
+-	if (record.state !== 'prepared' && record.state !== 'retry_ready') {
++	if (record.state !== 'prepared') {
+ 		refuse('DEMO_SIGALL_RECOVERY_CORRUPT', 'unsupported refund attempt state')
+ 	}
+ 	record = await cas(store, record, {
+@@ -592,12 +593,8 @@ export async function submitDemoSigAllRefundSwap(options: {
+ 	}, clock())
+ 	validateRefundPath(value.request)
+ 	if (clockSeconds() < value.request.locktime) {
+-		// No mint I/O occurred. Preserve an explicitly retryable state for a monotonic clock source to
+-		// re-enter only after the immutable locktime.
+-		await cas(store, record, {
+-			state: 'retry_ready',
+-			reconciliationDigest: hash('COCO_DEMO_SIGALL_REFUND_PREEXPIRY_BEFORE_MINT_V1'),
+-		}, clock())
++		// A backward-moving clock is not retry authority. Keep the admitted attempt fail-closed.
++		await cas(store, record, { state: 'ambiguous', reconciliationDigest: undefined }, clock())
+ 		refuse('DEMO_SIGALL_REFUND_NOT_EXPIRED', 'clock moved before locktime prior to refund mint I/O')
+ 	}
+ 	let signatures: BlindedSignature[]
+@@ -639,8 +636,7 @@ export async function reconcileDemoSigAllSwap(options: {
+ 		return { status: 'terminal_replay', terminal: validatedTerminal(record) }
+ 	}
+ 	if (record.state === 'prepared') return { status: 'not_attempted' }
+-	if (record.state === 'retry_ready') return { status: 'retry_ready' }
+-	if (record.state !== 'attempting' && record.state !== 'ambiguous') refuse('DEMO_SIGALL_RECOVERY_CORRUPT', 'unsupported attempt state')
++	if (record.state !== 'attempting' && record.state !== 'ambiguous' && record.state !== 'retry_ready') refuse('DEMO_SIGALL_RECOVERY_CORRUPT', 'unsupported attempt state')
+ 	const result = await recovery.reconcileExact({
+ 		schema: 'COCO_DEMO_SIGALL_RECONCILIATION_QUERY_V1',
+ 		scope: record.scope,
+@@ -652,14 +648,15 @@ export async function reconcileDemoSigAllSwap(options: {
+ 	})
+ 	if (result.status === 'indeterminate') {
+ 		requireText(result.reasonCode, 'reasonCode')
++		if (record.state === 'retry_ready') {
++			return { status: 'indeterminate', reasonCode: 'unverified_retry_fence' }
++		}
+ 		if (record.state === 'attempting') record = await cas(store, record, { state: 'ambiguous' }, clock())
+ 		return { status: 'indeterminate', reasonCode: result.reasonCode }
+ 	}
+ 	if (result.status === 'safe_to_retry') {
+ 		requireText(result.reconciliationId, 'reconciliationId')
+-		const reconciliationDigest = hash(result.reconciliationId)
+-		await cas(store, record, { state: 'retry_ready', reconciliationDigest }, clock())
+-		return { status: 'retry_authorized', reconciliationDigest }
++		return { status: 'indeterminate', reasonCode: 'unverified_retry_fence' }
+ 	}
+ 	// As with a direct mint response, reconciliation output remains externally owned until cloned.
+ 	const signatures = cloneSignatures(result.signatures)
+@@ -669,6 +666,23 @@ export async function reconcileDemoSigAllSwap(options: {
+ 	return { status: 'recovered', signatures, terminal }
+ }
+ 
++/**
++ * Accepted V2 public recovery surface. The V1-compatible function above keeps its historical
++ * TypeScript union for adjacent callers, but it no longer creates retry authority. This wrapper
++ * converts the fail-closed compatibility reason into the exact V2 manual result.
++ */
++export async function reconcileDemoSigAllSwapV2(
++	options: Parameters<typeof reconcileDemoSigAllSwap>[0],
++): Promise<DemoSigAllRecoveryResultV2> {
++	const operationId = structuredClone(options.value.request.operationId)
++	const result = await reconcileDemoSigAllSwap(options)
++	if (result.status === 'retry_ready' || result.status === 'retry_authorized'
++		|| (result.status === 'indeterminate' && result.reasonCode === 'unverified_retry_fence')) {
++		return { status: 'manual_intervention_required', operationId, reason: 'unverified_retry_fence' }
++	}
++	return result
++}
++
+ /**
+  * Restore blinded signatures after a succeeded operation without making another spend attempt.
+  * The exact restored response must hash to the terminal response digest already committed by the
+diff --git a/market-app/e2e/demo-payment-coordinator.e2e.ts b/market-app/e2e/demo-payment-coordinator.e2e.ts
+index 5039a30..28f3dc6 100644
+--- a/market-app/e2e/demo-payment-coordinator.e2e.ts
++++ b/market-app/e2e/demo-payment-coordinator.e2e.ts
+@@ -1,7 +1,7 @@
+ import { expect, test } from "bun:test";
+ 
+ import { demoAuthSignerPublicKey, signDemoAuthEventId } from "../../cashu-wrapper/ts/index.ts";
+-import type { DemoMaintainerOfflineRecoveryResult, DemoMaintainerOfflineSuccess } from "../../cashu-wrapper/ts/demo-maintainer-offline.ts";
++import { demoMaintainerFederationSessionId, type DemoMaintainerOfflineRecoveryResult, type DemoMaintainerOfflineSuccess } from "../../cashu-wrapper/ts/demo-maintainer-offline.ts";
+ import { deriveSellerChildPubkey } from "../../cashu-wrapper/ts/seller-child.ts";
+ import type { CommittedAuctionBatchV2, CommittedBidEntryV1 } from "../plugins/committed-bid-consumer.ts";
+ import {
+@@ -10,9 +10,22 @@ import {
+ 	DEMO_PAYMENT_MAX_BATCH_UTF8_BYTES,
+ 	DEMO_PAYMENT_POST_LOCKTIME_RACE,
+ 	DemoOfflinePaymentCoordinator,
++	advanceDemoPaymentVerificationV2,
++	buildDemoPaymentCompletionV2,
+ 	createBrowserDemoPaymentPersistence,
+ 	createDemoPaymentApproval,
++	deriveDemoPaymentDispositionsV2,
++	deriveDemoPaymentOperationMembershipV2,
++	reserveDemoMainSessionBeforeCutoffV2,
++	verifyDemoPaymentApprovalSetV2,
++	verifyDemoPaymentApprovalV2,
+ 	verifyDemoPaymentConsensusHandoff,
++	type DemoAuthenticatedPaymentCommitmentsV2,
++	type DemoCommittedAuctionHistoryChunkV2,
++	type DemoCommittedAuctionHistoryOpenV2,
++	type DemoMainSessionReservationPortV2,
++	type DemoPaymentApprovalSnapshotOpenV2,
++	type DemoPaymentApprovalV2,
+ 	type DemoPaymentConsensusEvidencePort,
+ 	type DemoPaymentConsensusHandoff,
+ 	type DemoPaymentLockManager,
+@@ -20,6 +33,8 @@ import {
+ 	type DemoPaymentOfflineIdentityPort,
+ 	type DemoPaymentRawSignedBidPort,
+ 	type DemoPaymentStorageArea,
++	type DemoPaymentVerificationCheckpointV2,
++	type DemoPaymentVerificationStoreV2,
+ } from "../plugins/demo-payment-coordinator.ts";
+ import type { DemoBidIntentRecord } from "../plugins/demo-auth-bid-store.ts";
+ import {
+@@ -304,3 +319,230 @@ test("new V1 approval creation preserves printable ASCII metacharacters exactly"
+ 	expect(captured).not.toBeNull();
+ 	expect((JSON.parse(captured!.content) as { chain_id: string }).chain_id).toBe(printable);
+ });
++
++const utf8 = (value: string): Uint8Array => new TextEncoder().encode(value);
++const hexBytes = (value: string): Uint8Array => Uint8Array.from({ length: value.length / 2 }, (_, index) => Number.parseInt(value.slice(index * 2, index * 2 + 2), 16));
++const uint64 = (value: number): Uint8Array => {
++	const out = new Uint8Array(8); let held = BigInt(value);
++	for (let index = 7; index >= 0; index -= 1) { out[index] = Number(held & 255n); held >>= 8n; }
++	return out;
++};
++const hashParts = async (...parts: Uint8Array[]): Promise<string> => {
++	const joined = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
++	let offset = 0; for (const part of parts) { joined.set(part, offset); offset += part.length; }
++	return [...new Uint8Array(await crypto.subtle.digest("SHA-256", joined as BufferSource))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
++};
++
++async function approvalV2Fixture(overrides: Partial<DemoPaymentApprovalV2> = {}): Promise<DemoPaymentApprovalV2> {
++	const base: DemoPaymentApprovalV2 = {
++		schema: "DemoPaymentApprovalV2", authNetworkId: NETWORK, chainId: CHAIN, auctionId: AUCTION,
++		operationId: "operation-v2", bidId: "bid-v2", bidEventId: "3".repeat(64), bidderActorId: actorIds[0]!,
++		bidderCashuPublicKey: `02${"b".repeat(64)}`, refundCashuPublicKey: `03${"c".repeat(64)}`,
++		refundKeyVersion: "separate-cashu-refund-key-v1", amount: 21, mintUrl: "https://mint.example",
++		sellerP2pkXpub: SELLER_XPUB, sellerDerivationPath: SELLER_PATH,
++		sellerRecipientPublicKey: deriveSellerChildPubkey(SELLER_XPUB, SELLER_PATH),
++		conditionFingerprint: "5".repeat(64), winnerPackageDigest: "6".repeat(64), refundPackageDigest: "7".repeat(64),
++		closeTime: 1_900_000_100, settlementWindowSeconds: 60, validUntil: 1_900_000_100, locktime: 1_900_000_300,
++		approvalLifetimePolicyVersion: "terminal-bound-exact-operation-v1", approvalCreatedAt: 1_900_000_000,
++		approvalEventId: "0".repeat(64), approvalSignature: "0".repeat(128),
++	};
++	const value = { ...base, ...overrides };
++	const content = JSON.stringify({
++		schema: value.schema, auth_network_id: value.authNetworkId, chain_id: value.chainId, auction_id: value.auctionId,
++		operation_id: value.operationId, bid_id: value.bidId, bid_event_id: value.bidEventId,
++		bidder_cashu_public_key: value.bidderCashuPublicKey, refund_cashu_public_key: value.refundCashuPublicKey,
++		refund_key_version: value.refundKeyVersion, amount: value.amount, mint_url: value.mintUrl,
++		seller_p2pk_xpub: value.sellerP2pkXpub, seller_derivation_path: value.sellerDerivationPath,
++		seller_recipient_public_key: value.sellerRecipientPublicKey, condition_fingerprint: value.conditionFingerprint,
++		winner_package_digest: value.winnerPackageDigest, refund_package_digest: value.refundPackageDigest,
++		close_time: value.closeTime, settlement_window_seconds: value.settlementWindowSeconds, valid_until: value.validUntil,
++		locktime: value.locktime, approval_lifetime_policy_version: value.approvalLifetimePolicyVersion,
++	});
++	const event = await sign(privateKeys[0], {
++		pubkey: value.bidderActorId, created_at: value.approvalCreatedAt, kind: 28643,
++		tags: [["protocol", "plebeian-auction-fake-ecash-payment"], ["version", "2"], ["environment", value.authNetworkId], ["bid_event", value.bidEventId]], content,
++	});
++	return { ...value, approvalEventId: event.id, approvalSignature: event.sig };
++}
++
++test("ApprovalV2 validates exact signed bytes, distinct roles, lifetime, and the five-field membership join", async () => {
++	const approval = await approvalV2Fixture();
++	const keyRoles = { committeePublicKey: `02${"d".repeat(64)}`, validatorPublicKeys: [`03${"e".repeat(64)}`] };
++	const verified = await verifyDemoPaymentApprovalV2(approval, keyRoles);
++	expect(verified.approval.schema).toBe("DemoPaymentApprovalV2");
++	expect(verified.approvalDigest).toMatch(/^[0-9a-f]{64}$/);
++	const membership = {
++		members: [{ operationId: approval.operationId, bidId: approval.bidId, bidEventId: approval.bidEventId, bidderActorId: approval.bidderActorId, amount: approval.amount, committedHeight: 7, committedEntryIndex: 1 }],
++		operationMembershipSha256: "9".repeat(64),
++	};
++	const set = await verifyDemoPaymentApprovalSetV2({ approvals: [approval], membership, expected: { authNetworkId: NETWORK, chainId: CHAIN, auctionId: AUCTION }, keyRoles });
++	expect(set.approvals).toHaveLength(1);
++	expect(set.verifiedApprovalSetSha256).toMatch(/^[0-9a-f]{64}$/);
++	await expect(verifyDemoPaymentApprovalV2(await approvalV2Fixture({ bidderCashuPublicKey: `02${actorIds[0]}` }), keyRoles)).rejects.toThrow("role-key-alias");
++	await expect(verifyDemoPaymentApprovalSetV2({ approvals: [approval], membership: { ...membership, members: [{ ...membership.members[0]!, committedEntryIndex: 0, amount: 22 }] }, expected: { authNetworkId: NETWORK, chainId: CHAIN, auctionId: AUCTION }, keyRoles })).rejects.toThrow("approval-member-join");
++});
++
++test("membership preserves the original bids-array index before auction filtering and exact dispositions", async () => {
++	const batches: CommittedAuctionBatchV2[] = Array.from({ length: 7 }, (_, index) => ({
++		schema: "CommittedAuctionBatchV2", auth_profile: "DEMO_AUTH_V1", auth_network_id: NETWORK, chain_id: "chain-test",
++		height: index + 1, pbts_seconds: 100 + index, app_hash: String(index + 1).repeat(64).slice(0, 64), bids: [], closures: [],
++	}));
++	batches[6] = { ...batches[6]!, bids: [
++		{ actor_id: "1".repeat(64), operation_id: "op-other", auction_id: "auction-other", bid_id: "bid-other", event_id: "2".repeat(64), amount: 999, displaced_refund_eligible: false },
++		{ actor_id: "4".repeat(64), operation_id: "op-target", auction_id: "auction-target", bid_id: "bid-target", event_id: "3".repeat(64), amount: 2100, displaced_refund_eligible: false },
++	] };
++	const expected = { authNetworkId: NETWORK, chainId: "chain-test", auctionId: "auction-target" };
++	const membership = await deriveDemoPaymentOperationMembershipV2(batches, expected, 8);
++	expect(membership.members[0]?.committedEntryIndex).toBe(1);
++	expect(membership.operationMembershipSha256).toBe("52089e597ea98ecf4909cd27921bd5f784c95b99e1c05d5586946269d19215a0");
++	const shifted = structuredClone(batches); shifted[6] = { ...shifted[6]!, bids: [shifted[6]!.bids[1]!] };
++	expect((await deriveDemoPaymentOperationMembershipV2(shifted, expected, 8)).operationMembershipSha256).toBe("42001860425171f37e04d69c44eb305813636f62c2d0229804be93270cbf0f08");
++	const reserve = deriveDemoPaymentDispositionsV2(membership, { auth_network_id: NETWORK, chain_id: "chain-test", auction_id: "auction-target", height: 8, pbts_seconds: 108, effective_end: 108, app_hash: "8".repeat(64), close_outcome: "reserve_not_met", winner_bid_id: "", winner_actor_id: "", winner_operation_id: "", amount: 0 });
++	expect(reserve.map(({ role }) => role)).toEqual(["refund"]);
++});
++
++test("completion identity exact-matches all four durable journal digests and is restart-stable", async () => {
++	const requestDigest = "1".repeat(64); const responseDigest = "2".repeat(64); const recipientRequestDigest = "3".repeat(64); const recipientResponseDigest = "4".repeat(64);
++	const idempotencyKey = await hash(`COCO_DEMO_RECIPIENT_IMPORT_V1\0${recipientRequestDigest}`);
++	const options = {
++		evidenceDigest: "5".repeat(64), selectionRoot: "6".repeat(64), templateDigest: "7".repeat(64), bundleDigest: "8".repeat(64),
++		operationId: "operation-v2", role: "winner_settlement" as const, recipientPublicKey: `02${"9".repeat(64)}`, amount: 21, proofCount: 2,
++		mintRequestDigest: requestDigest, mintResponseDigest: responseDigest, recipientRequestDigest, recipientResponseDigest,
++		mintJournal: { requestDigest, responseDigest, outputCount: 2, amountTotal: 21, source: "exact_recovery" as const, completedAt: 1234 },
++		recipientJournal: { schema: "DemoRecipientImportCompletionV2" as const, operationId: "operation-v2", role: "winner_settlement" as const,
++			recipientPublicKey: `02${"9".repeat(64)}`, amount: 21, proofCount: 2, recipientRequestDigest, recipientResponseDigest, recipientImportIdempotencyKey: idempotencyKey, imported: true as const },
++		deliverySource: "terminal_restore" as const, alreadyImported: true, observedAt: 9999,
++	};
++	const first = await buildDemoPaymentCompletionV2(options);
++	const replay = await buildDemoPaymentCompletionV2({ ...options, deliverySource: "gate_replay", observedAt: 10001 });
++	expect(replay.completion).toEqual(first.completion);
++	expect(replay.completionDigest).toBe(first.completionDigest);
++	await expect(buildDemoPaymentCompletionV2({ ...options, recipientResponseDigest: "a".repeat(64) })).rejects.toThrow("completion-journal-mismatch");
++});
++
++test("atomic MAIN reservation rejects cutoff and clock rollback while racing sessions remain unique", async () => {
++	let seconds = 100; let floor = 0; let attempt = 0;
++	const port: DemoMainSessionReservationPortV2 = {
++		async reserveMainSessionBeforeCutoff(request) {
++			if (seconds < floor) throw new Error("clock-rollback");
++			if (seconds >= request.cutoffSeconds) throw new Error("cutoff");
++			floor = seconds; attempt += 1;
++			return { schema: "DemoMainSessionReservationV2", clockPolicyVersion: request.clockPolicyVersion, clockId: request.expectedClockId,
++				observedSeconds: seconds, attemptNumber: attempt, sessionId: demoMaintainerFederationSessionId(request.selectionRoot, attempt) };
++		},
++	};
++	const request = { scope: "scope-v2", bundleDigest: "b".repeat(64), selectionRoot: "c".repeat(64), cutoffSeconds: 120, expectedClockId: "executor-clock-1", clockPolicyVersion: "durable-monotonic-executor-seconds-v1" as const };
++	const reservations = await Promise.all([reserveDemoMainSessionBeforeCutoffV2(port, request), reserveDemoMainSessionBeforeCutoffV2(port, request)]);
++	expect(reservations.map(({ attemptNumber }) => attemptNumber)).toEqual([1, 2]);
++	expect(new Set(reservations.map(({ sessionId }) => sessionId)).size).toBe(2);
++	seconds = 99;
++	await expect(reserveDemoMainSessionBeforeCutoffV2(port, request)).rejects.toThrow("clock-rollback");
++	seconds = 120;
++	await expect(reserveDemoMainSessionBeforeCutoffV2(port, request)).rejects.toThrow("cutoff");
++});
++
++test("bounded V2 verification advances exactly one immutable history chunk per invocation", async () => {
++	const batches: CommittedAuctionBatchV2[] = [
++		{ schema: "CommittedAuctionBatchV2", auth_profile: "DEMO_AUTH_V1", auth_network_id: NETWORK, chain_id: CHAIN, height: 1, pbts_seconds: 101, app_hash: "1".repeat(64), bids: [], closures: [] },
++		{ schema: "CommittedAuctionBatchV2", auth_profile: "DEMO_AUTH_V1", auth_network_id: NETWORK, chain_id: CHAIN, height: 2, pbts_seconds: 102, app_hash: "2".repeat(64), bids: [], closures: [{ auth_network_id: NETWORK, chain_id: CHAIN, auction_id: AUCTION, height: 2, pbts_seconds: 102, effective_end: 102, app_hash: "2".repeat(64), close_outcome: "no_bids", winner_bid_id: "", winner_actor_id: "", winner_operation_id: "", amount: 0 }] },
++	];
++	const zero = "0".repeat(64); const marker = "synthetic-storage-r4";
++	const chunks: DemoCommittedAuctionHistoryChunkV2[] = [];
++	let previous = zero;
++	for (const [index, batch] of batches.entries()) {
++		const provisional: DemoCommittedAuctionHistoryChunkV2 = { schema: "DemoCommittedAuctionHistoryChunkV2", immutableStorageMarker: marker, storageRootSha256: zero, index, firstHeight: index + 1, lastHeight: index + 1, previousChunkDigest: previous, batches: [batch], chunkDigest: zero };
++		const body = JSON.stringify({ schema: provisional.schema, immutableStorageMarker: provisional.immutableStorageMarker, index: provisional.index, firstHeight: provisional.firstHeight, lastHeight: provisional.lastHeight, batches: provisional.batches });
++		const chunkDigest = await hashParts(utf8("COCO_DEMO_COMMITTED_AUCTION_HISTORY_CHUNK_V2\0"), hexBytes(previous), uint64(index), utf8(body));
++		chunks.push({ ...provisional, chunkDigest }); previous = chunkDigest;
++	}
++	const historyDigest = await hash(JSON.stringify(batches));
++	const membershipDigest = await hash(`COCO_DEMO_PAYMENT_OPERATION_MEMBERSHIP_V2\0[]`);
++	const approvalDigest = await hash(`COCO_DEMO_PAYMENT_APPROVAL_SET_V2\0[]`);
++	const rootDescriptor = { schema: "DemoCommittedAuctionHistoryOpenV2", authNetworkId: NETWORK, chainId: CHAIN, firstHeight: 1, throughHeight: 2,
++		throughAppHash: batches[1]!.app_hash, immutableStorageMarker: marker, chunkCount: 2, batchCount: 2, packingPolicy: "greedy-contiguous-height-v1",
++		maxBatchesPerChunk: 64, maxCanonicalBatchUtf8Bytes: 65536, maxCanonicalBatchArrayUtf8BytesPerChunk: 4194304, finalChunkDigest: previous,
++		canonicalBatchHistorySha256: historyDigest };
++	const storageRoot = await hash(`COCO_DEMO_COMMITTED_AUCTION_HISTORY_ROOT_V2\0${JSON.stringify(rootDescriptor)}`);
++	for (let index = 0; index < chunks.length; index += 1) chunks[index] = { ...chunks[index]!, storageRootSha256: storageRoot };
++	const open: DemoCommittedAuctionHistoryOpenV2 = { ...rootDescriptor, schema: "DemoCommittedAuctionHistoryOpenV2", packingPolicy: "greedy-contiguous-height-v1", firstHeight: 1, maxBatchesPerChunk: 64, maxCanonicalBatchUtf8Bytes: 65536, maxCanonicalBatchArrayUtf8BytesPerChunk: 4194304, storageRootSha256: storageRoot };
++	const snapshotDescriptor = { schema: "DemoPaymentApprovalSnapshotOpenV2" as const, snapshotMarker: "synthetic-approvals-r4", authNetworkId: NETWORK, chainId: CHAIN, auctionId: AUCTION,
++		operationMembershipSha256: membershipDigest, recordCount: 0, pageCount: 0, maxRecordsPerPage: 64 as const, maxCanonicalApprovalBytesPerRecord: 8192 as const,
++		maxCanonicalApprovalArrayBytesPerPage: 524353 as const, finalPageDigest: zero, verifiedApprovalSetSha256: approvalDigest };
++	const snapshot: DemoPaymentApprovalSnapshotOpenV2 = { ...snapshotDescriptor, snapshotRootSha256: await hash(`COCO_DEMO_PAYMENT_APPROVAL_SNAPSHOT_ROOT_V2\0${JSON.stringify(snapshotDescriptor)}`) };
++	class VerificationStore implements DemoPaymentVerificationStoreV2 {
++		checkpoint: DemoPaymentVerificationCheckpointV2 | null = null;
++		async createOrGet(initial: DemoPaymentVerificationCheckpointV2) { this.checkpoint ??= structuredClone(initial); return structuredClone(this.checkpoint); }
++		async compareAndSwap(request: { expectedRevision: number; next: DemoPaymentVerificationCheckpointV2; appendMembers: readonly never[]; appendApprovalKeys: readonly string[] }) {
++			if (this.checkpoint?.revision !== request.expectedRevision || request.appendMembers.length !== 0 || request.appendApprovalKeys.length !== 0) return false;
++			this.checkpoint = structuredClone(request.next); return true;
++		}
++		async readMemberByOperation() { return null; }
++		async findMember() { return null; }
++		async hasMemberConflict() { return false; }
++	}
++	const store = new VerificationStore();
++	const expected: DemoAuthenticatedPaymentCommitmentsV2 = { schema: "DemoAuthenticatedPaymentCommitmentsV2", authNetworkId: NETWORK, chainId: CHAIN, auctionId: AUCTION,
++		closureHeight: 2, closureAppHash: batches[1]!.app_hash, immutableStorageMarker: marker, storageRootSha256: storageRoot,
++		operationMembershipSha256: membershipDigest, operationCount: 0, approvalCount: 0, canonicalBatchHistorySha256: historyDigest, verifiedApprovalSetSha256: approvalDigest };
++	const common = { expected, keyRoles: { committeePublicKey: `02${"d".repeat(64)}` }, storageAuthority: { schema: "DemoPaymentStorageAuthorityV2" as const, mode: "synthetic_fixture" as const, fixtureDigest: "f".repeat(64) }, store,
++		history: { async open() { return structuredClone(open); }, async readChunk(request: { index: number }) { return structuredClone(chunks[request.index] ?? null); } },
++		approvals: { async openExact() { return structuredClone(snapshot); }, async readPage() { throw new Error("empty snapshot has no page"); } } };
++	await expect(advanceDemoPaymentVerificationV2({ ...common, storageAuthority: { ...common.storageAuthority, fixtureDigest: "unaccepted" } })).rejects.toThrow("storage-adapter-unaccepted");
++	await expect(advanceDemoPaymentVerificationV2({ ...common, storageAuthority: { schema: "DemoPaymentStorageAuthorityV2", mode: "accepted_sealed", handoffSeal: "e".repeat(64) } })).rejects.toThrow("storage-adapter-unaccepted");
++	expect(await advanceDemoPaymentVerificationV2(common)).toMatchObject({ status: "verification_pending", phase: "history" });
++	expect(store.checkpoint?.nextChunkIndex).toBe(1);
++	expect(await advanceDemoPaymentVerificationV2(common)).toMatchObject({ status: "ready", productionReady: false });
++	expect(store.checkpoint?.nextChunkIndex).toBe(2);
++});
++
++test("bounded V2 verification processes one approval page in a later invocation", async () => {
++	const approval = await approvalV2Fixture();
++	const entry: CommittedBidEntryV1 = { actor_id: approval.bidderActorId, operation_id: approval.operationId, auction_id: AUCTION, bid_id: approval.bidId, event_id: approval.bidEventId, amount: approval.amount, displaced_refund_eligible: false };
++	const batches: CommittedAuctionBatchV2[] = [
++		{ schema: "CommittedAuctionBatchV2", auth_profile: "DEMO_AUTH_V1", auth_network_id: NETWORK, chain_id: CHAIN, height: 1, pbts_seconds: 101, app_hash: "1".repeat(64), bids: [entry], closures: [] },
++		{ schema: "CommittedAuctionBatchV2", auth_profile: "DEMO_AUTH_V1", auth_network_id: NETWORK, chain_id: CHAIN, height: 2, pbts_seconds: 102, app_hash: "2".repeat(64), bids: [], closures: [{ auth_network_id: NETWORK, chain_id: CHAIN, auction_id: AUCTION, height: 2, pbts_seconds: 102, effective_end: 102, app_hash: "2".repeat(64), close_outcome: "winner", winner_bid_id: approval.bidId, winner_actor_id: approval.bidderActorId, winner_operation_id: approval.operationId, amount: approval.amount }] },
++	];
++	const member = { operationId: approval.operationId, bidId: approval.bidId, bidEventId: approval.bidEventId, bidderActorId: approval.bidderActorId, amount: approval.amount, committedHeight: 1, committedEntryIndex: 0 };
++	const membershipDigest = await hash(`COCO_DEMO_PAYMENT_OPERATION_MEMBERSHIP_V2\0${JSON.stringify([member])}`);
++	const approvalDigest = await hash(`COCO_DEMO_PAYMENT_APPROVAL_SET_V2\0${JSON.stringify([approval])}`);
++	const historyDigest = await hash(JSON.stringify(batches)); const zero = "0".repeat(64); const marker = "synthetic-storage-approval-r4";
++	const provisional: DemoCommittedAuctionHistoryChunkV2 = { schema: "DemoCommittedAuctionHistoryChunkV2", immutableStorageMarker: marker, storageRootSha256: zero, index: 0, firstHeight: 1, lastHeight: 2, previousChunkDigest: zero, batches, chunkDigest: zero };
++	const chunkBody = JSON.stringify({ schema: provisional.schema, immutableStorageMarker: marker, index: 0, firstHeight: 1, lastHeight: 2, batches });
++	const chunkDigest = await hashParts(utf8("COCO_DEMO_COMMITTED_AUCTION_HISTORY_CHUNK_V2\0"), hexBytes(zero), uint64(0), utf8(chunkBody));
++	const rootDescriptor = { schema: "DemoCommittedAuctionHistoryOpenV2", authNetworkId: NETWORK, chainId: CHAIN, firstHeight: 1, throughHeight: 2,
++		throughAppHash: batches[1]!.app_hash, immutableStorageMarker: marker, chunkCount: 1, batchCount: 2, packingPolicy: "greedy-contiguous-height-v1",
++		maxBatchesPerChunk: 64, maxCanonicalBatchUtf8Bytes: 65536, maxCanonicalBatchArrayUtf8BytesPerChunk: 4194304, finalChunkDigest: chunkDigest, canonicalBatchHistorySha256: historyDigest };
++	const storageRoot = await hash(`COCO_DEMO_COMMITTED_AUCTION_HISTORY_ROOT_V2\0${JSON.stringify(rootDescriptor)}`);
++	const chunk: DemoCommittedAuctionHistoryChunkV2 = { ...provisional, storageRootSha256: storageRoot, chunkDigest };
++	const open: DemoCommittedAuctionHistoryOpenV2 = { ...rootDescriptor, schema: "DemoCommittedAuctionHistoryOpenV2", firstHeight: 1, packingPolicy: "greedy-contiguous-height-v1", maxBatchesPerChunk: 64, maxCanonicalBatchUtf8Bytes: 65536, maxCanonicalBatchArrayUtf8BytesPerChunk: 4194304, storageRootSha256: storageRoot };
++	const pageBody = JSON.stringify({ schema: "DemoPaymentApprovalSnapshotPageV2", snapshotMarker: "synthetic-approval-page-r4", pageIndex: 0, records: [approval], cumulativeRecordCount: 1, eof: true });
++	const pageDigest = await hashParts(utf8("COCO_DEMO_PAYMENT_APPROVAL_SNAPSHOT_PAGE_V2\0"), hexBytes(zero), uint64(0), utf8(pageBody));
++	const snapshotDescriptor = { schema: "DemoPaymentApprovalSnapshotOpenV2" as const, snapshotMarker: "synthetic-approval-page-r4", authNetworkId: NETWORK, chainId: CHAIN, auctionId: AUCTION,
++		operationMembershipSha256: membershipDigest, recordCount: 1, pageCount: 1, maxRecordsPerPage: 64 as const, maxCanonicalApprovalBytesPerRecord: 8192 as const,
++		maxCanonicalApprovalArrayBytesPerPage: 524353 as const, finalPageDigest: pageDigest, verifiedApprovalSetSha256: approvalDigest };
++	const snapshot: DemoPaymentApprovalSnapshotOpenV2 = { ...snapshotDescriptor, snapshotRootSha256: await hash(`COCO_DEMO_PAYMENT_APPROVAL_SNAPSHOT_ROOT_V2\0${JSON.stringify(snapshotDescriptor)}`) };
++	class VerificationStore implements DemoPaymentVerificationStoreV2 {
++		checkpoint: DemoPaymentVerificationCheckpointV2 | null = null; member: typeof member | null = null; keys: string[] = [];
++		async createOrGet(initial: DemoPaymentVerificationCheckpointV2) { this.checkpoint ??= structuredClone(initial); return structuredClone(this.checkpoint); }
++		async compareAndSwap(request: { expectedRevision: number; next: DemoPaymentVerificationCheckpointV2; appendMembers: readonly typeof member[]; appendApprovalKeys: readonly string[] }) {
++			if (this.checkpoint?.revision !== request.expectedRevision) return false;
++			if (request.appendMembers.length > 0) { if (this.member !== null || request.appendMembers.length !== 1) return false; this.member = structuredClone(request.appendMembers[0]!); }
++			for (const key of request.appendApprovalKeys) { if (this.keys.at(-1)! >= key) return false; this.keys.push(key); }
++			this.checkpoint = structuredClone(request.next); return true;
++		}
++		async readMemberByOperation(operationId: string) { return this.member?.operationId === operationId ? structuredClone(this.member) : null; }
++		async findMember(request: { operationId: string }) { return this.member?.operationId === request.operationId ? structuredClone(this.member) : null; }
++		async hasMemberConflict(candidate: typeof member) { return this.member !== null && (this.member.operationId === candidate.operationId || this.member.bidId === candidate.bidId || this.member.bidEventId === candidate.bidEventId); }
++	}
++	const store = new VerificationStore(); let pageReads = 0;
++	const expected: DemoAuthenticatedPaymentCommitmentsV2 = { schema: "DemoAuthenticatedPaymentCommitmentsV2", authNetworkId: NETWORK, chainId: CHAIN, auctionId: AUCTION,
++		closureHeight: 2, closureAppHash: batches[1]!.app_hash, immutableStorageMarker: marker, storageRootSha256: storageRoot,
++		operationMembershipSha256: membershipDigest, operationCount: 1, approvalCount: 1, canonicalBatchHistorySha256: historyDigest, verifiedApprovalSetSha256: approvalDigest };
++	const common = { expected, keyRoles: { committeePublicKey: `02${"d".repeat(64)}` }, storageAuthority: { schema: "DemoPaymentStorageAuthorityV2" as const, mode: "synthetic_fixture" as const, fixtureDigest: "f".repeat(64) }, store,
++		history: { async open() { return structuredClone(open); }, async readChunk(request: { index: number }) { return request.index === 0 ? structuredClone(chunk) : null; } },
++		approvals: { async openExact() { return structuredClone(snapshot); }, async readPage(request: { pageIndex: number }) { pageReads += 1; return request.pageIndex === 0 ? { schema: "DemoPaymentApprovalSnapshotPageV2" as const, snapshotMarker: snapshot.snapshotMarker, snapshotRootSha256: snapshot.snapshotRootSha256, pageIndex: 0, previousPageDigest: zero, records: [approval], cumulativeRecordCount: 1, eof: true, pageDigest } : null; } } };
++	expect(await advanceDemoPaymentVerificationV2(common)).toMatchObject({ status: "verification_pending", phase: "approvals" });
++	expect(pageReads).toBe(0);
++	expect(await advanceDemoPaymentVerificationV2(common)).toMatchObject({ status: "ready", productionReady: false });
++	expect(pageReads).toBe(1);
++});
+diff --git a/market-app/plugins/demo-payment-coordinator.ts b/market-app/plugins/demo-payment-coordinator.ts
+index e22fa8a..263d4f5 100644
+--- a/market-app/plugins/demo-payment-coordinator.ts
++++ b/market-app/plugins/demo-payment-coordinator.ts
+@@ -12,11 +12,12 @@ import { parseStrictJSON, verifySignedBidTemplate } from "../ts/demo-auth-bid.ts
+ import type { DemoBidIntentRecord } from "./demo-auth-bid-store.ts";
+ import { verifyDemoAuthEventId } from "../../cashu-wrapper/ts/index.ts";
+ import { deriveSellerChildPubkey } from "../../cashu-wrapper/ts/seller-child.ts";
+-import type {
+-	DemoMaintainerOfflineIdentity,
+-	DemoMaintainerExpectedDisposition,
+-	DemoMaintainerOfflineExecutionResult,
+-	DemoMaintainerOfflineRecoveryResult,
++import {
++	demoMaintainerFederationSessionId,
++	type DemoMaintainerOfflineIdentity,
++	type DemoMaintainerExpectedDisposition,
++	type DemoMaintainerOfflineExecutionResult,
++	type DemoMaintainerOfflineRecoveryResult,
+ } from "../../cashu-wrapper/ts/demo-maintainer-offline.ts";
+ 
+ export const DEMO_PAYMENT_APPROVAL_SCHEMA = "DemoPaymentApprovalV1" as const;
+@@ -634,3 +635,970 @@ export class DemoOfflinePaymentCoordinator {
+ 
+ /** Backward import name retained for the demo shell; semantics are now the exact offline coordinator above. */
+ export class DemoFakeEcashPaymentCoordinator extends DemoOfflinePaymentCoordinator {}
++
++// ---------------------------------------------------------------------------
++// Accepted R4.3 V2 integration contracts.
++// ---------------------------------------------------------------------------
++
++export const DEMO_PAYMENT_APPROVAL_V2_SCHEMA = "DemoPaymentApprovalV2" as const;
++export const DEMO_PAYMENT_APPROVAL_V2_LIFETIME = "terminal-bound-exact-operation-v1" as const;
++export const DEMO_PAYMENT_APPROVAL_V2_REFUND_KEY = "separate-cashu-refund-key-v1" as const;
++export const DEMO_PAYMENT_APPROVAL_V2_DOMAIN = "COCO_DEMO_PAYMENT_APPROVAL_V2\0";
++export const DEMO_PAYMENT_APPROVAL_SET_V2_DOMAIN = "COCO_DEMO_PAYMENT_APPROVAL_SET_V2\0";
++export const DEMO_PAYMENT_MEMBERSHIP_V2_DOMAIN = "COCO_DEMO_PAYMENT_OPERATION_MEMBERSHIP_V2\0";
++export const DEMO_PAYMENT_COMPLETION_V2_DOMAIN = "COCO_DEMO_PAYMENT_COMPLETION_V2\0";
++export const DEMO_PAYMENT_HISTORY_CHUNK_V2_DOMAIN = "COCO_DEMO_COMMITTED_AUCTION_HISTORY_CHUNK_V2\0";
++export const DEMO_PAYMENT_HISTORY_ROOT_V2_DOMAIN = "COCO_DEMO_COMMITTED_AUCTION_HISTORY_ROOT_V2\0";
++export const DEMO_PAYMENT_APPROVAL_PAGE_V2_DOMAIN = "COCO_DEMO_PAYMENT_APPROVAL_SNAPSHOT_PAGE_V2\0";
++export const DEMO_PAYMENT_APPROVAL_ROOT_V2_DOMAIN = "COCO_DEMO_PAYMENT_APPROVAL_SNAPSHOT_ROOT_V2\0";
++export const DEMO_PAYMENT_CHECKPOINT_V2_DOMAIN = "COCO_DEMO_PAYMENT_VERIFICATION_CHECKPOINT_V2\0";
++
++const V2_COMPRESSED_KEY = /^(?:02|03)[0-9a-f]{64}$/;
++const V2_DERIVATION_PATH = /^m\/(?:0|[1-9][0-9]{0,9})\/(?:0|[1-9][0-9]{0,9})\/(?:0|[1-9][0-9]{0,9})\/(?:0|[1-9][0-9]{0,9})\/(?:0|[1-9][0-9]{0,9})$/;
++
++export interface DemoPaymentApprovalV2 {
++	readonly schema: typeof DEMO_PAYMENT_APPROVAL_V2_SCHEMA;
++	readonly authNetworkId: string;
++	readonly chainId: string;
++	readonly auctionId: string;
++	readonly operationId: string;
++	readonly bidId: string;
++	readonly bidEventId: string;
++	readonly bidderActorId: string;
++	readonly bidderCashuPublicKey: string;
++	readonly refundCashuPublicKey: string;
++	readonly refundKeyVersion: typeof DEMO_PAYMENT_APPROVAL_V2_REFUND_KEY;
++	readonly amount: number;
++	readonly mintUrl: string;
++	readonly sellerP2pkXpub: string;
++	readonly sellerDerivationPath: string;
++	readonly sellerRecipientPublicKey: string;
++	readonly conditionFingerprint: string;
++	readonly winnerPackageDigest: string;
++	readonly refundPackageDigest: string;
++	readonly closeTime: number;
++	readonly settlementWindowSeconds: number;
++	readonly validUntil: number;
++	readonly locktime: number;
++	readonly approvalLifetimePolicyVersion: typeof DEMO_PAYMENT_APPROVAL_V2_LIFETIME;
++	readonly approvalCreatedAt: number;
++	readonly approvalEventId: string;
++	readonly approvalSignature: string;
++}
++
++export interface DemoPaymentVerifiedApprovalV2 {
++	readonly approval: DemoPaymentApprovalV2;
++	readonly approvalDigest: string;
++}
++
++export interface DemoPaymentKeyRoleContextV2 {
++	readonly committeePublicKey: string;
++	readonly validatorPublicKeys?: readonly string[];
++}
++
++function v2RequireAscii(value: string, field: string): void {
++	if (!PRINTABLE_ASCII_TEXT.test(value)) throw new Error(`demo-payment-v2-${field}-invalid`);
++}
++
++function v2RequireHex32(value: string, field: string): void {
++	if (!HEX_64.test(value)) throw new Error(`demo-payment-v2-${field}-invalid`);
++}
++
++function v2RequirePoint(value: string, field: string): void {
++	if (!V2_COMPRESSED_KEY.test(value)) throw new Error(`demo-payment-v2-${field}-invalid`);
++}
++
++function v2SafePositive(value: number, field: string): void {
++	if (!Number.isSafeInteger(value) || value < 1) throw new Error(`demo-payment-v2-${field}-invalid`);
++}
++
++function v2MintOrigin(value: string): void {
++	v2RequireAscii(value, "mint-origin");
++	let parsed: URL;
++	try { parsed = new URL(value); } catch { throw new Error("demo-payment-v2-mint-origin-invalid"); }
++	if (parsed.protocol !== "https:" || value !== parsed.origin || parsed.username !== "" || parsed.password !== ""
++		|| parsed.port !== "" || parsed.pathname !== "/" || parsed.search !== "" || parsed.hash !== "") {
++		throw new Error("demo-payment-v2-mint-origin-invalid");
++	}
++}
++
++function v2DerivationPath(value: string): void {
++	v2RequireAscii(value, "seller-path");
++	if (!V2_DERIVATION_PATH.test(value)) throw new Error("demo-payment-v2-seller-path-invalid");
++	for (const part of value.slice(2).split("/")) {
++		const level = Number(part);
++		if (!Number.isSafeInteger(level) || level > 2_147_483_647) throw new Error("demo-payment-v2-seller-path-invalid");
++	}
++}
++
++function v2ApprovalCanonical(value: DemoPaymentApprovalV2): DemoPaymentApprovalV2 {
++	return {
++		schema: value.schema,
++		authNetworkId: value.authNetworkId,
++		chainId: value.chainId,
++		auctionId: value.auctionId,
++		operationId: value.operationId,
++		bidId: value.bidId,
++		bidEventId: value.bidEventId,
++		bidderActorId: value.bidderActorId,
++		bidderCashuPublicKey: value.bidderCashuPublicKey,
++		refundCashuPublicKey: value.refundCashuPublicKey,
++		refundKeyVersion: value.refundKeyVersion,
++		amount: value.amount,
++		mintUrl: value.mintUrl,
++		sellerP2pkXpub: value.sellerP2pkXpub,
++		sellerDerivationPath: value.sellerDerivationPath,
++		sellerRecipientPublicKey: value.sellerRecipientPublicKey,
++		conditionFingerprint: value.conditionFingerprint,
++		winnerPackageDigest: value.winnerPackageDigest,
++		refundPackageDigest: value.refundPackageDigest,
++		closeTime: value.closeTime,
++		settlementWindowSeconds: value.settlementWindowSeconds,
++		validUntil: value.validUntil,
++		locktime: value.locktime,
++		approvalLifetimePolicyVersion: value.approvalLifetimePolicyVersion,
++		approvalCreatedAt: value.approvalCreatedAt,
++		approvalEventId: value.approvalEventId,
++		approvalSignature: value.approvalSignature,
++	};
++}
++
++function v2ApprovalContent(value: DemoPaymentApprovalV2): string {
++	return JSON.stringify({
++		schema: value.schema,
++		auth_network_id: value.authNetworkId,
++		chain_id: value.chainId,
++		auction_id: value.auctionId,
++		operation_id: value.operationId,
++		bid_id: value.bidId,
++		bid_event_id: value.bidEventId,
++		bidder_cashu_public_key: value.bidderCashuPublicKey,
++		refund_cashu_public_key: value.refundCashuPublicKey,
++		refund_key_version: value.refundKeyVersion,
++		amount: value.amount,
++		mint_url: value.mintUrl,
++		seller_p2pk_xpub: value.sellerP2pkXpub,
++		seller_derivation_path: value.sellerDerivationPath,
++		seller_recipient_public_key: value.sellerRecipientPublicKey,
++		condition_fingerprint: value.conditionFingerprint,
++		winner_package_digest: value.winnerPackageDigest,
++		refund_package_digest: value.refundPackageDigest,
++		close_time: value.closeTime,
++		settlement_window_seconds: value.settlementWindowSeconds,
++		valid_until: value.validUntil,
++		locktime: value.locktime,
++		approval_lifetime_policy_version: value.approvalLifetimePolicyVersion,
++	});
++}
++
++function v2ApprovalUnsigned(value: DemoPaymentApprovalV2): DemoUnsignedEvent {
++	return {
++		pubkey: value.bidderActorId,
++		created_at: value.approvalCreatedAt,
++		kind: DEMO_PAYMENT_APPROVAL_KIND,
++		tags: [
++			["protocol", "plebeian-auction-fake-ecash-payment"],
++			["version", "2"],
++			["environment", value.authNetworkId],
++			["bid_event", value.bidEventId],
++		],
++		content: v2ApprovalContent(value),
++	};
++}
++
++async function v2DomainHash(domain: string, payload: string): Promise<string> {
++	return sha256Hex(`${domain}${payload}`);
++}
++
++export function assertDemoPaymentKeyRolesV2(approval: DemoPaymentApprovalV2, context: DemoPaymentKeyRoleContextV2): void {
++	v2RequirePoint(context.committeePublicKey, "committee-key");
++	for (const [index, key] of (context.validatorPublicKeys ?? []).entries()) v2RequirePoint(key, `validator-key-${index}`);
++	const roleX = [
++		approval.bidderActorId,
++		approval.bidderCashuPublicKey.slice(2),
++		approval.refundCashuPublicKey.slice(2),
++		approval.sellerRecipientPublicKey.slice(2),
++		context.committeePublicKey.slice(2),
++	];
++	if (new Set(roleX).size !== roleX.length) throw new Error("demo-payment-v2-role-key-alias");
++	const prohibited = new Set(roleX);
++	for (const key of context.validatorPublicKeys ?? []) {
++		if (prohibited.has(key.slice(2))) throw new Error("demo-payment-v2-validator-key-alias");
++		prohibited.add(key.slice(2));
++	}
++}
++
++export async function verifyDemoPaymentApprovalV2(
++	input: DemoPaymentApprovalV2,
++	context: DemoPaymentKeyRoleContextV2,
++): Promise<DemoPaymentVerifiedApprovalV2> {
++	let value: DemoPaymentApprovalV2;
++	try { value = structuredClone(input); } catch { throw new Error("demo-payment-v2-approval-not-cloneable"); }
++	const keys = [
++		"schema", "authNetworkId", "chainId", "auctionId", "operationId", "bidId", "bidEventId",
++		"bidderActorId", "bidderCashuPublicKey", "refundCashuPublicKey", "refundKeyVersion", "amount",
++		"mintUrl", "sellerP2pkXpub", "sellerDerivationPath", "sellerRecipientPublicKey",
++		"conditionFingerprint", "winnerPackageDigest", "refundPackageDigest", "closeTime",
++		"settlementWindowSeconds", "validUntil", "locktime", "approvalLifetimePolicyVersion",
++		"approvalCreatedAt", "approvalEventId", "approvalSignature",
++	];
++	if (!exactObject(value, keys) || value.schema !== DEMO_PAYMENT_APPROVAL_V2_SCHEMA
++		|| value.refundKeyVersion !== DEMO_PAYMENT_APPROVAL_V2_REFUND_KEY
++		|| value.approvalLifetimePolicyVersion !== DEMO_PAYMENT_APPROVAL_V2_LIFETIME) {
++		throw new Error("demo-payment-v2-approval-shape");
++	}
++	for (const [field, text] of Object.entries({ chainId: value.chainId, auctionId: value.auctionId, operationId: value.operationId, bidId: value.bidId })) v2RequireAscii(text, field);
++	for (const [field, digest] of Object.entries({
++		authNetworkId: value.authNetworkId, bidEventId: value.bidEventId, bidderActorId: value.bidderActorId,
++		conditionFingerprint: value.conditionFingerprint, winnerPackageDigest: value.winnerPackageDigest,
++		refundPackageDigest: value.refundPackageDigest, approvalEventId: value.approvalEventId,
++	})) v2RequireHex32(digest, field);
++	v2RequirePoint(value.bidderCashuPublicKey, "bidder-cashu-key");
++	v2RequirePoint(value.refundCashuPublicKey, "refund-cashu-key");
++	v2RequirePoint(value.sellerRecipientPublicKey, "seller-recipient-key");
++	if (!HEX_128.test(value.approvalSignature)) throw new Error("demo-payment-v2-approval-signature-invalid");
++	v2SafePositive(value.amount, "amount");
++	for (const [field, timestamp] of Object.entries({ closeTime: value.closeTime, validUntil: value.validUntil, locktime: value.locktime, approvalCreatedAt: value.approvalCreatedAt })) v2SafePositive(timestamp, field);
++	if (!Number.isSafeInteger(value.settlementWindowSeconds) || value.settlementWindowSeconds < 60
++		|| value.closeTime > value.validUntil || value.approvalCreatedAt > value.closeTime
++		|| !Number.isSafeInteger(value.closeTime + value.settlementWindowSeconds)
++		|| value.closeTime + value.settlementWindowSeconds > value.locktime - 60) {
++		throw new Error("demo-payment-v2-approval-lifetime-invalid");
++	}
++	v2MintOrigin(value.mintUrl);
++	v2RequireAscii(value.sellerP2pkXpub, "seller-xpub");
++	v2DerivationPath(value.sellerDerivationPath);
++	assertSellerBinding(value.sellerP2pkXpub, value.sellerDerivationPath, value.sellerRecipientPublicKey);
++	assertDemoPaymentKeyRolesV2(value, context);
++	const unsigned = v2ApprovalUnsigned(value);
++	if (new TextEncoder().encode(unsigned.content).byteLength > 4096) throw new Error("demo-payment-v2-approval-content-limit");
++	const canonical = v2ApprovalCanonical(value);
++	const canonicalBytes = JSON.stringify(canonical);
++	if (new TextEncoder().encode(canonicalBytes).byteLength > 8192) throw new Error("demo-payment-v2-approval-limit");
++	const signed: DemoSignedEvent = { ...unsigned, id: value.approvalEventId, sig: value.approvalSignature };
++	await verifySignedBidTemplate(unsigned, signed);
++	if (!verifyDemoAuthEventId(value.approvalSignature, value.approvalEventId, value.bidderActorId)) throw new Error("demo-payment-v2-approval-signature-invalid");
++	return { approval: canonical, approvalDigest: await v2DomainHash(DEMO_PAYMENT_APPROVAL_V2_DOMAIN, canonicalBytes) };
++}
++
++export interface DemoPaymentOperationMemberV2 {
++	readonly operationId: string;
++	readonly bidId: string;
++	readonly bidEventId: string;
++	readonly bidderActorId: string;
++	readonly amount: number;
++	readonly committedHeight: number;
++	readonly committedEntryIndex: number;
++}
++
++export interface DemoPaymentOperationMembershipV2 {
++	readonly members: readonly DemoPaymentOperationMemberV2[];
++	readonly operationMembershipSha256: string;
++}
++
++function v2CanonicalMember(value: DemoPaymentOperationMemberV2): DemoPaymentOperationMemberV2 {
++	return {
++		operationId: value.operationId,
++		bidId: value.bidId,
++		bidEventId: value.bidEventId,
++		bidderActorId: value.bidderActorId,
++		amount: value.amount,
++		committedHeight: value.committedHeight,
++		committedEntryIndex: value.committedEntryIndex,
++	};
++}
++
++export async function deriveDemoPaymentOperationMembershipV2(
++	batches: readonly CommittedAuctionBatchV2[],
++	expected: DemoPaymentScope,
++	closureHeight: number,
++): Promise<DemoPaymentOperationMembershipV2> {
++	if (!HEX_64.test(expected.authNetworkId) || !Number.isSafeInteger(closureHeight) || closureHeight < 1) throw new Error("demo-payment-v2-membership-scope-invalid");
++	const members: DemoPaymentOperationMemberV2[] = [];
++	const operationIds = new Set<string>();
++	const bidIds = new Set<string>();
++	const eventIds = new Set<string>();
++	const tuples = new Set<string>();
++	for (const [historyIndex, batch] of batches.entries()) {
++		if (batch.auth_network_id !== expected.authNetworkId || batch.chain_id !== expected.chainId || batch.height !== historyIndex + 1) throw new Error("demo-payment-v2-membership-history-invalid");
++		if (batch.height >= closureHeight) continue;
++		for (const [committedEntryIndex, bid] of batch.bids.entries()) {
++			if (bid.auction_id !== expected.auctionId) continue;
++			const displacementFields = [bid.displaced_actor_id, bid.displaced_operation_id, bid.displaced_bid_id, bid.displaced_event_id];
++			const displacementCount = displacementFields.filter((item) => item !== undefined).length;
++			if ((bid.displaced_refund_eligible && displacementCount !== 4) || (!bid.displaced_refund_eligible && displacementCount !== 0)) throw new Error("demo-payment-v2-displacement-invalid");
++			if (bid.displaced_refund_eligible) {
++				const prior = members.find((item) => item.bidderActorId === bid.displaced_actor_id
++					&& item.operationId === bid.displaced_operation_id && item.bidId === bid.displaced_bid_id && item.bidEventId === bid.displaced_event_id);
++				if (prior === undefined) throw new Error("demo-payment-v2-displacement-forward-or-external");
++			}
++			const member = v2CanonicalMember({ operationId: bid.operation_id, bidId: bid.bid_id, bidEventId: bid.event_id, bidderActorId: bid.actor_id, amount: bid.amount, committedHeight: batch.height, committedEntryIndex });
++			const tuple = JSON.stringify(member);
++			if (operationIds.has(member.operationId) || bidIds.has(member.bidId) || eventIds.has(member.bidEventId) || tuples.has(tuple)) throw new Error("demo-payment-v2-membership-conflict");
++			operationIds.add(member.operationId); bidIds.add(member.bidId); eventIds.add(member.bidEventId); tuples.add(tuple); members.push(member);
++		}
++	}
++	const canonical = JSON.stringify(members);
++	return { members, operationMembershipSha256: await v2DomainHash(DEMO_PAYMENT_MEMBERSHIP_V2_DOMAIN, canonical) };
++}
++
++export interface DemoPaymentApprovalSetV2 {
++	readonly approvals: readonly DemoPaymentApprovalV2[];
++	readonly approvalDigests: readonly string[];
++	readonly verifiedApprovalSetSha256: string;
++}
++
++function v2StringTupleCompare(left: readonly string[], right: readonly string[]): number {
++	for (let index = 0; index < left.length; index += 1) {
++		if (left[index] === right[index]) continue;
++		return left[index]! < right[index]! ? -1 : 1;
++	}
++	return 0;
++}
++
++export async function verifyDemoPaymentApprovalSetV2(options: {
++	readonly approvals: readonly DemoPaymentApprovalV2[];
++	readonly membership: DemoPaymentOperationMembershipV2;
++	readonly expected: DemoPaymentScope;
++	readonly keyRoles: DemoPaymentKeyRoleContextV2;
++}): Promise<DemoPaymentApprovalSetV2> {
++	if (options.approvals.length !== options.membership.members.length) throw new Error("demo-payment-v2-approval-membership-count");
++	const verified = await Promise.all(options.approvals.map((approval) => verifyDemoPaymentApprovalV2(approval, options.keyRoles)));
++	const byOperation = new Map<string, DemoPaymentVerifiedApprovalV2>();
++	for (const item of verified) {
++		if (byOperation.has(item.approval.operationId)) throw new Error("demo-payment-v2-approval-duplicate");
++		byOperation.set(item.approval.operationId, item);
++	}
++	for (const member of options.membership.members) {
++		const item = byOperation.get(member.operationId);
++		if (item === undefined) throw new Error("demo-payment-v2-approval-missing");
++		const approval = item.approval;
++		if (approval.authNetworkId !== options.expected.authNetworkId || approval.chainId !== options.expected.chainId || approval.auctionId !== options.expected.auctionId
++			|| approval.operationId !== member.operationId || approval.bidId !== member.bidId || approval.bidEventId !== member.bidEventId
++			|| approval.bidderActorId !== member.bidderActorId || approval.amount !== member.amount) throw new Error("demo-payment-v2-approval-member-join");
++	}
++	const ordered = [...verified].sort((left, right) => v2StringTupleCompare(
++		[left.approval.authNetworkId, left.approval.chainId, left.approval.auctionId, left.approval.operationId, left.approval.approvalEventId],
++		[right.approval.authNetworkId, right.approval.chainId, right.approval.auctionId, right.approval.operationId, right.approval.approvalEventId],
++	));
++	const approvals = ordered.map((item) => item.approval);
++	return {
++		approvals,
++		approvalDigests: ordered.map((item) => item.approvalDigest),
++		verifiedApprovalSetSha256: await v2DomainHash(DEMO_PAYMENT_APPROVAL_SET_V2_DOMAIN, JSON.stringify(approvals)),
++	};
++}
++
++export interface DemoPaymentDispositionV2 {
++	readonly member: DemoPaymentOperationMemberV2;
++	readonly role: DemoPaymentRole;
++}
++
++export function deriveDemoPaymentDispositionsV2(
++	membership: DemoPaymentOperationMembershipV2,
++	closure: CommittedAutomaticCloseEntryV2,
++): readonly DemoPaymentDispositionV2[] {
++	const members = [...membership.members];
++	if (closure.close_outcome === "no_bids") {
++		if (members.length !== 0) throw new Error("demo-payment-v2-no-bids-membership-conflict");
++		return [];
++	}
++	if (closure.close_outcome === "reserve_not_met") return members.map((member) => ({ member, role: "refund" as const }));
++	const winner = members.find((member) => member.operationId === closure.winner_operation_id && member.bidId === closure.winner_bid_id
++		&& member.bidderActorId === closure.winner_actor_id && member.amount === closure.amount);
++	if (winner === undefined) throw new Error("demo-payment-v2-winner-membership-missing");
++	return [
++		{ member: winner, role: "winner_settlement" },
++		...members.filter((member) => member.operationId !== winner.operationId).map((member) => ({ member, role: "refund" as const })),
++	];
++}
++
++export interface DemoAuthenticatedPaymentCommitmentsV2 {
++	readonly schema: "DemoAuthenticatedPaymentCommitmentsV2";
++	readonly authNetworkId: string;
++	readonly chainId: string;
++	readonly auctionId: string;
++	readonly closureHeight: number;
++	readonly closureAppHash: string;
++	readonly immutableStorageMarker: string;
++	readonly storageRootSha256: string;
++	readonly operationMembershipSha256: string;
++	readonly operationCount: number;
++	readonly approvalCount: number;
++	readonly canonicalBatchHistorySha256: string;
++	readonly verifiedApprovalSetSha256: string;
++}
++
++export function exactDemoAuthenticatedPaymentCommitmentsV2(value: DemoAuthenticatedPaymentCommitmentsV2): DemoAuthenticatedPaymentCommitmentsV2 {
++	const keys = ["schema", "authNetworkId", "chainId", "auctionId", "closureHeight", "closureAppHash", "immutableStorageMarker", "storageRootSha256", "operationMembershipSha256", "operationCount", "approvalCount", "canonicalBatchHistorySha256", "verifiedApprovalSetSha256"];
++	if (!exactObject(value, keys) || value.schema !== "DemoAuthenticatedPaymentCommitmentsV2" || !HEX_64.test(value.authNetworkId)
++		|| !HEX_64.test(value.closureAppHash) || !HEX_64.test(value.storageRootSha256) || !HEX_64.test(value.operationMembershipSha256)
++		|| !HEX_64.test(value.canonicalBatchHistorySha256) || !HEX_64.test(value.verifiedApprovalSetSha256)
++		|| !PRINTABLE_ASCII_TEXT.test(value.chainId) || !PRINTABLE_ASCII_TEXT.test(value.auctionId) || !PRINTABLE_ASCII_TEXT.test(value.immutableStorageMarker)
++		|| !Number.isSafeInteger(value.closureHeight) || value.closureHeight < 1 || !Number.isSafeInteger(value.operationCount) || value.operationCount < 0
++		|| !Number.isSafeInteger(value.approvalCount) || value.approvalCount < 0 || value.approvalCount !== value.operationCount) throw new Error("demo-payment-v2-commitments-invalid");
++	return { ...value };
++}
++
++export interface DemoPaymentMintTerminalJournalV2 {
++	readonly requestDigest: string;
++	readonly responseDigest: string;
++	readonly outputCount: number;
++	readonly amountTotal: number;
++	readonly source: "mint_response" | "exact_recovery";
++	readonly completedAt: number;
++}
++
++export interface DemoRecipientImportCompletionV2 {
++	readonly schema: "DemoRecipientImportCompletionV2";
++	readonly operationId: string;
++	readonly role: DemoPaymentRole;
++	readonly recipientPublicKey: string;
++	readonly amount: number;
++	readonly proofCount: number;
++	readonly recipientRequestDigest: string;
++	readonly recipientResponseDigest: string;
++	readonly recipientImportIdempotencyKey: string;
++	readonly imported: true;
++}
++
++export interface DemoRecipientImportCompletionPortV2 {
++	readExact(request: Omit<DemoRecipientImportCompletionV2, "schema" | "amount" | "proofCount" | "imported">): Promise<DemoRecipientImportCompletionV2 | null>;
++}
++
++export interface DemoPaymentCompletionIdentityV2 {
++	readonly schema: "DemoPaymentCompletionIdentityV2";
++	readonly evidenceDigest: string;
++	readonly selectionRoot: string;
++	readonly templateDigest: string;
++	readonly bundleDigest: string;
++	readonly operationId: string;
++	readonly role: DemoPaymentRole;
++	readonly recipientPublicKey: string;
++	readonly amount: number;
++	readonly proofCount: number;
++	readonly mintRequestDigest: string;
++	readonly mintResponseDigest: string;
++	readonly recipientRequestDigest: string;
++	readonly recipientResponseDigest: string;
++	readonly recipientImportIdempotencyKey: string;
++	readonly terminalSource: "mint_response" | "exact_recovery";
++	readonly completedAt: number;
++	readonly imported: true;
++}
++
++export interface DemoAuthenticatedPaymentReceiptV2 {
++	readonly schema: "DemoAuthenticatedPaymentReceiptV2";
++	readonly completion: DemoPaymentCompletionIdentityV2;
++	readonly completionDigest: string;
++	readonly diagnostics: {
++		readonly schema: "DemoPaymentDeliveryDiagnosticsV2";
++		readonly deliverySource: "submitted" | "terminal_restore" | "gate_replay";
++		readonly alreadyImported: boolean;
++		readonly observedAt: number;
++	};
++}
++
++export async function buildDemoPaymentCompletionV2(options: {
++	readonly evidenceDigest: string;
++	readonly selectionRoot: string;
++	readonly templateDigest: string;
++	readonly bundleDigest: string;
++	readonly operationId: string;
++	readonly role: DemoPaymentRole;
++	readonly recipientPublicKey: string;
++	readonly amount: number;
++	readonly proofCount: number;
++	readonly mintRequestDigest: string;
++	readonly mintResponseDigest: string;
++	readonly recipientRequestDigest: string;
++	readonly recipientResponseDigest: string;
++	readonly mintJournal: DemoPaymentMintTerminalJournalV2;
++	readonly recipientJournal: DemoRecipientImportCompletionV2;
++	readonly deliverySource: DemoAuthenticatedPaymentReceiptV2["diagnostics"]["deliverySource"];
++	readonly alreadyImported: boolean;
++	readonly observedAt: number;
++}): Promise<DemoAuthenticatedPaymentReceiptV2> {
++	for (const [field, digest] of Object.entries({ evidenceDigest: options.evidenceDigest, selectionRoot: options.selectionRoot, templateDigest: options.templateDigest, bundleDigest: options.bundleDigest, mintRequestDigest: options.mintRequestDigest, mintResponseDigest: options.mintResponseDigest, recipientRequestDigest: options.recipientRequestDigest, recipientResponseDigest: options.recipientResponseDigest })) v2RequireHex32(digest, field);
++	v2SafePositive(options.amount, "completion-amount"); v2SafePositive(options.proofCount, "completion-proof-count");
++	v2RequireAscii(options.operationId, "completion-operation"); v2RequirePoint(options.recipientPublicKey, "completion-recipient");
++	if (!Number.isSafeInteger(options.observedAt) || options.observedAt < 0) throw new Error("demo-payment-v2-completion-observed-at-invalid");
++	const importKey = await sha256Hex(`COCO_DEMO_RECIPIENT_IMPORT_V1\0${options.recipientRequestDigest}`);
++	const mint = options.mintJournal;
++	const recipient = options.recipientJournal;
++	if (!exactObject(mint, ["requestDigest", "responseDigest", "outputCount", "amountTotal", "source", "completedAt"])
++		|| !exactObject(recipient, ["schema", "operationId", "role", "recipientPublicKey", "amount", "proofCount", "recipientRequestDigest", "recipientResponseDigest", "recipientImportIdempotencyKey", "imported"])
++		|| !["mint_response", "exact_recovery"].includes(mint.source) || !Number.isSafeInteger(mint.completedAt) || mint.completedAt < 0
++		|| !HEX_64.test(recipient.recipientImportIdempotencyKey)
++		|| mint.requestDigest !== options.mintRequestDigest || mint.responseDigest !== options.mintResponseDigest
++		|| mint.outputCount !== options.proofCount || mint.amountTotal !== options.amount
++		|| recipient.schema !== "DemoRecipientImportCompletionV2" || recipient.operationId !== options.operationId || recipient.role !== options.role
++		|| recipient.recipientPublicKey !== options.recipientPublicKey || recipient.amount !== options.amount || recipient.proofCount !== options.proofCount
++		|| recipient.recipientRequestDigest !== options.recipientRequestDigest || recipient.recipientResponseDigest !== options.recipientResponseDigest
++		|| recipient.recipientImportIdempotencyKey !== importKey || recipient.imported !== true) throw new Error("demo-payment-v2-completion-journal-mismatch");
++	const completion: DemoPaymentCompletionIdentityV2 = {
++		schema: "DemoPaymentCompletionIdentityV2", evidenceDigest: options.evidenceDigest, selectionRoot: options.selectionRoot,
++		templateDigest: options.templateDigest, bundleDigest: options.bundleDigest, operationId: options.operationId, role: options.role,
++		recipientPublicKey: options.recipientPublicKey, amount: options.amount, proofCount: options.proofCount,
++		mintRequestDigest: options.mintRequestDigest, mintResponseDigest: options.mintResponseDigest,
++		recipientRequestDigest: options.recipientRequestDigest, recipientResponseDigest: options.recipientResponseDigest,
++		recipientImportIdempotencyKey: importKey, terminalSource: mint.source, completedAt: mint.completedAt, imported: true,
++	};
++	const completionDigest = await v2DomainHash(DEMO_PAYMENT_COMPLETION_V2_DOMAIN, JSON.stringify(completion));
++	return {
++		schema: "DemoAuthenticatedPaymentReceiptV2", completion, completionDigest,
++		diagnostics: { schema: "DemoPaymentDeliveryDiagnosticsV2", deliverySource: options.deliverySource, alreadyImported: options.alreadyImported, observedAt: options.observedAt },
++	};
++}
++
++export interface DemoMainSessionReservationV2 {
++	readonly schema: "DemoMainSessionReservationV2";
++	readonly clockPolicyVersion: "durable-monotonic-executor-seconds-v1";
++	readonly clockId: string;
++	readonly observedSeconds: number;
++	readonly attemptNumber: number;
++	readonly sessionId: string;
++}
++
++export interface DemoMainSessionReservationPortV2 {
++	reserveMainSessionBeforeCutoff(request: {
++		readonly scope: string;
++		readonly bundleDigest: string;
++		readonly selectionRoot: string;
++		readonly cutoffSeconds: number;
++		readonly expectedClockId: string;
++		readonly clockPolicyVersion: "durable-monotonic-executor-seconds-v1";
++	}): Promise<DemoMainSessionReservationV2>;
++}
++
++export async function reserveDemoMainSessionBeforeCutoffV2(
++	port: DemoMainSessionReservationPortV2,
++	request: Parameters<DemoMainSessionReservationPortV2["reserveMainSessionBeforeCutoff"]>[0],
++): Promise<DemoMainSessionReservationV2> {
++	if (!PRINTABLE_ASCII_TEXT.test(request.scope) || !HEX_64.test(request.bundleDigest) || !HEX_64.test(request.selectionRoot)
++		|| !PRINTABLE_ASCII_TEXT.test(request.expectedClockId) || !Number.isSafeInteger(request.cutoffSeconds) || request.cutoffSeconds < 1
++		|| request.clockPolicyVersion !== "durable-monotonic-executor-seconds-v1") throw new Error("demo-payment-v2-session-request-invalid");
++	const result = await port.reserveMainSessionBeforeCutoff({ ...request });
++	if (!exactObject(result, ["schema", "clockPolicyVersion", "clockId", "observedSeconds", "attemptNumber", "sessionId"])
++		|| result.schema !== "DemoMainSessionReservationV2" || result.clockPolicyVersion !== request.clockPolicyVersion || result.clockId !== request.expectedClockId
++		|| !Number.isSafeInteger(result.observedSeconds) || result.observedSeconds < 0 || result.observedSeconds >= request.cutoffSeconds
++		|| !Number.isSafeInteger(result.attemptNumber) || result.attemptNumber < 1
++		|| result.sessionId !== demoMaintainerFederationSessionId(request.selectionRoot, result.attemptNumber)) throw new Error("demo-payment-v2-session-reservation-invalid");
++	return { ...result };
++}
++
++export interface DemoSha256StateV1 {
++	readonly schema: "DemoSha256StateV1";
++	readonly h: readonly [number, number, number, number, number, number, number, number];
++	readonly totalBytes: number;
++	readonly tailHex: string;
++}
++
++const V2_SHA256_INITIAL = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19] as const;
++const V2_SHA256_K = [
++	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
++	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
++	0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
++	0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
++	0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
++	0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
++	0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
++	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
++] as const;
++
++function v2HexBytes(value: string): Uint8Array {
++	if (!/^(?:[0-9a-f]{2})*$/.test(value)) throw new Error("demo-payment-v2-hex-invalid");
++	return Uint8Array.from({ length: value.length / 2 }, (_, index) => Number.parseInt(value.slice(index * 2, index * 2 + 2), 16));
++}
++
++function v2BytesHex(value: Uint8Array): string {
++	return [...value].map((byte) => byte.toString(16).padStart(2, "0")).join("");
++}
++
++function v2ConcatBytes(...parts: readonly Uint8Array[]): Uint8Array {
++	const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
++	let offset = 0;
++	for (const part of parts) { out.set(part, offset); offset += part.length; }
++	return out;
++}
++
++async function v2HashBytes(...parts: readonly Uint8Array[]): Promise<string> {
++	return v2BytesHex(new Uint8Array(await crypto.subtle.digest("SHA-256", v2ConcatBytes(...parts) as BufferSource)));
++}
++
++function v2Uint64(value: number): Uint8Array {
++	if (!Number.isSafeInteger(value) || value < 0) throw new Error("demo-payment-v2-uint64-invalid");
++	const out = new Uint8Array(8);
++	let held = BigInt(value);
++	for (let index = 7; index >= 0; index -= 1) { out[index] = Number(held & 255n); held >>= 8n; }
++	return out;
++}
++
++function v2Rotr(value: number, shift: number): number { return (value >>> shift) | (value << (32 - shift)); }
++
++function v2Sha256Block(h: number[], block: Uint8Array): void {
++	const w = new Uint32Array(64);
++	for (let index = 0; index < 16; index += 1) {
++		const offset = index * 4;
++		w[index] = ((block[offset]! << 24) | (block[offset + 1]! << 16) | (block[offset + 2]! << 8) | block[offset + 3]!) >>> 0;
++	}
++	for (let index = 16; index < 64; index += 1) {
++		const x = w[index - 15]!; const y = w[index - 2]!;
++		const s0 = (v2Rotr(x, 7) ^ v2Rotr(x, 18) ^ (x >>> 3)) >>> 0;
++		const s1 = (v2Rotr(y, 17) ^ v2Rotr(y, 19) ^ (y >>> 10)) >>> 0;
++		w[index] = (w[index - 16]! + s0 + w[index - 7]! + s1) >>> 0;
++	}
++	let [a, b, c, d, e, f, g, hh] = h;
++	for (let index = 0; index < 64; index += 1) {
++		const s1 = (v2Rotr(e!, 6) ^ v2Rotr(e!, 11) ^ v2Rotr(e!, 25)) >>> 0;
++		const choose = ((e! & f!) ^ (~e! & g!)) >>> 0;
++		const t1 = (hh! + s1 + choose + V2_SHA256_K[index]! + w[index]!) >>> 0;
++		const s0 = (v2Rotr(a!, 2) ^ v2Rotr(a!, 13) ^ v2Rotr(a!, 22)) >>> 0;
++		const majority = ((a! & b!) ^ (a! & c!) ^ (b! & c!)) >>> 0;
++		const t2 = (s0 + majority) >>> 0;
++		hh = g; g = f; f = e; e = (d! + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
++	}
++	const next = [a!, b!, c!, d!, e!, f!, g!, hh!];
++	for (let index = 0; index < 8; index += 1) h[index] = (h[index]! + next[index]!) >>> 0;
++}
++
++export function demoSha256InitialV1(prefix = new Uint8Array()): DemoSha256StateV1 {
++	return demoSha256UpdateV1({ schema: "DemoSha256StateV1", h: [...V2_SHA256_INITIAL], totalBytes: 0, tailHex: "" }, prefix);
++}
++
++function v2ValidateShaState(value: DemoSha256StateV1): void {
++	if (value.schema !== "DemoSha256StateV1" || !Array.isArray(value.h) || value.h.length !== 8
++		|| value.h.some((word) => !Number.isSafeInteger(word) || word < 0 || word > 0xffffffff)
++		|| !Number.isSafeInteger(value.totalBytes) || value.totalBytes < 0 || !/^(?:[0-9a-f]{2}){0,63}$/.test(value.tailHex)
++		|| value.tailHex.length / 2 !== value.totalBytes % 64) throw new Error("demo-payment-v2-sha-state-invalid");
++}
++
++export function demoSha256UpdateV1(value: DemoSha256StateV1, bytes: Uint8Array): DemoSha256StateV1 {
++	v2ValidateShaState(value);
++	const totalBytes = value.totalBytes + bytes.length;
++	if (!Number.isSafeInteger(totalBytes)) throw new Error("demo-payment-v2-sha-state-overflow");
++	const held = v2ConcatBytes(v2HexBytes(value.tailHex), bytes);
++	const h = [...value.h];
++	let offset = 0;
++	while (offset + 64 <= held.length) { v2Sha256Block(h, held.subarray(offset, offset + 64)); offset += 64; }
++	return { schema: "DemoSha256StateV1", h: h as unknown as DemoSha256StateV1["h"], totalBytes, tailHex: v2BytesHex(held.subarray(offset)) };
++}
++
++export function demoSha256DigestV1(value: DemoSha256StateV1): string {
++	v2ValidateShaState(value);
++	const h = [...value.h];
++	const tail = v2HexBytes(value.tailHex);
++	const paddingLength = (56 - ((value.totalBytes + 1) % 64) + 64) % 64;
++	const padding = new Uint8Array(1 + paddingLength + 8);
++	padding[0] = 0x80;
++	let bits = BigInt(value.totalBytes) * 8n;
++	for (let index = padding.length - 1; index >= padding.length - 8; index -= 1) { padding[index] = Number(bits & 255n); bits >>= 8n; }
++	const finalBytes = v2ConcatBytes(tail, padding);
++	for (let offset = 0; offset < finalBytes.length; offset += 64) v2Sha256Block(h, finalBytes.subarray(offset, offset + 64));
++	const digest = new Uint8Array(32);
++	for (let index = 0; index < 8; index += 1) {
++		const word = h[index]!;
++		digest[index * 4] = word >>> 24; digest[index * 4 + 1] = word >>> 16; digest[index * 4 + 2] = word >>> 8; digest[index * 4 + 3] = word;
++	}
++	return v2BytesHex(digest);
++}
++
++export interface DemoCommittedAuctionHistoryOpenV2 {
++	readonly schema: "DemoCommittedAuctionHistoryOpenV2";
++	readonly authNetworkId: string;
++	readonly chainId: string;
++	readonly firstHeight: 1;
++	readonly throughHeight: number;
++	readonly throughAppHash: string;
++	readonly immutableStorageMarker: string;
++	readonly storageRootSha256: string;
++	readonly chunkCount: number;
++	readonly batchCount: number;
++	readonly packingPolicy: "greedy-contiguous-height-v1";
++	readonly maxBatchesPerChunk: 64;
++	readonly maxCanonicalBatchUtf8Bytes: 65536;
++	readonly maxCanonicalBatchArrayUtf8BytesPerChunk: 4194304;
++	readonly finalChunkDigest: string;
++	readonly canonicalBatchHistorySha256: string;
++}
++
++export interface DemoCommittedAuctionHistoryChunkV2 {
++	readonly schema: "DemoCommittedAuctionHistoryChunkV2";
++	readonly immutableStorageMarker: string;
++	readonly storageRootSha256: string;
++	readonly index: number;
++	readonly firstHeight: number;
++	readonly lastHeight: number;
++	readonly previousChunkDigest: string;
++	readonly batches: readonly CommittedAuctionBatchV2[];
++	readonly chunkDigest: string;
++}
++
++export interface DemoCommittedAuctionHistoryPortV2 {
++	open(request: { readonly authNetworkId: string; readonly chainId: string; readonly throughHeight: number; readonly throughAppHash: string }): Promise<DemoCommittedAuctionHistoryOpenV2 | null>;
++	readChunk(request: { readonly immutableStorageMarker: string; readonly storageRootSha256: string; readonly index: number }): Promise<DemoCommittedAuctionHistoryChunkV2 | null>;
++}
++
++export interface DemoPaymentApprovalSnapshotOpenV2 {
++	readonly schema: "DemoPaymentApprovalSnapshotOpenV2";
++	readonly snapshotMarker: string;
++	readonly snapshotRootSha256: string;
++	readonly authNetworkId: string;
++	readonly chainId: string;
++	readonly auctionId: string;
++	readonly operationMembershipSha256: string;
++	readonly recordCount: number;
++	readonly pageCount: number;
++	readonly maxRecordsPerPage: 64;
++	readonly maxCanonicalApprovalBytesPerRecord: 8192;
++	readonly maxCanonicalApprovalArrayBytesPerPage: 524353;
++	readonly finalPageDigest: string;
++	readonly verifiedApprovalSetSha256: string;
++}
++
++export interface DemoPaymentApprovalSnapshotPageV2 {
++	readonly schema: "DemoPaymentApprovalSnapshotPageV2";
++	readonly snapshotMarker: string;
++	readonly snapshotRootSha256: string;
++	readonly pageIndex: number;
++	readonly previousPageDigest: string;
++	readonly records: readonly DemoPaymentApprovalV2[];
++	readonly cumulativeRecordCount: number;
++	readonly eof: boolean;
++	readonly pageDigest: string;
++}
++
++export interface DemoPaymentApprovalSnapshotPortV2 {
++	openExact(request: { readonly authNetworkId: string; readonly chainId: string; readonly auctionId: string; readonly operationMembershipSha256: string; readonly operationCount: number; readonly operationMembershipIndexMarker: string; readonly operationMembershipIndexRootSha256: string }): Promise<DemoPaymentApprovalSnapshotOpenV2 | null>;
++	readPage(request: { readonly snapshotMarker: string; readonly snapshotRootSha256: string; readonly pageIndex: number }): Promise<DemoPaymentApprovalSnapshotPageV2 | null>;
++}
++
++export interface DemoPaymentVerificationCheckpointV2 {
++	readonly schema: "DemoPaymentVerificationCheckpointV2";
++	readonly revision: number;
++	readonly phase: "history" | "approvals" | "ready" | "consumed";
++	readonly authNetworkId: string;
++	readonly chainId: string;
++	readonly auctionId: string;
++	readonly closureHeight: number;
++	readonly closureAppHash: string;
++	readonly immutableStorageMarker: string;
++	readonly storageRootSha256: string;
++	readonly nextChunkIndex: number;
++	readonly nextHeight: number;
++	readonly verifiedBatchCount: number;
++	readonly previousChunkDigest: string;
++	readonly historySha256State: DemoSha256StateV1;
++	readonly operationMembershipSha256State: DemoSha256StateV1;
++	readonly operationCount: number;
++	readonly operationMembershipSha256: string | null;
++	readonly operationMembershipIndexMarker: string;
++	readonly operationMembershipIndexRootSha256: string;
++	readonly approvalSnapshotMarker: string | null;
++	readonly approvalSnapshotRootSha256: string | null;
++	readonly nextApprovalPageIndex: number;
++	readonly verifiedApprovalCount: number;
++	readonly previousApprovalPageDigest: string;
++	readonly approvalSha256State: DemoSha256StateV1;
++	readonly checkpointDigest: string;
++}
++
++export interface DemoPaymentVerificationStoreV2 {
++	createOrGet(initial: DemoPaymentVerificationCheckpointV2): Promise<DemoPaymentVerificationCheckpointV2>;
++	compareAndSwap(request: { readonly expectedRevision: number; readonly next: DemoPaymentVerificationCheckpointV2; readonly appendMembers: readonly DemoPaymentOperationMemberV2[]; readonly appendApprovalKeys: readonly string[] }): Promise<boolean>;
++	readMemberByOperation(operationId: string): Promise<DemoPaymentOperationMemberV2 | null>;
++	findMember(request: { readonly operationId: string; readonly bidId: string; readonly bidEventId: string; readonly bidderActorId: string }): Promise<DemoPaymentOperationMemberV2 | null>;
++	hasMemberConflict(member: DemoPaymentOperationMemberV2): Promise<boolean>;
++}
++
++export type DemoPaymentStorageAuthorityV2 =
++	| { readonly schema: "DemoPaymentStorageAuthorityV2"; readonly mode: "synthetic_fixture"; readonly fixtureDigest: string }
++	| { readonly schema: "DemoPaymentStorageAuthorityV2"; readonly mode: "accepted_sealed"; readonly handoffSeal: string };
++
++export type DemoPaymentVerificationProgressV2 =
++	| { readonly status: "verification_pending"; readonly checkpointDigest: string; readonly phase: "history" | "approvals"; readonly productionReady: boolean }
++	| { readonly status: "ready"; readonly checkpointDigest: string; readonly productionReady: boolean };
++
++function v2CheckpointBody(value: Omit<DemoPaymentVerificationCheckpointV2, "checkpointDigest">): Omit<DemoPaymentVerificationCheckpointV2, "checkpointDigest"> { return value; }
++
++async function v2Checkpoint(next: Omit<DemoPaymentVerificationCheckpointV2, "checkpointDigest">): Promise<DemoPaymentVerificationCheckpointV2> {
++	return { ...next, checkpointDigest: await v2DomainHash(DEMO_PAYMENT_CHECKPOINT_V2_DOMAIN, JSON.stringify(v2CheckpointBody(next))) };
++}
++
++async function v2HistoryOpen(port: DemoCommittedAuctionHistoryPortV2, expected: DemoAuthenticatedPaymentCommitmentsV2): Promise<DemoCommittedAuctionHistoryOpenV2> {
++	const open = await port.open({ authNetworkId: expected.authNetworkId, chainId: expected.chainId, throughHeight: expected.closureHeight, throughAppHash: expected.closureAppHash });
++	if (open === null || open.schema !== "DemoCommittedAuctionHistoryOpenV2" || open.authNetworkId !== expected.authNetworkId || open.chainId !== expected.chainId
++		|| open.firstHeight !== 1 || open.throughHeight !== expected.closureHeight || open.throughAppHash !== expected.closureAppHash
++		|| open.immutableStorageMarker !== expected.immutableStorageMarker || open.storageRootSha256 !== expected.storageRootSha256
++		|| open.batchCount !== open.throughHeight || open.packingPolicy !== "greedy-contiguous-height-v1" || open.maxBatchesPerChunk !== 64
++		|| open.maxCanonicalBatchUtf8Bytes !== 65536 || open.maxCanonicalBatchArrayUtf8BytesPerChunk !== 4194304
++		|| open.canonicalBatchHistorySha256 !== expected.canonicalBatchHistorySha256 || !HEX_64.test(open.finalChunkDigest)) throw new Error("demo-payment-v2-history-open-mismatch");
++	const rootDescriptor = {
++		schema: open.schema, authNetworkId: open.authNetworkId, chainId: open.chainId, firstHeight: open.firstHeight,
++		throughHeight: open.throughHeight, throughAppHash: open.throughAppHash, immutableStorageMarker: open.immutableStorageMarker,
++		chunkCount: open.chunkCount, batchCount: open.batchCount, packingPolicy: open.packingPolicy, maxBatchesPerChunk: open.maxBatchesPerChunk,
++		maxCanonicalBatchUtf8Bytes: open.maxCanonicalBatchUtf8Bytes, maxCanonicalBatchArrayUtf8BytesPerChunk: open.maxCanonicalBatchArrayUtf8BytesPerChunk,
++		finalChunkDigest: open.finalChunkDigest, canonicalBatchHistorySha256: open.canonicalBatchHistorySha256,
++	};
++	if (await v2DomainHash(DEMO_PAYMENT_HISTORY_ROOT_V2_DOMAIN, JSON.stringify(rootDescriptor)) !== open.storageRootSha256) throw new Error("demo-payment-v2-history-root-invalid");
++	return open;
++}
++
++async function v2ChunkDigest(chunk: DemoCommittedAuctionHistoryChunkV2): Promise<string> {
++	const body = JSON.stringify({ schema: chunk.schema, immutableStorageMarker: chunk.immutableStorageMarker, index: chunk.index, firstHeight: chunk.firstHeight, lastHeight: chunk.lastHeight, batches: chunk.batches });
++	return v2HashBytes(new TextEncoder().encode(DEMO_PAYMENT_HISTORY_CHUNK_V2_DOMAIN), v2HexBytes(chunk.previousChunkDigest), v2Uint64(chunk.index), new TextEncoder().encode(body));
++}
++
++async function v2PageDigest(page: DemoPaymentApprovalSnapshotPageV2): Promise<string> {
++	const body = JSON.stringify({ schema: page.schema, snapshotMarker: page.snapshotMarker, pageIndex: page.pageIndex, records: page.records, cumulativeRecordCount: page.cumulativeRecordCount, eof: page.eof });
++	return v2HashBytes(new TextEncoder().encode(DEMO_PAYMENT_APPROVAL_PAGE_V2_DOMAIN), v2HexBytes(page.previousPageDigest), v2Uint64(page.pageIndex), new TextEncoder().encode(body));
++}
++
++async function v2MembersFromChunk(chunk: DemoCommittedAuctionHistoryChunkV2, expected: DemoAuthenticatedPaymentCommitmentsV2, store: DemoPaymentVerificationStoreV2): Promise<DemoPaymentOperationMemberV2[]> {
++	const out: DemoPaymentOperationMemberV2[] = [];
++	const operationIds = new Set<string>(); const bidIds = new Set<string>(); const eventIds = new Set<string>();
++	for (const batch of chunk.batches) {
++		if (batch.auth_network_id !== expected.authNetworkId || batch.chain_id !== expected.chainId || batch.height < 1 || batch.height > expected.closureHeight) throw new Error("demo-payment-v2-history-batch-domain");
++		for (const [committedEntryIndex, bid] of batch.bids.entries()) {
++			if (batch.height >= expected.closureHeight || bid.auction_id !== expected.auctionId) continue;
++			const displaced = [bid.displaced_actor_id, bid.displaced_operation_id, bid.displaced_bid_id, bid.displaced_event_id];
++			const displacedCount = displaced.filter((item) => item !== undefined).length;
++			if ((bid.displaced_refund_eligible && displacedCount !== 4) || (!bid.displaced_refund_eligible && displacedCount !== 0)) throw new Error("demo-payment-v2-displacement-invalid");
++			if (bid.displaced_refund_eligible) {
++				const local = out.find((member) => member.operationId === bid.displaced_operation_id && member.bidId === bid.displaced_bid_id && member.bidEventId === bid.displaced_event_id && member.bidderActorId === bid.displaced_actor_id);
++				const prior = local ?? await store.findMember({ operationId: bid.displaced_operation_id!, bidId: bid.displaced_bid_id!, bidEventId: bid.displaced_event_id!, bidderActorId: bid.displaced_actor_id! });
++				if (prior === null || prior === undefined) throw new Error("demo-payment-v2-displacement-forward-or-external");
++			}
++			const member = v2CanonicalMember({ operationId: bid.operation_id, bidId: bid.bid_id, bidEventId: bid.event_id, bidderActorId: bid.actor_id, amount: bid.amount, committedHeight: batch.height, committedEntryIndex });
++			if (operationIds.has(member.operationId) || bidIds.has(member.bidId) || eventIds.has(member.bidEventId) || await store.hasMemberConflict(member)) throw new Error("demo-payment-v2-membership-conflict");
++			operationIds.add(member.operationId); bidIds.add(member.bidId); eventIds.add(member.bidEventId); out.push(member);
++		}
++	}
++	return out;
++}
++
++export async function advanceDemoPaymentVerificationV2(options: {
++	readonly history: DemoCommittedAuctionHistoryPortV2;
++	readonly approvals: DemoPaymentApprovalSnapshotPortV2;
++	readonly store: DemoPaymentVerificationStoreV2;
++	readonly expected: DemoAuthenticatedPaymentCommitmentsV2;
++	readonly keyRoles: DemoPaymentKeyRoleContextV2;
++	readonly storageAuthority: DemoPaymentStorageAuthorityV2;
++}): Promise<DemoPaymentVerificationProgressV2> {
++	if (options.storageAuthority.schema !== "DemoPaymentStorageAuthorityV2") throw new Error("demo-payment-v2-storage-adapter-unaccepted");
++	// No concrete storage-owner handoff digest is frozen in this lane. Keep the future tagged
++	// variant readable at the type boundary, but never let a caller-provided seal self-authorize.
++	if (options.storageAuthority.mode !== "synthetic_fixture" || !HEX_64.test(options.storageAuthority.fixtureDigest)) {
++		throw new Error("demo-payment-v2-storage-adapter-unaccepted");
++	}
++	const productionReady = false;
++	const expected = exactDemoAuthenticatedPaymentCommitmentsV2(options.expected);
++	const open = await v2HistoryOpen(options.history, expected);
++	const zero = "0".repeat(64);
++	const initial = await v2Checkpoint({
++		schema: "DemoPaymentVerificationCheckpointV2", revision: 0, phase: "history", authNetworkId: expected.authNetworkId, chainId: expected.chainId,
++		auctionId: expected.auctionId, closureHeight: expected.closureHeight, closureAppHash: expected.closureAppHash,
++		immutableStorageMarker: expected.immutableStorageMarker, storageRootSha256: expected.storageRootSha256,
++		nextChunkIndex: 0, nextHeight: 1, verifiedBatchCount: 0, previousChunkDigest: zero,
++		historySha256State: demoSha256InitialV1(new TextEncoder().encode("[")),
++		operationMembershipSha256State: demoSha256InitialV1(new TextEncoder().encode(`${DEMO_PAYMENT_MEMBERSHIP_V2_DOMAIN}[`)),
++		operationCount: 0, operationMembershipSha256: null,
++		operationMembershipIndexMarker: `membership:${expected.authNetworkId}:${expected.chainId}:${expected.auctionId}`,
++		operationMembershipIndexRootSha256: expected.operationMembershipSha256,
++		approvalSnapshotMarker: null, approvalSnapshotRootSha256: null, nextApprovalPageIndex: 0, verifiedApprovalCount: 0,
++		previousApprovalPageDigest: zero, approvalSha256State: demoSha256InitialV1(new TextEncoder().encode(`${DEMO_PAYMENT_APPROVAL_SET_V2_DOMAIN}[`)),
++	});
++	let checkpoint = await options.store.createOrGet(initial);
++	if (checkpoint.authNetworkId !== expected.authNetworkId || checkpoint.chainId !== expected.chainId || checkpoint.auctionId !== expected.auctionId
++		|| checkpoint.closureHeight !== expected.closureHeight || checkpoint.closureAppHash !== expected.closureAppHash
++		|| checkpoint.immutableStorageMarker !== expected.immutableStorageMarker || checkpoint.storageRootSha256 !== expected.storageRootSha256) throw new Error("demo-payment-v2-checkpoint-domain-drift");
++	if (checkpoint.phase === "ready" || checkpoint.phase === "consumed") return { status: "ready", checkpointDigest: checkpoint.checkpointDigest, productionReady };
++	if (checkpoint.phase === "history") {
++		if (checkpoint.nextChunkIndex >= open.chunkCount) throw new Error("demo-payment-v2-history-late-eof");
++		const chunk = await options.history.readChunk({ immutableStorageMarker: open.immutableStorageMarker, storageRootSha256: open.storageRootSha256, index: checkpoint.nextChunkIndex });
++		if (chunk === null || chunk.schema !== "DemoCommittedAuctionHistoryChunkV2" || chunk.immutableStorageMarker !== open.immutableStorageMarker || chunk.storageRootSha256 !== open.storageRootSha256
++			|| chunk.index !== checkpoint.nextChunkIndex || chunk.previousChunkDigest !== checkpoint.previousChunkDigest || chunk.firstHeight !== checkpoint.nextHeight
++			|| chunk.batches.length < 1 || chunk.batches.length > 64 || chunk.lastHeight !== chunk.firstHeight + chunk.batches.length - 1
++			|| chunk.batches.some((batch, index) => batch.height !== chunk.firstHeight + index)) throw new Error("demo-payment-v2-history-chunk-invalid");
++		const batchBytes = chunk.batches.map((batch) => new TextEncoder().encode(JSON.stringify(batch)));
++		if (batchBytes.some((bytes) => bytes.length > 65536) || 2 + batchBytes.reduce((sum, bytes) => sum + bytes.length, 0) + Math.max(0, batchBytes.length - 1) > 4194304) throw new Error("demo-payment-v2-history-chunk-limit");
++		if (await v2ChunkDigest(chunk) !== chunk.chunkDigest) throw new Error("demo-payment-v2-history-chunk-digest");
++		let historyState = checkpoint.historySha256State;
++		for (const [index, bytes] of batchBytes.entries()) historyState = demoSha256UpdateV1(historyState, v2ConcatBytes(new TextEncoder().encode(checkpoint.verifiedBatchCount + index === 0 ? "" : ","), bytes));
++		const additions = await v2MembersFromChunk(chunk, expected, options.store);
++		let membershipState = checkpoint.operationMembershipSha256State;
++		for (const [index, member] of additions.entries()) membershipState = demoSha256UpdateV1(membershipState, new TextEncoder().encode(`${checkpoint.operationCount + index === 0 ? "" : ","}${JSON.stringify(member)}`));
++		const isLast = chunk.index + 1 === open.chunkCount;
++		let phase: DemoPaymentVerificationCheckpointV2["phase"] = "history";
++		let operationMembershipSha256: string | null = null;
++		let snapshot: DemoPaymentApprovalSnapshotOpenV2 | null = null;
++		if (isLast) {
++			if (chunk.chunkDigest !== open.finalChunkDigest || chunk.lastHeight !== open.throughHeight) throw new Error("demo-payment-v2-history-final-mismatch");
++			historyState = demoSha256UpdateV1(historyState, new TextEncoder().encode("]"));
++			membershipState = demoSha256UpdateV1(membershipState, new TextEncoder().encode("]"));
++			operationMembershipSha256 = demoSha256DigestV1(membershipState);
++			if (demoSha256DigestV1(historyState) !== expected.canonicalBatchHistorySha256 || operationMembershipSha256 !== expected.operationMembershipSha256
++				|| checkpoint.operationCount + additions.length !== expected.operationCount) throw new Error("demo-payment-v2-history-commitment-mismatch");
++			snapshot = await options.approvals.openExact({ authNetworkId: expected.authNetworkId, chainId: expected.chainId, auctionId: expected.auctionId,
++				operationMembershipSha256, operationCount: expected.operationCount, operationMembershipIndexMarker: checkpoint.operationMembershipIndexMarker,
++				operationMembershipIndexRootSha256: checkpoint.operationMembershipIndexRootSha256 });
++			if (snapshot === null || snapshot.schema !== "DemoPaymentApprovalSnapshotOpenV2" || snapshot.authNetworkId !== expected.authNetworkId || snapshot.chainId !== expected.chainId
++				|| snapshot.auctionId !== expected.auctionId || snapshot.operationMembershipSha256 !== operationMembershipSha256 || snapshot.recordCount !== expected.approvalCount
++				|| snapshot.maxRecordsPerPage !== 64 || snapshot.maxCanonicalApprovalBytesPerRecord !== 8192 || snapshot.maxCanonicalApprovalArrayBytesPerPage !== 524353
++				|| snapshot.verifiedApprovalSetSha256 !== expected.verifiedApprovalSetSha256) throw new Error("demo-payment-v2-approval-snapshot-mismatch");
++			const rootDescriptor = { schema: snapshot.schema, snapshotMarker: snapshot.snapshotMarker, authNetworkId: snapshot.authNetworkId, chainId: snapshot.chainId,
++				auctionId: snapshot.auctionId, operationMembershipSha256: snapshot.operationMembershipSha256, recordCount: snapshot.recordCount, pageCount: snapshot.pageCount,
++				maxRecordsPerPage: snapshot.maxRecordsPerPage, maxCanonicalApprovalBytesPerRecord: snapshot.maxCanonicalApprovalBytesPerRecord,
++				maxCanonicalApprovalArrayBytesPerPage: snapshot.maxCanonicalApprovalArrayBytesPerPage, finalPageDigest: snapshot.finalPageDigest,
++				verifiedApprovalSetSha256: snapshot.verifiedApprovalSetSha256 };
++			if (await v2DomainHash(DEMO_PAYMENT_APPROVAL_ROOT_V2_DOMAIN, JSON.stringify(rootDescriptor)) !== snapshot.snapshotRootSha256) throw new Error("demo-payment-v2-approval-snapshot-root");
++			phase = snapshot.recordCount === 0 ? "ready" : "approvals";
++			if (snapshot.recordCount === 0 && (snapshot.pageCount !== 0 || snapshot.finalPageDigest !== zero || expected.operationCount !== 0
++				|| demoSha256DigestV1(demoSha256UpdateV1(checkpoint.approvalSha256State, new TextEncoder().encode("]"))) !== expected.verifiedApprovalSetSha256)) throw new Error("demo-payment-v2-empty-approval-snapshot-invalid");
++		}
++		const next = await v2Checkpoint({ ...checkpoint, revision: checkpoint.revision + 1, phase, nextChunkIndex: checkpoint.nextChunkIndex + 1,
++			nextHeight: chunk.lastHeight + 1, verifiedBatchCount: checkpoint.verifiedBatchCount + chunk.batches.length, previousChunkDigest: chunk.chunkDigest,
++			historySha256State: historyState, operationMembershipSha256State: membershipState, operationCount: checkpoint.operationCount + additions.length,
++			operationMembershipSha256, approvalSnapshotMarker: snapshot?.snapshotMarker ?? null, approvalSnapshotRootSha256: snapshot?.snapshotRootSha256 ?? null });
++		if (!await options.store.compareAndSwap({ expectedRevision: checkpoint.revision, next, appendMembers: additions, appendApprovalKeys: [] })) throw new Error("demo-payment-v2-checkpoint-cas-conflict");
++		return phase === "ready" ? { status: "ready", checkpointDigest: next.checkpointDigest, productionReady } : { status: "verification_pending", checkpointDigest: next.checkpointDigest, phase, productionReady };
++	}
++	if (checkpoint.operationMembershipSha256 === null || checkpoint.approvalSnapshotMarker === null || checkpoint.approvalSnapshotRootSha256 === null) throw new Error("demo-payment-v2-approval-checkpoint-invalid");
++	const snapshot = await options.approvals.openExact({ authNetworkId: expected.authNetworkId, chainId: expected.chainId, auctionId: expected.auctionId,
++		operationMembershipSha256: checkpoint.operationMembershipSha256!, operationCount: checkpoint.operationCount,
++		operationMembershipIndexMarker: checkpoint.operationMembershipIndexMarker, operationMembershipIndexRootSha256: checkpoint.operationMembershipIndexRootSha256 });
++	if (snapshot === null || snapshot.snapshotMarker !== checkpoint.approvalSnapshotMarker || snapshot.snapshotRootSha256 !== checkpoint.approvalSnapshotRootSha256
++		|| snapshot.operationMembershipSha256 !== checkpoint.operationMembershipSha256 || snapshot.recordCount !== expected.approvalCount
++		|| snapshot.verifiedApprovalSetSha256 !== expected.verifiedApprovalSetSha256 || checkpoint.nextApprovalPageIndex >= snapshot.pageCount) throw new Error("demo-payment-v2-approval-snapshot-drift");
++	const page = await options.approvals.readPage({ snapshotMarker: checkpoint.approvalSnapshotMarker, snapshotRootSha256: checkpoint.approvalSnapshotRootSha256, pageIndex: checkpoint.nextApprovalPageIndex });
++	if (page === null || page.schema !== "DemoPaymentApprovalSnapshotPageV2" || page.snapshotMarker !== checkpoint.approvalSnapshotMarker || page.snapshotRootSha256 !== checkpoint.approvalSnapshotRootSha256
++		|| page.pageIndex !== checkpoint.nextApprovalPageIndex || page.previousPageDigest !== checkpoint.previousApprovalPageDigest || page.records.length < 1 || page.records.length > 64
++		|| page.cumulativeRecordCount !== checkpoint.verifiedApprovalCount + page.records.length || page.eof !== (page.pageIndex + 1 === snapshot.pageCount)
++		|| (page.eof && page.pageDigest !== snapshot.finalPageDigest) || await v2PageDigest(page) !== page.pageDigest) throw new Error("demo-payment-v2-approval-page-invalid");
++	let approvalState = checkpoint.approvalSha256State;
++	const approvalKeys: string[] = [];
++	let priorApprovalKey: string | null = null;
++	for (const [index, approval] of page.records.entries()) {
++		const verified = await verifyDemoPaymentApprovalV2(approval, options.keyRoles);
++		const member = await options.store.readMemberByOperation(verified.approval.operationId);
++		if (member === null || verified.approval.authNetworkId !== expected.authNetworkId || verified.approval.chainId !== expected.chainId || verified.approval.auctionId !== expected.auctionId
++			|| verified.approval.bidId !== member.bidId || verified.approval.bidEventId !== member.bidEventId || verified.approval.bidderActorId !== member.bidderActorId || verified.approval.amount !== member.amount) throw new Error("demo-payment-v2-approval-member-join");
++		const key = JSON.stringify([verified.approval.authNetworkId, verified.approval.chainId, verified.approval.auctionId, verified.approval.operationId, verified.approval.approvalEventId]);
++		if (priorApprovalKey !== null && priorApprovalKey >= key) throw new Error("demo-payment-v2-approval-order-invalid");
++		priorApprovalKey = key;
++		approvalKeys.push(key);
++		approvalState = demoSha256UpdateV1(approvalState, new TextEncoder().encode(`${checkpoint.verifiedApprovalCount + index === 0 ? "" : ","}${JSON.stringify(verified.approval)}`));
++	}
++	const total = checkpoint.verifiedApprovalCount + page.records.length;
++	let phase: DemoPaymentVerificationCheckpointV2["phase"] = "approvals";
++	if (page.eof) {
++		if (total !== expected.approvalCount) throw new Error("demo-payment-v2-approval-count-mismatch");
++		approvalState = demoSha256UpdateV1(approvalState, new TextEncoder().encode("]"));
++		if (demoSha256DigestV1(approvalState) !== expected.verifiedApprovalSetSha256) throw new Error("demo-payment-v2-approval-set-mismatch");
++		phase = "ready";
++	} else if (total >= expected.approvalCount) throw new Error("demo-payment-v2-approval-late-eof");
++	const next = await v2Checkpoint({ ...checkpoint, revision: checkpoint.revision + 1, phase, nextApprovalPageIndex: checkpoint.nextApprovalPageIndex + 1,
++		verifiedApprovalCount: total, previousApprovalPageDigest: page.pageDigest, approvalSha256State: approvalState });
++	if (!await options.store.compareAndSwap({ expectedRevision: checkpoint.revision, next, appendMembers: [], appendApprovalKeys: approvalKeys })) throw new Error("demo-payment-v2-checkpoint-cas-conflict");
++	return phase === "ready" ? { status: "ready", checkpointDigest: next.checkpointDigest, productionReady } : { status: "verification_pending", checkpointDigest: next.checkpointDigest, phase: "approvals", productionReady };
++}

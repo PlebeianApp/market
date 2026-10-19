@@ -1,0 +1,1293 @@
+--- a/internal/demo/authenticated_evidence_handoff.go
++++ b/internal/demo/authenticated_evidence_handoff.go
+@@ -9,6 +9,7 @@
+ 	"errors"
+ 	"fmt"
+ 	"math/big"
++	"net/url"
+ 	"os"
+ 	"path/filepath"
+ 	"sort"
+@@ -28,11 +29,21 @@
+ )
+ 
+ const (
+-	AuthenticatedHandoffSchema          = "OwnerLocalR4AuthenticatedApplicationHandoffV2"
+-	SignedEventExportSchema             = "OwnerLocalR4SignedEventExportV1"
+-	PaymentApprovalSchema               = "DemoPaymentApprovalV1"
+-	PaymentApprovalKind          uint16 = 28643
+-	MaxAuthenticatedHandoffBytes        = 2 * 1024 * 1024
++	AuthenticatedHandoffSchema               = "OwnerLocalR4AuthenticatedApplicationHandoffV2"
++	SignedEventExportSchema                  = "OwnerLocalR4SignedEventExportV1"
++	PaymentApprovalSchema                    = "DemoPaymentApprovalV1"
++	PaymentApprovalSchemaV2                  = "DemoPaymentApprovalV2"
++	PaymentApprovalLifetimePolicyV2          = "terminal-bound-exact-operation-v1"
++	PaymentApprovalRefundKeyVersionV2        = "separate-cashu-refund-key-v1"
++	PaymentApprovalKind               uint16 = 28643
++	MaxAuthenticatedHandoffBytes             = 2 * 1024 * 1024
++	MaxPaymentApprovalContentBytesV2         = 4096
++	MaxPaymentApprovalBytesV2                = 8192
++)
++
++var (
++	paymentApprovalDigestDomainV2 = []byte("COCO_DEMO_PAYMENT_APPROVAL_V2\x00")
++	paymentApprovalSetDomainV2    = []byte("COCO_DEMO_PAYMENT_APPROVAL_SET_V2\x00")
+ )
+ 
+ // SignedEventExport is the exact, raw NIP-01 event export produced by
+@@ -96,6 +107,65 @@
+ 	RefundPackageDigest  string `json:"refund_package_digest"`
+ }
+ 
++// PaymentApprovalV2 is the frozen, payment-free authenticated approval
++// envelope. It contains public identities and digests only; it is not a Cashu
++// proof, mint response, threshold share, or execution receipt.
++type PaymentApprovalV2 struct {
++	Schema                        string `json:"schema"`
++	AuthNetworkID                 string `json:"authNetworkId"`
++	ChainID                       string `json:"chainId"`
++	AuctionID                     string `json:"auctionId"`
++	OperationID                   string `json:"operationId"`
++	BidID                         string `json:"bidId"`
++	BidEventID                    string `json:"bidEventId"`
++	BidderActorID                 string `json:"bidderActorId"`
++	BidderCashuPublicKey          string `json:"bidderCashuPublicKey"`
++	RefundCashuPublicKey          string `json:"refundCashuPublicKey"`
++	RefundKeyVersion              string `json:"refundKeyVersion"`
++	Amount                        int64  `json:"amount"`
++	MintURL                       string `json:"mintUrl"`
++	SellerP2PKXPub                string `json:"sellerP2pkXpub"`
++	SellerDerivationPath          string `json:"sellerDerivationPath"`
++	SellerRecipientPublicKey      string `json:"sellerRecipientPublicKey"`
++	ConditionFingerprint          string `json:"conditionFingerprint"`
++	WinnerPackageDigest           string `json:"winnerPackageDigest"`
++	RefundPackageDigest           string `json:"refundPackageDigest"`
++	CloseTime                     int64  `json:"closeTime"`
++	SettlementWindowSeconds       int64  `json:"settlementWindowSeconds"`
++	ValidUntil                    int64  `json:"validUntil"`
++	Locktime                      int64  `json:"locktime"`
++	ApprovalLifetimePolicyVersion string `json:"approvalLifetimePolicyVersion"`
++	ApprovalCreatedAt             int64  `json:"approvalCreatedAt"`
++	ApprovalEventID               string `json:"approvalEventId"`
++	ApprovalSignature             string `json:"approvalSignature"`
++}
++
++type paymentApprovalContentV2 struct {
++	Schema                        string `json:"schema"`
++	AuthNetworkID                 string `json:"auth_network_id"`
++	ChainID                       string `json:"chain_id"`
++	AuctionID                     string `json:"auction_id"`
++	OperationID                   string `json:"operation_id"`
++	BidID                         string `json:"bid_id"`
++	BidEventID                    string `json:"bid_event_id"`
++	BidderCashuPublicKey          string `json:"bidder_cashu_public_key"`
++	RefundCashuPublicKey          string `json:"refund_cashu_public_key"`
++	RefundKeyVersion              string `json:"refund_key_version"`
++	Amount                        int64  `json:"amount"`
++	MintURL                       string `json:"mint_url"`
++	SellerP2PKXPub                string `json:"seller_p2pk_xpub"`
++	SellerDerivationPath          string `json:"seller_derivation_path"`
++	SellerRecipientPublicKey      string `json:"seller_recipient_public_key"`
++	ConditionFingerprint          string `json:"condition_fingerprint"`
++	WinnerPackageDigest           string `json:"winner_package_digest"`
++	RefundPackageDigest           string `json:"refund_package_digest"`
++	CloseTime                     int64  `json:"close_time"`
++	SettlementWindowSeconds       int64  `json:"settlement_window_seconds"`
++	ValidUntil                    int64  `json:"valid_until"`
++	Locktime                      int64  `json:"locktime"`
++	ApprovalLifetimePolicyVersion string `json:"approval_lifetime_policy_version"`
++}
++
+ type AuthenticatedApplicationHandoff struct {
+ 	Schema                         string `json:"schema"`
+ 	Ready                          bool   `json:"ready"`
+@@ -440,6 +510,271 @@
+ 	return nil
+ }
+ 
++func paymentApprovalV2Content(approval PaymentApprovalV2) paymentApprovalContentV2 {
++	return paymentApprovalContentV2{
++		Schema: PaymentApprovalSchemaV2, AuthNetworkID: approval.AuthNetworkID,
++		ChainID: approval.ChainID, AuctionID: approval.AuctionID, OperationID: approval.OperationID,
++		BidID: approval.BidID, BidEventID: approval.BidEventID,
++		BidderCashuPublicKey: approval.BidderCashuPublicKey,
++		RefundCashuPublicKey: approval.RefundCashuPublicKey, RefundKeyVersion: approval.RefundKeyVersion,
++		Amount: approval.Amount, MintURL: approval.MintURL, SellerP2PKXPub: approval.SellerP2PKXPub,
++		SellerDerivationPath:     approval.SellerDerivationPath,
++		SellerRecipientPublicKey: approval.SellerRecipientPublicKey,
++		ConditionFingerprint:     approval.ConditionFingerprint,
++		WinnerPackageDigest:      approval.WinnerPackageDigest, RefundPackageDigest: approval.RefundPackageDigest,
++		CloseTime: approval.CloseTime, SettlementWindowSeconds: approval.SettlementWindowSeconds,
++		ValidUntil: approval.ValidUntil, Locktime: approval.Locktime,
++		ApprovalLifetimePolicyVersion: approval.ApprovalLifetimePolicyVersion,
++	}
++}
++
++func printableASCII160(value string) bool {
++	if len(value) < 1 || len(value) > 160 {
++		return false
++	}
++	for index := 0; index < len(value); index++ {
++		if value[index] < 0x21 || value[index] > 0x7e {
++			return false
++		}
++	}
++	return true
++}
++
++func canonicalSellerDerivationPathV2(value string) bool {
++	if !printableASCII160(value) || !strings.HasPrefix(value, "m/") {
++		return false
++	}
++	parts := strings.Split(value[2:], "/")
++	if len(parts) != 5 {
++		return false
++	}
++	for _, part := range parts {
++		if part == "" || (len(part) > 1 && part[0] == '0') {
++			return false
++		}
++		parsed, err := strconv.ParseUint(part, 10, 31)
++		if err != nil || strconv.FormatUint(parsed, 10) != part {
++			return false
++		}
++	}
++	return true
++}
++
++func canonicalHTTPSOriginV2(value string) bool {
++	if !printableASCII160(value) {
++		return false
++	}
++	parsed, err := url.Parse(value)
++	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Hostname() == "" || parsed.Port() != "" || parsed.Path != "" || parsed.RawPath != "" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.ForceQuery || parsed.Opaque != "" {
++		return false
++	}
++	if parsed.Host != strings.ToLower(parsed.Host) || value != "https://"+parsed.Host {
++		return false
++	}
++	return true
++}
++
++func safePositiveIntegerV2(value int64) bool {
++	const maxSafeInteger = int64(1<<53 - 1)
++	return value > 0 && value <= maxSafeInteger
++}
++
++func compressedSecpIdentityV2(value string) (string, error) {
++	if len(value) != 66 || (value[:2] != "02" && value[:2] != "03") || strings.ToLower(value) != value {
++		return "", errors.New("identity is not a canonical compressed public key")
++	}
++	return normalizeSecpIdentity(value)
++}
++
++// VerifyPaymentApprovalLifetimeV2 checks the complete frozen terminal-bound
++// admission equation. Envelope verification alone deliberately cannot claim
++// this result because bundle preparation and admission timestamps are owned by
++// the payment lane.
++func VerifyPaymentApprovalLifetimeV2(approval PaymentApprovalV2, bundlePreparedAt, admittedAt int64) error {
++	if !safePositiveIntegerV2(approval.ApprovalCreatedAt) || !safePositiveIntegerV2(bundlePreparedAt) || !safePositiveIntegerV2(admittedAt) || !safePositiveIntegerV2(approval.CloseTime) || !safePositiveIntegerV2(approval.ValidUntil) || !safePositiveIntegerV2(approval.Locktime) || !safePositiveIntegerV2(approval.SettlementWindowSeconds) {
++		return errors.New("payment approval V2 lifetime contains a non-positive or unsafe integer")
++	}
++	if approval.SettlementWindowSeconds < 60 || approval.ApprovalCreatedAt > bundlePreparedAt || bundlePreparedAt > admittedAt || admittedAt > approval.ValidUntil || admittedAt > approval.CloseTime || approval.CloseTime > approval.ValidUntil {
++		return errors.New("payment approval V2 lifetime ordering is invalid")
++	}
++	if approval.CloseTime > (1<<53-1)-approval.SettlementWindowSeconds || approval.Locktime < 60 || approval.CloseTime+approval.SettlementWindowSeconds > approval.Locktime-60 {
++		return errors.New("payment approval V2 settlement window exceeds the locktime bound")
++	}
++	return nil
++}
++
++// verifyPaymentApprovalV2Envelope validates the exact signed public envelope
++// and returns its domain-separated digest. It does not substitute for
++// VerifyPaymentApprovalLifetimeV2 or payment-lane bundle/branch verification.
++func verifyPaymentApprovalV2Envelope(approval PaymentApprovalV2, acceptedSellerP2PKXPub string, validatorIdentities map[string]struct{}) (string, error) {
++	if approval.Schema != PaymentApprovalSchemaV2 || approval.RefundKeyVersion != PaymentApprovalRefundKeyVersionV2 || approval.ApprovalLifetimePolicyVersion != PaymentApprovalLifetimePolicyV2 {
++		return "", errors.New("payment approval V2 schema or policy literal is invalid")
++	}
++	for _, value := range []string{approval.ChainID, approval.AuctionID, approval.OperationID, approval.BidID} {
++		if !printableASCII160(value) {
++			return "", errors.New("payment approval V2 signed text is outside printable ASCII grammar")
++		}
++	}
++	if !lowerHexExact(approval.AuthNetworkID, 32) || !lowerHexExact(approval.BidEventID, 32) || !lowerHexExact(approval.BidderActorID, 32) || !lowerHexExact(approval.ConditionFingerprint, 32) || !lowerHexExact(approval.WinnerPackageDigest, 32) || !lowerHexExact(approval.RefundPackageDigest, 32) || !lowerHexExact(approval.ApprovalEventID, 32) || !lowerHexExact(approval.ApprovalSignature, 64) {
++		return "", errors.New("payment approval V2 hexadecimal field is invalid")
++	}
++	if !safePositiveIntegerV2(approval.Amount) || !safePositiveIntegerV2(approval.CloseTime) || !safePositiveIntegerV2(approval.SettlementWindowSeconds) || !safePositiveIntegerV2(approval.ValidUntil) || !safePositiveIntegerV2(approval.Locktime) || !safePositiveIntegerV2(approval.ApprovalCreatedAt) {
++		return "", errors.New("payment approval V2 integer field is invalid")
++	}
++	if approval.SettlementWindowSeconds < 60 || approval.ApprovalCreatedAt > approval.ValidUntil || approval.ApprovalCreatedAt > approval.CloseTime || approval.CloseTime > approval.ValidUntil || approval.CloseTime > (1<<53-1)-approval.SettlementWindowSeconds || approval.Locktime < 60 || approval.CloseTime+approval.SettlementWindowSeconds > approval.Locktime-60 {
++		return "", errors.New("payment approval V2 intrinsic lifetime bound is invalid")
++	}
++	if !canonicalHTTPSOriginV2(approval.MintURL) {
++		return "", errors.New("payment approval V2 mint URL is not an exact HTTPS origin")
++	}
++	if !printableASCII160(approval.SellerP2PKXPub) || approval.SellerP2PKXPub != acceptedSellerP2PKXPub {
++		return "", errors.New("payment approval V2 seller xpub does not match accepted authority")
++	}
++	if !canonicalSellerDerivationPathV2(approval.SellerDerivationPath) {
++		return "", errors.New("payment approval V2 seller derivation path is not canonical")
++	}
++	actorIdentity, err := normalizeSecpIdentity(approval.BidderActorID)
++	if err != nil {
++		return "", errors.New("payment approval V2 actor identity is invalid")
++	}
++	mainIdentity, err := compressedSecpIdentityV2(approval.BidderCashuPublicKey)
++	if err != nil {
++		return "", errors.New("payment approval V2 MAIN identity is invalid")
++	}
++	refundIdentity, err := compressedSecpIdentityV2(approval.RefundCashuPublicKey)
++	if err != nil {
++		return "", errors.New("payment approval V2 REFUND identity is invalid")
++	}
++	sellerIdentity, err := compressedSecpIdentityV2(approval.SellerRecipientPublicKey)
++	if err != nil {
++		return "", errors.New("payment approval V2 seller recipient identity is invalid")
++	}
++	sellerRootIdentity, err := sellerXPubRootIdentity(approval.SellerP2PKXPub)
++	if err != nil {
++		return "", fmt.Errorf("payment approval V2 seller xpub: %w", err)
++	}
++	derived, err := deriveSellerChildPublicKey(approval.SellerP2PKXPub, approval.SellerDerivationPath)
++	if err != nil {
++		return "", fmt.Errorf("payment approval V2 seller derivation: %w", err)
++	}
++	if approval.SellerRecipientPublicKey != derived {
++		return "", errors.New("payment approval V2 seller recipient does not match xpub/path derivation")
++	}
++	if sellerRootIdentity == sellerIdentity {
++		return "", errors.New("payment approval V2 seller root aliases derived recipient")
++	}
++	if _, exists := validatorIdentities[sellerRootIdentity]; exists {
++		return "", errors.New("payment approval V2 seller root aliases validator identity")
++	}
++	if _, exists := validatorIdentities[sellerIdentity]; exists {
++		return "", errors.New("payment approval V2 seller recipient aliases validator identity")
++	}
++	identities := []string{actorIdentity, mainIdentity, refundIdentity}
++	for left := range identities {
++		for right := left + 1; right < len(identities); right++ {
++			if identities[left] == identities[right] {
++				return "", errors.New("payment approval V2 actor, MAIN, and REFUND identities are not distinct")
++			}
++		}
++		if identities[left] == sellerRootIdentity || identities[left] == sellerIdentity {
++			return "", errors.New("payment approval V2 identity aliases seller authority")
++		}
++		if _, exists := validatorIdentities[identities[left]]; exists {
++			return "", errors.New("payment approval V2 identity aliases validator identity")
++		}
++	}
++	content, err := marshalCanonicalUTF8JSON(paymentApprovalV2Content(approval))
++	if err != nil {
++		return "", err
++	}
++	if len(content) > MaxPaymentApprovalContentBytesV2 {
++		return "", errors.New("payment approval V2 signed content exceeds 4096 UTF-8 bytes")
++	}
++	canonicalApproval, err := marshalCanonicalUTF8JSON(approval)
++	if err != nil {
++		return "", err
++	}
++	if len(canonicalApproval) > MaxPaymentApprovalBytesV2 {
++		return "", errors.New("payment approval V2 exceeds 8192 canonical UTF-8 bytes")
++	}
++	var publicKey, eventID [32]byte
++	var signature [64]byte
++	if _, err := hex.Decode(publicKey[:], []byte(approval.BidderActorID)); err != nil {
++		return "", err
++	}
++	if _, err := hex.Decode(eventID[:], []byte(approval.ApprovalEventID)); err != nil {
++		return "", err
++	}
++	if _, err := hex.Decode(signature[:], []byte(approval.ApprovalSignature)); err != nil {
++		return "", err
++	}
++	signed := bidauth.SignedEvent{
++		Event: bidauth.UnsignedEvent{
++			PublicKey: publicKey, CreatedAt: approval.ApprovalCreatedAt, Kind: PaymentApprovalKind,
++			Tags:    [][]string{{"protocol", "plebeian-auction-fake-ecash-payment"}, {"version", "2"}, {"environment", approval.AuthNetworkID}, {"bid_event", approval.BidEventID}},
++			Content: string(content),
++		},
++		ID: eventID, Signature: signature,
++	}
++	if _, err := bidauth.VerifyEvent(signed, bidauth.EventLimitsForProfile(), bidauth.BTCECBIP340Verifier{}); err != nil {
++		return "", fmt.Errorf("payment approval V2 event: %w", err)
++	}
++	hash := sha256.New()
++	_, _ = hash.Write(paymentApprovalDigestDomainV2)
++	_, _ = hash.Write(canonicalApproval)
++	return hex.EncodeToString(hash.Sum(nil)), nil
++}
++
++func verifiedPaymentApprovalSetSHA256V2(approvals []PaymentApprovalV2, acceptedSellerP2PKXPub string, validatorIdentities map[string]struct{}) (string, error) {
++	if approvals == nil {
++		return "", errors.New("payment approval V2 set must be an array")
++	}
++	ordered := append(make([]PaymentApprovalV2, 0, len(approvals)), approvals...)
++	digests := make(map[string]struct{}, len(ordered))
++	operations := make(map[string]struct{}, len(ordered))
++	approvalEvents := make(map[string]struct{}, len(ordered))
++	bidEvents := make(map[string]struct{}, len(ordered))
++	bidIDs := make(map[string]struct{}, len(ordered))
++	for index, approval := range ordered {
++		digest, err := verifyPaymentApprovalV2Envelope(approval, acceptedSellerP2PKXPub, validatorIdentities)
++		if err != nil {
++			return "", fmt.Errorf("payment approval V2 %d: %w", index+1, err)
++		}
++		operationKey := approval.AuthNetworkID + "\x00" + approval.ChainID + "\x00" + approval.AuctionID + "\x00" + approval.OperationID
++		for _, item := range []struct {
++			value string
++			seen  map[string]struct{}
++		}{
++			{operationKey, operations}, {approval.ApprovalEventID, approvalEvents},
++			{approval.BidEventID, bidEvents}, {approval.BidID, bidIDs}, {digest, digests},
++		} {
++			value, seen := item.value, item.seen
++			if _, exists := seen[value]; exists {
++				return "", errors.New("payment approval V2 set contains a duplicate identity or digest")
++			}
++			seen[value] = struct{}{}
++		}
++	}
++	sort.Slice(ordered, func(left, right int) bool {
++		leftKey := [5]string{ordered[left].AuthNetworkID, ordered[left].ChainID, ordered[left].AuctionID, ordered[left].OperationID, ordered[left].ApprovalEventID}
++		rightKey := [5]string{ordered[right].AuthNetworkID, ordered[right].ChainID, ordered[right].AuctionID, ordered[right].OperationID, ordered[right].ApprovalEventID}
++		for index := range leftKey {
++			if leftKey[index] != rightKey[index] {
++				return leftKey[index] < rightKey[index]
++			}
++		}
++		return false
++	})
++	raw, err := marshalCanonicalUTF8JSON(ordered)
++	if err != nil {
++		return "", err
++	}
++	hash := sha256.New()
++	_, _ = hash.Write(paymentApprovalSetDomainV2)
++	_, _ = hash.Write(raw)
++	return hex.EncodeToString(hash.Sum(nil)), nil
++}
++
+ func canonicalBatchHistorySHA256(batches []app.CommittedAuctionBatchV2) (string, error) {
+ 	var canonical bytes.Buffer
+ 	canonical.WriteByte('[')
+@@ -707,3 +1042,23 @@
+ 	}
+ 	return approvals, nil
+ }
++
++func DecodePaymentApprovalsV2(raw []byte) ([]PaymentApprovalV2, error) {
++	var approvals []PaymentApprovalV2
++	if err := DecodeStrictJSON(raw, MaxAuthenticatedHandoffBytes, &approvals); err != nil {
++		return nil, err
++	}
++	if approvals == nil {
++		return nil, errors.New("payment approval V2 set must be an array")
++	}
++	for index, approval := range approvals {
++		canonical, err := marshalCanonicalUTF8JSON(approval)
++		if err != nil {
++			return nil, err
++		}
++		if len(canonical) > MaxPaymentApprovalBytesV2 {
++			return nil, fmt.Errorf("payment approval V2 %d exceeds 8192 canonical UTF-8 bytes", index+1)
++		}
++	}
++	return approvals, nil
++}
+--- a/internal/demo/authenticated_evidence_handoff_test.go
++++ b/internal/demo/authenticated_evidence_handoff_test.go
+@@ -138,6 +138,145 @@
+ 	return approval
+ }
+ 
++func newPaymentApprovalV2Fixture(t *testing.T) PaymentApprovalV2 {
++	t.Helper()
++	actorPrivate, actorPublic := btcec.PrivKeyFromBytes(bytes.Repeat([]byte{0x31}, 32))
++	_, mainPublic := btcec.PrivKeyFromBytes(bytes.Repeat([]byte{0x41}, 32))
++	_, refundPublic := btcec.PrivKeyFromBytes(bytes.Repeat([]byte{0x51}, 32))
++	approval := PaymentApprovalV2{
++		Schema: PaymentApprovalSchemaV2, AuthNetworkID: strings.Repeat("a", 64), ChainID: "chain-test",
++		AuctionID: "auction-target", OperationID: "operation-target", BidID: "bid-target",
++		BidEventID: strings.Repeat("b", 64), BidderActorID: hex.EncodeToString(schnorr.SerializePubKey(actorPublic)),
++		BidderCashuPublicKey: hex.EncodeToString(mainPublic.SerializeCompressed()),
++		RefundCashuPublicKey: hex.EncodeToString(refundPublic.SerializeCompressed()),
++		RefundKeyVersion:     PaymentApprovalRefundKeyVersionV2, Amount: 2100, MintURL: "https://mint.invalid",
++		SellerP2PKXPub: testSellerXPub, SellerDerivationPath: "m/1/2/3/4/1",
++		SellerRecipientPublicKey: "0351646c50019651bb5f5ceadaf2911df64f7172f20041e9c9846ab2a8b823c7e9",
++		ConditionFingerprint:     strings.Repeat("c", 64), WinnerPackageDigest: strings.Repeat("d", 64),
++		RefundPackageDigest: strings.Repeat("e", 64), CloseTime: 200, SettlementWindowSeconds: 60,
++		ValidUntil: 250, Locktime: 320, ApprovalLifetimePolicyVersion: PaymentApprovalLifetimePolicyV2,
++		ApprovalCreatedAt: 100,
++	}
++	return signPaymentApprovalV2(t, approval, actorPrivate)
++}
++
++func signPaymentApprovalV2(t *testing.T, approval PaymentApprovalV2, privateKey *btcec.PrivateKey) PaymentApprovalV2 {
++	t.Helper()
++	content, err := marshalCanonicalUTF8JSON(paymentApprovalV2Content(approval))
++	if err != nil {
++		t.Fatal(err)
++	}
++	var publicKey [32]byte
++	if _, err := hex.Decode(publicKey[:], []byte(approval.BidderActorID)); err != nil {
++		t.Fatal(err)
++	}
++	event := bidauth.UnsignedEvent{
++		PublicKey: publicKey, CreatedAt: approval.ApprovalCreatedAt, Kind: PaymentApprovalKind,
++		Tags:    [][]string{{"protocol", "plebeian-auction-fake-ecash-payment"}, {"version", "2"}, {"environment", approval.AuthNetworkID}, {"bid_event", approval.BidEventID}},
++		Content: string(content),
++	}
++	eventID, err := bidauth.ComputeEventID(event, bidauth.EventLimitsForProfile())
++	if err != nil {
++		t.Fatal(err)
++	}
++	signature, err := schnorr.Sign(privateKey, eventID[:])
++	if err != nil {
++		t.Fatal(err)
++	}
++	approval.ApprovalEventID = hex.EncodeToString(eventID[:])
++	approval.ApprovalSignature = hex.EncodeToString(signature.Serialize())
++	return approval
++}
++
++func TestPaymentApprovalV2EnvelopeAndLifetime(t *testing.T) {
++	approval := newPaymentApprovalV2Fixture(t)
++	digest, err := verifyPaymentApprovalV2Envelope(approval, testSellerXPub, map[string]struct{}{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !lowerHexExact(digest, 32) {
++		t.Fatalf("approval V2 digest is invalid: %q", digest)
++	}
++	if err := VerifyPaymentApprovalLifetimeV2(approval, 110, 120); err != nil {
++		t.Fatalf("exact terminal-bound lifetime was rejected: %v", err)
++	}
++	for name, times := range map[string][2]int64{
++		"bundle before approval":  {99, 120},
++		"admission before bundle": {120, 119},
++		"admission after close":   {110, 201},
++	} {
++		t.Run(name, func(t *testing.T) {
++			if err := VerifyPaymentApprovalLifetimeV2(approval, times[0], times[1]); err == nil {
++				t.Fatal("accepted invalid terminal-bound lifetime")
++			}
++		})
++	}
++
++	actorPrivate, _ := btcec.PrivKeyFromBytes(bytes.Repeat([]byte{0x31}, 32))
++	tests := map[string]func(PaymentApprovalV2) PaymentApprovalV2{
++		"V1 cannot enter V2": func(value PaymentApprovalV2) PaymentApprovalV2 { value.Schema = PaymentApprovalSchema; return value },
++		"MAIN REFUND alias": func(value PaymentApprovalV2) PaymentApprovalV2 {
++			value.RefundCashuPublicKey = value.BidderCashuPublicKey
++			return signPaymentApprovalV2(t, value, actorPrivate)
++		},
++		"non-origin mint URL": func(value PaymentApprovalV2) PaymentApprovalV2 {
++			value.MintURL += "/"
++			return signPaymentApprovalV2(t, value, actorPrivate)
++		},
++		"noncanonical path": func(value PaymentApprovalV2) PaymentApprovalV2 {
++			value.SellerDerivationPath = "m/01/2/3/4/1"
++			return signPaymentApprovalV2(t, value, actorPrivate)
++		},
++		"signature drift": func(value PaymentApprovalV2) PaymentApprovalV2 { value.Amount++; return value },
++		"intrinsic lifetime": func(value PaymentApprovalV2) PaymentApprovalV2 {
++			value.Locktime = 319
++			return signPaymentApprovalV2(t, value, actorPrivate)
++		},
++	}
++	for name, mutate := range tests {
++		t.Run(name, func(t *testing.T) {
++			if _, err := verifyPaymentApprovalV2Envelope(mutate(approval), testSellerXPub, map[string]struct{}{}); err == nil {
++				t.Fatal("accepted invalid payment approval V2")
++			}
++		})
++	}
++}
++
++func TestPaymentApprovalV2SetAndStrictCodec(t *testing.T) {
++	first := newPaymentApprovalV2Fixture(t)
++	actorPrivate, _ := btcec.PrivKeyFromBytes(bytes.Repeat([]byte{0x31}, 32))
++	second := first
++	second.OperationID = "operation-z"
++	second.BidID = "bid-z"
++	second.BidEventID = strings.Repeat("f", 64)
++	second = signPaymentApprovalV2(t, second, actorPrivate)
++
++	forward, err := verifiedPaymentApprovalSetSHA256V2([]PaymentApprovalV2{first, second}, testSellerXPub, map[string]struct{}{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	reverse, err := verifiedPaymentApprovalSetSHA256V2([]PaymentApprovalV2{second, first}, testSellerXPub, map[string]struct{}{})
++	if err != nil || forward != reverse || !lowerHexExact(forward, 32) {
++		t.Fatalf("approval V2 set order was not canonical: forward=%s reverse=%s err=%v", forward, reverse, err)
++	}
++	if _, err := verifiedPaymentApprovalSetSHA256V2([]PaymentApprovalV2{first, first}, testSellerXPub, map[string]struct{}{}); err == nil {
++		t.Fatal("accepted duplicate ApprovalV2 identity/digest")
++	}
++	raw, err := marshalCanonicalUTF8JSON([]PaymentApprovalV2{first})
++	if err != nil {
++		t.Fatal(err)
++	}
++	decoded, err := DecodePaymentApprovalsV2(raw)
++	if err != nil || len(decoded) != 1 || decoded[0].ApprovalEventID != first.ApprovalEventID {
++		t.Fatalf("strict ApprovalV2 codec drifted: value=%#v err=%v", decoded, err)
++	}
++	for _, malformed := range []string{"null", `[{"schema":"DemoPaymentApprovalV2","schema":"DemoPaymentApprovalV2"}]`, `[{"schema":"DemoPaymentApprovalV2","extra":true}]`} {
++		if _, err := DecodePaymentApprovalsV2([]byte(malformed)); err == nil {
++			t.Fatalf("strict ApprovalV2 codec accepted %s", malformed)
++		}
++	}
++}
++
+ func TestAuthenticatedApplicationHandoffVerifiesExactOfflineBoundary(t *testing.T) {
+ 	fixture := newAuthenticatedHandoffFixture(t)
+ 	receipt, err := VerifyAuthenticatedApplicationHandoff(fixture.sessionRaw, fixture.authRaw, fixture.evidences, fixture.batches, fixture.exported, testSellerXPub, fixture.approvals)
+--- a/plugins/committed-bid-consumer.ts
++++ b/plugins/committed-bid-consumer.ts
+@@ -5,6 +5,8 @@
+  */
+ import type { WalletCommandRunner } from "../ts/wallet-command.ts";
+ import type { WalletOperationCommand, WalletOperationSnapshot } from "../../cashu-wrapper/ts/types.ts";
++import { sha256 } from "@noble/hashes/sha2.js";
++import { bytesToHex, concatBytes, hexToBytes, utf8ToBytes } from "@noble/hashes/utils.js";
+ import { parseStrictJSON } from "../ts/demo-auth-bid.ts";
+ 
+ export const COMMITTED_BID_BATCH_SCHEMA = "CommittedBidBatchV1";
+@@ -12,6 +14,17 @@
+ export const DEMO_AUTH_PROFILE = "DEMO_AUTH_V1";
+ export const COMMITTED_BID_WALLET_APPLICATION_ID = "plebeian-market";
+ export const COMMITTED_BID_REFUND_OPERATION_KIND = "auctions.bid-refund";
++export const DEMO_COMMITTED_AUCTION_HISTORY_OPEN_SCHEMA = "DemoCommittedAuctionHistoryOpenV2" as const;
++export const DEMO_COMMITTED_AUCTION_HISTORY_CHUNK_SCHEMA = "DemoCommittedAuctionHistoryChunkV2" as const;
++export const DEMO_COMMITTED_AUCTION_HISTORY_PACKING_POLICY = "greedy-contiguous-height-v1" as const;
++export const DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCHES = 64 as const;
++export const DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCH_UTF8_BYTES = 65_536 as const;
++export const DEMO_COMMITTED_AUCTION_HISTORY_MAX_ARRAY_UTF8_BYTES = 4_194_304 as const;
++
++const HISTORY_CHUNK_DOMAIN = utf8ToBytes("COCO_DEMO_COMMITTED_AUCTION_HISTORY_CHUNK_V2\0");
++const HISTORY_ROOT_DOMAIN = utf8ToBytes("COCO_DEMO_COMMITTED_AUCTION_HISTORY_ROOT_V2\0");
++const OPERATION_MEMBERSHIP_DOMAIN = utf8ToBytes("COCO_DEMO_PAYMENT_OPERATION_MEMBERSHIP_V2\0");
++const ZERO_SHA256 = "0".repeat(64);
+ 
+ const BID_JOIN_STORAGE_KEY = "plebeian-market.committed-bid-joins.v1";
+ const DELIVERY_JOURNAL_STORAGE_KEY = "plebeian-market.committed-bid-delivery.v1";
+@@ -71,6 +84,81 @@
+ 	readonly closures: readonly CommittedAutomaticCloseEntryV2[];
+ }
+ 
++export interface DemoCommittedAuctionHistoryOpenV2 {
++	readonly schema: typeof DEMO_COMMITTED_AUCTION_HISTORY_OPEN_SCHEMA;
++	readonly authNetworkId: string;
++	readonly chainId: string;
++	readonly firstHeight: 1;
++	readonly throughHeight: number;
++	readonly throughAppHash: string;
++	readonly immutableStorageMarker: string;
++	readonly storageRootSha256: string;
++	readonly chunkCount: number;
++	readonly batchCount: number;
++	readonly packingPolicy: typeof DEMO_COMMITTED_AUCTION_HISTORY_PACKING_POLICY;
++	readonly maxBatchesPerChunk: typeof DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCHES;
++	readonly maxCanonicalBatchUtf8Bytes: typeof DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCH_UTF8_BYTES;
++	readonly maxCanonicalBatchArrayUtf8BytesPerChunk: typeof DEMO_COMMITTED_AUCTION_HISTORY_MAX_ARRAY_UTF8_BYTES;
++	readonly finalChunkDigest: string;
++	readonly canonicalBatchHistorySha256: string;
++}
++
++export interface DemoCommittedAuctionHistoryChunkV2 {
++	readonly schema: typeof DEMO_COMMITTED_AUCTION_HISTORY_CHUNK_SCHEMA;
++	readonly immutableStorageMarker: string;
++	readonly storageRootSha256: string;
++	readonly index: number;
++	readonly firstHeight: number;
++	readonly lastHeight: number;
++	readonly previousChunkDigest: string;
++	readonly batches: readonly CommittedAuctionBatchV2[];
++	readonly chunkDigest: string;
++}
++
++export interface DemoCommittedAuctionHistoryPortV2 {
++	open(request: {
++		readonly authNetworkId: string;
++		readonly chainId: string;
++		readonly throughHeight: number;
++		readonly throughAppHash: string;
++	}): Promise<DemoCommittedAuctionHistoryOpenV2 | null>;
++	readChunk(request: {
++		readonly immutableStorageMarker: string;
++		readonly storageRootSha256: string;
++		readonly index: number;
++	}): Promise<DemoCommittedAuctionHistoryChunkV2 | null>;
++}
++
++export interface DemoPaymentOperationMemberV2 {
++	readonly operationId: string;
++	readonly bidId: string;
++	readonly bidEventId: string;
++	readonly bidderActorId: string;
++	readonly amount: number;
++	readonly committedHeight: number;
++	readonly committedEntryIndex: number;
++}
++
++export interface DemoCommittedAuctionHistoryExpectationV2 {
++	readonly authNetworkId: string;
++	readonly chainId: string;
++	readonly auctionId: string;
++	readonly closureHeight: number;
++	readonly closureAppHash: string;
++	readonly immutableStorageMarker: string;
++	readonly storageRootSha256: string;
++	readonly operationMembershipSha256: string;
++	readonly operationCount: number;
++	readonly canonicalBatchHistorySha256: string;
++}
++
++export interface VerifiedDemoCommittedAuctionHistoryV2 {
++	readonly open: DemoCommittedAuctionHistoryOpenV2;
++	readonly operationMembershipSha256: string;
++	readonly operationCount: number;
++	readonly outcome: CommittedAutomaticCloseEntryV2["close_outcome"];
++}
++
+ export type CommittedBidBatch = CommittedBidBatchV1 | CommittedAuctionBatchV2;
+ 
+ /** Public bindings only. This record must never contain proofs or secrets. */
+@@ -180,6 +268,16 @@
+ 	"auth_network_id", "chain_id", "auction_id", "height", "pbts_seconds", "effective_end", "app_hash", "close_outcome",
+ 	"winner_bid_id", "winner_actor_id", "winner_operation_id", "amount",
+ ];
++const EXACT_HISTORY_OPEN_KEYS = [
++	"schema", "authNetworkId", "chainId", "firstHeight", "throughHeight", "throughAppHash",
++	"immutableStorageMarker", "storageRootSha256", "chunkCount", "batchCount", "packingPolicy",
++	"maxBatchesPerChunk", "maxCanonicalBatchUtf8Bytes", "maxCanonicalBatchArrayUtf8BytesPerChunk",
++	"finalChunkDigest", "canonicalBatchHistorySha256",
++];
++const EXACT_HISTORY_CHUNK_KEYS = [
++	"schema", "immutableStorageMarker", "storageRootSha256", "index", "firstHeight", "lastHeight",
++	"previousChunkDigest", "batches", "chunkDigest",
++];
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+ 	return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -608,30 +706,18 @@
+ 	return parsed as unknown as CommittedBidBatch;
+ }
+ 
+-/**
+- * Canonical Go-compatible V2 history commitment. This deliberately rebuilds
+- * every object in the frozen struct field order instead of trusting caller or
+- * parser property insertion order. No payment field is added to the batch.
+- */
+-export async function computeCommittedAuctionBatchHistorySha256(values: readonly unknown[]): Promise<string> {
+-	if (!Array.isArray(values)) throw new Error("committed-bid-batch-history-invalid");
+-	const ordered = values.map((value) => {
+-		const decoded = decodeCommittedBidBatch(JSON.stringify(value));
+-		if (decoded.schema !== COMMITTED_AUCTION_BATCH_SCHEMA) throw new Error("committed-bid-batch-history-v2-required");
+-		return decoded;
+-	}).sort((left, right) => left.height - right.height);
+-	if (ordered.length === 0 || ordered[0]!.height !== 1 || ordered.some((batch, index) => batch.height !== index + 1)) {
+-		throw new Error("committed-bid-batch-history-incomplete");
+-	}
+-	const canonical = ordered.map((batch) => ({
+-		schema: batch.schema,
+-		auth_profile: batch.auth_profile,
+-		auth_network_id: batch.auth_network_id,
+-		chain_id: batch.chain_id,
+-		height: batch.height,
+-		pbts_seconds: batch.pbts_seconds,
+-		app_hash: batch.app_hash,
+-		bids: batch.bids.map((bid) => ({
++function canonicalCommittedAuctionBatch(value: unknown): { readonly batch: CommittedAuctionBatchV2; readonly bytes: Uint8Array } {
++	const decoded = decodeCommittedBidBatch(JSON.stringify(value));
++	if (decoded.schema !== COMMITTED_AUCTION_BATCH_SCHEMA) throw new Error("committed-bid-batch-history-v2-required");
++	const canonical = {
++		schema: decoded.schema,
++		auth_profile: decoded.auth_profile,
++		auth_network_id: decoded.auth_network_id,
++		chain_id: decoded.chain_id,
++		height: decoded.height,
++		pbts_seconds: decoded.pbts_seconds,
++		app_hash: decoded.app_hash,
++		bids: decoded.bids.map((bid) => ({
+ 			actor_id: bid.actor_id,
+ 			operation_id: bid.operation_id,
+ 			auction_id: bid.auction_id,
+@@ -646,7 +732,7 @@
+ 			} : {}),
+ 			displaced_refund_eligible: bid.displaced_refund_eligible,
+ 		})),
+-		closures: batch.closures.map((closure) => ({
++		closures: decoded.closures.map((closure) => ({
+ 			auth_network_id: closure.auth_network_id,
+ 			chain_id: closure.chain_id,
+ 			auction_id: closure.auction_id,
+@@ -660,8 +746,286 @@
+ 			winner_operation_id: closure.winner_operation_id,
+ 			amount: closure.amount,
+ 		})),
+-	}));
+-	return sha256Hex(canonicalUtf8Json(canonical));
++	};
++	return { batch: decoded, bytes: utf8ToBytes(canonicalUtf8Json(canonical)) };
++}
++
++/**
++ * Canonical Go-compatible V2 history commitment. This deliberately rebuilds
++ * every object in the frozen struct field order instead of trusting caller or
++ * parser property insertion order. No payment field is added to the batch.
++ */
++export async function computeCommittedAuctionBatchHistorySha256(values: readonly unknown[]): Promise<string> {
++	if (!Array.isArray(values)) throw new Error("committed-bid-batch-history-invalid");
++	const ordered = values.map(canonicalCommittedAuctionBatch).sort((left, right) => left.batch.height - right.batch.height);
++	if (ordered.length === 0 || ordered[0]!.batch.height !== 1 || ordered.some((item, index) => item.batch.height !== index + 1)) {
++		throw new Error("committed-bid-batch-history-incomplete");
++	}
++	const hasher = sha256.create();
++	hasher.update(utf8ToBytes("["));
++	ordered.forEach((item, index) => {
++		if (index > 0) hasher.update(utf8ToBytes(","));
++		hasher.update(item.bytes);
++	});
++	hasher.update(utf8ToBytes("]"));
++	return bytesToHex(hasher.digest());
++}
++
++function nonnegativeInteger(value: unknown): value is number {
++	return Number.isSafeInteger(value) && (value as number) >= 0;
++}
++
++function positiveSafeInteger(value: unknown): value is number {
++	return Number.isSafeInteger(value) && (value as number) > 0;
++}
++
++function uint64be(value: number): Uint8Array {
++	if (!nonnegativeInteger(value)) throw new Error("committed-history-index-invalid");
++	const bytes = new Uint8Array(8);
++	const view = new DataView(bytes.buffer);
++	view.setUint32(0, Math.floor(value / 0x1_0000_0000), false);
++	view.setUint32(4, value >>> 0, false);
++	return bytes;
++}
++
++function domainHash(domain: Uint8Array, payload: Uint8Array): string {
++	return bytesToHex(sha256(concatBytes(domain, payload)));
++}
++
++export function decodeDemoCommittedAuctionHistoryOpenV2(value: unknown): DemoCommittedAuctionHistoryOpenV2 {
++	if (!isRecord(value) || !exactKeys(value, EXACT_HISTORY_OPEN_KEYS, EXACT_HISTORY_OPEN_KEYS)
++		|| value.schema !== DEMO_COMMITTED_AUCTION_HISTORY_OPEN_SCHEMA
++		|| typeof value.authNetworkId !== "string" || !HEX_64.test(value.authNetworkId)
++		|| !nonempty(value.chainId) || value.firstHeight !== 1 || !positiveSafeInteger(value.throughHeight)
++		|| typeof value.throughAppHash !== "string" || !HEX_64.test(value.throughAppHash)
++		|| !nonempty(value.immutableStorageMarker)
++		|| typeof value.storageRootSha256 !== "string" || !HEX_64.test(value.storageRootSha256)
++		|| !positiveSafeInteger(value.chunkCount) || value.chunkCount > value.throughHeight
++		|| value.batchCount !== value.throughHeight
++		|| value.packingPolicy !== DEMO_COMMITTED_AUCTION_HISTORY_PACKING_POLICY
++		|| value.maxBatchesPerChunk !== DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCHES
++		|| value.maxCanonicalBatchUtf8Bytes !== DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCH_UTF8_BYTES
++		|| value.maxCanonicalBatchArrayUtf8BytesPerChunk !== DEMO_COMMITTED_AUCTION_HISTORY_MAX_ARRAY_UTF8_BYTES
++		|| typeof value.finalChunkDigest !== "string" || !HEX_64.test(value.finalChunkDigest)
++		|| typeof value.canonicalBatchHistorySha256 !== "string" || !HEX_64.test(value.canonicalBatchHistorySha256)) {
++		throw new Error("committed-history-open-invalid");
++	}
++	return value as unknown as DemoCommittedAuctionHistoryOpenV2;
++}
++
++export function decodeDemoCommittedAuctionHistoryChunkV2(value: unknown): DemoCommittedAuctionHistoryChunkV2 {
++	if (!isRecord(value) || !exactKeys(value, EXACT_HISTORY_CHUNK_KEYS, EXACT_HISTORY_CHUNK_KEYS)
++		|| value.schema !== DEMO_COMMITTED_AUCTION_HISTORY_CHUNK_SCHEMA
++		|| !nonempty(value.immutableStorageMarker)
++		|| typeof value.storageRootSha256 !== "string" || !HEX_64.test(value.storageRootSha256)
++		|| !nonnegativeInteger(value.index) || !positiveSafeInteger(value.firstHeight) || !positiveSafeInteger(value.lastHeight)
++		|| (value.lastHeight as number) < (value.firstHeight as number)
++		|| typeof value.previousChunkDigest !== "string" || !HEX_64.test(value.previousChunkDigest)
++		|| !Array.isArray(value.batches) || value.batches.length < 1 || value.batches.length > DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCHES
++		|| value.batches.length !== (value.lastHeight as number) - (value.firstHeight as number) + 1
++		|| typeof value.chunkDigest !== "string" || !HEX_64.test(value.chunkDigest)) {
++		throw new Error("committed-history-chunk-invalid");
++	}
++	const batches = value.batches.map((batch) => canonicalCommittedAuctionBatch(batch).batch);
++	return { ...value, batches } as unknown as DemoCommittedAuctionHistoryChunkV2;
++}
++
++function historyChunkBody(chunk: DemoCommittedAuctionHistoryChunkV2): Record<string, unknown> {
++	return {
++		schema: chunk.schema,
++		immutableStorageMarker: chunk.immutableStorageMarker,
++		index: chunk.index,
++		firstHeight: chunk.firstHeight,
++		lastHeight: chunk.lastHeight,
++		batches: chunk.batches.map((batch) => JSON.parse(new TextDecoder().decode(canonicalCommittedAuctionBatch(batch).bytes))),
++	};
++}
++
++export function computeDemoCommittedAuctionHistoryChunkDigestV2(chunk: DemoCommittedAuctionHistoryChunkV2): string {
++	if (!HEX_64.test(chunk.previousChunkDigest)) throw new Error("committed-history-chunk-previous-invalid");
++	return bytesToHex(sha256(concatBytes(
++		HISTORY_CHUNK_DOMAIN,
++		hexToBytes(chunk.previousChunkDigest),
++		uint64be(chunk.index),
++		utf8ToBytes(canonicalUtf8Json(historyChunkBody(chunk))),
++	)));
++}
++
++function historyRootDescriptor(open: DemoCommittedAuctionHistoryOpenV2): Record<string, unknown> {
++	return {
++		schema: open.schema,
++		authNetworkId: open.authNetworkId,
++		chainId: open.chainId,
++		firstHeight: open.firstHeight,
++		throughHeight: open.throughHeight,
++		throughAppHash: open.throughAppHash,
++		immutableStorageMarker: open.immutableStorageMarker,
++		chunkCount: open.chunkCount,
++		batchCount: open.batchCount,
++		packingPolicy: open.packingPolicy,
++		maxBatchesPerChunk: open.maxBatchesPerChunk,
++		maxCanonicalBatchUtf8Bytes: open.maxCanonicalBatchUtf8Bytes,
++		maxCanonicalBatchArrayUtf8BytesPerChunk: open.maxCanonicalBatchArrayUtf8BytesPerChunk,
++		finalChunkDigest: open.finalChunkDigest,
++		canonicalBatchHistorySha256: open.canonicalBatchHistorySha256,
++	};
++}
++
++export function computeDemoCommittedAuctionHistoryRootSha256V2(open: DemoCommittedAuctionHistoryOpenV2): string {
++	return domainHash(HISTORY_ROOT_DOMAIN, utf8ToBytes(canonicalUtf8Json(historyRootDescriptor(open))));
++}
++
++function memberPayload(member: DemoPaymentOperationMemberV2): Record<string, unknown> {
++	return {
++		operationId: member.operationId,
++		bidId: member.bidId,
++		bidEventId: member.bidEventId,
++		bidderActorId: member.bidderActorId,
++		amount: member.amount,
++		committedHeight: member.committedHeight,
++		committedEntryIndex: member.committedEntryIndex,
++	};
++}
++
++/**
++ * Pure immutable-history admission used by offline fixtures. The production
++ * resumable checkpoint and storage adapter remain separately owned; this
++ * function performs no wallet, FROST, mint, recipient, or persistence effect.
++ */
++export async function verifyDemoCommittedAuctionHistoryV2(
++	history: DemoCommittedAuctionHistoryPortV2,
++	expected: DemoCommittedAuctionHistoryExpectationV2,
++): Promise<VerifiedDemoCommittedAuctionHistoryV2> {
++	if (!HEX_64.test(expected.authNetworkId) || !nonempty(expected.chainId) || !nonempty(expected.auctionId)
++		|| !positiveSafeInteger(expected.closureHeight) || !HEX_64.test(expected.closureAppHash)
++		|| !nonempty(expected.immutableStorageMarker) || !HEX_64.test(expected.storageRootSha256)
++		|| !HEX_64.test(expected.operationMembershipSha256) || !nonnegativeInteger(expected.operationCount)
++		|| !HEX_64.test(expected.canonicalBatchHistorySha256)) throw new Error("committed-history-expectation-invalid");
++	const opened = await history.open({
++		authNetworkId: expected.authNetworkId,
++		chainId: expected.chainId,
++		throughHeight: expected.closureHeight,
++		throughAppHash: expected.closureAppHash,
++	});
++	if (opened === null) throw new Error("committed-history-open-missing");
++	const open = decodeDemoCommittedAuctionHistoryOpenV2(opened);
++	if (open.authNetworkId !== expected.authNetworkId || open.chainId !== expected.chainId
++		|| open.throughHeight !== expected.closureHeight || open.throughAppHash !== expected.closureAppHash
++		|| open.immutableStorageMarker !== expected.immutableStorageMarker || open.storageRootSha256 !== expected.storageRootSha256
++		|| open.canonicalBatchHistorySha256 !== expected.canonicalBatchHistorySha256) throw new Error("committed-history-open-conflict");
++	if (computeDemoCommittedAuctionHistoryRootSha256V2(open) !== open.storageRootSha256) throw new Error("committed-history-root-mismatch");
++
++	const historyHasher = sha256.create();
++	historyHasher.update(utf8ToBytes("["));
++	const membershipHasher = sha256.create();
++	membershipHasher.update(OPERATION_MEMBERSHIP_DOMAIN);
++	membershipHasher.update(utf8ToBytes("["));
++	const members: DemoPaymentOperationMemberV2[] = [];
++	const operations = new Map<string, DemoPaymentOperationMemberV2>();
++	const bidIDs = new Set<string>();
++	const bidEvents = new Set<string>();
++	let previousChunkDigest = ZERO_SHA256;
++	let nextHeight = 1;
++	let verifiedBatchCount = 0;
++	let priorChunkArrayBytes = 0;
++	let priorChunkCount = 0;
++	let closure: CommittedAutomaticCloseEntryV2 | null = null;
++
++	for (let chunkIndex = 0; chunkIndex < open.chunkCount; chunkIndex += 1) {
++		const supplied = await history.readChunk({
++			immutableStorageMarker: open.immutableStorageMarker,
++			storageRootSha256: open.storageRootSha256,
++			index: chunkIndex,
++		});
++		if (supplied === null) throw new Error("committed-history-chunk-missing");
++		const chunk = decodeDemoCommittedAuctionHistoryChunkV2(supplied);
++		if (chunk.immutableStorageMarker !== open.immutableStorageMarker || chunk.storageRootSha256 !== open.storageRootSha256
++			|| chunk.index !== chunkIndex || chunk.firstHeight !== nextHeight || chunk.previousChunkDigest !== previousChunkDigest) {
++			throw new Error("committed-history-chunk-conflict");
++		}
++		const canonicalBatches = chunk.batches.map(canonicalCommittedAuctionBatch);
++		const arrayBytes = 2 + canonicalBatches.reduce((total, item) => total + item.bytes.length, 0) + Math.max(0, canonicalBatches.length - 1);
++		if (canonicalBatches.some((item) => item.bytes.length > DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCH_UTF8_BYTES)
++			|| arrayBytes > DEMO_COMMITTED_AUCTION_HISTORY_MAX_ARRAY_UTF8_BYTES) throw new Error("committed-history-chunk-byte-limit");
++		if (chunkIndex > 0 && priorChunkCount < DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCHES
++			&& priorChunkArrayBytes + 1 + canonicalBatches[0]!.bytes.length <= DEMO_COMMITTED_AUCTION_HISTORY_MAX_ARRAY_UTF8_BYTES) {
++			throw new Error("committed-history-chunk-not-greedy");
++		}
++		if (computeDemoCommittedAuctionHistoryChunkDigestV2(chunk) !== chunk.chunkDigest) throw new Error("committed-history-chunk-digest-mismatch");
++
++		for (const [withinChunkIndex, item] of canonicalBatches.entries()) {
++			const batch = item.batch;
++			const height = nextHeight + withinChunkIndex;
++			if (batch.height !== height || batch.auth_network_id !== expected.authNetworkId || batch.chain_id !== expected.chainId) {
++				throw new Error("committed-history-batch-conflict");
++			}
++			if (verifiedBatchCount > 0) historyHasher.update(utf8ToBytes(","));
++			historyHasher.update(item.bytes);
++			verifiedBatchCount += 1;
++
++			for (const [committedEntryIndex, bid] of batch.bids.entries()) {
++				if (height >= expected.closureHeight || bid.auction_id !== expected.auctionId) continue;
++				if (operations.has(bid.operation_id) || bidIDs.has(bid.bid_id) || bidEvents.has(bid.event_id)) throw new Error("committed-history-membership-duplicate");
++				if (bid.displaced_refund_eligible) {
++					const displaced = operations.get(bid.displaced_operation_id!);
++					if (displaced === undefined || displaced.bidId !== bid.displaced_bid_id || displaced.bidEventId !== bid.displaced_event_id || displaced.bidderActorId !== bid.displaced_actor_id) {
++						throw new Error("committed-history-displacement-conflict");
++					}
++				}
++				const member: DemoPaymentOperationMemberV2 = {
++					operationId: bid.operation_id, bidId: bid.bid_id, bidEventId: bid.event_id,
++					bidderActorId: bid.actor_id, amount: bid.amount, committedHeight: height, committedEntryIndex,
++				};
++				if (members.length > 0) membershipHasher.update(utf8ToBytes(","));
++				membershipHasher.update(utf8ToBytes(canonicalUtf8Json(memberPayload(member))));
++				members.push(member);
++				operations.set(member.operationId, member);
++				bidIDs.add(member.bidId);
++				bidEvents.add(member.bidEventId);
++			}
++			for (const candidate of batch.closures) {
++				if (candidate.auction_id !== expected.auctionId) continue;
++				if (closure !== null) throw new Error("committed-history-closure-conflict");
++				closure = candidate;
++			}
++		}
++		if (chunk.lastHeight !== nextHeight + chunk.batches.length - 1) throw new Error("committed-history-chunk-height-conflict");
++		nextHeight = chunk.lastHeight + 1;
++		previousChunkDigest = chunk.chunkDigest;
++		priorChunkArrayBytes = arrayBytes;
++		priorChunkCount = chunk.batches.length;
++	}
++	const afterEOF = await history.readChunk({
++		immutableStorageMarker: open.immutableStorageMarker,
++		storageRootSha256: open.storageRootSha256,
++		index: open.chunkCount,
++	});
++	if (afterEOF !== null) throw new Error("committed-history-chunk-after-eof");
++	if (verifiedBatchCount !== open.batchCount || nextHeight !== open.throughHeight + 1 || previousChunkDigest !== open.finalChunkDigest) {
++		throw new Error("committed-history-final-count-conflict");
++	}
++	historyHasher.update(utf8ToBytes("]"));
++	membershipHasher.update(utf8ToBytes("]"));
++	const canonicalBatchHistorySha256 = bytesToHex(historyHasher.digest());
++	const operationMembershipSha256 = bytesToHex(membershipHasher.digest());
++	if (canonicalBatchHistorySha256 !== open.canonicalBatchHistorySha256 || canonicalBatchHistorySha256 !== expected.canonicalBatchHistorySha256) {
++		throw new Error("committed-history-whole-digest-mismatch");
++	}
++	if (operationMembershipSha256 !== expected.operationMembershipSha256 || members.length !== expected.operationCount) {
++		throw new Error("committed-history-membership-mismatch");
++	}
++	if (closure === null || closure.height !== expected.closureHeight || closure.app_hash !== expected.closureAppHash) {
++		throw new Error("committed-history-closure-missing");
++	}
++	if (closure.close_outcome === "no_bids" && members.length !== 0) throw new Error("committed-history-no-bids-conflict");
++	if (closure.close_outcome === "reserve_not_met" && members.length === 0) throw new Error("committed-history-reserve-conflict");
++	if (closure.close_outcome === "winner") {
++		const winner = operations.get(closure.winner_operation_id);
++		if (winner === undefined || winner.bidId !== closure.winner_bid_id || winner.bidderActorId !== closure.winner_actor_id || winner.amount !== closure.amount) {
++			throw new Error("committed-history-winner-conflict");
++		}
++	}
++	return { open, operationMembershipSha256, operationCount: members.length, outcome: closure.close_outcome };
+ }
+ 
+ function assertJoin(join: WalletBidJoinV1, batch: CommittedBidBatch, entry: CommittedBidEntryV1): void {
+--- a/e2e/committed-bid-consumer.e2e.ts
++++ b/e2e/committed-bid-consumer.e2e.ts
+@@ -16,12 +16,26 @@
+ import { bindWallet, contribution as walletContribution, walletHost } from "../plugins/wallet-plugin.ts";
+ import {
+ 	COMMITTED_BID_REFUND_OPERATION_KIND,
++	DEMO_COMMITTED_AUCTION_HISTORY_CHUNK_SCHEMA,
++	DEMO_COMMITTED_AUCTION_HISTORY_MAX_ARRAY_UTF8_BYTES,
++	DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCHES,
++	DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCH_UTF8_BYTES,
++	DEMO_COMMITTED_AUCTION_HISTORY_OPEN_SCHEMA,
++	DEMO_COMMITTED_AUCTION_HISTORY_PACKING_POLICY,
++	computeDemoCommittedAuctionHistoryChunkDigestV2,
++	computeDemoCommittedAuctionHistoryRootSha256V2,
++	computeCommittedAuctionBatchHistorySha256,
+ 	consumeCommittedBidBatch,
+ 	createBrowserCommittedBidPersistence,
+ 	createCommittedBidConsumerPorts,
+ 	createCommittedBidRefundIntentReader,
+ 	decodeCommittedBidBatch,
++	verifyDemoCommittedAuctionHistoryV2,
++	type CommittedAuctionBatchV2,
+ 	type CommittedBidLockManager,
++	type DemoCommittedAuctionHistoryChunkV2,
++	type DemoCommittedAuctionHistoryOpenV2,
++	type DemoCommittedAuctionHistoryPortV2,
+ 	type CommittedBidStorageArea,
+ 	type WalletBidJoinV1,
+ } from "../plugins/committed-bid-consumer.ts";
+@@ -257,6 +271,151 @@
+ 	const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+ 	return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+ }
++
++function emptyCommittedBatch(height: number, throughHeight: number, outcome: "no_bids" | "winner" = "no_bids"): CommittedAuctionBatchV2 {
++	const appHash = String(height % 10).repeat(64);
++	return {
++		schema: "CommittedAuctionBatchV2", auth_profile: "DEMO_AUTH_V1", auth_network_id: "a".repeat(64),
++		chain_id: "chain-test", height, pbts_seconds: 1_900_000_000 + height, app_hash: appHash,
++		bids: [],
++		closures: height === throughHeight ? [{
++			auth_network_id: "a".repeat(64), chain_id: "chain-test", auction_id: "auction-target",
++			height, pbts_seconds: 1_900_000_000 + height, effective_end: 1_900_000_000 + height,
++			app_hash: appHash, close_outcome: outcome, winner_bid_id: "", winner_actor_id: "",
++			winner_operation_id: "", amount: 0,
++		}] : [],
++	};
++}
++
++async function immutableHistoryPort(
++	batches: readonly CommittedAuctionBatchV2[],
++	marker: string,
++	packedBatches = DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCHES,
++): Promise<{ readonly port: DemoCommittedAuctionHistoryPortV2; readonly open: DemoCommittedAuctionHistoryOpenV2 }> {
++	const canonicalBatchHistorySha256 = await computeCommittedAuctionBatchHistorySha256(batches);
++	const chunks: DemoCommittedAuctionHistoryChunkV2[] = [];
++	let previousChunkDigest = "0".repeat(64);
++	for (let start = 0; start < batches.length; start += packedBatches) {
++		const selected = batches.slice(start, start + packedBatches);
++		const chunk: DemoCommittedAuctionHistoryChunkV2 = {
++			schema: DEMO_COMMITTED_AUCTION_HISTORY_CHUNK_SCHEMA,
++			immutableStorageMarker: marker,
++			storageRootSha256: "0".repeat(64),
++			index: chunks.length,
++			firstHeight: selected[0]!.height,
++			lastHeight: selected[selected.length - 1]!.height,
++			previousChunkDigest,
++			batches: selected,
++			chunkDigest: "0".repeat(64),
++		};
++		const sealed = { ...chunk, chunkDigest: computeDemoCommittedAuctionHistoryChunkDigestV2(chunk) };
++		chunks.push(sealed);
++		previousChunkDigest = sealed.chunkDigest;
++	}
++	const provisional: DemoCommittedAuctionHistoryOpenV2 = {
++		schema: DEMO_COMMITTED_AUCTION_HISTORY_OPEN_SCHEMA,
++		authNetworkId: "a".repeat(64), chainId: "chain-test", firstHeight: 1,
++		throughHeight: batches.length, throughAppHash: batches[batches.length - 1]!.app_hash,
++		immutableStorageMarker: marker, storageRootSha256: "0".repeat(64), chunkCount: chunks.length,
++		batchCount: batches.length, packingPolicy: DEMO_COMMITTED_AUCTION_HISTORY_PACKING_POLICY,
++		maxBatchesPerChunk: DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCHES,
++		maxCanonicalBatchUtf8Bytes: DEMO_COMMITTED_AUCTION_HISTORY_MAX_BATCH_UTF8_BYTES,
++		maxCanonicalBatchArrayUtf8BytesPerChunk: DEMO_COMMITTED_AUCTION_HISTORY_MAX_ARRAY_UTF8_BYTES,
++		finalChunkDigest: previousChunkDigest, canonicalBatchHistorySha256,
++	};
++	const storageRootSha256 = computeDemoCommittedAuctionHistoryRootSha256V2(provisional);
++	const open = { ...provisional, storageRootSha256 };
++	const sealedChunks = chunks.map((chunk) => ({ ...chunk, storageRootSha256 }));
++	const port: DemoCommittedAuctionHistoryPortV2 = {
++		async open() { return open; },
++		async readChunk(request) {
++			if (request.immutableStorageMarker !== marker || request.storageRootSha256 !== storageRootSha256) return null;
++			return sealedChunks[request.index] ?? null;
++		},
++	};
++	return { port, open };
++}
++
++function frozenMembershipHistory(): CommittedAuctionBatchV2[] {
++	const batches = Array.from({ length: 8 }, (_, index) => emptyCommittedBatch(index + 1, 8));
++	batches[6] = {
++		...batches[6]!,
++		bids: [
++			{ actor_id: "1".repeat(64), operation_id: "op-other", auction_id: "auction-other", bid_id: "bid-other", event_id: "2".repeat(64), amount: 999, displaced_refund_eligible: false },
++			{ actor_id: "4".repeat(64), operation_id: "op-target", auction_id: "auction-target", bid_id: "bid-target", event_id: "3".repeat(64), amount: 2100, displaced_refund_eligible: false },
++		],
++	};
++	batches[7] = {
++		...batches[7]!,
++		closures: [{ ...batches[7]!.closures[0]!, close_outcome: "winner", winner_bid_id: "bid-target", winner_actor_id: "4".repeat(64), winner_operation_id: "op-target", amount: 2100 }],
++	};
++	return batches;
++}
++
++{
++	const frozenDigest = "52089e597ea98ecf4909cd27921bd5f784c95b99e1c05d5586946269d19215a0";
++	const built = await immutableHistoryPort(frozenMembershipHistory(), "immutable-history-vector-1");
++	const expected = {
++		authNetworkId: built.open.authNetworkId, chainId: built.open.chainId, auctionId: "auction-target",
++		closureHeight: built.open.throughHeight, closureAppHash: built.open.throughAppHash,
++		immutableStorageMarker: built.open.immutableStorageMarker, storageRootSha256: built.open.storageRootSha256,
++		operationMembershipSha256: frozenDigest, operationCount: 1,
++		canonicalBatchHistorySha256: built.open.canonicalBatchHistorySha256,
++	};
++	const verified = await verifyDemoCommittedAuctionHistoryV2(built.port, expected);
++	ok("R4.2 original-array membership index-1 vector verifies", verified.operationMembershipSha256 === frozenDigest && verified.operationCount === 1);
++
++	const moved = frozenMembershipHistory();
++	moved[6] = { ...moved[6]!, bids: [moved[6]!.bids[1]!] };
++	const drifted = await immutableHistoryPort(moved, "immutable-history-vector-drift");
++	await refuses(
++		"filter-first provenance drift refuses the frozen membership commitment",
++		() => verifyDemoCommittedAuctionHistoryV2(drifted.port, {
++			...expected,
++			immutableStorageMarker: drifted.open.immutableStorageMarker,
++			storageRootSha256: drifted.open.storageRootSha256,
++			canonicalBatchHistorySha256: drifted.open.canonicalBatchHistorySha256,
++		}),
++		"committed-history-membership-mismatch",
++	);
++}
++
++{
++	const batches = Array.from({ length: 65 }, (_, index) => emptyCommittedBatch(index + 1, 65));
++	const built = await immutableHistoryPort(batches, "immutable-history-65-heights");
++	const emptyMembership = await sha256Hex("COCO_DEMO_PAYMENT_OPERATION_MEMBERSHIP_V2\0[]");
++	const expected = {
++		authNetworkId: built.open.authNetworkId, chainId: built.open.chainId, auctionId: "auction-target",
++		closureHeight: 65, closureAppHash: built.open.throughAppHash,
++		immutableStorageMarker: built.open.immutableStorageMarker, storageRootSha256: built.open.storageRootSha256,
++		operationMembershipSha256: emptyMembership, operationCount: 0,
++		canonicalBatchHistorySha256: built.open.canonicalBatchHistorySha256,
++	};
++	ok("greedy 64/65 history boundary verifies two chunks", built.open.chunkCount === 2 && (await verifyDemoCommittedAuctionHistoryV2(built.port, expected)).operationCount === 0);
++	const nonGreedy = await immutableHistoryPort(batches, "immutable-history-non-greedy", 63);
++	await refuses(
++		"64/65 history refuses a validly hashed but non-greedy 63/2 split",
++		() => verifyDemoCommittedAuctionHistoryV2(nonGreedy.port, {
++			...expected,
++			immutableStorageMarker: nonGreedy.open.immutableStorageMarker,
++			storageRootSha256: nonGreedy.open.storageRootSha256,
++			canonicalBatchHistorySha256: nonGreedy.open.canonicalBatchHistorySha256,
++		}),
++		"committed-history-chunk-not-greedy",
++	);
++	await refuses(
++		"missing immutable history authority fails closed",
++		() => verifyDemoCommittedAuctionHistoryV2({ ...built.port, async open() { return null; } }, expected),
++		"committed-history-open-missing",
++	);
++	const driftRoot = "f".repeat(64);
++	await refuses(
++		"self-referential or drifting storage root fails closed",
++		() => verifyDemoCommittedAuctionHistoryV2({ ...built.port, async open() { return { ...built.open, storageRootSha256: driftRoot }; } }, { ...expected, storageRootSha256: driftRoot }),
++		"committed-history-root-mismatch",
++	);
++}
++
+ function tuple(value: WalletBidJoinV1): string {
+ 	return JSON.stringify([value.authNetworkId, value.actorId, value.operationId, value.auctionId, value.bidId, value.eventId]);
+ }
+--- a/plugins/demo-certified-closure.ts
++++ b/plugins/demo-certified-closure.ts
+@@ -167,6 +167,23 @@
+ 	readonly verifiedApprovalSetSha256: string;
+ }
+ 
++/** Frozen R4.1/R4.3 public commitment boundary; it carries no payment secret. */
++export interface DemoAuthenticatedPaymentCommitmentsV2 {
++	readonly schema: "DemoAuthenticatedPaymentCommitmentsV2";
++	readonly authNetworkId: string;
++	readonly chainId: string;
++	readonly auctionId: string;
++	readonly closureHeight: number;
++	readonly closureAppHash: string;
++	readonly immutableStorageMarker: string;
++	readonly storageRootSha256: string;
++	readonly operationMembershipSha256: string;
++	readonly operationCount: number;
++	readonly approvalCount: number;
++	readonly canonicalBatchHistorySha256: string;
++	readonly verifiedApprovalSetSha256: string;
++}
++
+ export interface VerifiedDemoAuthenticatedHandoff {
+ 	readonly closure: VerifiedDemoCertifiedClosure;
+ 	readonly agreement: OwnerLocalR4AuthenticatedEvidenceAgreementV1;
+@@ -206,6 +223,30 @@
+ 	return Number.isSafeInteger(value) && (value as number) > 0;
+ }
+ 
++export function decodeDemoAuthenticatedPaymentCommitmentsV2(value: unknown): DemoAuthenticatedPaymentCommitmentsV2 {
++	const keys = [
++		"schema", "authNetworkId", "chainId", "auctionId", "closureHeight", "closureAppHash",
++		"immutableStorageMarker", "storageRootSha256", "operationMembershipSha256", "operationCount",
++		"approvalCount", "canonicalBatchHistorySha256", "verifiedApprovalSetSha256",
++	];
++	if (!exactObject(value, keys)
++		|| value.schema !== "DemoAuthenticatedPaymentCommitmentsV2"
++		|| typeof value.authNetworkId !== "string" || !HEX_64.test(value.authNetworkId)
++		|| !safeText(value.chainId) || !safeText(value.auctionId) || !positiveInteger(value.closureHeight)
++		|| typeof value.closureAppHash !== "string" || !HEX_64.test(value.closureAppHash)
++		|| !safeText(value.immutableStorageMarker)
++		|| typeof value.storageRootSha256 !== "string" || !HEX_64.test(value.storageRootSha256)
++		|| typeof value.operationMembershipSha256 !== "string" || !HEX_64.test(value.operationMembershipSha256)
++		|| !Number.isSafeInteger(value.operationCount) || (value.operationCount as number) < 0
++		|| !Number.isSafeInteger(value.approvalCount) || (value.approvalCount as number) < 0
++		|| value.operationCount !== value.approvalCount
++		|| typeof value.canonicalBatchHistorySha256 !== "string" || !HEX_64.test(value.canonicalBatchHistorySha256)
++		|| typeof value.verifiedApprovalSetSha256 !== "string" || !HEX_64.test(value.verifiedApprovalSetSha256)) {
++		refuse("authenticated-payment-commitments-v2-invalid");
++	}
++	return value as unknown as DemoAuthenticatedPaymentCommitmentsV2;
++}
++
+ function canonicalBid(value: unknown): DemoCertifiedClosureBidV1 {
+ 	const keys = [
+ 		"auction_id", "bid_id", "operation_id", "event_id", "actor_id", "amount",
+--- a/plugins/demo-certified-closure.test.ts
++++ b/plugins/demo-certified-closure.test.ts
+@@ -7,6 +7,7 @@
+ 	computeCertifiedClosureDigest,
+ 	computeCertifiedClosureHistoryRoot,
+ 	computeDemoPaymentApprovalSetSha256,
++	decodeDemoAuthenticatedPaymentCommitmentsV2,
+ 	verifyDemoAuthenticatedHandoff,
+ 	verifyDemoCertifiedClosure,
+ 	type DemoCertifiedClosureCertificateV1,
+@@ -138,6 +139,28 @@
+ }
+ 
+ describe("certified closure verification boundary", () => {
++	test("strictly decodes the corrected V2 payment commitment boundary", () => {
++		const value = {
++			schema: "DemoAuthenticatedPaymentCommitmentsV2",
++			authNetworkId: network,
++			chainId: policy.chainId,
++			auctionId: policy.auctionId,
++			closureHeight: 4,
++			closureAppHash: "e".repeat(64),
++			immutableStorageMarker: "immutable-storage-1",
++			storageRootSha256: "1".repeat(64),
++			operationMembershipSha256: "2".repeat(64),
++			operationCount: 2,
++			approvalCount: 2,
++			canonicalBatchHistorySha256: "3".repeat(64),
++			verifiedApprovalSetSha256: "4".repeat(64),
++		};
++		expect(decodeDemoAuthenticatedPaymentCommitmentsV2(value)).toEqual(value);
++		expect(() => decodeDemoAuthenticatedPaymentCommitmentsV2({ ...value, schema: "DemoAuthenticatedPaymentCommitmentsV1" })).toThrow("authenticated-payment-commitments-v2-invalid");
++		expect(() => decodeDemoAuthenticatedPaymentCommitmentsV2({ ...value, approvalCount: 1 })).toThrow("authenticated-payment-commitments-v2-invalid");
++		expect(() => decodeDemoAuthenticatedPaymentCommitmentsV2({ ...value, unexpected: true })).toThrow("authenticated-payment-commitments-v2-invalid");
++	});
++
+ 	test("accepts exact complete history and four authenticated validator identities", async () => {
+ 		const batches = history();
+ 		const cert = await certificate(batches);
