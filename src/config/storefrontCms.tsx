@@ -1,9 +1,16 @@
 import { CollectionPickerField, ProductPickerField } from '@/components/storefront/builder/fields/ItemPickerField'
-import { ThemeSwatchGrid } from '@/components/storefront/builder/fields/ThemePickerField'
+import { ThemePaletteStrip, ThemeSwatchGrid, ThemeTunePanel } from '@/components/storefront/builder/fields/ThemePickerField'
 import { StorefrontBlockView, StorefrontRoot } from '@/components/storefront/StorefrontRenderer'
-import type { StorefrontBlock, StorefrontBlockType, StorefrontRootProps, StorefrontThemeId } from '@/lib/schemas/storefront'
-import { StorefrontRootPropsSchema } from '@/lib/schemas/storefront'
-import type { Config } from '@puckeditor/core'
+import { STOREFRONT_THEMES } from '@/config/storefrontThemes'
+import type {
+	StorefrontBlock,
+	StorefrontBlockType,
+	StorefrontRootProps,
+	StorefrontThemeId,
+	StorefrontThemeTune,
+} from '@/lib/schemas/storefront'
+import { STOREFRONT_TUNE_DEFAULTS, StorefrontRootPropsSchema } from '@/lib/schemas/storefront'
+import { usePuck, type Config } from '@puckeditor/core'
 
 /**
  * The CMS component registry: what the Puck editor can put on a page.
@@ -47,6 +54,40 @@ const widthOptions = [
 	{ label: 'Wide', value: 'wide' },
 ]
 
+/**
+ * The layout currently selected on the page, read from Puck's own state.
+ *
+ * Steps 2 and 3 need to know which layout is chosen, and a Puck custom field
+ * receives only its own `value` and `onChange` — there is no sibling access.
+ * `usePuck` is the supported way to read it, and these fields only ever render
+ * inside the editor sidebar, which is inside the Puck context.
+ */
+function useRootTheme(): StorefrontThemeId {
+	const { appState } = usePuck()
+	const theme = (appState?.data?.root?.props as { theme?: string } | undefined)?.theme
+	return (theme && Object.prototype.hasOwnProperty.call(STOREFRONT_THEMES, theme) ? theme : 'default') as StorefrontThemeId
+}
+
+/** Step 2 as a sidebar field: the colourways of whichever layout is selected. */
+function ThemePaletteField({ value, onChange, readOnly }: { value?: string; onChange: (v: string) => void; readOnly?: boolean }) {
+	const theme = useRootTheme()
+	return <ThemePaletteStrip themeId={theme} value={value ?? ''} onChange={onChange} readOnly={readOnly} />
+}
+
+/** Step 3 as a sidebar field: the six bounded axes for the selected layout. */
+function ThemeTuneField({
+	value,
+	onChange,
+	readOnly,
+}: {
+	value?: Partial<StorefrontThemeTune>
+	onChange: (v: StorefrontThemeTune) => void
+	readOnly?: boolean
+}) {
+	const theme = useRootTheme()
+	return <ThemeTunePanel themeId={theme} value={value} onChange={onChange} readOnly={readOnly} />
+}
+
 export const storefrontCmsConfig: Config = {
 	categories: {
 		identity: { title: 'Identity', components: ['ProfileHeader', 'Hero'] },
@@ -60,13 +101,28 @@ export const storefrontCmsConfig: Config = {
 			title: { type: 'text', label: 'Page title' },
 			theme: {
 				type: 'custom',
-				label: 'Theme',
+				label: 'Layout',
 				render: ({ value, onChange, readOnly }) => (
 					<ThemeSwatchGrid value={(value as StorefrontThemeId) ?? 'default'} onChange={onChange} readOnly={readOnly} />
 				),
 			},
+			// Steps 2 and 3 of the studio flow, as separate root fields: Puck binds
+			// one field to one value, so the palette and the tune each need their
+			// own — and each reads the selected layout from Puck's state.
+			palette: {
+				type: 'custom',
+				label: 'Colours',
+				render: ({ value, onChange, readOnly }) => <ThemePaletteField value={value as string} onChange={onChange} readOnly={readOnly} />,
+			},
+			tune: {
+				type: 'custom',
+				label: 'Fine-tune',
+				render: ({ value, onChange, readOnly }) => (
+					<ThemeTuneField value={value as Partial<StorefrontThemeTune>} onChange={onChange} readOnly={readOnly} />
+				),
+			},
 		},
-		defaultProps: { title: '', theme: 'default' },
+		defaultProps: { title: '', theme: 'default', palette: '', tune: STOREFRONT_TUNE_DEFAULTS },
 		// The canvas wraps children in the very element the published page uses,
 		// so a background chosen here looks the same in both places.
 		render: ({ children, ...rootProps }: { children?: React.ReactNode } & Partial<StorefrontRootProps>) => {

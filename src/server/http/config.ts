@@ -42,6 +42,9 @@ export const configRoutes: BunRoutes = {
 				needsSetup: !appSettings,
 				serverReady: isEventHandlerReady(),
 				externalZapRelaysEnabled: stage === 'production' || (stage === 'development' && process.env.LOCAL_RELAY_ONLY !== 'true'),
+				// Published so the browser can honour the same restriction the
+				// server applies — see the field's note in `instance-config.ts`.
+				localRelayOnly: process.env.LOCAL_RELAY_ONLY === 'true',
 			}
 			return Response.json(config)
 		},

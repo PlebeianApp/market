@@ -255,24 +255,170 @@ export const STOREFRONT_BLOCK_TYPES = [
 ] as const satisfies readonly StorefrontBlockType[]
 
 /**
- * Closed set of page themes. Each id maps to a fixed CSS-custom-property token
+ * Closed set of page layouts. Each id maps to a fixed CSS-custom-property token
  * set in `src/config/storefrontThemes.ts` — the registry the author's CMS
  * sidebar and the setup wizard both read from. Closed for the same reason the
  * block union is closed: a free-form color picker is an open-ended surface
  * (arbitrary CSS injected into every page on the app), and an id drawn from a
  * fixed list is not.
+ *
+ * The first five ids are the original fixed themes; they are kept in the enum
+ * so a page published against one keeps validating and keeps rendering
+ * identically. The remaining ids are the Theme Studio layouts, which add
+ * per-layout palettes and a tune below.
  */
-export const STOREFRONT_THEME_IDS = ['default', 'midnight', 'sunset', 'forest', 'mono'] as const
+export const STOREFRONT_THEME_IDS = [
+	'default',
+	'midnight',
+	'sunset',
+	'forest',
+	'mono',
+	'farm',
+	'art',
+	'cards',
+	'elec',
+	'law',
+	'acct',
+	'pleb',
+	'brut',
+] as const
 export type StorefrontThemeId = (typeof STOREFRONT_THEME_IDS)[number]
+
+/**
+ * Closed set of palettes. Every palette is a curated colourway from the Theme
+ * Studio; there is deliberately no way to name a colour, only to choose one of
+ * these. `getStorefrontPalette` still resolves the key *inside* the chosen
+ * layout, so a key that belongs to another layout falls back to that layout's
+ * default rather than throwing.
+ *
+ * An empty string is also accepted for `palette` and means "this layout's
+ * default", which is what a page published before palettes existed carries.
+ */
+export const STOREFRONT_PALETTE_KEYS = [
+	'acid',
+	'arcade',
+	'beetroot',
+	'blueprint',
+	'brutal',
+	'charcoal-room',
+	'concrete',
+	'earth-green-yellow',
+	'harvest-gold',
+	'hi-vis',
+	'holo-night',
+	'ink-blue',
+	'ink-paper',
+	'inns-navy',
+	'ledger-green',
+	'live-red',
+	'mint-condition',
+	'neon',
+	'night-loam',
+	'night-market',
+	'orange-pill',
+	'oxblood',
+	'parchment',
+	'plaster-pink',
+	'plebeian',
+	'robing-room',
+	'sage-cream',
+	'sats-orange',
+	'soft-pink',
+	'spreadsheet',
+	'white-cube',
+	'year-end',
+	// The five original fixed themes each carry exactly one palette, keyed by the
+	// theme's own id. They are listed here so a page published against one still
+	// validates after layouts gained palettes.
+	'default',
+	'midnight',
+	'sunset',
+	'forest',
+	'mono',
+] as const
+export type StorefrontPaletteKey = (typeof STOREFRONT_PALETTE_KEYS)[number]
+
+/**
+ * The six tune axes, with the bounds the registry's sliders also render from.
+ * These numbers are the *only* author-supplied styling input the format has,
+ * so they are bounded here as a security property, not as validation polish:
+ * every value that reaches the page is a number the app clamped.
+ */
+export const STOREFRONT_TUNE_BOUNDS = {
+	radiusPx: { min: 0, max: 32, fallback: 12 },
+	shadow: { min: 0, max: 1, fallback: 0.3 },
+	glass: { min: 0, max: 1, fallback: 0.6 },
+	spacing: { min: 0.75, max: 1.45, fallback: 1 },
+	texture: { min: 0, max: 1, fallback: 0 },
+	handmade: { min: 0, max: 1, fallback: 0 },
+} as const
+
+type TuneAxisKey = keyof typeof STOREFRONT_TUNE_BOUNDS
+
+/**
+ * One axis. Deliberately *cannot* fail: a missing value, a non-number, or an
+ * out-of-range number all resolve to a usable value (fallback or clamped)
+ * rather than rejecting the document. A page must not lose its theme — or its
+ * title — because one slider value arrived garbled or from a newer client with
+ * a wider range.
+ */
+function tuneAxis(key: TuneAxisKey) {
+	const { min, max, fallback } = STOREFRONT_TUNE_BOUNDS[key]
+	return z.preprocess(
+		(value) => (typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback),
+		z.number(),
+	)
+}
+
+export const StorefrontThemeTuneSchema = z.object({
+	radiusPx: tuneAxis('radiusPx'),
+	shadow: tuneAxis('shadow'),
+	glass: tuneAxis('glass'),
+	spacing: tuneAxis('spacing'),
+	texture: tuneAxis('texture'),
+	handmade: tuneAxis('handmade'),
+})
+
+export type StorefrontThemeTune = z.infer<typeof StorefrontThemeTuneSchema>
+
+/** The tune a page carries when it names none — mirrors `STOREFRONT_DEFAULT_TUNE`. */
+export const STOREFRONT_TUNE_DEFAULTS: StorefrontThemeTune = {
+	radiusPx: STOREFRONT_TUNE_BOUNDS.radiusPx.fallback,
+	shadow: STOREFRONT_TUNE_BOUNDS.shadow.fallback,
+	glass: STOREFRONT_TUNE_BOUNDS.glass.fallback,
+	spacing: STOREFRONT_TUNE_BOUNDS.spacing.fallback,
+	texture: STOREFRONT_TUNE_BOUNDS.texture.fallback,
+	handmade: STOREFRONT_TUNE_BOUNDS.handmade.fallback,
+}
+
+/**
+ * A palette key. Empty means "the chosen layout's default palette" and is what
+ * a page published before palettes existed carries; any other value must be one
+ * of the closed set. Written as a refined string rather than a literal union so
+ * the picker can hold it as a plain string without losing the closed-set check.
+ */
+export const storefrontPaletteKeySchema = z
+	.string()
+	.max(64)
+	.refine((value) => value === '' || (STOREFRONT_PALETTE_KEYS as readonly string[]).includes(value), {
+		message: 'Unknown palette',
+	})
+	.default('')
 
 /**
  * Page-level settings. Deliberately minimal: per-block width already exists, so
  * a page-level width control would be a second, conflicting answer to the same
  * question.
+ *
+ * `theme` picks a layout, `palette` picks one of that layout's curated
+ * colourways, and `tune` refines it along six bounded axes. All three are
+ * closed or bounded — see the notes on each closed list above.
  */
 export const StorefrontRootPropsSchema = z.object({
 	title: shortText.default(''),
 	theme: z.enum(STOREFRONT_THEME_IDS).default('default'),
+	palette: storefrontPaletteKeySchema,
+	tune: StorefrontThemeTuneSchema.default(STOREFRONT_TUNE_DEFAULTS),
 })
 
 export type StorefrontRootProps = z.infer<typeof StorefrontRootPropsSchema>
@@ -319,6 +465,27 @@ export function createEmptyStorefrontPage(): StorefrontPage {
 		root: { props: StorefrontRootPropsSchema.parse({}) },
 		content: [],
 	}
+}
+
+/**
+ * Parses the root props one field at a time.
+ *
+ * This is what makes the fallback below a *per-field* fallback rather than an
+ * all-or-nothing one: a `palette` key written by a newer client costs the
+ * palette and nothing else. The page keeps its title and its layout. Parsing
+ * the object as a whole would throw all three away over one unrecognised
+ * string.
+ */
+export function parseStorefrontRootProps(candidate: unknown): StorefrontRootProps {
+	const record = candidate && typeof candidate === 'object' && !Array.isArray(candidate) ? (candidate as Record<string, unknown>) : {}
+	const shape = StorefrontRootPropsSchema.shape
+	const props: Record<string, unknown> = {}
+	for (const key of Object.keys(shape) as (keyof typeof shape)[]) {
+		const field = shape[key]
+		const parsed = field.safeParse(record[key])
+		props[key] = parsed.success ? parsed.data : field.parse(undefined)
+	}
+	return props as StorefrontRootProps
 }
 
 /**
@@ -370,8 +537,7 @@ export function parseStorefrontPage(raw: string | null | undefined): StorefrontP
 
 	const rootCandidate =
 		doc.root && typeof doc.root === 'object' && !Array.isArray(doc.root) ? (doc.root as Record<string, unknown>).props : undefined
-	const rootParsed = StorefrontRootPropsSchema.safeParse(rootCandidate)
-	const root = { props: rootParsed.success ? rootParsed.data : StorefrontRootPropsSchema.parse({}) }
+	const root = { props: parseStorefrontRootProps(rootCandidate) }
 
 	const rawContent = Array.isArray(doc.content) ? doc.content : []
 

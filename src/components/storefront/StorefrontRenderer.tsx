@@ -1,8 +1,11 @@
-import { getStorefrontTheme, storefrontThemeCssVars } from '@/config/storefrontThemes'
+import { getStorefrontPalette, getStorefrontTheme, storefrontThemeCssVars } from '@/config/storefrontThemes'
 import { cn } from '@/lib/utils'
 import type { StorefrontBlock, StorefrontPage, StorefrontRootProps } from '@/lib/schemas/storefront'
 import type { ReactNode } from 'react'
 import { StorefrontProvider, useStorefrontContext } from './StorefrontContext'
+
+// The tune variables this wrapper sets are consumed here and nowhere else.
+import './storefront-theme.css'
 import { FeaturedProductBlock } from './blocks/FeaturedProductBlock'
 import { HeroBlock } from './blocks/HeroBlock'
 import { ImageBlock } from './blocks/ImageBlock'
@@ -52,6 +55,7 @@ export function StorefrontRoot({
 }) {
 	const { isEditing } = useStorefrontContext()
 	const theme = getStorefrontTheme(props.theme)
+	const palette = getStorefrontPalette(theme, props.palette)
 	return (
 		<div
 			// Only the live page carries the marker. The editor canvas and wizard
@@ -59,8 +63,9 @@ export function StorefrontRoot({
 			// sees a storefront" must not be satisfied by either of those.
 			data-testid={isEditing ? undefined : 'storefront-page'}
 			data-storefront-theme={theme.id}
+			data-storefront-palette={palette.key}
 			className={cn('w-full bg-background text-foreground', fullHeight && 'min-h-screen', className)}
-			style={storefrontThemeCssVars(theme)}
+			style={storefrontThemeCssVars(theme, props.palette, props.tune)}
 		>
 			{children}
 		</div>

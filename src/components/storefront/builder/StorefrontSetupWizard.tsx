@@ -5,14 +5,14 @@ import {
 	instantiateStorefrontTemplate,
 	type StorefrontTemplateId,
 } from '@/config/storefrontTemplates'
-import { STOREFRONT_THEME_LIST } from '@/config/storefrontThemes'
-import { createEmptyStorefrontPage, type StorefrontPage, type StorefrontThemeId } from '@/lib/schemas/storefront'
+import { getStorefrontTheme, normalizeStorefrontTune } from '@/config/storefrontThemes'
+import { createEmptyStorefrontPage, type StorefrontPage, type StorefrontThemeId, type StorefrontThemeTune } from '@/lib/schemas/storefront'
 import { cn } from '@/lib/utils'
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { StorefrontProvider } from '../StorefrontContext'
 import { StorefrontBlockView, StorefrontRoot } from '../StorefrontRenderer'
-import { ThemeSwatchCard } from './fields/ThemePickerField'
+import { ThemeStudio } from './fields/ThemePickerField'
 
 /**
  * The two-step page setup wizard: choose a template, then choose a theme.
@@ -44,6 +44,13 @@ export interface StorefrontSetupWizardProps {
 	/** Pre-selects a starting point — used when "Change template" reopens the wizard over an existing page. */
 	initialTemplateId?: StorefrontTemplateId
 	initialThemeId?: StorefrontThemeId
+	/**
+	 * Reopening over a page that already has a look carries its colourway and
+	 * fine-tuning back in, so step 2 starts from what the author chose rather
+	 * than from the layout's defaults.
+	 */
+	initialPaletteKey?: string
+	initialTune?: StorefrontThemeTune
 	onComplete: (page: StorefrontPage) => void
 	/** Omitted on first-time setup, where there is nothing yet to cancel back to. */
 	onCancel?: () => void
@@ -53,32 +60,51 @@ export function StorefrontSetupWizard({
 	pubkey,
 	initialTemplateId = 'shop',
 	initialThemeId,
+	initialPaletteKey,
+	initialTune,
 	onComplete,
 	onCancel,
 }: StorefrontSetupWizardProps) {
+	const startingThemeId = initialThemeId ?? getStorefrontTemplate(initialTemplateId).defaultThemeId
+	const startingTheme = getStorefrontTheme(startingThemeId)
 	const [step, setStep] = useState<WizardStep>('template')
 	const [templateId, setTemplateId] = useState<StorefrontTemplateId>(initialTemplateId)
-	const [themeId, setThemeId] = useState<StorefrontThemeId>(initialThemeId ?? getStorefrontTemplate(initialTemplateId).defaultThemeId)
+	const [themeId, setThemeId] = useState<StorefrontThemeId>(startingThemeId)
+	const [paletteKey, setPaletteKey] = useState<string>(initialPaletteKey || startingTheme.palettes[0].key)
+	const [tune, setTune] = useState<StorefrontThemeTune>(normalizeStorefrontTune(initialTune, startingTheme.tune))
 
 	const stepIndex = STEPS.indexOf(step)
 	const template = getStorefrontTemplate(templateId)
+	const theme = getStorefrontTheme(themeId)
 
 	// A fresh instantiation per template/step change, not per keystroke — there
 	// are none here, only button clicks, so recomputing this is cheap and keeps
 	// the preview blocks' ids stable while the author lingers on one step.
 	const previewBlocks = useMemo(() => instantiateStorefrontTemplate(template), [template])
 
+	/**
+	 * Switching layout resets the colourway and the tuning to that layout's own
+	 * defaults, matching the studio: a palette key belongs to one layout, and
+	 * carrying the numbers across would describe a look nobody chose.
+	 */
+	const applyTheme = (id: StorefrontThemeId) => {
+		const next = getStorefrontTheme(id)
+		setThemeId(id)
+		setPaletteKey(next.palettes[0].key)
+		setTune({ ...next.tune })
+	}
+
 	const selectTemplate = (id: StorefrontTemplateId) => {
 		setTemplateId(id)
 		// Carry the newly-picked template's suggested theme into step 2 as the
 		// starting point — the author can still override it there.
-		setThemeId(getStorefrontTemplate(id).defaultThemeId)
+		applyTheme(getStorefrontTemplate(id).defaultThemeId)
 	}
 
 	const finish = () => {
 		const page: StorefrontPage = {
 			...createEmptyStorefrontPage(),
-			root: { props: { title: '', theme: themeId } },
+			root: { props: { title: '', theme: themeId, palette: paletteKey, tune } },
 			content: instantiateStorefrontTemplate(template),
 		}
 		onComplete(page)
@@ -126,30 +152,44 @@ export function StorefrontSetupWizard({
 				)}
 
 				{step === 'theme' && (
-					<div className="flex flex-1 flex-col gap-6">
-						<div className="grid grid-cols-1 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Theme">
-							{STOREFRONT_THEME_LIST.map((theme) => (
-								<ThemeSwatchCard key={theme.id} theme={theme} selected={theme.id === themeId} onSelect={() => setThemeId(theme.id)} />
-							))}
-						</div>
+					<div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+						{/* The studio's three steps, reused verbatim from the builder
+						    sidebar — one component means the wizard and the editor can
+						    never offer different-looking theme controls. */}
+						<ThemeStudio
+							theme={themeId}
+							palette={paletteKey}
+							tune={tune}
+							onChange={({ theme: nextTheme, palette: nextPalette, tune: nextTune }) => {
+								setThemeId(nextTheme)
+								setPaletteKey(nextPalette)
+								setTune(nextTune)
+							}}
+						/>
 
-						{/* The template chosen in step 1, rendered with the theme chosen
-						    here — the moment that makes "this template, with this theme"
-						    concrete before the author commits to it. */}
-						<div className="overflow-hidden rounded-lg border border-border">
-							{previewBlocks.length > 0 ? (
-								<div className="pointer-events-none" aria-hidden>
-									<StorefrontRoot props={{ title: '', theme: themeId }} fullHeight={false}>
-										{previewBlocks.slice(0, 2).map((block) => (
-											<StorefrontBlockView key={block.props.id} block={block} />
-										))}
-									</StorefrontRoot>
-								</div>
-							) : (
-								<p className="p-6 text-center text-sm text-muted-foreground">
-									A blank page has nothing to preview yet — the theme still applies once you add blocks.
-								</p>
-							)}
+						<div className="flex min-w-0 flex-col gap-3">
+							{/* The template chosen in step 1, rendered with the look chosen
+							    here — the moment that makes "this template, with this look"
+							    concrete before the author commits to it. */}
+							<p className="text-sm text-muted-foreground">
+								<span className="font-medium text-foreground">{theme.label}</span> · {theme.forWho} ·{' '}
+								{theme.palettes.find((p) => p.key === paletteKey)?.label ?? theme.palettes[0].label}
+							</p>
+							<div className="overflow-hidden rounded-lg border border-border">
+								{previewBlocks.length > 0 ? (
+									<div className="pointer-events-none" aria-hidden>
+										<StorefrontRoot props={{ title: '', theme: themeId, palette: paletteKey, tune }} fullHeight={false}>
+											{previewBlocks.slice(0, 2).map((block) => (
+												<StorefrontBlockView key={block.props.id} block={block} />
+											))}
+										</StorefrontRoot>
+									</div>
+								) : (
+									<p className="p-6 text-center text-sm text-muted-foreground">
+										A blank page has nothing to preview yet — the theme still applies once you add blocks.
+									</p>
+								)}
+							</div>
 						</div>
 					</div>
 				)}
@@ -221,7 +261,7 @@ function TemplateCard({
 					// `scale-[0.3]` so the content still lays out at (roughly) its
 					// normal width before shrinking, rather than reflowing narrow.
 					<div className="pointer-events-none absolute left-0 top-0 w-[333%] origin-top-left scale-[0.3]" aria-hidden>
-						<StorefrontRoot props={{ title: '', theme: themeId }} fullHeight={false}>
+						<StorefrontRoot props={{ title: '', theme: themeId, palette: '', tune: getStorefrontTheme(themeId).tune }} fullHeight={false}>
 							{preview.map((block) => (
 								<StorefrontBlockView key={block.props.id} block={block} />
 							))}

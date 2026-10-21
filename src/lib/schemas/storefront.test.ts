@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import {
 	STOREFRONT_LIMITS,
 	STOREFRONT_PAGE_VERSION,
+	STOREFRONT_TUNE_BOUNDS,
+	STOREFRONT_TUNE_DEFAULTS,
 	createEmptyStorefrontPage,
 	isSafeHref,
 	isSafeMediaSrc,
@@ -229,7 +231,58 @@ describe('parseStorefrontPage — a bad root prop falls back to its default, the
 	test('a missing root object entirely still parses, using every default', () => {
 		const raw = JSON.stringify({ version: STOREFRONT_PAGE_VERSION, enabled: true, content: [] })
 		const page = parseStorefrontPage(raw).page
-		expect(page?.root.props).toEqual({ title: '', theme: 'default' })
+		expect(page?.root.props).toEqual({ title: '', theme: 'default', palette: '', tune: STOREFRONT_TUNE_DEFAULTS })
+	})
+
+	describe('theme tune and palette — the theme-config half of a page', () => {
+		const doc = (props: Record<string, unknown>) =>
+			JSON.stringify({ version: STOREFRONT_PAGE_VERSION, enabled: true, root: { props }, content: [] })
+
+		test('a page with no tune gets the declared defaults', () => {
+			expect(parseStorefrontPage(doc({ theme: 'pleb' })).page?.root.props.tune).toEqual(STOREFRONT_TUNE_DEFAULTS)
+		})
+
+		test('a layout, palette and tune from the closed sets survive a round trip', () => {
+			const tune = { radiusPx: 20, shadow: 1, glass: 0, spacing: 1.45, texture: 0.5, handmade: 0.25 }
+			const parsed = parseStorefrontPage(doc({ theme: 'pleb', palette: 'night-market', tune })).page?.root.props
+			expect(parsed?.theme).toBe('pleb')
+			expect(parsed?.palette).toBe('night-market')
+			expect(parsed?.tune).toEqual(tune)
+		})
+
+		test('an out-of-range tune value is clamped, not rejected — the page keeps its theme and its title', () => {
+			const raw = doc({ title: 'My shop', theme: 'brut', tune: { radiusPx: 9999, shadow: -5, spacing: 99 } })
+			const parsed = parseStorefrontPage(raw).page?.root.props
+			expect(parsed?.title).toBe('My shop')
+			expect(parsed?.theme).toBe('brut')
+			expect(parsed?.tune.radiusPx).toBe(STOREFRONT_TUNE_BOUNDS.radiusPx.max)
+			expect(parsed?.tune.shadow).toBe(STOREFRONT_TUNE_BOUNDS.shadow.min)
+			expect(parsed?.tune.spacing).toBe(STOREFRONT_TUNE_BOUNDS.spacing.max)
+		})
+
+		test('a non-numeric tune value falls back per axis rather than throwing', () => {
+			const raw = doc({ theme: 'art', tune: { radiusPx: 'round please', shadow: null } })
+			expect(parseStorefrontPage(raw).page?.root.props.tune).toEqual(STOREFRONT_TUNE_DEFAULTS)
+		})
+
+		test('a partially specified tune keeps the axes it names and defaults the rest', () => {
+			const tune = parseStorefrontPage(doc({ theme: 'art', tune: { radiusPx: 4 } })).page?.root.props.tune
+			expect(tune?.radiusPx).toBe(4)
+			expect(tune?.glass).toBe(STOREFRONT_TUNE_DEFAULTS.glass)
+		})
+
+		test('an unknown palette key costs only the palette, never the rest of the root props', () => {
+			const parsed = parseStorefrontPage(doc({ title: 'kept', theme: 'farm', palette: 'not-a-palette' })).page?.root.props
+			expect(parsed?.title).not.toBe('')
+			expect(parsed?.theme).toBe('farm')
+		})
+
+		test('a page published before palettes existed still validates unchanged', () => {
+			const parsed = parseStorefrontPage(doc({ title: 'old page', theme: 'midnight' })).page?.root.props
+			expect(parsed?.theme).toBe('midnight')
+			expect(parsed?.palette).toBe('')
+			expect(parsed?.tune).toEqual(STOREFRONT_TUNE_DEFAULTS)
+		})
 	})
 
 	test('a non-boolean enabled value is treated as false — the safer reading, not a thrown error', () => {

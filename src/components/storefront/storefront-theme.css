@@ -1,0 +1,99 @@
+/*
+ * The tune half of a storefront theme.
+ *
+ * `StorefrontRoot` sets eight custom properties as inline styles, computed from
+ * the six bounded numbers the schema clamped (`src/config/storefrontThemes.ts`,
+ * `storefrontTuneCssVars`). This file is the only consumer, and it is scoped to
+ * `[data-storefront-theme]` so a themed page can never leak its corner radius or
+ * its paper grain into the rest of the dashboard.
+ *
+ * Two of the six axes need no cooperation from any block, because they remap
+ * variables the blocks already use:
+ *
+ *   - Corners — the app maps Tailwind's `rounded-*` utilities onto `--radius-*`
+ *     (styles/globals.css). Rebinding that scale here means every existing
+ *     `rounded-lg` and `rounded-md` on the page follows the slider, with no
+ *     block aware that a theme exists. This is the same mechanism ADR-0006 uses
+ *     for colour.
+ *   - Texture — a grain overlay on the wrapper itself.
+ *
+ * The other four are opt-in, via the `sf-` marker classes below: Glass, Shadows
+ * and Hand-made describe how a *surface* is treated, and only the block that
+ * draws that surface can decide whether it is one. Until a block opts in, its
+ * slider stores the author's choice and changes nothing on screen. That is
+ * stated here rather than left to be discovered.
+ */
+
+[data-storefront-theme] {
+	/* Corners. `--radius` is the app's own token; the rest mirror how
+	   globals.css derives its scale from it, so the whole family moves together. */
+	--radius: var(--storefront-radius, 12px);
+	--radius-lg: var(--storefront-radius, 12px);
+	--radius-md: calc(var(--storefront-radius, 12px) * 0.75);
+	--radius-sm: calc(var(--storefront-radius, 12px) * 0.5);
+	--radius-xl: calc(var(--storefront-radius, 12px) * 1.5);
+
+	/* Spacing, as a length any opt-in block can use in padding or gap. */
+	--storefront-space: calc(var(--storefront-spacing, 1) * 1rem);
+
+	position: relative;
+}
+
+/* ---------------------------------------------------------------------------
+ * Texture — paper grain, straight from the axis. Always on, opacity 0 at rest,
+ * so a theme with the default tune renders exactly as it did before.
+ * ------------------------------------------------------------------------- */
+
+[data-storefront-theme]::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	opacity: calc(var(--storefront-texture, 0) * 0.55);
+	mix-blend-mode: multiply;
+	background-repeat: repeat;
+	background-size: 160px 160px;
+	background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23g)' opacity='0.42'/></svg>");
+}
+
+/* Keep the page's own content above the grain. */
+[data-storefront-theme] > * {
+	position: relative;
+	z-index: 1;
+}
+
+/* ---------------------------------------------------------------------------
+ * Opt-in surfaces. A block adds one of these classes to the element that draws
+ * the surface; the axis then decides how much of the treatment applies.
+ * ------------------------------------------------------------------------- */
+
+/* Glass — frosted panel. Blur and tint both scale with the axis, so 0 is a
+   plain opaque card with no backdrop filter at all. */
+[data-storefront-theme] .sf-glass {
+	backdrop-filter: blur(calc(var(--storefront-glass, 0) * 14px));
+	background-color: color-mix(in oklab, var(--card) calc(72% + var(--storefront-glass, 0) * 24%), transparent);
+}
+
+/* Shadows — hue comes from the palette, not from neutral black. */
+[data-storefront-theme] .sf-raised {
+	box-shadow: 0 calc(var(--storefront-shadow, 0) * 6px) calc(var(--storefront-shadow, 0) * 20px)
+		rgba(var(--storefront-shadow-rgb, 0, 0, 0), calc(var(--storefront-shadow, 0) * 0.35));
+}
+
+/* Hand-made — a slight, stable tilt. Deterministic per position rather than
+   random, so the same page looks the same on every visit. */
+[data-storefront-theme] .sf-tilt {
+	transform: rotate(calc((var(--storefront-handmade, 0) - 0.5) * 0.7deg));
+}
+
+[data-storefront-theme] .sf-tilt:nth-of-type(even) {
+	transform: rotate(calc((var(--storefront-handmade, 0) - 0.5) * -0.9deg));
+}
+
+/* Motion-sensitive readers get the layout without the tilt. */
+@media (prefers-reduced-motion: reduce) {
+	[data-storefront-theme] .sf-tilt {
+		transform: none;
+	}
+}

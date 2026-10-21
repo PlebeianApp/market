@@ -15,6 +15,7 @@ import {
 	STOREFRONT_PAGE_VERSION,
 	validateStorefrontPageForPublish,
 	type StorefrontPage,
+	type StorefrontRootProps,
 	type StorefrontThemeId,
 } from '@/lib/schemas/storefront'
 import { cn } from '@/lib/utils'
@@ -272,7 +273,10 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 		setMode('wizard')
 	}, [])
 
-	const currentThemeId = (currentData.current?.root?.props as { theme?: StorefrontThemeId } | undefined)?.theme
+	// The page's current look, so reopening the wizard starts from what the
+	// author already chose rather than from the new template's defaults.
+	const currentRootProps = (currentData.current?.root?.props ?? {}) as Partial<StorefrontRootProps>
+	const currentThemeId = currentRootProps.theme
 
 	// The header-actions override keeps storefront visibility and the explicit
 	// publish flow together. The full header override lays them out in the
@@ -519,6 +523,8 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 			<StorefrontSetupWizard
 				pubkey={pubkey}
 				initialThemeId={currentThemeId}
+				initialPaletteKey={currentRootProps.palette}
+				initialTune={currentRootProps.tune}
 				// Only offer a way back out when there's an editor session to
 				// return to — true first-time setup has nothing to cancel to.
 				onCancel={initialData ? () => setMode('editor') : undefined}
