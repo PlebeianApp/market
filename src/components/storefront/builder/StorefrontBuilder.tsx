@@ -11,10 +11,12 @@ import {
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { storefrontCmsConfig } from '@/config/storefrontCms'
+import { validateStorefrontThemeSelection } from '@/config/storefrontThemes'
 import {
 	STOREFRONT_PAGE_VERSION,
 	validateStorefrontPageForPublish,
 	type StorefrontPage,
+	type StorefrontRootProps,
 	type StorefrontThemeId,
 } from '@/lib/schemas/storefront'
 import { cn } from '@/lib/utils'
@@ -217,6 +219,18 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 				toast.error('Fix the highlighted problems before publishing')
 				return
 			}
+
+			// The schema holds the closed *list* of palette keys and deliberately
+			// knows nothing about which layout offers which, so the pairing is
+			// checked here, where the registry is in scope. Without this, a palette
+			// from a different layout validates cleanly and then renders the
+			// layout's default colourway without telling anyone.
+			const themeErrors = validateStorefrontThemeSelection(validation.page.root.props)
+			if (themeErrors.length > 0) {
+				setErrors(themeErrors)
+				toast.error('Fix the highlighted problems before publishing')
+				return
+			}
 			setErrors([])
 
 			try {
@@ -272,7 +286,10 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 		setMode('wizard')
 	}, [])
 
-	const currentThemeId = (currentData.current?.root?.props as { theme?: StorefrontThemeId } | undefined)?.theme
+	// The page's current look, so reopening the wizard starts from what the
+	// author already chose rather than from the new template's defaults.
+	const currentRootProps = (currentData.current?.root?.props ?? {}) as Partial<StorefrontRootProps>
+	const currentThemeId = currentRootProps.theme
 
 	// The header-actions override keeps storefront visibility and the explicit
 	// publish flow together. The full header override lays them out in the
@@ -519,6 +536,8 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 			<StorefrontSetupWizard
 				pubkey={pubkey}
 				initialThemeId={currentThemeId}
+				initialPaletteKey={currentRootProps.palette}
+				initialTune={currentRootProps.tune}
 				// Only offer a way back out when there's an editor session to
 				// return to — true first-time setup has nothing to cancel to.
 				onCancel={initialData ? () => setMode('editor') : undefined}

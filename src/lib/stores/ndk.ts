@@ -424,7 +424,11 @@ export const ndkActions = {
 			appRelay: configStore.state.config.appRelay,
 			publicRelays: configStore.state.config.publicRelays,
 			overrideRelays: relays,
-			localRelayOnly: isBunLocalRelayOnly(),
+			// `isBunLocalRelayOnly()` only ever fires server-side. A browser has no
+			// Bun, so it reads the instance's own flag from `/api/config` instead:
+			// without this the server would pin itself to the app relay while every
+			// visitor's browser still fanned out to the public relay set.
+			localRelayOnly: isBunLocalRelayOnly() || configStore.state.config.localRelayOnly === true,
 		})
 
 		// AI Guardrails are an NDK dev-time educational tool (shipped off by

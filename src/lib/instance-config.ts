@@ -36,6 +36,17 @@ export interface PublicAppConfig extends InstanceConfig {
 	needsSetup: boolean
 	serverReady: boolean
 	externalZapRelaysEnabled: boolean
+	/**
+	 * The server was started with `LOCAL_RELAY_ONLY=true`, meaning this instance
+	 * intends to talk to its own relay and nothing else.
+	 *
+	 * This has to be published in the config because the flag itself is a Bun
+	 * runtime env var, and the browser has no Bun: a client that only consulted
+	 * `LOCAL_RELAY_ONLY` would silently fan out to the instance's configured
+	 * public relays while the server stayed pinned to the app relay. A client
+	 * that reads this field stays on the app relay too.
+	 */
+	localRelayOnly: boolean
 }
 
 const InstanceConfigEnvironmentSchema = z.object({
