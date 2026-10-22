@@ -2,8 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { STOREFRONT_THEME_IDS } from '@/lib/schemas/storefront'
 import {
 	getStorefrontTheme,
+	isPaletteInTheme,
 	storefrontThemeCssVars,
+	storefrontThemePaletteKeys,
 	storefrontThemeSwatchColors,
+	validateStorefrontThemeSelection,
 	STOREFRONT_THEMES,
 	STOREFRONT_THEME_LIST,
 } from './storefrontThemes'
@@ -93,5 +96,78 @@ describe('storefrontThemeCssVars', () => {
 describe('storefrontThemeSwatchColors', () => {
 	test('returns five colors for the picker dots', () => {
 		expect(storefrontThemeSwatchColors(STOREFRONT_THEMES.default)).toHaveLength(5)
+	})
+})
+
+describe('isPaletteInTheme — a colourway belongs to a layout, not to the app', () => {
+	test('a layout offers its own colourways', () => {
+		expect(isPaletteInTheme('elec', 'hi-vis')).toBe(true)
+		expect(isPaletteInTheme('cards', 'holo-night')).toBe(true)
+	})
+
+	test('a colourway from another layout does not belong', () => {
+		expect(isPaletteInTheme('elec', 'holo-night')).toBe(false)
+		expect(isPaletteInTheme('cards', 'hi-vis')).toBe(false)
+		// `concrete` and `acid` are brut's alone; nothing else offers them.
+		expect(isPaletteInTheme('elec', 'concrete')).toBe(false)
+		expect(isPaletteInTheme('farm', 'acid')).toBe(false)
+	})
+
+	test('the shared pair is offered by the layouts that receive it', () => {
+		expect(isPaletteInTheme('elec', 'brutal')).toBe(true)
+		expect(isPaletteInTheme('elec', 'neon')).toBe(true)
+		expect(isPaletteInTheme('farm', 'brutal')).toBe(true)
+	})
+
+	test('brut opted out of the shared pair and lists its own set instead', () => {
+		expect(isPaletteInTheme('brut', 'brutal')).toBe(true)
+		expect(isPaletteInTheme('brut', 'neon')).toBe(true)
+		expect(isPaletteInTheme('brut', 'concrete')).toBe(true)
+		expect(isPaletteInTheme('brut', 'acid')).toBe(true)
+		expect(isPaletteInTheme('brut', 'holo-night')).toBe(false)
+	})
+
+	test('every layout accepts every key it actually offers', () => {
+		for (const theme of STOREFRONT_THEME_LIST) {
+			for (const key of storefrontThemePaletteKeys(theme.id)) {
+				expect(isPaletteInTheme(theme.id, key), `${theme.id}/${key}`).toBe(true)
+			}
+		}
+	})
+})
+
+describe('validateStorefrontThemeSelection — the pairing the schema cannot check', () => {
+	test('accepts a colourway that belongs to the layout', () => {
+		expect(validateStorefrontThemeSelection({ theme: 'elec', palette: 'hi-vis' })).toEqual([])
+	})
+
+	test('accepts an empty key, which means "this layout default"', () => {
+		expect(validateStorefrontThemeSelection({ theme: 'elec', palette: '' })).toEqual([])
+		expect(validateStorefrontThemeSelection({ theme: 'elec' })).toEqual([])
+	})
+
+	test('rejects the exact pairing a real published page shipped with', () => {
+		// theme=elec alongside the `cards` colourway holo-night — and `cards`'
+		// default tune. The layout switch wrote only the layout.
+		const errors = validateStorefrontThemeSelection({ theme: 'elec', palette: 'holo-night' })
+		expect(errors).toHaveLength(1)
+		expect(errors[0]).toContain('holo-night')
+		expect(errors[0]).toContain('Live Wire')
+		expect(errors[0]).toContain('hi-vis')
+	})
+
+	test('agrees with isPaletteInTheme across every layout and every key in the app', () => {
+		const everyKey = Array.from(new Set(STOREFRONT_THEME_LIST.flatMap((theme) => storefrontThemePaletteKeys(theme.id))))
+		for (const theme of STOREFRONT_THEME_LIST) {
+			for (const key of everyKey) {
+				const accepted = validateStorefrontThemeSelection({ theme: theme.id, palette: key }).length === 0
+				expect(accepted, `${theme.id}/${key}`).toBe(isPaletteInTheme(theme.id, key))
+			}
+		}
+	})
+
+	test('an unknown layout id resolves to default rather than throwing', () => {
+		expect(validateStorefrontThemeSelection({ theme: 'not-a-layout', palette: '' })).toEqual([])
+		expect(validateStorefrontThemeSelection({ theme: 'not-a-layout', palette: 'holo-night' })).toHaveLength(1)
 	})
 })

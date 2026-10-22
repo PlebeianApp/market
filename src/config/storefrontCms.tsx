@@ -10,7 +10,7 @@ import type {
 	StorefrontThemeTune,
 } from '@/lib/schemas/storefront'
 import { STOREFRONT_TUNE_DEFAULTS, StorefrontRootPropsSchema } from '@/lib/schemas/storefront'
-import { usePuck, type Config } from '@puckeditor/core'
+import { usePuck, type Config, type Data } from '@puckeditor/core'
 
 /**
  * The CMS component registry: what the Puck editor can put on a page.
@@ -88,6 +88,52 @@ function ThemeTuneField({
 	return <ThemeTunePanel themeId={theme} value={value} onChange={onChange} readOnly={readOnly} />
 }
 
+/**
+ * Step 1 as a sidebar field.
+ *
+ * A layout change has to reset the colourway and the tuning along with it. The
+ * wizard does that through `ThemeStudio`; the sidebar must do the same, or the
+ * two disagree about what "picking a layout" means.
+ *
+ * Puck binds one field to one value, so the reset cannot be expressed through
+ * this field's own `onChange` — the sibling `palette` and `tune` fields would
+ * keep whatever the previous layout left behind. `dispatch({ type: 'setData' })`
+ * writes all three root props in a single action, and the functional form
+ * composes with the current props rather than a captured copy.
+ *
+ * This is not hypothetical. A page published from a staging instance named the
+ * `elec` layout with the `cards` palette `holo-night` and `cards`' default tune,
+ * because the switch only ever wrote the layout.
+ */
+function ThemeLayoutField({ value, readOnly }: { value?: StorefrontThemeId; readOnly?: boolean }) {
+	const { dispatch } = usePuck()
+	return (
+		<ThemeSwatchGrid
+			value={value ?? 'default'}
+			readOnly={readOnly}
+			onChange={(id) =>
+				dispatch({
+					type: 'setData',
+					data: (previous: Data) => ({
+						...previous,
+						root: {
+							...previous.root,
+							props: {
+								...previous.root.props,
+								theme: id,
+								// Empty is "this layout's default colourway", so a key
+								// belonging to the layout just left behind cannot survive.
+								palette: '',
+								tune: { ...STOREFRONT_THEMES[id].tune },
+							},
+						},
+					}),
+				})
+			}
+		/>
+	)
+}
+
 export const storefrontCmsConfig: Config = {
 	categories: {
 		identity: { title: 'Identity', components: ['ProfileHeader', 'Hero'] },
@@ -102,9 +148,7 @@ export const storefrontCmsConfig: Config = {
 			theme: {
 				type: 'custom',
 				label: 'Layout',
-				render: ({ value, onChange, readOnly }) => (
-					<ThemeSwatchGrid value={(value as StorefrontThemeId) ?? 'default'} onChange={onChange} readOnly={readOnly} />
-				),
+				render: ({ value, readOnly }) => <ThemeLayoutField value={value as StorefrontThemeId} readOnly={readOnly} />,
 			},
 			// Steps 2 and 3 of the studio flow, as separate root fields: Puck binds
 			// one field to one value, so the palette and the tune each need their

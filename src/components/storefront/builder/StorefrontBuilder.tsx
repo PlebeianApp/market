@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { storefrontCmsConfig } from '@/config/storefrontCms'
+import { validateStorefrontThemeSelection } from '@/config/storefrontThemes'
 import {
 	STOREFRONT_PAGE_VERSION,
 	validateStorefrontPageForPublish,
@@ -215,6 +216,18 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 			const validation = validateStorefrontPageForPublish(page)
 			if (!validation.ok) {
 				setErrors(validation.errors)
+				toast.error('Fix the highlighted problems before publishing')
+				return
+			}
+
+			// The schema holds the closed *list* of palette keys and deliberately
+			// knows nothing about which layout offers which, so the pairing is
+			// checked here, where the registry is in scope. Without this, a palette
+			// from a different layout validates cleanly and then renders the
+			// layout's default colourway without telling anyone.
+			const themeErrors = validateStorefrontThemeSelection(validation.page.root.props)
+			if (themeErrors.length > 0) {
+				setErrors(themeErrors)
 				toast.error('Fix the highlighted problems before publishing')
 				return
 			}

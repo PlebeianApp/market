@@ -1393,6 +1393,51 @@ export function getStorefrontPalette(theme: StorefrontThemeDefinition, key: stri
 	return theme.palettes[0]
 }
 
+/** The palette keys a layout offers — its own colourways plus the shared pair. */
+export function storefrontThemePaletteKeys(themeId: StorefrontThemeId): string[] {
+	return getStorefrontTheme(themeId).palettes.map((palette) => palette.key)
+}
+
+/**
+ * True when a key is one of that layout's palettes.
+ *
+ * The two shared colourways (Brutalist, Neon) are part of every layout except
+ * the one that opts out, so they answer true wherever they are actually
+ * offered — this reads the layout's own list rather than a global one.
+ */
+export function isPaletteInTheme(themeId: StorefrontThemeId, key: string): boolean {
+	return storefrontThemePaletteKeys(themeId).includes(key)
+}
+
+/**
+ * Checks that a page's palette belongs to its layout — the pairing the schema
+ * cannot check.
+ *
+ * `storefront.ts` deliberately knows nothing about what a theme contains: it
+ * holds the closed *list* of palette keys and leaves their meaning to this
+ * registry. The consequence is that a document naming, say, `theme: 'elec'`
+ * with `palette: 'holo-night'` (a `cards` colourway) validates cleanly and then
+ * silently renders the layout's *default* palette. The author's explicit choice
+ * disappears and nothing says so.
+ *
+ * That happened for real: a page published from a staging instance carried
+ * exactly that pairing, with `cards`' default tune, because the sidebar's
+ * layout switch did not reset the palette and tune the way the wizard does.
+ *
+ * This is the strict half of the answer, for use on the *publish* path where
+ * the author is present and can fix it. Rendering keeps the lenient fallback in
+ * `getStorefrontPalette`, because a page that crossed a relay must still render
+ * — the same split the block union already uses.
+ */
+export function validateStorefrontThemeSelection(props: { theme?: string; palette?: string }): string[] {
+	const theme = getStorefrontTheme(props.theme)
+	const key = props.palette ?? ''
+	// Empty is the documented "this layout's default colourway".
+	if (key === '') return []
+	if (isPaletteInTheme(theme.id, key)) return []
+	return [`Palette "${key}" does not belong to the "${theme.label}" layout. Available: ${storefrontThemePaletteKeys(theme.id).join(', ')}`]
+}
+
 /**
  * Projects a theme's tokens onto the standard CSS custom property names the
  * rest of the app already reads (`--primary`, `--card`, …). Applied as an
