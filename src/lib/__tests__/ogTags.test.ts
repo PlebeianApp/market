@@ -66,6 +66,19 @@ describe('buildOgProductMeta', () => {
 		expect(buildOgProductMeta(event)).toBeNull()
 	})
 
+	test('returns null for a variation without verified parent moderation context', () => {
+		const event = productEvent({
+			tags: [
+				['d', 'safe-looking-child'],
+				['title', 'Safe-looking child'],
+				['type', 'variation', 'physical'],
+				['image', 'https://cdn.example/child.png'],
+			],
+		})
+
+		expect(buildOgProductMeta(event)).toBeNull()
+	})
+
 	test('falls back to Untitled Product when no title tag', () => {
 		const meta = buildOgProductMeta(productEvent({ tags: [['d', 'x']] }))
 		expect(meta?.title).toBe('Untitled Product')

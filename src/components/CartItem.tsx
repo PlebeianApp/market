@@ -3,12 +3,13 @@ import { Input } from '@/components/ui/input'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
+	getProductImages,
+	getProductPrice,
 	getProductShippingOptions,
-	productSmartQueryOptions,
-	useProductTitle,
-	useProductPrice,
-	useProductImages,
-	useProductStock,
+	getProductStock,
+	getProductTitle,
+	isNSFWProduct,
+	productSelectionQueryOptions,
 } from '@/queries/products'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ShippingSelector } from '@/components/ShippingSelector'
@@ -18,6 +19,14 @@ import { cartActions, cartStore } from '@/lib/stores/cart'
 import { normalizePublishedProductShippingTags, resolvePublishedProductShippingOptions } from '@/lib/utils/productShippingSelections'
 import { useQuery } from '@tanstack/react-query'
 import { PriceDisplay } from '@/components/PriceDisplay'
+import {
+	getProductSelectionContext,
+	getProductSelectionImages,
+	getProductSelectionTags,
+	isProductSelectionResolved,
+} from '@/queries/productFamilies'
+import { uiStore } from '@/lib/stores/ui'
+import { useStore } from '@tanstack/react-store'
 
 interface CartItemProps {
 	productId: string
@@ -40,25 +49,45 @@ export default function CartItem({
 }: CartItemProps) {
 	const [quantity, setQuantity] = useState(amount)
 
-	// Fetch product data - pass sellerPubkey to support d-tag lookups
-	const { data: title, isLoading: isTitleLoading } = useProductTitle(productId, sellerPubkey)
-	const { data: priceTag, isLoading: isPriceLoading } = useProductPrice(productId, sellerPubkey)
-	const { data: images, isLoading: isImagesLoading } = useProductImages(productId, sellerPubkey)
-	const { data: stockTag, isLoading: isStockLoading } = useProductStock(productId, sellerPubkey)
-	const productQuery = useQuery(productSmartQueryOptions(productId, sellerPubkey))
+	// Keep the selected child as the cart identity and price/stock source, while
+	// resolving its exact same-author parent for image and shipping fallback.
+	const productSelectionQuery = useQuery(productSelectionQueryOptions(productId, sellerPubkey))
+	const selectedProduct = productSelectionQuery.data?.selected ?? null
+	const productSelectionUnavailable =
+		productSelectionQuery.isError ||
+		(productSelectionQuery.isSuccess && (!productSelectionQuery.data || !isProductSelectionResolved(productSelectionQuery.data)))
+	const parentProduct =
+		productSelectionUnavailable || !productSelectionQuery.data ? null : getProductSelectionContext(productSelectionQuery.data)
+	const title = getProductTitle(selectedProduct)
+	const priceTag = getProductPrice(selectedProduct)
+	const { showNSFWContent } = useStore(uiStore)
+	const isNSFW = isNSFWProduct(parentProduct) || isNSFWProduct(selectedProduct)
+	const images =
+		productSelectionUnavailable || (isNSFW && !showNSFWContent)
+			? []
+			: parentProduct
+				? getProductSelectionImages(parentProduct, selectedProduct)
+				: getProductImages(selectedProduct)
+	const stockTag = getProductStock(selectedProduct)
 	const sellerShippingOptionsQuery = useShippingOptionsByPubkey(sellerPubkey)
 
-	const isLoading = isTitleLoading || isPriceLoading || isImagesLoading || isStockLoading
+	const isLoading = productSelectionQuery.isLoading
 
 	// Parse data
 	const price = priceTag ? parseFloat(priceTag[1]) : 0
 	const currency = priceTag ? priceTag[2] : 'USD'
-	const stockQuantity = stockTag ? parseInt(stockTag[1]) : 0
+	const stockQuantity = stockTag && /^\d+$/.test(stockTag[1]) ? Number(stockTag[1]) : undefined
 	const subtotal = price * amount
 
 	// Get current shipping method
 	const currentShippingId = cartActions.getShippingMethod(productId)
 	const hasShipping = Boolean(currentShippingId)
+
+	useEffect(() => {
+		if (productSelectionUnavailable && currentShippingId) {
+			void cartActions.setShippingMethod(productId, {})
+		}
+	}, [currentShippingId, productId, productSelectionUnavailable])
 
 	const sellerShippingOptions = useMemo<RichShippingInfo[]>(() => {
 		if (!sellerShippingOptionsQuery.data || !sellerPubkey) return []
@@ -82,8 +111,13 @@ export default function CartItem({
 	}, [sellerPubkey, sellerShippingOptionsQuery.data])
 
 	const productShippingSelections = useMemo(
-		() => normalizePublishedProductShippingTags(getProductShippingOptions(productQuery.data ?? null)),
-		[productQuery.data],
+		() =>
+			normalizePublishedProductShippingTags(
+				parentProduct
+					? getProductSelectionTags(parentProduct, selectedProduct, 'shipping_option')
+					: getProductShippingOptions(selectedProduct),
+			),
+		[parentProduct, selectedProduct],
 	)
 
 	const productShippingOptions = useMemo(
@@ -101,8 +135,10 @@ export default function CartItem({
 	}, [currentShippingId, productShippingOptions])
 
 	const hasResolvedSellerShippingState = sellerShippingOptionsQuery.isSuccess || sellerShippingOptionsQuery.data !== undefined
-	const isShippingOptionsLoading = productQuery.isLoading || (productShippingSelections.length > 0 && !hasResolvedSellerShippingState)
-	const isShippingOptionsUnavailable = productQuery.isError || (!hasResolvedSellerShippingState && sellerShippingOptionsQuery.isError)
+	const isShippingOptionsLoading =
+		productSelectionQuery.isLoading || (productShippingSelections.length > 0 && !hasResolvedSellerShippingState)
+	const isShippingOptionsUnavailable =
+		productSelectionUnavailable || (!hasResolvedSellerShippingState && sellerShippingOptionsQuery.isError)
 
 	// Handle quantity input change
 	const handleQuantityChange = (value: string) => {
@@ -124,7 +160,7 @@ export default function CartItem({
 	// Handle immediate button-based quantity changes
 	const handleIncrementClick = () => {
 		if (!isEditable) return
-		const newAmount = Math.min(amount + 1, stockQuantity)
+		const newAmount = stockQuantity === undefined ? amount + 1 : Math.min(amount + 1, stockQuantity)
 		if (newAmount !== amount) {
 			onQuantityChange(productId, newAmount)
 		}
@@ -202,6 +238,31 @@ export default function CartItem({
 		)
 	}
 
+	if (productSelectionUnavailable) {
+		return (
+			<li className="flex items-center justify-between gap-4 py-4 border-b border-red-200" data-testid="cart-product-parent-unavailable">
+				<div>
+					<h3 className="font-medium text-red-700">Product option unavailable</h3>
+					<p className="text-sm text-muted-foreground">
+						The parent listing needed to verify this option was not returned. Remove it from the cart before checkout.
+					</p>
+				</div>
+				<Button
+					variant="ghost"
+					size="icon"
+					className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+					onClick={() => {
+						if (isEditable) onRemove(productId)
+					}}
+					disabled={!isEditable}
+					aria-label="Remove unavailable product"
+				>
+					<Trash2 size={16} />
+				</Button>
+			</li>
+		)
+	}
+
 	return (
 		<li className="flex flex-col py-4 border-b border-gray-300 [.bg-gray-100_&]:border-white">
 			<div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -261,7 +322,7 @@ export default function CartItem({
 								size="icon"
 								className="h-8 w-8"
 								onClick={handleIncrementClick}
-								disabled={!isEditable || amount >= stockQuantity}
+								disabled={!isEditable || (stockQuantity !== undefined && amount >= stockQuantity)}
 							>
 								<Plus size={14} />
 							</Button>

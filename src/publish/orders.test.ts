@@ -184,6 +184,8 @@ import type { CheckoutFormData } from '@/components/checkout/ShippingAddressForm
 import { decryptPrivateOrderMessage } from '@/lib/orders/privateOrderMessage'
 import { createOrder, createOrderCreationEvent, publishOrderWithDependencies } from '@/publish/orders'
 import { privateDetailsMatchPublicOrder } from '@/queries/orders'
+import type { ProductSelectionEvents } from '@/queries/productFamilies'
+import type { ProductSelectionResolver } from '@/lib/checkout/productSelectionGuard'
 
 const PII_SENTINELS = [
 	'buyer@example.com',
@@ -220,6 +222,7 @@ function paramsFor(overrides: {
 	productsBySeller: Record<string, Array<{ id: string; amount: number; shippingMethodId?: string | null }>>
 	sellerData?: Record<string, { satsTotal: number; shippingSats: number; shares: { sellerAmount: number } }>
 	sellers?: string[]
+	resolveProductSelection?: ProductSelectionResolver
 }) {
 	const sellers = overrides.sellers || Object.keys(overrides.productsBySeller)
 	const sellerData =
@@ -235,6 +238,24 @@ function paramsFor(overrides: {
 		productsBySeller: overrides.productsBySeller,
 		sellerData,
 		v4vShares: {},
+		resolveProductSelection:
+			overrides.resolveProductSelection ??
+			(async (productId, sellerPubkey) =>
+				({
+					selected: {
+						id: `${productId}-event`,
+						kind: 30402,
+						pubkey: sellerPubkey,
+						created_at: 1,
+						content: '',
+						tags: [
+							['d', productId],
+							['type', 'simple', 'physical'],
+						],
+					} as any,
+					parent: null,
+					parentRequired: false,
+				}) satisfies ProductSelectionEvents),
 	}
 }
 
@@ -305,6 +326,35 @@ function publicShippingRef(sellerPubkey: string, dTag: string) {
 
 function publicProductRef(sellerPubkey: string, dTag: string) {
 	return `30402:${sellerPubkey}:${dTag}`
+}
+
+function resolvedVariationSelection(sellerPubkey: string, productId: string, parentDTag = 'variable-parent'): ProductSelectionEvents {
+	return {
+		selected: {
+			id: `${productId}-event`,
+			kind: 30402,
+			pubkey: sellerPubkey,
+			created_at: 2,
+			content: '',
+			tags: [
+				['d', productId],
+				['type', 'variation', 'physical'],
+				['a', publicProductRef(sellerPubkey, parentDTag)],
+			],
+		} as any,
+		parent: {
+			id: `${parentDTag}-event`,
+			kind: 30402,
+			pubkey: sellerPubkey,
+			created_at: 1,
+			content: '',
+			tags: [
+				['d', parentDTag],
+				['type', 'variable', 'physical'],
+			],
+		} as any,
+		parentRequired: true,
+	}
 }
 
 async function decryptGiftWrapForSeller(event: PublishedEvent, seller: TestKeyPair) {
@@ -420,6 +470,78 @@ describe('public order privacy guard', () => {
 				}),
 			),
 		).rejects.toThrow('Delivery requirements could not be verified')
+
+		expect(publishedEvents).toHaveLength(0)
+	})
+
+	test('waits for exact 64-hex d-tag product-family resolution before publishing and retains child identity', async () => {
+		const seller = createKeyPair()
+		const shippingRef = publicShippingRef(seller.pubkey, 'pickup')
+		const childDTag = 'c'.repeat(64)
+		shippingServices = { [shippingRef]: 'pickup' }
+		let releaseSelection!: (selection: ProductSelectionEvents) => void
+		const pendingSelection = new Promise<ProductSelectionEvents>((resolve) => {
+			releaseSelection = resolve
+		})
+
+		const publishPromise = publishOrderWithDependencies(
+			paramsFor({
+				productsBySeller: {
+					[seller.pubkey]: [{ id: childDTag, amount: 1, shippingMethodId: shippingRef }],
+				},
+				resolveProductSelection: async () => pendingSelection,
+			}),
+		)
+
+		await Promise.resolve()
+		expect(publishedEvents).toHaveLength(0)
+
+		releaseSelection(resolvedVariationSelection(seller.pubkey, childDTag))
+		await publishPromise
+
+		expect(publicOrderEvents()).toHaveLength(1)
+		expect(publicOrderEvents()[0]?.tags).toContainEqual(['item', publicProductRef(seller.pubkey, childDTag), '1'])
+	})
+
+	test('rejects a variation with an unresolved parent before any publish', async () => {
+		const seller = createKeyPair()
+		const shippingRef = publicShippingRef(seller.pubkey, 'pickup')
+		const childDTag = 'orphan-child'
+		shippingServices = { [shippingRef]: 'pickup' }
+		const unresolved = resolvedVariationSelection(seller.pubkey, childDTag)
+		unresolved.parent = null
+
+		await expect(
+			publishOrderWithDependencies(
+				paramsFor({
+					productsBySeller: {
+						[seller.pubkey]: [{ id: childDTag, amount: 1, shippingMethodId: shippingRef }],
+					},
+					resolveProductSelection: async () => unresolved,
+				}),
+			),
+		).rejects.toThrow('Product selection could not be verified')
+
+		expect(publishedEvents).toHaveLength(0)
+	})
+
+	test('rejects a failed parent lookup before any publish', async () => {
+		const seller = createKeyPair()
+		const shippingRef = publicShippingRef(seller.pubkey, 'pickup')
+		shippingServices = { [shippingRef]: 'pickup' }
+
+		await expect(
+			publishOrderWithDependencies(
+				paramsFor({
+					productsBySeller: {
+						[seller.pubkey]: [{ id: 'failed-child', amount: 1, shippingMethodId: shippingRef }],
+					},
+					resolveProductSelection: async () => {
+						throw new Error('synthetic parent lookup failure')
+					},
+				}),
+			),
+		).rejects.toThrow('Product selection could not be verified')
 
 		expect(publishedEvents).toHaveLength(0)
 	})
