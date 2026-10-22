@@ -12,6 +12,7 @@ import { safeNpubEncode } from '@/lib/utils'
 
 const VALID_PUBKEY = 'a'.repeat(64)
 const HEX_D_TAG = 'b'.repeat(64)
+const LEGACY_EVENT_ID = 'd'.repeat(64)
 
 describe('productsByPubkeyQueryOptions', () => {
 	test('disables the query while the pubkey is empty', () => {
@@ -67,6 +68,43 @@ describe('fetchProductsByPubkey direct-call guard', () => {
 })
 
 describe('fetchProductSelectionEvents coordinate identity', () => {
+	test('uses a normal d-tag coordinate without attempting an event-ID fallback', async () => {
+		const product = {
+			id: 'simple-event',
+			kind: 30402,
+			pubkey: VALID_PUBKEY,
+			created_at: 1,
+			content: '',
+			tags: [
+				['d', 'simple-product'],
+				['type', 'simple', 'physical'],
+			],
+		} as unknown as NDKEvent
+		const requestedAddresses: unknown[] = []
+		const realGetNDK = ndkActions.getNDK
+
+		try {
+			;(ndkActions as { getNDK: () => unknown }).getNDK = () => ({
+				fetchEvent: async (address: unknown) => {
+					requestedAddresses.push(address)
+					return product
+				},
+			})
+
+			const selection = await fetchProductSelectionEvents('simple-product', VALID_PUBKEY)
+
+			expect(requestedAddresses).toHaveLength(1)
+			expect(String(requestedAddresses[0]).startsWith('naddr1')).toBe(true)
+			expect(selection?.identity).toEqual({
+				source: 'coordinate',
+				requestedId: 'simple-product',
+				canonicalDTag: 'simple-product',
+			})
+		} finally {
+			;(ndkActions as { getNDK: () => unknown }).getNDK = realGetNDK as () => unknown
+		}
+	})
+
 	test('uses the exact seller coordinate for a 64-hex d-tag', async () => {
 		const product = {
 			id: 'c'.repeat(64),
@@ -98,8 +136,91 @@ describe('fetchProductSelectionEvents coordinate identity', () => {
 			expect(selection?.selected.pubkey).toBe(VALID_PUBKEY)
 			expect(selection?.selected.kind).toBe(30402)
 			expect(selection?.selected.tags.find((tag) => tag[0] === 'd')?.[1]).toBe(HEX_D_TAG)
+			expect(selection?.identity?.source).toBe('coordinate')
 		} finally {
 			;(ndkActions as { getNDK: () => unknown }).getNDK = realGetNDK as () => unknown
+		}
+	})
+
+	test('maps an old detail-page event-ID cart row to its exact canonical coordinate', async () => {
+		const legacyEvent = {
+			id: LEGACY_EVENT_ID,
+			kind: 30402,
+			pubkey: VALID_PUBKEY,
+			created_at: 1,
+			content: '',
+			tags: [
+				['d', 'legacy-detail-product'],
+				['type', 'simple', 'physical'],
+			],
+		} as unknown as NDKEvent
+		const canonicalEvent = { ...legacyEvent, id: 'e'.repeat(64), created_at: 2 } as unknown as NDKEvent
+		const requestedAddresses: unknown[] = []
+		const realGetNDK = ndkActions.getNDK
+		const realConnect = ndkActions.connect
+		const realFetchEventsWithTimeout = ndkActions.fetchEventsWithTimeout
+
+		try {
+			;(ndkActions as { getNDK: () => unknown }).getNDK = () => ({
+				fetchEvent: async (address: unknown) => {
+					requestedAddresses.push(address)
+					return requestedAddresses.length === 1 ? null : canonicalEvent
+				},
+			})
+			;(ndkActions as { connect: () => Promise<void> }).connect = async () => {}
+			;(ndkActions as unknown as { fetchEventsWithTimeout: () => Promise<Set<NDKEvent>> }).fetchEventsWithTimeout = async () => {
+				requestedAddresses.push(LEGACY_EVENT_ID)
+				return new Set([legacyEvent])
+			}
+
+			const selection = await fetchProductSelectionEvents(LEGACY_EVENT_ID, VALID_PUBKEY)
+
+			expect(requestedAddresses).toHaveLength(3)
+			expect(String(requestedAddresses[0]).startsWith('naddr1')).toBe(true)
+			expect(requestedAddresses[1]).toBe(LEGACY_EVENT_ID)
+			expect(String(requestedAddresses[2]).startsWith('naddr1')).toBe(true)
+			expect(selection?.selected.id).toBe(canonicalEvent.id)
+			expect(selection?.identity).toEqual({
+				source: 'legacy-event-id',
+				requestedId: LEGACY_EVENT_ID,
+				canonicalDTag: 'legacy-detail-product',
+			})
+		} finally {
+			;(ndkActions as { getNDK: () => unknown }).getNDK = realGetNDK as () => unknown
+			;(ndkActions as { connect: unknown }).connect = realConnect
+			;(ndkActions as { fetchEventsWithTimeout: unknown }).fetchEventsWithTimeout = realFetchEventsWithTimeout
+		}
+	})
+
+	test('fails closed when the legacy event is missing or belongs to another seller', async () => {
+		const foreignEvent = {
+			id: LEGACY_EVENT_ID,
+			kind: 30402,
+			pubkey: 'f'.repeat(64),
+			created_at: 1,
+			content: '',
+			tags: [['d', 'foreign-product']],
+		} as unknown as NDKEvent
+		const realGetNDK = ndkActions.getNDK
+		const realConnect = ndkActions.connect
+		const realFetchEventsWithTimeout = ndkActions.fetchEventsWithTimeout
+
+		try {
+			let eventIdResult: NDKEvent | null = null
+			;(ndkActions as { getNDK: () => unknown }).getNDK = () => ({
+				fetchEvent: async () => null,
+			})
+			;(ndkActions as { connect: () => Promise<void> }).connect = async () => {}
+			;(ndkActions as unknown as { fetchEventsWithTimeout: () => Promise<Set<NDKEvent>> }).fetchEventsWithTimeout = async () =>
+				eventIdResult ? new Set([eventIdResult]) : new Set()
+
+			expect(await fetchProductSelectionEvents(LEGACY_EVENT_ID, VALID_PUBKEY)).toBeNull()
+			eventIdResult = foreignEvent
+			expect(await fetchProductSelectionEvents(LEGACY_EVENT_ID, VALID_PUBKEY)).toBeNull()
+		} finally {
+			;(ndkActions as { getNDK: () => unknown }).getNDK = realGetNDK as () => unknown
+			;(ndkActions as { connect: unknown }).connect = realConnect
+			;(ndkActions as { fetchEventsWithTimeout: unknown }).fetchEventsWithTimeout = realFetchEventsWithTimeout
 		}
 	})
 })

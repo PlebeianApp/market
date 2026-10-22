@@ -1,5 +1,5 @@
 import type { CartProduct } from '@/lib/stores/cart'
-import { isProductSelectionValidForCartItem, type ProductSelectionEvents } from '@/queries/productFamilies'
+import { getProductDTag, isProductSelectionValidForCartItem, type ProductSelectionEvents } from '@/queries/productFamilies'
 
 export type CheckoutProductSelectionState = 'pending' | 'resolved' | 'invalid'
 
@@ -43,8 +43,12 @@ export const canContinueCheckoutPayment = (state: CheckoutProductSelectionState,
 export async function assertCheckoutProductSelectionsResolved(
 	productsBySeller: Record<string, Array<Pick<CartProduct, 'id'>>>,
 	resolveProductSelection: ProductSelectionResolver,
-): Promise<void> {
+): Promise<Record<string, Record<string, string>>> {
+	const canonicalIdsBySeller: Record<string, Record<string, string>> = {}
+
 	for (const [sellerPubkey, products] of Object.entries(productsBySeller)) {
+		canonicalIdsBySeller[sellerPubkey] = {}
+		const claimedCanonicalIds = new Set<string>()
 		for (const product of products) {
 			let selection: ProductSelectionEvents | null
 			try {
@@ -56,6 +60,15 @@ export async function assertCheckoutProductSelectionsResolved(
 			if (!selection || !isProductSelectionValidForCartItem(selection, product.id, sellerPubkey)) {
 				throw new Error('Product selection could not be verified before order creation')
 			}
+
+			const canonicalDTag = getProductDTag(selection.selected)
+			if (!canonicalDTag || claimedCanonicalIds.has(canonicalDTag)) {
+				throw new Error('Product selection could not be verified before order creation')
+			}
+			claimedCanonicalIds.add(canonicalDTag)
+			canonicalIdsBySeller[sellerPubkey][product.id] = canonicalDTag
 		}
 	}
+
+	return canonicalIdsBySeller
 }

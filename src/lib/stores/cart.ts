@@ -32,7 +32,9 @@ import {
 	getProductSelectionContext,
 	getProductSelectionTags,
 	isProductSelectionValidForCartItem,
+	resolveProductIdentifier,
 	resolveProductSelectionParent,
+	type ProductSelectionIdentity,
 	type ProductSelectionEvents,
 } from '@/queries/productFamilies'
 
@@ -333,10 +335,7 @@ function parseCoordinateRef(reference: string, expectedKind: string): { pubkey: 
 	}
 }
 
-/**
- * Fetches a product for a persisted cart identity. A known seller defines an
- * addressable d-tag coordinate; event-ID lookup remains the no-seller fallback.
- */
+/** Raw product read used by the coordinate-first persisted-identity resolver. */
 const fetchProductEventFromQueries = async (id: string, sellerPubkey?: string): Promise<NDKEvent | null> => {
 	try {
 		// Persisted cart identity is an addressable-product d-tag. A known seller
@@ -358,7 +357,8 @@ const fetchProductEventFromQueries = async (id: string, sellerPubkey?: string): 
 		return null
 	} catch (error) {
 		console.error(`Failed to fetch product event ${id} via queryClient:`, error)
-		return null
+		if (!sellerPubkey && isEventId(id) && error instanceof Error && error.message === 'Product not found') return null
+		throw error
 	}
 }
 
@@ -401,9 +401,9 @@ let cartSyncDependencies: CartSyncDependencies = {
 const getProductEvent = async (id: string, sellerPubkey?: string): Promise<NDKEvent | null> =>
 	cartSyncDependencies.getProductEvent(id, sellerPubkey)
 
-const resolveCartProductSelection = async (selected: NDKEvent): Promise<ProductSelectionEvents> => {
+const resolveCartProductSelection = async (selected: NDKEvent, identity?: ProductSelectionIdentity): Promise<ProductSelectionEvents> => {
 	const parentRequired = getProductEventType(selected) === 'variation'
-	if (!parentRequired) return { selected, parent: null, parentRequired }
+	if (!parentRequired) return { selected, parent: null, parentRequired, identity }
 
 	let parent: NDKEvent | null = null
 	try {
@@ -412,13 +412,66 @@ const resolveCartProductSelection = async (selected: NDKEvent): Promise<ProductS
 		// A failed parent read cannot be treated as permission to use the child as
 		// its own shipping/moderation context.
 	}
-	return { selected, parent, parentRequired }
+	return { selected, parent, parentRequired, identity }
+}
+
+const migrateLegacyCartProductIdentity = (identity: ProductSelectionIdentity, sellerPubkey: string): boolean => {
+	if (identity.source !== 'legacy-event-id') return true
+
+	const state = cartStore.state
+	const legacyProduct = state.cart.products[identity.requestedId]
+	if (!legacyProduct) return true
+	if (legacyProduct.sellerPubkey !== sellerPubkey || state.cart.products[identity.canonicalDTag]) return false
+	const seller = state.cart.sellers[sellerPubkey]
+	if (!seller || !seller.productIds.includes(identity.requestedId) || seller.productIds.includes(identity.canonicalDTag)) return false
+
+	const nextProducts = { ...state.cart.products }
+	delete nextProducts[identity.requestedId]
+	nextProducts[identity.canonicalDTag] = { ...legacyProduct, id: identity.canonicalDTag }
+
+	const nextSellers = {
+		...state.cart.sellers,
+		[sellerPubkey]: {
+			...seller,
+			productIds: seller.productIds.map((id) => (id === identity.requestedId ? identity.canonicalDTag : id)),
+		},
+	}
+	const updatedAt = cartSyncDependencies.now()
+	const cart = { ...state.cart, products: nextProducts, sellers: nextSellers }
+
+	cartStore.setState((currentState) => ({
+		...currentState,
+		cart,
+		productsBySeller: computeProductsBySeller(nextProducts),
+		lastCartIntentUpdatedAt: updatedAt,
+	}))
+	cartActions.persistCartIntentLocally(cart, updatedAt)
+	cartActions.scheduleRemotePublish()
+	return true
 }
 
 const getCartProductSelection = async (id: string, sellerPubkey?: string): Promise<ProductSelectionEvents | null> => {
 	try {
-		const selected = await getProductEvent(id, sellerPubkey)
-		return selected ? resolveCartProductSelection(selected) : null
+		if (!sellerPubkey) {
+			const selected = await getProductEvent(id)
+			return selected ? resolveCartProductSelection(selected) : null
+		}
+
+		const resolved = await resolveProductIdentifier(id, sellerPubkey, {
+			fetchByCoordinate: (pubkey, dTag) => getProductEvent(dTag, pubkey),
+			fetchByEventId: (eventId) => getProductEvent(eventId),
+		})
+		if (!resolved) return null
+
+		const selection = await resolveCartProductSelection(resolved.event, resolved.identity)
+		if (
+			resolved.identity.source === 'legacy-event-id' &&
+			isProductSelectionValidForCartItem(selection, id, sellerPubkey) &&
+			!migrateLegacyCartProductIdentity(resolved.identity, sellerPubkey)
+		) {
+			return null
+		}
+		return selection
 	} catch {
 		return null
 	}
@@ -731,16 +784,18 @@ export const cartActions = {
 			return false
 		}
 
-		const existingProducts = Object.values(cartStore.state.cart.products)
-		const isNewProduct = !cartStore.state.cart.products[productId]
+		const requestedProductId = productId
 		const productSelection = productEventForShippingRefs
 			? await resolveCartProductSelection(productEventForShippingRefs)
 			: await getCartProductSelection(productId, sellerPubkey)
-		if (!productSelection || !isProductSelectionValidForCartItem(productSelection, productId, sellerPubkey)) {
+		if (!productSelection || !isProductSelectionValidForCartItem(productSelection, requestedProductId, sellerPubkey)) {
 			console.warn('Cannot add a product without a verified purchasable listing')
 			return false
 		}
+		productId = productSelection.identity?.canonicalDTag ?? productId
 		productEventForShippingRefs = productSelection.selected
+		const existingProducts = Object.values(cartStore.state.cart.products)
+		const isNewProduct = !cartStore.state.cart.products[productId]
 		let reusableShippingSelection: ReturnType<typeof findReusablePublishedShippingSelection> = null
 		if (isNewProduct) {
 			const productShippingTags = getCartProductShippingTags(productSelection) ?? []

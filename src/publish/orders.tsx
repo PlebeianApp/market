@@ -829,12 +829,22 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 	// Re-read every exact cart coordinate at the publication boundary. Persisted
 	// shipping state cannot authorize an order while a variation parent is
 	// missing, rejected, or still unresolved in the UI.
-	await assertCheckoutProductSelectionsResolved(productsBySeller, resolveProductSelection)
+	const canonicalIdsBySeller = await assertCheckoutProductSelectionsResolved(productsBySeller, resolveProductSelection)
+	const verifiedProductsBySeller = Object.fromEntries(
+		Object.entries(productsBySeller).map(([sellerPubkey, products]) => [
+			sellerPubkey,
+			products.map((product) => {
+				const canonicalDTag = canonicalIdsBySeller[sellerPubkey]?.[product.id]
+				if (!canonicalDTag) throw new Error('Product selection could not be verified before order creation')
+				return { ...product, id: canonicalDTag }
+			}),
+		]),
+	)
 
 	const preflight: SellerOrderPreflight[] = []
 
 	for (const sellerPubkey of sellers) {
-		const sellerProducts = productsBySeller[sellerPubkey] || []
+		const sellerProducts = verifiedProductsBySeller[sellerPubkey] || []
 		const data = sellerData[sellerPubkey]
 
 		if (sellerProducts.length === 0 || !data) continue

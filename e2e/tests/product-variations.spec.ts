@@ -1,9 +1,9 @@
 import { expect, test } from '../fixtures'
 import { RELAY_URL } from '../test-config'
-import { devUser1, devUser2 } from '@/lib/fixtures'
-import { hexToBytes } from '@noble/hashes/utils.js'
+import { devUser2 } from '@/lib/fixtures'
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import type { Page } from '@playwright/test'
-import { finalizeEvent } from 'nostr-tools/pure'
+import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
 import type { VerifiedEvent } from 'nostr-tools'
 import path from 'node:path'
@@ -112,6 +112,9 @@ test('Product Variations - variable family selection preserves images, availabil
 }, testInfo) => {
 	const network = await installLocalOnlyRoutes(page)
 	const relay = await Relay.connect(RELAY_URL)
+	const fixtureSellerSecretKey = generateSecretKey()
+	const fixtureSellerPrivateKey = bytesToHex(fixtureSellerSecretKey)
+	const fixtureSellerPubkey = getPublicKey(fixtureSellerSecretKey)
 	const suffix = `${Date.now()}-${testInfo.workerIndex}`
 	const createdAt = Math.floor(Date.now() / 1000)
 	const parentDTag = `fixture-variable-parent-${suffix}`
@@ -127,23 +130,23 @@ test('Product Variations - variable family selection preserves images, availabil
 	const restrictedParentDTag = `fixture-restricted-parent-${suffix}`
 	const restrictedChildDTag = `fixture-restricted-child-${suffix}`
 	const orphanDTag = `fixture-orphan-child-${suffix}`
-	const parentCoordinate = `30402:${devUser1.pk}:${parentDTag}`
-	const restrictedParentCoordinate = `30402:${devUser1.pk}:${restrictedParentDTag}`
+	const parentCoordinate = `30402:${fixtureSellerPubkey}:${parentDTag}`
+	const restrictedParentCoordinate = `30402:${fixtureSellerPubkey}:${restrictedParentDTag}`
 	const shippingDTag = `fixture-standard-shipping-${suffix}`
-	const shippingReference = `30406:${devUser1.pk}:${shippingDTag}`
+	const shippingReference = `30406:${fixtureSellerPubkey}:${shippingDTag}`
 
 	let parent: VerifiedEvent
 	let simple: VerifiedEvent
 	let restrictedChild: VerifiedEvent
 	try {
-		await publishEvent(relay, devUser1.sk, 30_406, createdAt, 'Synthetic parent-only shipping option.', [
+		await publishEvent(relay, fixtureSellerPrivateKey, 30_406, createdAt, 'Synthetic parent-only shipping option.', [
 			['d', shippingDTag],
 			['title', 'Standard fixture shipping'],
 			['price', '50', 'SATS'],
 			['service', 'standard'],
 			['country', 'US'],
 		])
-		parent = await publishProduct(relay, devUser1.sk, createdAt, 'Synthetic variable product parent.', [
+		parent = await publishProduct(relay, fixtureSellerPrivateKey, createdAt, 'Synthetic variable product parent.', [
 			['d', parentDTag],
 			['title', 'Variation Fixture Jacket'],
 			['price', '999', 'SATS'],
@@ -153,7 +156,7 @@ test('Product Variations - variable family selection preserves images, availabil
 			['image', PARENT_IMAGE_URL],
 			['shipping_option', shippingReference],
 		])
-		await publishProduct(relay, devUser1.sk, createdAt + 1, 'Red variation with parent-only imagery.', [
+		await publishProduct(relay, fixtureSellerPrivateKey, createdAt + 1, 'Red variation with parent-only imagery.', [
 			['d', redDTag],
 			['title', 'Variation Fixture Jacket - Red'],
 			['price', '1000', 'SATS'],
@@ -163,7 +166,7 @@ test('Product Variations - variable family selection preserves images, availabil
 			['spec', 'Color', 'Red'],
 			['a', parentCoordinate],
 		])
-		await publishProduct(relay, devUser1.sk, createdAt + 2, 'Blue variation with its own imagery.', [
+		await publishProduct(relay, fixtureSellerPrivateKey, createdAt + 2, 'Blue variation with its own imagery.', [
 			['d', blueDTag],
 			['title', 'Variation Fixture Jacket - Blue'],
 			['price', '2000', 'SATS'],
@@ -174,7 +177,7 @@ test('Product Variations - variable family selection preserves images, availabil
 			['image', CHILD_IMAGE_URL],
 			['a', parentCoordinate],
 		])
-		await publishProduct(relay, devUser1.sk, createdAt + 3, 'Sold-out variation.', [
+		await publishProduct(relay, fixtureSellerPrivateKey, createdAt + 3, 'Sold-out variation.', [
 			['d', soldOutDTag],
 			['title', 'Variation Fixture Jacket - Sold out'],
 			['price', '3000', 'SATS'],
@@ -184,7 +187,7 @@ test('Product Variations - variable family selection preserves images, availabil
 			['spec', 'Color', 'Sold out'],
 			['a', parentCoordinate],
 		])
-		await publishProduct(relay, devUser1.sk, createdAt + 4, 'Stockless preorder variation.', [
+		await publishProduct(relay, fixtureSellerPrivateKey, createdAt + 4, 'Stockless preorder variation.', [
 			['d', preorderDTag],
 			['title', 'Variation Fixture Jacket - Preorder'],
 			['price', '2500', 'SATS'],
@@ -193,7 +196,7 @@ test('Product Variations - variable family selection preserves images, availabil
 			['spec', 'Color', 'Preorder'],
 			['a', parentCoordinate],
 		])
-		await publishProduct(relay, devUser1.sk, createdAt + 5, 'Variation with malformed stock.', [
+		await publishProduct(relay, fixtureSellerPrivateKey, createdAt + 5, 'Variation with malformed stock.', [
 			['d', invalidStockDTag],
 			['title', 'Variation Fixture Jacket - Invalid stock'],
 			['price', '3500', 'SATS'],
@@ -203,7 +206,7 @@ test('Product Variations - variable family selection preserves images, availabil
 			['spec', 'Color', 'Invalid stock'],
 			['a', parentCoordinate],
 		])
-		await publishProduct(relay, devUser1.sk, createdAt + 6, 'Sensitive variation.', [
+		await publishProduct(relay, fixtureSellerPrivateKey, createdAt + 6, 'Sensitive variation.', [
 			['d', sensitiveDTag],
 			['title', 'Variation Fixture Jacket - Sensitive'],
 			['price', '4500', 'SATS'],
@@ -215,7 +218,7 @@ test('Product Variations - variable family selection preserves images, availabil
 			['content-warning', 'nsfw'],
 			['a', parentCoordinate],
 		])
-		await publishProduct(relay, devUser1.sk, createdAt + 7, 'Malformed variation with two parents.', [
+		await publishProduct(relay, fixtureSellerPrivateKey, createdAt + 7, 'Malformed variation with two parents.', [
 			['d', malformedDTag],
 			['title', 'Malformed should not group'],
 			['price', '4000', 'SATS'],
@@ -224,9 +227,9 @@ test('Product Variations - variable family selection preserves images, availabil
 			['stock', '4'],
 			['spec', 'Color', 'Malformed'],
 			['a', parentCoordinate],
-			['a', `30402:${devUser1.pk}:another-parent-${suffix}`],
+			['a', `30402:${fixtureSellerPubkey}:another-parent-${suffix}`],
 		])
-		await publishProduct(relay, devUser1.sk, createdAt + 8, 'Variation with a foreign-author parent coordinate.', [
+		await publishProduct(relay, fixtureSellerPrivateKey, createdAt + 8, 'Variation with a foreign-author parent coordinate.', [
 			['d', foreignDTag],
 			['title', 'Foreign relation should not group'],
 			['price', '5000', 'SATS'],
@@ -236,7 +239,7 @@ test('Product Variations - variable family selection preserves images, availabil
 			['spec', 'Color', 'Foreign'],
 			['a', `30402:${devUser2.pk}:foreign-parent-${suffix}`],
 		])
-		simple = await publishProduct(relay, devUser1.sk, createdAt + 9, 'Synthetic simple product.', [
+		simple = await publishProduct(relay, fixtureSellerPrivateKey, createdAt + 9, 'Synthetic simple product.', [
 			['d', simpleDTag],
 			['title', 'Simple Fixture Mug'],
 			['price', '400', 'SATS'],
@@ -245,7 +248,7 @@ test('Product Variations - variable family selection preserves images, availabil
 			['stock', '4'],
 			['image', SIMPLE_IMAGE_URL],
 		])
-		await publishProduct(relay, devUser1.sk, createdAt + 10, 'Parent-only restricted family.', [
+		await publishProduct(relay, fixtureSellerPrivateKey, createdAt + 10, 'Parent-only restricted family.', [
 			['d', restrictedParentDTag],
 			['title', 'Restricted Parent Fixture'],
 			['price', '6000', 'SATS'],
@@ -255,7 +258,7 @@ test('Product Variations - variable family selection preserves images, availabil
 			['image', RESTRICTED_PARENT_IMAGE_URL],
 			['content-warning', 'nsfw'],
 		])
-		restrictedChild = await publishProduct(relay, devUser1.sk, createdAt + 11, 'Safe-looking child of a restricted parent.', [
+		restrictedChild = await publishProduct(relay, fixtureSellerPrivateKey, createdAt + 11, 'Safe-looking child of a restricted parent.', [
 			['d', restrictedChildDTag],
 			['title', 'Restricted Parent Fixture - Child'],
 			['price', '6100', 'SATS'],
@@ -265,7 +268,7 @@ test('Product Variations - variable family selection preserves images, availabil
 			['spec', 'Option', 'Child'],
 			['a', restrictedParentCoordinate],
 		])
-		await publishProduct(relay, devUser1.sk, createdAt + 12, 'Child whose declared parent is unavailable.', [
+		await publishProduct(relay, fixtureSellerPrivateKey, createdAt + 12, 'Child whose declared parent is unavailable.', [
 			['d', orphanDTag],
 			['title', 'Unavailable Parent Fixture - Child'],
 			['price', '7100', 'SATS'],
@@ -273,16 +276,20 @@ test('Product Variations - variable family selection preserves images, availabil
 			['visibility', 'on-sale'],
 			['stock', '2'],
 			['image', ORPHAN_IMAGE_URL],
-			['a', `30402:${devUser1.pk}:missing-parent-${suffix}`],
+			['a', `30402:${fixtureSellerPubkey}:missing-parent-${suffix}`],
 		])
 	} finally {
 		relay.close()
 	}
 
-	// Compile the SPA shell before the first dynamic product request. On a cold
-	// Bun dev server the product OG handler can otherwise time out while its
-	// loopback shell request is still triggering the initial bundle.
-	await page.goto('/')
+	// Compile the SPA shell before the first dynamic product request. Use the
+	// inert Nostr route instead of the marketplace home page: the per-PR relay is
+	// cumulative, so warming `/` would render products seeded by earlier specs
+	// and record their unrelated external image URLs in this test's isolation
+	// assertion.
+	await page.goto('/nostr/')
+	await expect(page.getByText('Hello "/nostr/"!')).toBeVisible()
+	expect(network.blockedHttp).toEqual([])
 	await page.goto(`/products/${parent.id}`)
 	const productHero = page.locator('.hero-content-product')
 	await expect(productHero.getByRole('heading', { name: 'Variation Fixture Jacket' })).toBeVisible({ timeout: 30_000 })
@@ -336,7 +343,7 @@ test('Product Variations - variable family selection preserves images, availabil
 	expect(cart.cart.products[redDTag]).toMatchObject({
 		id: redDTag,
 		amount: 1,
-		sellerPubkey: devUser1.pk,
+		sellerPubkey: fixtureSellerPubkey,
 	})
 	expect(cart.cart.products[parentDTag]).toBeUndefined()
 	expect(cart.cart.products[blueDTag]).toBeUndefined()
@@ -362,7 +369,7 @@ test('Product Variations - variable family selection preserves images, availabil
 			envelope.cart.sellers[sellerPubkey].productIds = [orphanDTag]
 			sessionStorage.setItem('cart', JSON.stringify(envelope))
 		},
-		{ orphanDTag, redDTag, sellerPubkey: devUser1.pk, shippingReference },
+		{ orphanDTag, redDTag, sellerPubkey: fixtureSellerPubkey, shippingReference },
 	)
 	network.setLocalRelayResponseDelay(2_000)
 	await page.reload({ waitUntil: 'domcontentloaded' })

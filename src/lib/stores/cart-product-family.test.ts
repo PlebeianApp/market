@@ -20,6 +20,7 @@ const SELLER = 'a'.repeat(64)
 const CHILD_D_TAG = 'shirt-small'
 const PARENT_D_TAG = 'shirt'
 const HEX_D_TAG = 'b'.repeat(64)
+const LEGACY_EVENT_ID = 'd'.repeat(64)
 const SHIPPING_REF = `30406:${SELLER}:standard`
 
 const child = {
@@ -164,6 +165,76 @@ describe('cart product-family fallback', () => {
 		} finally {
 			;(ndkActions as { getNDK: () => unknown }).getNDK = realGetNDK as () => unknown
 		}
+	})
+
+	test('migrates the old detail-page event-ID cart shape to its canonical d-tag', async () => {
+		const legacyChild = { ...child, id: LEGACY_EVENT_ID } as NDKEvent
+		const legacyProduct = { ...cartProduct, id: LEGACY_EVENT_ID }
+		cartStore.setState((state) => ({
+			...state,
+			cart: {
+				...cart,
+				products: { [LEGACY_EVENT_ID]: legacyProduct },
+				sellers: {
+					[SELLER]: { ...cart.sellers[SELLER], productIds: [LEGACY_EVENT_ID] },
+				},
+			},
+			productsBySeller: { [SELLER]: [legacyProduct] },
+		}))
+		cartTestUtils.setSyncDependencies({
+			getProductEvent: async (id, sellerPubkey) => {
+				if (id === LEGACY_EVENT_ID && sellerPubkey === SELLER) return null
+				if (id === LEGACY_EVENT_ID && sellerPubkey === undefined) return legacyChild
+				if (id === CHILD_D_TAG && sellerPubkey === SELLER) return child
+				if (id === PARENT_D_TAG && sellerPubkey === SELLER) return parent
+				return null
+			},
+		})
+
+		const selection = await cartTestUtils.getProductSelection(LEGACY_EVENT_ID, SELLER)
+
+		expect(selection?.identity).toEqual({
+			source: 'legacy-event-id',
+			requestedId: LEGACY_EVENT_ID,
+			canonicalDTag: CHILD_D_TAG,
+		})
+		expect(Object.keys(cartStore.state.cart.products)).toEqual([CHILD_D_TAG])
+		expect(cartStore.state.cart.products[CHILD_D_TAG]).toMatchObject({ id: CHILD_D_TAG, sellerPubkey: SELLER })
+		expect(cartStore.state.cart.sellers[SELLER]?.productIds).toEqual([CHILD_D_TAG])
+	})
+
+	test('keeps a missing or foreign-author legacy row unresolved and unmigrated', async () => {
+		const legacyProduct = { ...cartProduct, id: LEGACY_EVENT_ID }
+		const setLegacyCart = () =>
+			cartStore.setState((state) => ({
+				...state,
+				cart: {
+					...cart,
+					products: { [LEGACY_EVENT_ID]: legacyProduct },
+					sellers: {
+						[SELLER]: { ...cart.sellers[SELLER], productIds: [LEGACY_EVENT_ID] },
+					},
+				},
+				productsBySeller: { [SELLER]: [legacyProduct] },
+			}))
+
+		setLegacyCart()
+		cartTestUtils.setSyncDependencies({ getProductEvent: async () => null })
+		expect(await cartTestUtils.getProductSelection(LEGACY_EVENT_ID, SELLER)).toBeNull()
+		expect(Object.keys(cartStore.state.cart.products)).toEqual([LEGACY_EVENT_ID])
+
+		setLegacyCart()
+		cartTestUtils.setSyncDependencies({
+			getProductEvent: async (id, sellerPubkey) => {
+				if (id === LEGACY_EVENT_ID && sellerPubkey === SELLER) return null
+				if (id === LEGACY_EVENT_ID && sellerPubkey === undefined) {
+					return { ...child, id: LEGACY_EVENT_ID, pubkey: 'f'.repeat(64) } as NDKEvent
+				}
+				return null
+			},
+		})
+		expect(await cartTestUtils.getProductSelection(LEGACY_EVENT_ID, SELLER)).toBeNull()
+		expect(Object.keys(cartStore.state.cart.products)).toEqual([LEGACY_EVENT_ID])
 	})
 
 	test('does not add a variation when its declared parent cannot be fetched', async () => {

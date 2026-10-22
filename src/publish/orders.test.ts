@@ -503,6 +503,33 @@ describe('public order privacy guard', () => {
 		expect(publicOrderEvents()[0]?.tags).toContainEqual(['item', publicProductRef(seller.pubkey, childDTag), '1'])
 	})
 
+	test('publishes an old detail-page event-ID cart row with its verified canonical d-tag', async () => {
+		const seller = createKeyPair()
+		const shippingRef = publicShippingRef(seller.pubkey, 'pickup')
+		const legacyEventId = 'd'.repeat(64)
+		const canonicalDTag = 'legacy-detail-child'
+		shippingServices = { [shippingRef]: 'pickup' }
+		const selection = resolvedVariationSelection(seller.pubkey, canonicalDTag)
+		selection.identity = {
+			source: 'legacy-event-id',
+			requestedId: legacyEventId,
+			canonicalDTag,
+		}
+
+		await publishOrderWithDependencies(
+			paramsFor({
+				productsBySeller: {
+					[seller.pubkey]: [{ id: legacyEventId, amount: 1, shippingMethodId: shippingRef }],
+				},
+				resolveProductSelection: async () => selection,
+			}),
+		)
+
+		expect(publicOrderEvents()).toHaveLength(1)
+		expect(publicOrderEvents()[0]?.tags).toContainEqual(['item', publicProductRef(seller.pubkey, canonicalDTag), '1'])
+		expect(publicOrderEvents()[0]?.tags).not.toContainEqual(['item', publicProductRef(seller.pubkey, legacyEventId), '1'])
+	})
+
 	test('rejects a variation with an unresolved parent before any publish', async () => {
 		const seller = createKeyPair()
 		const shippingRef = publicShippingRef(seller.pubkey, 'pickup')

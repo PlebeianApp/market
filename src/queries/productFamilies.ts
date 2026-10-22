@@ -2,6 +2,7 @@ import type { NDKEvent } from '@/lib/nostr/ndk-events'
 
 const PRODUCT_KIND = 30402
 const PUBKEY_PATTERN = /^[0-9a-f]{64}$/i
+const EVENT_ID_PATTERN = /^[0-9a-f]{64}$/i
 const PRODUCT_COORDINATE_PATTERN = /^30402:([0-9a-f]{64}):(.+)$/i
 const NATURAL_COLLATOR = new Intl.Collator('en', { numeric: true, sensitivity: 'base' })
 
@@ -39,6 +40,18 @@ export interface ProductSelectionEvents {
 	selected: NDKEvent
 	parent: NDKEvent | null
 	parentRequired: boolean
+	identity?: ProductSelectionIdentity
+}
+
+export interface ProductSelectionIdentity {
+	source: 'coordinate' | 'legacy-event-id'
+	requestedId: string
+	canonicalDTag: string
+}
+
+export interface ResolvedProductIdentifier {
+	event: NDKEvent
+	identity: ProductSelectionIdentity
 }
 
 /**
@@ -53,10 +66,26 @@ export const isProductSelectionResolved = (selection: ProductSelectionEvents): b
 
 export const isProductSelectionValidForCartItem = (selection: ProductSelectionEvents, productId: string, sellerPubkey: string): boolean => {
 	const normalizedSeller = sellerPubkey.trim().toLowerCase()
+	if (!isProductSelectionResolved(selection) || getProductEventType(selection.selected) === 'variable') return false
+
+	const selectedAddress = getProductAddress(selection.selected)
+	const canonicalDTag = getProductDTag(selection.selected)
+	if (!selectedAddress || !canonicalDTag || selection.selected.pubkey.trim().toLowerCase() !== normalizedSeller) return false
+
+	if (selectedAddress === `${PRODUCT_KIND}:${normalizedSeller}:${productId}`) {
+		return (
+			!selection.identity ||
+			(selection.identity.requestedId === productId &&
+				selection.identity.canonicalDTag === canonicalDTag &&
+				selection.identity.source === 'coordinate')
+		)
+	}
+
 	return (
-		isProductSelectionResolved(selection) &&
-		getProductEventType(selection.selected) !== 'variable' &&
-		getProductAddress(selection.selected) === `${PRODUCT_KIND}:${normalizedSeller}:${productId}`
+		selection.identity?.source === 'legacy-event-id' &&
+		EVENT_ID_PATTERN.test(productId) &&
+		selection.identity.requestedId === productId &&
+		selection.identity.canonicalDTag === canonicalDTag
 	)
 }
 
@@ -129,6 +158,60 @@ export const resolveProductSelectionParent = async (
 	const parent = await fetchParent(parentCoordinates.pubkey, parentCoordinates.dTag)
 	if (!parent || getProductEventType(parent) !== 'variable' || getProductAddress(parent) !== parentCoordinates.address) return null
 	return parent
+}
+
+/**
+ * Resolve a persisted product identifier without confusing a 64-hex d-tag for
+ * an event ID. The exact seller coordinate always wins. Legacy event-ID lookup
+ * is attempted only after that coordinate is absent, and must map through a
+ * same-author kind-30402 event to a currently resolvable canonical coordinate.
+ */
+export const resolveProductIdentifier = async (
+	id: string,
+	sellerPubkey: string,
+	readers: {
+		fetchByCoordinate: (pubkey: string, dTag: string) => Promise<NDKEvent | null>
+		fetchByEventId: (eventId: string) => Promise<NDKEvent | null>
+	},
+): Promise<ResolvedProductIdentifier | null> => {
+	const normalizedSeller = sellerPubkey.trim().toLowerCase()
+	if (!id || !PUBKEY_PATTERN.test(normalizedSeller)) return null
+
+	const expectedAddress = `${PRODUCT_KIND}:${normalizedSeller}:${id}`
+	const coordinateEvent = await readers.fetchByCoordinate(normalizedSeller, id)
+	if (coordinateEvent) {
+		if (getProductAddress(coordinateEvent) !== expectedAddress) return null
+		return {
+			event: coordinateEvent,
+			identity: { source: 'coordinate', requestedId: id, canonicalDTag: id },
+		}
+	}
+
+	if (!EVENT_ID_PATTERN.test(id)) return null
+
+	const legacyEvent = await readers.fetchByEventId(id)
+	const legacyDTag = legacyEvent ? getProductDTag(legacyEvent) : null
+	if (
+		!legacyEvent ||
+		legacyEvent.id !== id ||
+		legacyEvent.kind !== PRODUCT_KIND ||
+		legacyEvent.pubkey.trim().toLowerCase() !== normalizedSeller ||
+		!legacyDTag
+	) {
+		return null
+	}
+	// If both interpretations use the same 64-hex value, two inconsistent
+	// coordinate reads cannot establish which identity the persisted row meant.
+	if (legacyDTag === id) return null
+
+	const canonicalAddress = `${PRODUCT_KIND}:${normalizedSeller}:${legacyDTag}`
+	const canonicalEvent = await readers.fetchByCoordinate(normalizedSeller, legacyDTag)
+	if (!canonicalEvent || getProductAddress(canonicalEvent) !== canonicalAddress) return null
+
+	return {
+		event: canonicalEvent,
+		identity: { source: 'legacy-event-id', requestedId: id, canonicalDTag: legacyDTag },
+	}
 }
 
 const isNewerAddressableEvent = (candidate: NDKEvent, existing: NDKEvent): boolean => {

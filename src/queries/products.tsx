@@ -27,6 +27,7 @@ import { isValidHexKey } from '@/lib/utils'
 import {
 	isProductAvailable,
 	prepareProductCatalog,
+	resolveProductIdentifier,
 	resolveProductSelectionParent,
 	type ProductCatalog,
 	type ProductSelectionEvents,
@@ -357,14 +358,33 @@ export const fetchProductSmart = async (id: string, sellerPubkey?: string): Prom
 }
 
 export const fetchProductSelectionEvents = async (id: string, sellerPubkey?: string): Promise<ProductSelectionEvents | null> => {
-	// Cart and checkout identity is an addressable-product d-tag. When its seller
-	// is known, resolve the exact coordinate even if the d-tag itself happens to
-	// be 64 hexadecimal characters and therefore resembles an event ID.
-	const selected = sellerPubkey ? await fetchProductByATag(sellerPubkey, id) : await fetchProductSmart(id)
-	if (!selected) return null
+	if (!sellerPubkey) {
+		const selected = await fetchProductSmart(id)
+		if (!selected) return null
+		const parent = await resolveProductSelectionParent(selected, fetchProductByATag)
+		return { selected, parent, parentRequired: getProductType(selected)?.[1] === 'variation' }
+	}
 
-	const parent = await resolveProductSelectionParent(selected, fetchProductByATag)
-	return { selected, parent, parentRequired: getProductType(selected)?.[1] === 'variation' }
+	const resolved = await resolveProductIdentifier(id, sellerPubkey, {
+		fetchByCoordinate: fetchProductByATag,
+		fetchByEventId: async (eventId) => {
+			try {
+				return await fetchProduct(eventId)
+			} catch (error) {
+				if (error instanceof Error && error.message === 'Product not found') return null
+				throw error
+			}
+		},
+	})
+	if (!resolved) return null
+
+	const parent = await resolveProductSelectionParent(resolved.event, fetchProductByATag)
+	return {
+		selected: resolved.event,
+		parent,
+		parentRequired: getProductType(resolved.event)?.[1] === 'variation',
+		identity: resolved.identity,
+	}
 }
 
 // --- REACT QUERY OPTIONS ---
