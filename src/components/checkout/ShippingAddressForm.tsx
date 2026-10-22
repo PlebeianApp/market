@@ -7,6 +7,7 @@ import { CityCombobox } from '@/components/checkout/CityCombobox'
 import { PhoneInput } from '@/components/checkout/PhoneInput'
 import type { CheckoutDeliveryRequirements } from '@/lib/checkout/deliveryRequirements'
 import { isValidDigitalDeliveryContact } from '@/lib/checkout/deliveryRequirements'
+import { canSubmitCheckoutShipping, type CheckoutProductSelectionState } from '@/lib/checkout/productSelectionGuard'
 import { cartStore } from '@/lib/stores/cart'
 import { useStore } from '@tanstack/react-store'
 import { getShippingEvent, getShippingPickupAddressString, getShippingService, getShippingTitle } from '@/queries/shipping'
@@ -26,6 +27,7 @@ export interface CheckoutFormData {
 interface ShippingAddressFormProps {
 	form: any
 	hasAllShippingMethods: boolean
+	productSelectionState: CheckoutProductSelectionState
 	deliveryRequirements: CheckoutDeliveryRequirements
 	isDeliveryRequirementsLoading: boolean
 	deliveryRequirementsError: string | null
@@ -34,6 +36,7 @@ interface ShippingAddressFormProps {
 export function ShippingAddressForm({
 	form,
 	hasAllShippingMethods,
+	productSelectionState,
 	deliveryRequirements,
 	isDeliveryRequirementsLoading,
 	deliveryRequirementsError,
@@ -57,6 +60,7 @@ export function ShippingAddressForm({
 	const hasDigitalDelivery = deliveryRequirements.hasDigitalDelivery
 	const deliveryRequirementsBlocked =
 		isDeliveryRequirementsLoading || !!deliveryRequirementsError || (hasAllShippingMethods && !deliveryRequirements.isResolved)
+	const productSelectionsResolved = canSubmitCheckoutShipping(productSelectionState, hasAllShippingMethods)
 
 	useEffect(() => {
 		const fetchPickupAddresses = async () => {
@@ -450,7 +454,7 @@ export function ShippingAddressForm({
 							form="shipping-form"
 							type="submit"
 							className="w-full btn-black"
-							disabled={!hasAllShippingMethods || deliveryRequirementsBlocked || isSubmitting}
+							disabled={!productSelectionsResolved || deliveryRequirementsBlocked || isSubmitting}
 						>
 							{isSubmitting ? 'Processing...' : 'Continue to Review'}
 						</Button>

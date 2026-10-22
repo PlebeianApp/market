@@ -2,7 +2,6 @@ import { cartActions, useCart } from '@/lib/stores/cart'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiActions } from '@/lib/stores/ui'
 import {
-	getProductImages,
 	getProductPrice,
 	getProductStock,
 	getProductTitle,
@@ -18,26 +17,38 @@ import { useEffect, useState } from 'react'
 import { PriceDisplay } from './PriceDisplay'
 import { Button } from './ui/button'
 import { authStore, useAuth } from '@/lib/stores/auth'
+import { uiStore } from '@/lib/stores/ui'
+import { useStore } from '@tanstack/react-store'
 import { ZapButton } from './social/ZapButton'
 import { cn } from '@/lib/utils'
 import { getItemTestLabelCoordinate } from '@/lib/utils/testLabelFilters'
 import { TestListingNotice } from './TestListingNotice'
+import {
+	getProductDTag,
+	getProductEventType,
+	getProductSelectionImages,
+	isProductAvailable,
+	type ProductFamily,
+} from '@/queries/productFamilies'
 
 export interface ProductCardProps extends React.HTMLAttributes<HTMLDivElement> {
 	product: NDKEvent
+	family?: ProductFamily
 }
 
-export function ProductCard({ product, className }: ProductCardProps) {
+export function ProductCard({ product, family, className }: ProductCardProps) {
+	const selectedProduct = family?.availableVariations[0] ?? product
 	const title = getProductTitle(product)
-	const images = getProductImages(product)
-	const price = getProductPrice(product)
-	const stockTag = getProductStock(product)
-	const stockQuantity = stockTag ? parseInt(stockTag[1]) : undefined
-	const visibilityTag = getProductVisibility(product)
+	const price = getProductPrice(selectedProduct)
+	const stockTag = getProductStock(selectedProduct)
+	const stockQuantity = stockTag && /^\d+$/.test(stockTag[1]) ? Number(stockTag[1]) : undefined
+	const visibilityTag = getProductVisibility(selectedProduct)
 	const visibility = visibilityTag?.[1] || 'on-sale'
-	const isNSFW = isNSFWProduct(product)
-	// Out of stock if stock is explicitly 0 or undefined (no stock tag), but not for pre-order items
-	const isOutOfStock = visibility !== 'pre-order' && (stockQuantity === undefined || stockQuantity === 0)
+	const isNSFW = isNSFWProduct(product) || isNSFWProduct(selectedProduct)
+	const { showNSFWContent } = useStore(uiStore)
+	const images = isNSFW && !showNSFWContent ? [] : getProductSelectionImages(product, selectedProduct)
+	const hasVariationOptions = !!family || getProductEventType(product) === 'variable'
+	const isOutOfStock = !isProductAvailable(selectedProduct)
 	const [isAddingToCart, setIsAddingToCart] = useState(false)
 	const [showConfirmation, setShowConfirmation] = useState(false)
 	const location = useLocation()
@@ -53,18 +64,20 @@ export function ProductCard({ product, className }: ProductCardProps) {
 	const testLabelCoordinate = getItemTestLabelCoordinate(product)
 
 	// Check if product is already in cart
-	const isInCart = !!cart.cart.products[product.id]
-	const cartQuantity = isInCart ? cart.cart.products[product.id]?.amount || 0 : 0
+	const cartProductId = getProductDTag(selectedProduct) ?? selectedProduct.id
+	const isInCart = !hasVariationOptions && !!cart.cart.products[cartProductId]
+	const cartQuantity = isInCart ? cart.cart.products[cartProductId]?.amount || 0 : 0
 
 	const handleAddToCart = async () => {
-		if (isOwnProduct || visibility === 'hidden' || isOutOfStock) return // Don't allow adding own products, hidden products, or out of stock items
+		if (hasVariationOptions || isOwnProduct || visibility === 'hidden' || isOutOfStock) return
 
 		// Check if adding would exceed available stock
 		if (stockQuantity !== undefined && cartQuantity >= stockQuantity) return
 
 		setIsAddingToCart(true)
 		try {
-			await cartActions.addProduct(product)
+			const added = await cartActions.addProduct(selectedProduct)
+			if (!added) return
 			setShowConfirmation(true)
 			setTimeout(() => setShowConfirmation(false), 1200)
 		} finally {
@@ -148,6 +161,10 @@ export function ProductCard({ product, className }: ProductCardProps) {
 								disabled={true}
 							>
 								Your Product
+							</Button>
+						) : hasVariationOptions ? (
+							<Button className="py-3 px-4 rounded-lg w-full font-medium bg-black text-white pointer-events-none" tabIndex={-1}>
+								View options
 							</Button>
 						) : isInCart ? (
 							<div className="flex gap-2 w-full">

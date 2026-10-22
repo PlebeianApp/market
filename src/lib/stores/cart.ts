@@ -27,6 +27,16 @@ import { useStore } from '@tanstack/react-store'
 import { Store } from '@tanstack/store'
 import { useEffect } from 'react'
 import { SHIPPING_KIND } from '../schemas/shippingOption'
+import {
+	getProductEventType,
+	getProductSelectionContext,
+	getProductSelectionTags,
+	isProductSelectionValidForCartItem,
+	resolveProductIdentifier,
+	resolveProductSelectionParent,
+	type ProductSelectionIdentity,
+	type ProductSelectionEvents,
+} from '@/queries/productFamilies'
 
 export interface ProductImage {
 	url: string
@@ -325,22 +335,20 @@ function parseCoordinateRef(reference: string, expectedKind: string): { pubkey: 
 	}
 }
 
-/**
- * Fetches a product event by ID.
- * Supports both event IDs (64-hex characters) and d-tags.
- * For d-tags, the sellerPubkey is required.
- */
+/** Raw product read used by the coordinate-first persisted-identity resolver. */
 const fetchProductEventFromQueries = async (id: string, sellerPubkey?: string): Promise<NDKEvent | null> => {
 	try {
-		// If it looks like an event ID (64 hex chars), query by event ID
-		if (isEventId(id)) {
-			const event = (await cartQueryClient.fetchQuery(productQueryOptions(id))) as NDKEvent | null
+		// Persisted cart identity is an addressable-product d-tag. A known seller
+		// makes this an exact coordinate even when the d-tag is 64 hex characters.
+		if (sellerPubkey) {
+			const event = (await cartQueryClient.fetchQuery(productByATagQueryOptions(sellerPubkey, id))) as NDKEvent | null
 			return event
 		}
 
-		// Otherwise, it's likely a d-tag - we need the seller pubkey to query by a-tag
-		if (sellerPubkey) {
-			const event = (await cartQueryClient.fetchQuery(productByATagQueryOptions(sellerPubkey, id))) as NDKEvent | null
+		// Preserve the legacy explicit event-ID path only when no coordinate author
+		// is available.
+		if (isEventId(id)) {
+			const event = (await cartQueryClient.fetchQuery(productQueryOptions(id))) as NDKEvent | null
 			return event
 		}
 
@@ -349,7 +357,8 @@ const fetchProductEventFromQueries = async (id: string, sellerPubkey?: string): 
 		return null
 	} catch (error) {
 		console.error(`Failed to fetch product event ${id} via queryClient:`, error)
-		return null
+		if (!sellerPubkey && isEventId(id) && error instanceof Error && error.message === 'Product not found') return null
+		throw error
 	}
 }
 
@@ -391,6 +400,87 @@ let cartSyncDependencies: CartSyncDependencies = {
 
 const getProductEvent = async (id: string, sellerPubkey?: string): Promise<NDKEvent | null> =>
 	cartSyncDependencies.getProductEvent(id, sellerPubkey)
+
+const resolveCartProductSelection = async (selected: NDKEvent, identity?: ProductSelectionIdentity): Promise<ProductSelectionEvents> => {
+	const parentRequired = getProductEventType(selected) === 'variation'
+	if (!parentRequired) return { selected, parent: null, parentRequired, identity }
+
+	let parent: NDKEvent | null = null
+	try {
+		parent = await resolveProductSelectionParent(selected, (pubkey, dTag) => getProductEvent(dTag, pubkey))
+	} catch {
+		// A failed parent read cannot be treated as permission to use the child as
+		// its own shipping/moderation context.
+	}
+	return { selected, parent, parentRequired, identity }
+}
+
+const migrateLegacyCartProductIdentity = (identity: ProductSelectionIdentity, sellerPubkey: string): boolean => {
+	if (identity.source !== 'legacy-event-id') return true
+
+	const state = cartStore.state
+	const legacyProduct = state.cart.products[identity.requestedId]
+	if (!legacyProduct) return true
+	if (legacyProduct.sellerPubkey !== sellerPubkey || state.cart.products[identity.canonicalDTag]) return false
+	const seller = state.cart.sellers[sellerPubkey]
+	if (!seller || !seller.productIds.includes(identity.requestedId) || seller.productIds.includes(identity.canonicalDTag)) return false
+
+	const nextProducts = { ...state.cart.products }
+	delete nextProducts[identity.requestedId]
+	nextProducts[identity.canonicalDTag] = { ...legacyProduct, id: identity.canonicalDTag }
+
+	const nextSellers = {
+		...state.cart.sellers,
+		[sellerPubkey]: {
+			...seller,
+			productIds: seller.productIds.map((id) => (id === identity.requestedId ? identity.canonicalDTag : id)),
+		},
+	}
+	const updatedAt = cartSyncDependencies.now()
+	const cart = { ...state.cart, products: nextProducts, sellers: nextSellers }
+
+	cartStore.setState((currentState) => ({
+		...currentState,
+		cart,
+		productsBySeller: computeProductsBySeller(nextProducts),
+		lastCartIntentUpdatedAt: updatedAt,
+	}))
+	cartActions.persistCartIntentLocally(cart, updatedAt)
+	cartActions.scheduleRemotePublish()
+	return true
+}
+
+const getCartProductSelection = async (id: string, sellerPubkey?: string): Promise<ProductSelectionEvents | null> => {
+	try {
+		if (!sellerPubkey) {
+			const selected = await getProductEvent(id)
+			return selected ? resolveCartProductSelection(selected) : null
+		}
+
+		const resolved = await resolveProductIdentifier(id, sellerPubkey, {
+			fetchByCoordinate: (pubkey, dTag) => getProductEvent(dTag, pubkey),
+			fetchByEventId: (eventId) => getProductEvent(eventId),
+		})
+		if (!resolved) return null
+
+		const selection = await resolveCartProductSelection(resolved.event, resolved.identity)
+		if (
+			resolved.identity.source === 'legacy-event-id' &&
+			isProductSelectionValidForCartItem(selection, id, sellerPubkey) &&
+			!migrateLegacyCartProductIdentity(resolved.identity, sellerPubkey)
+		) {
+			return null
+		}
+		return selection
+	} catch {
+		return null
+	}
+}
+
+const getCartProductShippingTags = (selection: ProductSelectionEvents): string[][] | null => {
+	const context = getProductSelectionContext(selection)
+	return context ? getProductSelectionTags(context, selection.selected, 'shipping_option') : null
+}
 
 export const getShippingEvent = async (shippingReferenceId: string): Promise<NDKEvent | null> =>
 	cartSyncDependencies.getShippingEvent(shippingReferenceId)
@@ -567,15 +657,22 @@ export const cartActions = {
 					const productCoords = parseCoordinateRef(item.productRef, '30402')
 					if (!productCoords) continue
 
-					const productEvent = await cartSyncDependencies.getProductEvent(productCoords.identifier, productCoords.pubkey)
+					const productSelection = await getCartProductSelection(productCoords.identifier, productCoords.pubkey)
+					if (!productSelection || !isProductSelectionValidForCartItem(productSelection, productCoords.identifier, productCoords.pubkey))
+						continue
+					const productEvent = productSelection.selected
+					const productContext = getProductSelectionContext(productSelection)
+					if (!productContext) continue
 					const productDTag = getProductId(productEvent)
-					if (!productEvent || !productDTag || productEvent.pubkey !== productCoords.pubkey) continue
+					if (!productDTag || productEvent.pubkey !== productCoords.pubkey) continue
 
 					liveProducts[item.productRef] = {
 						productRef: item.productRef,
 						sellerPubkey: productEvent.pubkey,
 						productId: productDTag,
-						shippingRefs: productEvent.tags.filter((tag) => tag[0] === 'shipping_option' && tag[1]).map((tag) => tag[1]),
+						shippingRefs: getProductSelectionTags(productContext, productEvent, 'shipping_option')
+							.filter((tag) => tag[1])
+							.map((tag) => tag[1]),
 					}
 
 					if (item.shippingRef && !liveShipping[item.shippingRef]) {
@@ -664,7 +761,7 @@ export const cartActions = {
 				sellerPubkey = pubkey || ''
 			} catch (error) {
 				console.error('Failed to fetch seller pubkey:', error)
-				return
+				return false
 			}
 		} else if (productData instanceof NDKEvent) {
 			productEventForShippingRefs = productData
@@ -684,18 +781,25 @@ export const cartActions = {
 
 		if (!sellerPubkey || !HEX_KEYS_REGEX.test(sellerPubkey)) {
 			console.error('Cannot add product without valid seller pubkey:', sellerPubkey)
-			return
+			return false
 		}
 
+		const requestedProductId = productId
+		const productSelection = productEventForShippingRefs
+			? await resolveCartProductSelection(productEventForShippingRefs)
+			: await getCartProductSelection(productId, sellerPubkey)
+		if (!productSelection || !isProductSelectionValidForCartItem(productSelection, requestedProductId, sellerPubkey)) {
+			console.warn('Cannot add a product without a verified purchasable listing')
+			return false
+		}
+		productId = productSelection.identity?.canonicalDTag ?? productId
+		productEventForShippingRefs = productSelection.selected
 		const existingProducts = Object.values(cartStore.state.cart.products)
 		const isNewProduct = !cartStore.state.cart.products[productId]
 		let reusableShippingSelection: ReturnType<typeof findReusablePublishedShippingSelection> = null
 		if (isNewProduct) {
-			if (!productEventForShippingRefs) {
-				productEventForShippingRefs = await getProductEvent(productId, sellerPubkey)
-			}
-
-			const productShippingSelections = normalizePublishedProductShippingTags(productEventForShippingRefs?.tags ?? [])
+			const productShippingTags = getCartProductShippingTags(productSelection) ?? []
+			const productShippingSelections = normalizePublishedProductShippingTags(productShippingTags)
 			const resolvedShippingOptions = await resolveCartProductShippingOptions(sellerPubkey, productShippingSelections)
 
 			reusableShippingSelection = findReusablePublishedShippingSelection({
@@ -733,6 +837,7 @@ export const cartActions = {
 		await cartActions.groupProductsBySeller()
 		await cartActions.updateSellerData()
 		cartActions.scheduleRemotePublish()
+		return true
 	},
 
 	updateProductAmount: async (buyerPubkey: string, productId: string, amount: number) => {
@@ -1623,11 +1728,13 @@ export const cartActions = {
 			// Get seller pubkey from cart product if available
 			const state = cartStore.state
 			const cartProduct = state.cart.products[productId]
-			const productEvent = await getProductEvent(productId, cartProduct?.sellerPubkey)
-			if (!productEvent) return []
+			if (!cartProduct?.sellerPubkey) return []
+			const productSelection = await getCartProductSelection(productId, cartProduct.sellerPubkey)
+			if (!productSelection || !isProductSelectionValidForCartItem(productSelection, productId, cartProduct.sellerPubkey)) return []
+			const productContext = getProductSelectionContext(productSelection)
+			if (!productContext) return []
 
-			// Get shipping options attached to this specific product
-			const shippingTags = productEvent.tags.filter((t) => t[0] === 'shipping_option')
+			const shippingTags = getProductSelectionTags(productContext, productSelection.selected, 'shipping_option')
 
 			if (shippingTags.length === 0) {
 				return []
@@ -1695,10 +1802,12 @@ export const cartActions = {
 					const extraCosts: Record<string, number> = {}
 
 					for (const product of products) {
-						const productEvent = await getProductEvent(product.id, product.sellerPubkey)
-						if (!productEvent) continue
+						const productSelection = await getCartProductSelection(product.id, product.sellerPubkey)
+						if (!productSelection || !isProductSelectionValidForCartItem(productSelection, product.id, product.sellerPubkey)) continue
+						const productContext = getProductSelectionContext(productSelection)
+						if (!productContext) continue
 
-						const shippingTags = productEvent.tags.filter((t) => t[0] === 'shipping_option')
+						const shippingTags = getProductSelectionTags(productContext, productSelection.selected, 'shipping_option')
 						for (const tag of shippingTags) {
 							const shippingRef = tag[1] // Format: "30406:pubkey:d-tag"
 							const extraCost = tag[2] ? parseFloat(tag[2]) : 0
@@ -1789,6 +1898,7 @@ export const cartActions = {
 }
 
 export const cartTestUtils = {
+	getProductSelection: (id: string, sellerPubkey?: string) => getCartProductSelection(id, sellerPubkey),
 	setSyncDependencies: (overrides: Partial<CartSyncDependencies>) => {
 		cartSyncDependencies = {
 			...cartSyncDependencies,
@@ -1883,13 +1993,11 @@ export async function handleAddToCart(userId: string, product: Partial<CartProdu
 	if (!product) return false
 
 	if (typeof product === 'string') {
-		await cartActions.addProduct(product)
-		return true
+		return await cartActions.addProduct(product)
 	}
 
 	if (product instanceof NDKEvent) {
-		await cartActions.addProduct(product)
-		return true
+		return await cartActions.addProduct(product)
 	}
 
 	if ('id' in product && product.id) {
@@ -1903,8 +2011,7 @@ export async function handleAddToCart(userId: string, product: Partial<CartProdu
 			sellerPubkey: product.sellerPubkey || '',
 		}
 
-		await cartActions.addProduct(cartProduct)
-		return true
+		return await cartActions.addProduct(cartProduct)
 	}
 
 	return false

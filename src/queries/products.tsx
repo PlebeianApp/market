@@ -24,6 +24,14 @@ import { filterBlacklistedEvents, filterBlacklistedPubkeys } from '@/lib/utils/b
 import { excludeTestLabeledEvents } from '@/queries/testLabels'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { isValidHexKey } from '@/lib/utils'
+import {
+	isProductAvailable,
+	prepareProductCatalog,
+	resolveProductIdentifier,
+	resolveProductSelectionParent,
+	type ProductCatalog,
+	type ProductSelectionEvents,
+} from '@/queries/productFamilies'
 
 // Re-export productKeys for use in other query files
 export { productKeys }
@@ -107,19 +115,7 @@ export const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
  * @returns true if the product is in stock
  */
 export const isProductInStock = (event: NDKEvent): boolean => {
-	const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
-	const visibility = visibilityTag?.[1] || 'on-sale'
-
-	// Pre-order items are always considered "in stock" for display purposes
-	if (visibility === 'pre-order') return true
-
-	const stockTag = event.tags.find((t) => t[0] === 'stock')
-	// No stock tag means out of stock (matching ProductCard behavior)
-	if (!stockTag) return false
-
-	const stockValue = parseInt(stockTag[1], 10)
-	// Stock must be a valid number > 0
-	return !isNaN(stockValue) && stockValue > 0
+	return isProductAvailable(event)
 }
 
 // --- DATA FETCHING FUNCTIONS ---
@@ -249,13 +245,27 @@ export const fetchProduct = async (id: string) => {
  * @param limit Maximum number of products to return (default: 50)
  * @returns Array of product events sorted by creation date (blacklist filtered, optionally hidden products excluded)
  */
-export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boolean = false, limit: number = 50) => {
+interface ProductsByPubkeyFetchResult {
+	events: NDKEvent[]
+	reachedLimit: boolean
+}
+
+/**
+ * Preserve completeness metadata before local policy filters remove events.
+ * `reachedLimit` is deliberately advisory: a false value cannot prove the
+ * relay read was complete when a relay times out or returns a partial result.
+ */
+const fetchProductsByPubkeyWithMetadata = async (
+	pubkey: string,
+	includeHidden: boolean = false,
+	limit: number = 50,
+): Promise<ProductsByPubkeyFetchResult> => {
 	if (!isValidHexKey(pubkey)) throw new Error('fetchProductsByPubkey: invalid seller pubkey')
 
 	const ndk = ndkActions.getNDK()
 	if (!ndk) {
 		console.warn('NDK not ready, returning empty products by pubkey list')
-		return []
+		return { events: [], reachedLimit: false }
 	}
 
 	const filter: NDKFilter = {
@@ -266,6 +276,7 @@ export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boole
 
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	const allEvents = Array.from(events)
+	const reachedLimit = allEvents.length >= limit
 
 	// Filter out blacklisted products (author check not needed since we're querying by author)
 	// Then filter out locally-deleted products
@@ -273,16 +284,38 @@ export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boole
 
 	// Filter out hidden products unless explicitly included
 	if (includeHidden) {
-		return filteredEvents
+		return { events: filteredEvents, reachedLimit }
 	}
 
-	return filteredEvents.filter((event) => {
-		const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
-		const visibility = visibilityTag?.[1] || 'on-sale' // Default to on-sale if not specified
-		if (visibility === 'hidden') return false
-		// Filter out out-of-stock products from public views
-		return isProductInStock(event)
-	})
+	return {
+		events: filteredEvents.filter((event) => {
+			const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
+			const visibility = visibilityTag?.[1] || 'on-sale' // Default to on-sale if not specified
+			if (visibility === 'hidden') return false
+			// Filter out out-of-stock products from public views
+			return isProductInStock(event)
+		}),
+		reachedLimit,
+	}
+}
+
+export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boolean = false, limit: number = 50) =>
+	(await fetchProductsByPubkeyWithMetadata(pubkey, includeHidden, limit)).events
+
+export const SELLER_PRODUCT_CATALOG_LIMIT = 500
+
+/**
+ * Fetch a seller's public product catalog with enough raw events to assemble
+ * variable-product families before applying stock visibility. A result at the
+ * cap is marked as possibly incomplete; unresolved variations remain explicit
+ * rather than being attached by title or another heuristic.
+ */
+export const fetchProductCatalogByPubkey = async (
+	pubkey: string,
+	limit: number = SELLER_PRODUCT_CATALOG_LIMIT,
+): Promise<ProductCatalog> => {
+	const result = await fetchProductsByPubkeyWithMetadata(pubkey, true, limit)
+	return prepareProductCatalog(result.events, { possiblyIncomplete: result.reachedLimit })
 }
 
 export const fetchProductByATag = async (pubkey: string, dTag: string) => {
@@ -324,6 +357,36 @@ export const fetchProductSmart = async (id: string, sellerPubkey?: string): Prom
 	return null
 }
 
+export const fetchProductSelectionEvents = async (id: string, sellerPubkey?: string): Promise<ProductSelectionEvents | null> => {
+	if (!sellerPubkey) {
+		const selected = await fetchProductSmart(id)
+		if (!selected) return null
+		const parent = await resolveProductSelectionParent(selected, fetchProductByATag)
+		return { selected, parent, parentRequired: getProductType(selected)?.[1] === 'variation' }
+	}
+
+	const resolved = await resolveProductIdentifier(id, sellerPubkey, {
+		fetchByCoordinate: fetchProductByATag,
+		fetchByEventId: async (eventId) => {
+			try {
+				return await fetchProduct(eventId)
+			} catch (error) {
+				if (error instanceof Error && error.message === 'Product not found') return null
+				throw error
+			}
+		},
+	})
+	if (!resolved) return null
+
+	const parent = await resolveProductSelectionParent(resolved.event, fetchProductByATag)
+	return {
+		selected: resolved.event,
+		parent,
+		parentRequired: getProductType(resolved.event)?.[1] === 'variation',
+		identity: resolved.identity,
+	}
+}
+
 // --- REACT QUERY OPTIONS ---
 
 /**
@@ -350,6 +413,14 @@ export const productSmartQueryOptions = (id: string, sellerPubkey?: string) =>
 		queryFn: () => fetchProductSmart(id, sellerPubkey),
 		staleTime: 300000,
 		enabled: isEventId(id) || !!sellerPubkey, // Only enable if we have enough info to fetch
+	})
+
+export const productSelectionQueryOptions = (id: string, sellerPubkey?: string) =>
+	queryOptions({
+		queryKey: [...productKeys.details(id), sellerPubkey ?? '', 'selectionContext'] as const,
+		queryFn: () => fetchProductSelectionEvents(id, sellerPubkey),
+		staleTime: 300000,
+		enabled: isEventId(id) || !!sellerPubkey,
 	})
 
 /**
@@ -385,6 +456,13 @@ export const productsByPubkeyQueryOptions = (pubkey: string, includeHidden: bool
 	queryOptions({
 		queryKey: includeHidden ? [...productKeys.byPubkey(pubkey), 'includeHidden'] : productKeys.byPubkey(pubkey),
 		queryFn: () => fetchProductsByPubkey(pubkey, includeHidden),
+		enabled: isValidHexKey(pubkey),
+	})
+
+export const productCatalogByPubkeyQueryOptions = (pubkey: string, limit: number = SELLER_PRODUCT_CATALOG_LIMIT) =>
+	queryOptions({
+		queryKey: [...productKeys.byPubkey(pubkey), 'publicCatalog', limit] as const,
+		queryFn: () => fetchProductCatalogByPubkey(pubkey, limit),
 		enabled: isValidHexKey(pubkey),
 	})
 

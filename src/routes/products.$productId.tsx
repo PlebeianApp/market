@@ -35,7 +35,6 @@ import {
 	getProductCreatedAt,
 	getProductDescription,
 	getProductDimensions,
-	getProductImages,
 	getProductPrice,
 	getProductPubkey,
 	getProductSpecs,
@@ -48,9 +47,19 @@ import {
 	getProductWeight,
 	isNSFWProduct,
 	productQueryOptions,
-	productsByPubkeyQueryOptions,
+	productCatalogByPubkeyQueryOptions,
 	getProductLocation,
 } from '@/queries/products'
+import {
+	findProductFamily,
+	getProductDTag,
+	getProductSelectionCartIdentity,
+	getProductSelectionImages,
+	getVariationParentAddress,
+	getVariationLabel,
+	isProductAvailable,
+	resolveProductVariation,
+} from '@/queries/productFamilies'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
@@ -228,7 +237,7 @@ const renderProductShippingSelector = (shippingState: ProductPageShippingState, 
 				<ShippingSelector
 					options={shippingState.options}
 					onSelect={(option: RichShippingInfo) => {
-						void cartActions.setShippingMethod(eventProduct.id, option)
+						void cartActions.setShippingMethod(getProductDTag(eventProduct) ?? eventProduct.id, option)
 					}}
 					className={className}
 				/>
@@ -236,7 +245,13 @@ const renderProductShippingSelector = (shippingState: ProductPageShippingState, 
 	}
 }
 
-const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView: boolean, shippingState: ProductPageShippingState) => {
+const getTabContent = (
+	tab: TabProductPage,
+	eventProduct: NDKEvent,
+	isMobileView: boolean,
+	shippingState: ProductPageShippingState,
+	purchasableProduct: NDKEvent | null,
+) => {
 	const wrapContent = (content: ReactNode) => <div className="bg-white shadow-md p-6 rounded-lg">{content}</div>
 
 	const summary = getProductSummary(eventProduct)
@@ -299,7 +314,7 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 						<div className="w-full md:w-1/2 min-w-0">
 							<p className="mb-4 text-gray-500 text-sm">Select a shipping method to see estimated costs and delivery times.</p>
 
-							<div className="w-full">{renderProductShippingSelector(shippingState, eventProduct, 'w-full')}</div>
+							<div className="w-full">{renderProductShippingSelector(shippingState, purchasableProduct ?? eventProduct, 'w-full')}</div>
 
 							<div className="mt-4">
 								<p className="text-gray-500 text-sm">Shipping costs will be added to the final price in the cart.</p>
@@ -353,10 +368,12 @@ function RouteComponent() {
 	const navigate = useNavigate()
 	const queryClient = useQueryClient()
 	const [currentTab, setCurrentTab] = useState<TabProductPage>(TabProductPage.description)
+	const [variationSelection, setVariationSelection] = useState<{ productId: string; dTag: string } | null>(null)
 
 	// Scroll to top when product changes
 	useEffect(() => {
 		window.scrollTo({ top: 0, behavior: 'smooth' })
+		setVariationSelection(null)
 	}, [productId])
 
 	const productQuery = useQuery({
@@ -366,17 +383,36 @@ function RouteComponent() {
 		retryDelay: (attemptIndex) => Math.min(500 + attemptIndex * 750, 5000),
 	})
 
-	const product = productQuery.data ?? null
+	const routeProduct = productQuery.data ?? null
+	const routePubkey = getProductPubkey(routeProduct) || ''
+	const sellerProductOptions = productCatalogByPubkeyQueryOptions(routePubkey)
+	const sellerProductsQuery = useQuery({
+		...sellerProductOptions,
+		enabled: sellerProductOptions.enabled,
+	})
+	const sellerProductCatalog = sellerProductsQuery.data
+	const productFamily = findProductFamily(sellerProductCatalog, routeProduct)
+	const routeProductIsVariation = routeProduct ? getProductType(routeProduct)?.[1] === 'variation' : false
+	const routeVariationDTag = routeProductIsVariation && routeProduct ? getProductDTag(routeProduct) : null
+	const explicitVariationDTag =
+		variationSelection && variationSelection.productId === productId ? variationSelection.dTag : (routeVariationDTag ?? undefined)
+	const selectedVariation = resolveProductVariation(productFamily, explicitVariationDTag)
+	const selectedVariationMissing = explicitVariationDTag !== undefined && !selectedVariation
+	const product = productFamily?.parent ?? routeProduct
+	const typeTag = getProductType(product)
+	const isVariableProduct = typeTag?.[1] === 'variable'
+	const purchasableProduct = isVariableProduct ? selectedVariation : product
 
-	// Derive all product fields from the loaded product event (avoids conditional hook calls / racey dependent queries)
+	// Parent identity drives the page; the selected child drives price, stock,
+	// images and cart identity. An image-less child inherits the parent gallery.
 	const title = getProductTitle(product) || 'Untitled Product'
 	const description = getProductDescription(product)
-	const images = getProductImages(product) || []
-	const priceTag = getProductPrice(product)
-	const typeTag = getProductType(product)
-	const stockTag = getProductStock(product)
-	const visibilityTag = getProductVisibility(product)
-	const pubkey = getProductPubkey(product) || ''
+	const images = product ? getProductSelectionImages(product, selectedVariation) : []
+	const priceTag = getProductPrice(purchasableProduct)
+	const stockTag = getProductStock(purchasableProduct)
+	const visibilityTag = getProductVisibility(purchasableProduct)
+	const parentVisibilityTag = getProductVisibility(product)
+	const pubkey = getProductPubkey(product) || routePubkey
 	const sellerShippingOptionsQuery = useShippingOptionsByPubkey(pubkey)
 
 	const sellerShippingOptions = useMemo<RichShippingInfo[]>(() => {
@@ -400,7 +436,11 @@ function RouteComponent() {
 			.filter((option): option is RichShippingInfo => option !== null)
 	}, [sellerShippingOptionsQuery.data, pubkey])
 
-	const productShippingSelections = useMemo(() => normalizePublishedProductShippingTags(getProductShippingOptions(product)), [product])
+	const productShippingSelections = useMemo(() => {
+		const selectedSelections = normalizePublishedProductShippingTags(getProductShippingOptions(purchasableProduct))
+		if (selectedSelections.length > 0 || !product || purchasableProduct === product) return selectedSelections
+		return normalizePublishedProductShippingTags(getProductShippingOptions(product))
+	}, [product, purchasableProduct])
 
 	const productShippingOptions = useMemo(
 		() =>
@@ -436,16 +476,12 @@ function RouteComponent() {
 		}
 	}
 
-	const sellerProductOptions = productsByPubkeyQueryOptions(pubkey)
-	const sellerProductsQuery = useQuery({
-		...sellerProductOptions,
-		enabled: sellerProductOptions.enabled,
-	})
-	const sellerProducts = sellerProductsQuery.data ?? []
+	const sellerProducts = sellerProductCatalog?.items ?? []
 
 	const breakpoint = useBreakpoint()
 	const isMobileOrTablet = breakpoint === 'sm' || breakpoint === 'md'
 	const [quantity, setQuantity] = useState(1)
+	const selectedCartIdentity = purchasableProduct ? getProductSelectionCartIdentity(purchasableProduct, quantity) : null
 	const [imageViewerOpen, setImageViewerOpen] = useState(false)
 	const [selectedImageIndex, setSelectedImageIndex] = useState(0)
 	const commentsSectionRef = useRef<HTMLDivElement>(null)
@@ -478,11 +514,11 @@ function RouteComponent() {
 	const [testLabelDialogMode, setTestLabelDialogMode] = useState<'mark' | 'unmark' | null>(null)
 
 	// Derived data from tags
-	const price = priceTag ? parseFloat(priceTag[1]) : 0
-	const stock = stockTag ? parseInt(stockTag[1]) : undefined
-	const visibility = visibilityTag?.[1] || 'on-sale'
-	// Out of stock if stock is explicitly 0 or undefined (no stock tag), but not for pre-order items
-	const isOutOfStock = visibility !== 'pre-order' && (stock === undefined || stock === 0)
+	const price = priceTag ? parseFloat(priceTag[1]) : undefined
+	const stock = stockTag && /^\d+$/.test(stockTag[1]) ? Number(stockTag[1]) : undefined
+	const visibility = parentVisibilityTag?.[1] === 'hidden' ? 'hidden' : visibilityTag?.[1] || 'on-sale'
+	const selectedProductAvailable = purchasableProduct ? isProductAvailable(purchasableProduct) : false
+	const isOutOfStock = !selectedProductAvailable
 	const productType = typeTag
 		? {
 				product: typeTag[1],
@@ -506,12 +542,18 @@ function RouteComponent() {
 	// NSFW product never leaks its title, description, or first image into
 	// <head> (og:*, twitter:*, document.title, hero background CSS) before the
 	// content gate renders.
-	const productIsNSFW = isNSFWProduct(product)
+	const productIsNSFW = isNSFWProduct(product) || isNSFWProduct(selectedVariation)
 	const nsfwGated = productIsNSFW && !showNSFWContent
+	// A direct variation route cannot safely render family media until its
+	// exact same-author parent has been resolved. This prevents a safe-looking
+	// child from briefly bypassing a parent-only content warning.
+	const familyModerationUnresolved =
+		routeProductIsVariation && !!routeProduct && !!getVariationParentAddress(routeProduct) && !productFamily
+	const productMediaGated = nsfwGated || familyModerationUnresolved
 
 	// Use the hook to inject dynamic CSS for the background image
 	const heroClassName = `hero-bg-${productId.replace(/[^a-zA-Z0-9]/g, '')}`
-	useHeroBackground(nsfwGated ? '' : backgroundImageUrl, heroClassName)
+	useHeroBackground(productMediaGated ? '' : backgroundImageUrl, heroClassName)
 
 	// Build product URL and meta description for social sharing
 	const productUrl = typeof window !== 'undefined' ? `${window.location.origin}/products/${productId}` : `/products/${productId}`
@@ -519,7 +561,7 @@ function RouteComponent() {
 
 	// Inject Open Graph and Twitter Card meta tags (no-op while the NSFW gate is active)
 	useDocumentMeta({
-		enabled: !nsfwGated,
+		enabled: !productMediaGated,
 		title,
 		description: metaDescription,
 		image: backgroundImageUrl || undefined,
@@ -572,6 +614,29 @@ function RouteComponent() {
 		)
 	}
 
+	if (familyModerationUnresolved) {
+		return (
+			<div className="flex flex-col justify-center items-center gap-3 px-4 h-[50vh] text-center">
+				{sellerProductsQuery.isLoading || sellerProductsQuery.isFetching ? (
+					<>
+						<div className="border-4 border-primary border-t-transparent rounded-full w-8 h-8 animate-spin" />
+						<p className="text-muted-foreground">Loading product options…</p>
+					</>
+				) : (
+					<>
+						<h1 className="font-bold text-2xl">Product options unavailable</h1>
+						<p className="max-w-md text-muted-foreground">
+							The parent listing needed to verify this option was not returned by the current relay read.
+						</p>
+						<Link to="/products" className="inline-flex">
+							<Button variant="outline">Back to products</Button>
+						</Link>
+					</>
+				)}
+			</div>
+		)
+	}
+
 	// Adult content gate: product is NSFW and the user hasn't enabled viewing.
 	// (productIsNSFW/nsfwGated are computed before the head-injecting hooks above)
 	if (nsfwGated) {
@@ -596,19 +661,16 @@ function RouteComponent() {
 
 	// Handle adding product to cart
 	const handleAddToCartClick = async () => {
-		// Check if we have a valid product and it's not hidden
-		if (!product || visibility === 'hidden') return
+		if (!selectedCartIdentity || visibility === 'hidden' || !purchasableProduct || !isProductAvailable(purchasableProduct)) return
 
-		// Just add the product ID to the cart with the specified quantity
-		await cartActions.addProduct({
-			id: productId,
-			amount: quantity,
+		const added = await cartActions.addProduct({
+			...selectedCartIdentity,
 			shippingMethodId: null,
 			shippingMethodName: null,
 			shippingCost: 0,
 			shippingCostCurrency: priceTag?.[2] || '',
-			sellerPubkey: pubkey,
 		})
+		if (!added) return
 
 		// Open the cart drawer
 		uiActions.openDrawer('cart')
@@ -616,7 +678,7 @@ function RouteComponent() {
 
 	// Handle edit product
 	const handleEdit = () => {
-		navigate({ to: '/dashboard/products/products/$productId', params: { productId } })
+		navigate({ to: '/dashboard/products/products/$productId', params: { productId: product?.id ?? productId } })
 	}
 
 	// Handle blacklist toggle
@@ -727,7 +789,7 @@ function RouteComponent() {
 									<EntityActionsMenu
 										permissions={permissions}
 										entityType="product"
-										entityId={productId}
+										entityId={product.id}
 										entityCoords={productCoords}
 										isBlacklisted={isBlacklisted}
 										isFeatured={isFeatured}
@@ -765,16 +827,65 @@ function RouteComponent() {
 								</div>
 							</div>
 
-							<PriceDisplay
-								priceValue={price}
-								originalCurrency={priceTag?.[2] || 'SATS'}
-								className="space-y-1"
-								showSatsPrice={true}
-								showOriginalPrice={true}
-								showRootCurrency={true}
-							/>
+							{price !== undefined && (
+								<PriceDisplay
+									priceValue={price}
+									originalCurrency={priceTag?.[2] || 'SATS'}
+									className="space-y-1"
+									showSatsPrice={true}
+									showOriginalPrice={true}
+									showRootCurrency={true}
+								/>
+							)}
 
-							{visibility === 'pre-order' ? (
+							{isVariableProduct && (
+								<div className="flex flex-col gap-2" data-testid="product-variation-selector">
+									<span className="font-medium text-sm">Options</span>
+									{sellerProductsQuery.isLoading && !productFamily ? (
+										<span className="text-sm text-white/80">Loading options…</span>
+									) : productFamily && productFamily.variations.length > 0 ? (
+										<div className="flex flex-wrap gap-2">
+											{productFamily.variations.map((variation) => {
+												const available = isProductAvailable(variation)
+												const variationDTag = getProductDTag(variation)
+												const selected = !!variationDTag && !!selectedVariation && getProductDTag(selectedVariation) === variationDTag
+												return (
+													<Button
+														key={variation.id}
+														type="button"
+														variant={selected ? 'secondary' : 'outline'}
+														disabled={!available}
+														aria-pressed={selected}
+														onClick={() => {
+															if (!variationDTag) return
+															setVariationSelection({ productId, dTag: variationDTag })
+															setQuantity(1)
+															setSelectedImageIndex(0)
+														}}
+													>
+														{getVariationLabel(variation)}
+													</Button>
+												)
+											})}
+										</div>
+									) : (
+										<span className="text-sm text-white/80">Options unavailable from the current relay read.</span>
+									)}
+									{productFamily && productFamily.availableVariations.length === 0 && (
+										<span className="text-sm text-white/80">All available options are sold out.</span>
+									)}
+									{selectedVariationMissing && (
+										<span className="text-sm text-amber-200">
+											The selected option is no longer available. Please choose another option.
+										</span>
+									)}
+									{sellerProductCatalog?.possiblyIncomplete && (
+										<span className="text-sm text-white/80">Some older options may not have been returned by the relay.</span>
+									)}
+								</div>
+							)}
+
+							{visibility === 'pre-order' && selectedProductAvailable ? (
 								<Badge className="bg-blue-500">Pre-order</Badge>
 							) : (
 								<Badge>{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
@@ -805,7 +916,7 @@ function RouteComponent() {
 								}
 							})()}
 
-							{stock !== undefined && (
+							{purchasableProduct && (
 								<div className="flex items-center gap-4">
 									{/* Show cart controls for non-owners */}
 									{permissions.canAddToCart && (
@@ -825,7 +936,7 @@ function RouteComponent() {
 													value={quantity}
 													onChange={(e) => {
 														const value = parseInt(e.target.value)
-														if (!isNaN(value) && value > 0 && value <= (stock || Infinity)) {
+														if (!isNaN(value) && value > 0 && (stock === undefined || value <= stock)) {
 															setQuantity(value)
 														}
 													}}
@@ -837,13 +948,17 @@ function RouteComponent() {
 													variant="outline"
 													className="text-foreground"
 													size="icon"
-													onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
-													disabled={quantity >= (stock || quantity)}
+													onClick={() => setQuantity(stock === undefined ? quantity + 1 : Math.min(stock, quantity + 1))}
+													disabled={stock !== undefined && quantity >= stock}
 												>
 													<Plus className="w-6 h-6" />
 												</Button>
 											</div>
-											<Button variant="secondary" onClick={handleAddToCartClick} disabled={isOutOfStock || visibility === 'hidden'}>
+											<Button
+												variant="secondary"
+												onClick={handleAddToCartClick}
+												disabled={!selectedCartIdentity || isOutOfStock || visibility === 'hidden'}
+											>
 												{visibility === 'hidden'
 													? 'Not Available'
 													: isOutOfStock
@@ -879,7 +994,7 @@ function RouteComponent() {
 									!getIsTabDisabled(tab) && (
 										<div>
 											<div className="bg-secondary px-4 py-2 rounded-t-md font-medium text-white text-sm">{tab}</div>
-											{getTabContent(tab, product, true, productShippingState)}
+											{getTabContent(tab, product, true, productShippingState, purchasableProduct)}
 										</div>
 									),
 							)}
@@ -901,7 +1016,7 @@ function RouteComponent() {
 
 							{Object.values(TabProductPage).map((tab) => (
 								<TabsContent value={tab} className="bg-tertiary mt-4 border-secondary border-t-3">
-									{getTabContent(tab, product, false, productShippingState)}
+									{getTabContent(tab, product, false, productShippingState, purchasableProduct)}
 								</TabsContent>
 							))}
 						</Tabs>
@@ -910,14 +1025,14 @@ function RouteComponent() {
 			</div>
 
 			{/* More from this seller */}
-			{sellerProducts.filter((p) => p.id !== productId).length > 0 && (
+			{sellerProducts.filter((item) => item.product.id !== product.id).length > 0 && (
 				<div className="flex flex-col gap-4 p-4">
 					<h2 className="font-heading text-2xl lg:text-left text-center">More from this seller</h2>
 					<ItemGrid className="gap-4 sm:gap-8">
 						{sellerProducts
-							.filter((p) => p.id !== productId)
-							.map((p) => (
-								<ProductCard key={p.id} product={p} />
+							.filter((item) => item.product.id !== product.id)
+							.map((item) => (
+								<ProductCard key={item.product.id} product={item.product} family={item.kind === 'family' ? item.family : undefined} />
 							))}
 					</ItemGrid>
 				</div>

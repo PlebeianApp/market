@@ -1,5 +1,5 @@
 /**
- * Guards per-PR gate membership for the `OG Meta Tags` e2e family
+ * Guards per-PR gate membership for the `OG Meta Tags` and `Product Variations` e2e families
  * (`.github/workflows/e2e.yml`).
  *
  * The `e2e-grep` job runs one single-quoted `--grep` alternation of
@@ -22,6 +22,7 @@ import { describe, expect, test } from 'bun:test'
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..')
 const WORKFLOW_PATH = join(REPO_ROOT, '.github', 'workflows', 'e2e.yml')
 const OG_SPEC_PATH = join(REPO_ROOT, 'e2e', 'tests', 'og-meta-tags.spec.ts')
+const PRODUCT_VARIATIONS_SPEC_PATH = join(REPO_ROOT, 'e2e', 'tests', 'product-variations.spec.ts')
 
 /**
  * The single-quoted `--grep '<pattern>'` used by the per-PR `e2e-grep` gate.
@@ -43,7 +44,13 @@ async function ogDescribeTitles(): Promise<string[]> {
 	return [...spec.matchAll(/test\.describe\(\s*'([^']+)'/g)].map((match) => match[1])
 }
 
-describe('e2e-grep gate membership (OG Meta Tags family)', () => {
+/** Every top-level `test('<title>'` title in the product-variations spec. */
+async function productVariationTestTitles(): Promise<string[]> {
+	const spec = await readFile(PRODUCT_VARIATIONS_SPEC_PATH, 'utf8')
+	return [...spec.matchAll(/^test\(\s*'([^']+)'/gm)].map((match) => match[1])
+}
+
+describe('e2e-grep gate membership (guarded feature families)', () => {
 	test('the per-PR gate has a bounded alternation, not a run-everything wildcard', async () => {
 		const pattern = (await gatePattern()).trim()
 		expect(pattern.length).toBeGreaterThan(0)
@@ -54,6 +61,14 @@ describe('e2e-grep gate membership (OG Meta Tags family)', () => {
 
 	test('every OG Meta Tags describe title is matched by the per-PR gate pattern', async () => {
 		const [pattern, titles] = await Promise.all([gatePattern(), ogDescribeTitles()])
+		expect(titles.length).toBeGreaterThan(0)
+		const gate = new RegExp(pattern)
+		const ungated = titles.filter((title) => !gate.test(title))
+		expect(ungated).toEqual([])
+	})
+
+	test('every Product Variations test title is matched by the per-PR gate pattern', async () => {
+		const [pattern, titles] = await Promise.all([gatePattern(), productVariationTestTitles()])
 		expect(titles.length).toBeGreaterThan(0)
 		const gate = new RegExp(pattern)
 		const ungated = titles.filter((title) => !gate.test(title))

@@ -278,6 +278,11 @@ export function isNsfwProductEvent(event: OgTagSourceEvent): boolean {
  */
 export function buildOgProductMeta(event: OgTagSourceEvent): OgProductMeta | null {
 	if (isNsfwProductEvent(event)) return null
+	// A standalone variation event cannot prove that its exact parent is safe.
+	// The browser resolves the same-author family before rendering it; the
+	// server-side single-event preview therefore fails closed for variations so
+	// a parent-only content warning cannot leak through social metadata.
+	if (findTag(event, 'type')?.[1] === 'variation') return null
 
 	const title = findTag(event, 'title')?.[1] || 'Untitled Product'
 	const description = event.content || ''

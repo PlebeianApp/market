@@ -18,12 +18,11 @@ import { addToFeaturedUsers, removeFromFeaturedUsers } from '@/publish/featured'
 import { useBlacklistSettings } from '@/queries/blacklist'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedUsers } from '@/queries/featured'
-import { productsByPubkeyQueryOptions } from '@/queries/products'
+import { productCatalogByPubkeyQueryOptions } from '@/queries/products'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useShippingOptionsByPubkey, getShippingService, getShippingPickupAddress, getShippingTitle } from '@/queries/shipping'
 import { getProfileIdentifierValidationError } from '@/lib/utils/profileValidation'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Edit, MapPin, MessageCircle, Minus, Plus, RotateCcw, Share2, Timer } from 'lucide-react'
@@ -76,11 +75,12 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		}
 	}, [user])
 
-	const sellerProductOptions = productsByPubkeyQueryOptions(profilePubkey ?? '')
-	const { data: sellerProducts = [], isLoading: sellerProductsIsLoading } = useQuery({
+	const sellerProductOptions = productCatalogByPubkeyQueryOptions(profilePubkey ?? '')
+	const { data: sellerProductCatalog, isLoading: sellerProductsIsLoading } = useQuery({
 		...sellerProductOptions,
 		enabled: sellerProductOptions.enabled,
 	})
+	const sellerProducts = sellerProductCatalog?.items ?? []
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
 	const [bannerIsLoadable, setBannerIsLoadable] = useState<boolean | null>(null)
@@ -364,6 +364,15 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 				</div>
 
 				<div className="flex flex-col flex-1 p-4">
+					{sellerProductCatalog?.possiblyIncomplete && (
+						<div
+							role="status"
+							data-testid="product-catalog-incomplete"
+							className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+						>
+							Some older products or options may not have been returned by the relay.
+						</div>
+					)}
 					{sellerProductsIsLoading ? (
 						<div className="flex flex-col flex-1 justify-center items-center gap-4">
 							<span className="font-heading text-2xl">Loading products...</span>
@@ -377,8 +386,8 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 								</div>
 							}
 						>
-							{sellerProducts.map((product: NDKEvent) => (
-								<ProductCard key={product.id} product={product} />
+							{sellerProducts.map((item) => (
+								<ProductCard key={item.product.id} product={item.product} family={item.kind === 'family' ? item.family : undefined} />
 							))}
 						</ItemGrid>
 					) : (

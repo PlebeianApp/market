@@ -16,6 +16,7 @@ import { getSignerCapability } from '@/lib/nostr/signer-registry'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { getShippingEvent, getShippingService } from '@/queries/shipping'
 import type { Event } from 'nostr-tools'
+import { assertCheckoutProductSelectionsResolved, type ProductSelectionResolver } from '@/lib/checkout/productSelectionGuard'
 // import type { CartProduct, SellerData, V4VShare } from '@/lib/stores/cart'
 
 async function resolveDeliveryRequirementsForProducts(
@@ -694,6 +695,7 @@ export interface PublishOrderDependenciesParams {
 	productsBySeller: Record<string, CartProduct[]>
 	sellerData: Record<string, SellerData>
 	v4vShares: Record<string, V4VShare[]>
+	resolveProductSelection: ProductSelectionResolver
 }
 
 type SellerOrderPreflight = {
@@ -809,7 +811,7 @@ async function publishRequiredPrivateGiftWrap(event: NDKEvent): Promise<void> {
  * @returns An array of the created spec-compliant order IDs.
  */
 export async function publishOrderWithDependencies(params: PublishOrderDependenciesParams): Promise<string[]> {
-	const { shippingData, sellers, productsBySeller, sellerData, v4vShares } = params
+	const { shippingData, sellers, productsBySeller, sellerData, v4vShares, resolveProductSelection } = params
 
 	const ndk = ndkActions.getNDK()
 	const currentUser = ndk?.activeUser
@@ -824,10 +826,25 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 		throw new Error('Enter a valid email address before creating the order')
 	}
 
+	// Re-read every exact cart coordinate at the publication boundary. Persisted
+	// shipping state cannot authorize an order while a variation parent is
+	// missing, rejected, or still unresolved in the UI.
+	const canonicalIdsBySeller = await assertCheckoutProductSelectionsResolved(productsBySeller, resolveProductSelection)
+	const verifiedProductsBySeller = Object.fromEntries(
+		Object.entries(productsBySeller).map(([sellerPubkey, products]) => [
+			sellerPubkey,
+			products.map((product) => {
+				const canonicalDTag = canonicalIdsBySeller[sellerPubkey]?.[product.id]
+				if (!canonicalDTag) throw new Error('Product selection could not be verified before order creation')
+				return { ...product, id: canonicalDTag }
+			}),
+		]),
+	)
+
 	const preflight: SellerOrderPreflight[] = []
 
 	for (const sellerPubkey of sellers) {
-		const sellerProducts = productsBySeller[sellerPubkey] || []
+		const sellerProducts = verifiedProductsBySeller[sellerPubkey] || []
 		const data = sellerData[sellerPubkey]
 
 		if (sellerProducts.length === 0 || !data) continue

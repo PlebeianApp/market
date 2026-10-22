@@ -14,6 +14,11 @@ import {
 	resolveCheckoutDeliveryRequirements,
 	type CheckoutDeliveryRequirements,
 } from '@/lib/checkout/deliveryRequirements'
+import {
+	canContinueCheckoutPayment,
+	canSubmitCheckoutShipping,
+	deriveCheckoutProductSelectionState,
+} from '@/lib/checkout/productSelectionGuard'
 import { authStore } from '@/lib/stores/auth'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { ndkStore } from '@/lib/stores/ndk'
@@ -22,11 +27,13 @@ import { persistInvoicesLocally, updatePersistedInvoiceLocally } from '@/lib/uti
 import type { OrderInvoiceSet } from '@/lib/utils/orderUtils'
 import { publishOrderWithDependencies } from '@/publish/orders'
 import { publishPaymentReceipt } from '@/publish/payment'
+import { fetchProductSelectionEvents, productSelectionQueryOptions } from '@/queries/products'
 import { getShippingEvent, getShippingService } from '@/queries/shipping'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { useGenerateInvoiceMutation, useAvailablePaymentOptions, type PaymentDetail } from '@/queries/payment'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useForm } from '@tanstack/react-form'
+import { useQueries } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, ChevronRight, Loader2, Zap } from 'lucide-react'
@@ -162,6 +169,14 @@ function RouteComponent() {
 	const { mutateAsync: generateInvoice, isPending: isGeneratingInvoices } = useGenerateInvoiceMutation()
 
 	const cartProducts = useMemo(() => Object.values(cart.products), [cart.products])
+	const productSelectionQueries = useQueries({
+		queries: cartProducts.map((product) => ({
+			...productSelectionQueryOptions(product.id, product.sellerPubkey),
+			staleTime: 0,
+			refetchOnMount: 'always' as const,
+		})),
+	})
+	const productSelectionState = deriveCheckoutProductSelectionState(cartProducts, productSelectionQueries)
 
 	const isCartEmpty = useMemo(() => {
 		return cartProducts.length === 0
@@ -510,7 +525,7 @@ function RouteComponent() {
 			additionalInformation: '',
 		} as CheckoutFormData,
 		onSubmit: async ({ value }) => {
-			if (!hasAllShippingMethods) return
+			if (!canSubmitCheckoutShipping(productSelectionState, hasAllShippingMethods)) return
 			if (isDeliveryRequirementsLoading || deliveryRequirementsError || !deliveryRequirements.isResolved) {
 				toast.error('Delivery requirements must be verified before checkout can continue.')
 				return
@@ -793,14 +808,20 @@ function RouteComponent() {
 		}
 	}
 
-	const canContinueToPayment =
+	const canContinueToPayment = canContinueCheckoutPayment(
+		productSelectionState,
 		!!shippingData &&
-		deliveryRequirements.isResolved &&
-		!isDeliveryRequirementsLoading &&
-		!deliveryRequirementsError &&
-		(!deliveryRequirements.needsDigitalDeliveryContact || isValidDigitalDeliveryContact(shippingData.email))
+			deliveryRequirements.isResolved &&
+			!isDeliveryRequirementsLoading &&
+			!deliveryRequirementsError &&
+			(!deliveryRequirements.needsDigitalDeliveryContact || isValidDigitalDeliveryContact(shippingData.email)),
+	)
 
 	const proceedWithPayment = async () => {
+		if (productSelectionState !== 'resolved') {
+			toast.error('Product options must be verified before an order can be created.')
+			return
+		}
 		if (shippingData && sellers.length > 0 && specOrderIds.length === 0) {
 			setIsCreatingOrder(true)
 			try {
@@ -810,6 +831,7 @@ function RouteComponent() {
 					productsBySeller,
 					sellerData,
 					v4vShares,
+					resolveProductSelection: fetchProductSelectionEvents,
 				})
 				setSpecOrderIds(createdOrderIds)
 				console.log('\n🎉 Order creation process complete. Generated Order IDs:', createdOrderIds)
@@ -993,6 +1015,7 @@ function RouteComponent() {
 										<ShippingAddressForm
 											form={form}
 											hasAllShippingMethods={hasAllShippingMethods}
+											productSelectionState={productSelectionState}
 											deliveryRequirements={deliveryRequirements}
 											isDeliveryRequirementsLoading={isDeliveryRequirementsLoading}
 											deliveryRequirementsError={deliveryRequirementsError}
