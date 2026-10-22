@@ -23,7 +23,13 @@ import { ZapButton } from './social/ZapButton'
 import { cn } from '@/lib/utils'
 import { getItemTestLabelCoordinate } from '@/lib/utils/testLabelFilters'
 import { TestListingNotice } from './TestListingNotice'
-import { getProductDTag, getProductSelectionImages, isProductAvailable, type ProductFamily } from '@/queries/productFamilies'
+import {
+	getProductDTag,
+	getProductEventType,
+	getProductSelectionImages,
+	isProductAvailable,
+	type ProductFamily,
+} from '@/queries/productFamilies'
 
 export interface ProductCardProps extends React.HTMLAttributes<HTMLDivElement> {
 	product: NDKEvent
@@ -41,7 +47,7 @@ export function ProductCard({ product, family, className }: ProductCardProps) {
 	const isNSFW = isNSFWProduct(product) || isNSFWProduct(selectedProduct)
 	const { showNSFWContent } = useStore(uiStore)
 	const images = isNSFW && !showNSFWContent ? [] : getProductSelectionImages(product, selectedProduct)
-	const hasVariationOptions = !!family
+	const hasVariationOptions = !!family || getProductEventType(product) === 'variable'
 	const isOutOfStock = !isProductAvailable(selectedProduct)
 	const [isAddingToCart, setIsAddingToCart] = useState(false)
 	const [showConfirmation, setShowConfirmation] = useState(false)
@@ -70,7 +76,8 @@ export function ProductCard({ product, family, className }: ProductCardProps) {
 
 		setIsAddingToCart(true)
 		try {
-			await cartActions.addProduct(selectedProduct)
+			const added = await cartActions.addProduct(selectedProduct)
+			if (!added) return
 			setShowConfirmation(true)
 			setTimeout(() => setShowConfirmation(false), 1200)
 		} finally {

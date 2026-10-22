@@ -23,7 +23,7 @@ import {
 	getProductSelectionContext,
 	getProductSelectionImages,
 	getProductSelectionTags,
-	isProductSelectionResolved,
+	isProductSelectionValidForCartItem,
 } from '@/queries/productFamilies'
 import { uiStore } from '@/lib/stores/ui'
 import { useStore } from '@tanstack/react-store'
@@ -55,7 +55,8 @@ export default function CartItem({
 	const selectedProduct = productSelectionQuery.data?.selected ?? null
 	const productSelectionUnavailable =
 		productSelectionQuery.isError ||
-		(productSelectionQuery.isSuccess && (!productSelectionQuery.data || !isProductSelectionResolved(productSelectionQuery.data)))
+		(productSelectionQuery.isSuccess &&
+			(!productSelectionQuery.data || !isProductSelectionValidForCartItem(productSelectionQuery.data, productId, sellerPubkey)))
 	const parentProduct =
 		productSelectionUnavailable || !productSelectionQuery.data ? null : getProductSelectionContext(productSelectionQuery.data)
 	const title = getProductTitle(selectedProduct)

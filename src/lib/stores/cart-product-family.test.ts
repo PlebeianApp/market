@@ -176,8 +176,9 @@ describe('cart product-family fallback', () => {
 			getProductEvent: async (id, sellerPubkey) => (id === CHILD_D_TAG && sellerPubkey === SELLER ? child : null),
 		})
 
-		await cartActions.addProduct({ ...cartProduct })
+		const added = await cartActions.addProduct({ ...cartProduct })
 
+		expect(added).toBe(false)
 		expect(cartStore.state.cart.products).toEqual({})
 		expect(cartStore.state.cart.sellers).toEqual({})
 	})
@@ -196,9 +197,27 @@ describe('cart product-family fallback', () => {
 			},
 		})
 
-		await cartActions.addProduct({ ...cartProduct })
+		const added = await cartActions.addProduct({ ...cartProduct })
 
+		expect(added).toBe(false)
 		expect(cartStore.state.cart.products).toEqual({})
 		expect(await cartActions.fetchAvailableShippingOptions(CHILD_D_TAG)).toEqual([])
+	})
+
+	test('does not add a variable container as a purchasable cart item', async () => {
+		cartStore.setState((state) => ({
+			...state,
+			cart: { sellers: {}, products: {}, orders: {}, invoices: {} },
+			productsBySeller: {},
+		}))
+
+		const added = await cartActions.addProduct({
+			...cartProduct,
+			id: PARENT_D_TAG,
+		})
+
+		expect(added).toBe(false)
+		expect(cartStore.state.cart.products).toEqual({})
+		expect(cartStore.state.cart.sellers).toEqual({})
 	})
 })

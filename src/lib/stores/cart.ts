@@ -31,7 +31,7 @@ import {
 	getProductEventType,
 	getProductSelectionContext,
 	getProductSelectionTags,
-	isProductSelectionResolved,
+	isProductSelectionValidForCartItem,
 	resolveProductSelectionParent,
 	type ProductSelectionEvents,
 } from '@/queries/productFamilies'
@@ -605,7 +605,8 @@ export const cartActions = {
 					if (!productCoords) continue
 
 					const productSelection = await getCartProductSelection(productCoords.identifier, productCoords.pubkey)
-					if (!productSelection || !isProductSelectionResolved(productSelection)) continue
+					if (!productSelection || !isProductSelectionValidForCartItem(productSelection, productCoords.identifier, productCoords.pubkey))
+						continue
 					const productEvent = productSelection.selected
 					const productContext = getProductSelectionContext(productSelection)
 					if (!productContext) continue
@@ -707,7 +708,7 @@ export const cartActions = {
 				sellerPubkey = pubkey || ''
 			} catch (error) {
 				console.error('Failed to fetch seller pubkey:', error)
-				return
+				return false
 			}
 		} else if (productData instanceof NDKEvent) {
 			productEventForShippingRefs = productData
@@ -727,7 +728,7 @@ export const cartActions = {
 
 		if (!sellerPubkey || !HEX_KEYS_REGEX.test(sellerPubkey)) {
 			console.error('Cannot add product without valid seller pubkey:', sellerPubkey)
-			return
+			return false
 		}
 
 		const existingProducts = Object.values(cartStore.state.cart.products)
@@ -735,9 +736,9 @@ export const cartActions = {
 		const productSelection = productEventForShippingRefs
 			? await resolveCartProductSelection(productEventForShippingRefs)
 			: await getCartProductSelection(productId, sellerPubkey)
-		if (!productSelection || !isProductSelectionResolved(productSelection)) {
-			console.warn('Cannot add product option without its verified parent listing')
-			return
+		if (!productSelection || !isProductSelectionValidForCartItem(productSelection, productId, sellerPubkey)) {
+			console.warn('Cannot add a product without a verified purchasable listing')
+			return false
 		}
 		productEventForShippingRefs = productSelection.selected
 		let reusableShippingSelection: ReturnType<typeof findReusablePublishedShippingSelection> = null
@@ -781,6 +782,7 @@ export const cartActions = {
 		await cartActions.groupProductsBySeller()
 		await cartActions.updateSellerData()
 		cartActions.scheduleRemotePublish()
+		return true
 	},
 
 	updateProductAmount: async (buyerPubkey: string, productId: string, amount: number) => {
@@ -1671,8 +1673,9 @@ export const cartActions = {
 			// Get seller pubkey from cart product if available
 			const state = cartStore.state
 			const cartProduct = state.cart.products[productId]
-			const productSelection = await getCartProductSelection(productId, cartProduct?.sellerPubkey)
-			if (!productSelection || !isProductSelectionResolved(productSelection)) return []
+			if (!cartProduct?.sellerPubkey) return []
+			const productSelection = await getCartProductSelection(productId, cartProduct.sellerPubkey)
+			if (!productSelection || !isProductSelectionValidForCartItem(productSelection, productId, cartProduct.sellerPubkey)) return []
 			const productContext = getProductSelectionContext(productSelection)
 			if (!productContext) return []
 
@@ -1745,7 +1748,7 @@ export const cartActions = {
 
 					for (const product of products) {
 						const productSelection = await getCartProductSelection(product.id, product.sellerPubkey)
-						if (!productSelection || !isProductSelectionResolved(productSelection)) continue
+						if (!productSelection || !isProductSelectionValidForCartItem(productSelection, product.id, product.sellerPubkey)) continue
 						const productContext = getProductSelectionContext(productSelection)
 						if (!productContext) continue
 
@@ -1935,13 +1938,11 @@ export async function handleAddToCart(userId: string, product: Partial<CartProdu
 	if (!product) return false
 
 	if (typeof product === 'string') {
-		await cartActions.addProduct(product)
-		return true
+		return await cartActions.addProduct(product)
 	}
 
 	if (product instanceof NDKEvent) {
-		await cartActions.addProduct(product)
-		return true
+		return await cartActions.addProduct(product)
 	}
 
 	if ('id' in product && product.id) {
@@ -1955,8 +1956,7 @@ export async function handleAddToCart(userId: string, product: Partial<CartProdu
 			sellerPubkey: product.sellerPubkey || '',
 		}
 
-		await cartActions.addProduct(cartProduct)
-		return true
+		return await cartActions.addProduct(cartProduct)
 	}
 
 	return false

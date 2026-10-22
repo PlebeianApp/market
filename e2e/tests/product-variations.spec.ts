@@ -107,7 +107,9 @@ async function installLocalOnlyRoutes(page: Page) {
 
 test.use({ scenario: 'none', video: 'on' })
 
-test('variable family selection preserves images, availability, price, stock, and cart identity', async ({ page }, testInfo) => {
+test('Product Variations - variable family selection preserves images, availability, price, stock, and cart identity', async ({
+	page,
+}, testInfo) => {
 	const network = await installLocalOnlyRoutes(page)
 	const relay = await Relay.connect(RELAY_URL)
 	const suffix = `${Date.now()}-${testInfo.workerIndex}`
@@ -277,6 +279,10 @@ test('variable family selection preserves images, availability, price, stock, an
 		relay.close()
 	}
 
+	// Compile the SPA shell before the first dynamic product request. On a cold
+	// Bun dev server the product OG handler can otherwise time out while its
+	// loopback shell request is still triggering the initial bundle.
+	await page.goto('/')
 	await page.goto(`/products/${parent.id}`)
 	const productHero = page.locator('.hero-content-product')
 	await expect(productHero.getByRole('heading', { name: 'Variation Fixture Jacket' })).toBeVisible({ timeout: 30_000 })

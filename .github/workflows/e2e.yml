@@ -142,9 +142,12 @@ jobs:
         # here so server-rendered product previews are exercised on every PR.
         # It runs on the local relay/dev server like every other family in this
         # job: no new triggers, permissions, secrets, or env are introduced.
+        # `Product Variations` adds one local-relay test (run twice) so the family
+        # selection and checkout fail-closed path added by PR #1424 cannot silently
+        # drop out of the per-PR gate.
         # `src/lib/__tests__/e2e-workflow-gate-membership.test.ts` fails if a
-        # describe in that spec stops matching this pattern.
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock|OG Meta Tags|Authentication' --repeat-each=2
+        # title in either guarded spec stops matching this pattern.
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock|OG Meta Tags|Product Variations|Authentication' --repeat-each=2
 
       - name: Show server logs on failure
         if: failure()

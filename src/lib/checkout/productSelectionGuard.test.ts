@@ -39,6 +39,12 @@ const resolvedSelection: ProductSelectionEvents = {
 	parentRequired: true,
 }
 
+const variableContainerSelection: ProductSelectionEvents = {
+	selected: resolvedSelection.parent!,
+	parent: null,
+	parentRequired: false,
+}
+
 const snapshot = (overrides: Partial<ProductSelectionQuerySnapshot>): ProductSelectionQuerySnapshot => ({
 	isPending: false,
 	isFetching: false,
@@ -59,6 +65,15 @@ describe('checkout product-selection transition guards', () => {
 
 	test('blocks both checkout transitions after parent resolution rejects', () => {
 		const state = deriveCheckoutProductSelectionState([product], [snapshot({ isError: true, isSuccess: false, data: undefined })])
+
+		expect(state).toBe('invalid')
+		expect(canSubmitCheckoutShipping(state, true)).toBe(false)
+		expect(canContinueCheckoutPayment(state, true)).toBe(false)
+	})
+
+	test('blocks a variable container even when its exact coordinate resolves', () => {
+		const variableProduct = { id: PARENT_D_TAG, sellerPubkey: SELLER }
+		const state = deriveCheckoutProductSelectionState([variableProduct], [snapshot({ data: variableContainerSelection })])
 
 		expect(state).toBe('invalid')
 		expect(canSubmitCheckoutShipping(state, true)).toBe(false)

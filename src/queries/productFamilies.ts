@@ -54,7 +54,9 @@ export const isProductSelectionResolved = (selection: ProductSelectionEvents): b
 export const isProductSelectionValidForCartItem = (selection: ProductSelectionEvents, productId: string, sellerPubkey: string): boolean => {
 	const normalizedSeller = sellerPubkey.trim().toLowerCase()
 	return (
-		isProductSelectionResolved(selection) && getProductAddress(selection.selected) === `${PRODUCT_KIND}:${normalizedSeller}:${productId}`
+		isProductSelectionResolved(selection) &&
+		getProductEventType(selection.selected) !== 'variable' &&
+		getProductAddress(selection.selected) === `${PRODUCT_KIND}:${normalizedSeller}:${productId}`
 	)
 }
 

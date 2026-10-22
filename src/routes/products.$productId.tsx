@@ -663,13 +663,14 @@ function RouteComponent() {
 	const handleAddToCartClick = async () => {
 		if (!selectedCartIdentity || visibility === 'hidden' || !purchasableProduct || !isProductAvailable(purchasableProduct)) return
 
-		await cartActions.addProduct({
+		const added = await cartActions.addProduct({
 			...selectedCartIdentity,
 			shippingMethodId: null,
 			shippingMethodName: null,
 			shippingCost: 0,
 			shippingCostCurrency: priceTag?.[2] || '',
 		})
+		if (!added) return
 
 		// Open the cart drawer
 		uiActions.openDrawer('cart')
