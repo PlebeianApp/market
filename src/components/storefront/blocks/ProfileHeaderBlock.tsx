@@ -1,11 +1,16 @@
 import { AvatarUser } from '@/components/AvatarUser'
 import { Media } from '@/components/Media'
 import { Nip05Badge } from '@/components/Nip05Badge'
-import { isSafeMediaSrc } from '@/lib/schemas/storefront'
+import { isSafeHref, isSafeMediaSrc } from '@/lib/schemas/storefront'
 import { cn } from '@/lib/utils'
 import { getNormalizedProfileDisplayName, useProfile } from '@/queries/profiles'
 import { useStorefrontContext } from '../StorefrontContext'
 import { StorefrontEditorHint, StorefrontSection, alignClass, type StorefrontAlign } from './shared'
+import { StorefrontLink } from '../StorefrontLink'
+import { cartStore } from '@/lib/stores/cart'
+import { uiActions } from '@/lib/stores/ui'
+import { useStore } from '@tanstack/react-store'
+import { ShoppingBag } from 'lucide-react'
 
 export interface ProfileHeaderBlockProps {
 	showBanner: boolean
@@ -13,6 +18,8 @@ export interface ProfileHeaderBlockProps {
 	showAbout: boolean
 	showNip05: boolean
 	align: StorefrontAlign
+	layout?: 'banner' | 'compact'
+	navigation?: { label: string; href: string }[]
 }
 
 /**
@@ -24,9 +31,19 @@ export interface ProfileHeaderBlockProps {
  * updates their profile once and every page they have published follows, and a
  * stale page can never misrepresent who they are now.
  */
-export function ProfileHeaderBlock({ showBanner, fullScreen, showAbout, showNip05, align }: ProfileHeaderBlockProps) {
+export function ProfileHeaderBlock({
+	showBanner,
+	fullScreen,
+	showAbout,
+	showNip05,
+	align,
+	layout,
+	navigation = [],
+}: ProfileHeaderBlockProps) {
 	const { pubkey, isEditing } = useStorefrontContext()
 	const { data: profileData, isLoading } = useProfile(pubkey)
+	const { cart } = useStore(cartStore)
+	const totalItems = Object.values(cart.products).reduce((total, product) => total + product.amount, 0)
 	const profile = profileData?.profile
 
 	if (!pubkey) {
@@ -41,6 +58,48 @@ export function ProfileHeaderBlock({ showBanner, fullScreen, showAbout, showNip0
 	const about = typeof profile?.about === 'string' ? profile.about.trim() : ''
 	const banner = typeof profile?.banner === 'string' && isSafeMediaSrc(profile.banner) ? profile.banner : null
 	const hasBanner = showBanner && !!banner
+	const safeNavigation = navigation.filter((link) => isSafeHref(link.href) && link.label.trim().length > 0)
+
+	if (layout === 'compact') {
+		return (
+			<div data-testid="storefront-profile-header" data-layout="compact" className="border-b border-border bg-background">
+				<StorefrontSection width="wide" className="flex flex-wrap items-center justify-between gap-5 py-5 sm:py-6">
+					<div className="flex min-w-0 items-center gap-3">
+						<AvatarUser pubkey={pubkey} className="size-10 shrink-0" />
+						<div className="min-w-0">
+							<p className="break-words font-heading text-xl font-semibold">{isLoading && !displayName ? 'Loading…' : displayName}</p>
+							{showNip05 && <Nip05Badge pubkey={pubkey} className="text-xs text-muted-foreground" />}
+						</div>
+					</div>
+					<div className="flex flex-wrap items-center gap-6">
+						{safeNavigation.length > 0 && (
+							<nav aria-label="Store navigation" className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm font-medium">
+								{safeNavigation.map((link, index) => (
+									<StorefrontLink
+										key={`${link.href}-${index}`}
+										href={link.href}
+										className="transition-colors hover:text-primary hover:underline"
+									>
+										{link.label}
+									</StorefrontLink>
+								))}
+							</nav>
+						)}
+						<button
+							type="button"
+							aria-label={`View cart (${totalItems} items)`}
+							disabled={isEditing}
+							onClick={() => uiActions.openDrawer('cart')}
+							className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-4 text-sm transition-colors hover:bg-muted disabled:opacity-50"
+						>
+							<ShoppingBag className="size-4" aria-hidden />
+							<span>{totalItems}</span>
+						</button>
+					</div>
+				</StorefrontSection>
+			</div>
+		)
+	}
 
 	return (
 		<div

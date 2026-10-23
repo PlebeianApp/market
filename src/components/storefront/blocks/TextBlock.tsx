@@ -7,10 +7,11 @@ export interface TextBlockProps {
 	markdown: string
 	align: StorefrontAlign
 	width: 'narrow' | 'normal' | 'wide'
+	anchor?: string
 }
 
 /** Prose, rendered through the restricted markdown token tree — never as HTML. */
-export function TextBlock({ markdown, align, width }: TextBlockProps) {
+export function TextBlock({ markdown, align, width, anchor }: TextBlockProps) {
 	const { isEditing } = useStorefrontContext()
 
 	if (markdown.trim().length === 0) {
@@ -22,7 +23,7 @@ export function TextBlock({ markdown, align, width }: TextBlockProps) {
 	}
 
 	return (
-		<StorefrontSection width={width} className="py-8">
+		<StorefrontSection id={anchor || undefined} width={width} className="scroll-mt-6 py-8">
 			<MiniMarkdown source={markdown} className={cn(align === 'center' && 'text-center', align === 'right' && 'text-right')} />
 		</StorefrontSection>
 	)

@@ -47,6 +47,19 @@ const widthOptions = [
 	{ label: 'Wide', value: 'wide' },
 ]
 
+const anchorField = { type: 'text', label: 'Section anchor (optional)', placeholder: 'harvest' } as const
+const navigationFields = {
+	type: 'array',
+	label: 'Navigation links (compact header)',
+	max: 8,
+	getItemSummary: (item: { label?: string }) => item?.label || 'Link',
+	arrayFields: {
+		label: { type: 'text', label: 'Label' },
+		href: { type: 'text', label: 'Address', placeholder: '#harvest or https://…' },
+	},
+	defaultItemProps: { label: 'New link', href: 'https://' },
+} as const
+
 export const storefrontCmsConfig: Config = {
 	categories: {
 		identity: { title: 'Identity', components: ['ProfileHeader', 'Hero'] },
@@ -58,6 +71,14 @@ export const storefrontCmsConfig: Config = {
 	root: {
 		fields: {
 			title: { type: 'text', label: 'Page title' },
+			typography: {
+				type: 'select',
+				label: 'Typography',
+				options: [
+					{ label: 'Default', value: 'default' },
+					{ label: 'Editorial serif', value: 'editorial' },
+				],
+			},
 			theme: {
 				type: 'custom',
 				label: 'Theme',
@@ -81,6 +102,15 @@ export const storefrontCmsConfig: Config = {
 		ProfileHeader: {
 			label: 'Profile header',
 			fields: {
+				layout: {
+					type: 'select',
+					label: 'Header layout',
+					options: [
+						{ label: 'Profile banner', value: 'banner' },
+						{ label: 'Compact store header', value: 'compact' },
+					],
+				},
+				navigation: navigationFields,
 				showBanner: {
 					type: 'radio',
 					label: 'Banner',
@@ -122,11 +152,20 @@ export const storefrontCmsConfig: Config = {
 		Hero: {
 			label: 'Hero banner',
 			fields: {
+				layout: {
+					type: 'select',
+					label: 'Hero layout',
+					options: [
+						{ label: 'Background banner', value: 'banner' },
+						{ label: 'Split image and text', value: 'split' },
+					],
+				},
+				eyebrow: { type: 'text', label: 'Eyebrow (split layout)' },
 				title: { type: 'text', label: 'Title' },
 				subtitle: { type: 'textarea', label: 'Subtitle' },
-				imageUrl: { type: 'text', label: 'Background image URL', placeholder: 'https://…' },
+				imageUrl: { type: 'text', label: 'Hero image URL', placeholder: 'https://… or /images/…' },
 				ctaLabel: { type: 'text', label: 'Button label' },
-				ctaHref: { type: 'text', label: 'Button link', placeholder: 'https://… or /products' },
+				ctaHref: { type: 'text', label: 'Button link', placeholder: '#harvest, https://… or /products' },
 				align: { type: 'select', label: 'Alignment', options: alignOptions },
 				minHeight: { type: 'number', label: 'Height (px)', min: 120, max: 1200, step: 20 },
 			},
@@ -145,6 +184,7 @@ export const storefrontCmsConfig: Config = {
 		Text: {
 			label: 'Text',
 			fields: {
+				anchor: anchorField,
 				markdown: {
 					type: 'textarea',
 					label: 'Text (markdown)',
@@ -160,6 +200,15 @@ export const storefrontCmsConfig: Config = {
 		ProductGrid: {
 			label: 'Product grid',
 			fields: {
+				anchor: anchorField,
+				cardStyle: {
+					type: 'select',
+					label: 'Product card style',
+					options: [
+						{ label: 'Marketplace', value: 'marketplace' },
+						{ label: 'Clean storefront', value: 'storefront' },
+					],
+				},
 				title: { type: 'text', label: 'Section title' },
 				source: {
 					type: 'radio',

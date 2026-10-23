@@ -21,6 +21,49 @@ describe('STOREFRONT_TEMPLATES registry', () => {
 		const blank = STOREFRONT_TEMPLATES.find((t) => t.id === 'blank')
 		expect(blank?.blocks).toEqual([])
 	})
+
+	test.each([
+		['farmer', 'forest', 3, 6],
+		['artist', 'mono', 2, 8],
+		['electrician', 'default', 3, 6],
+		['store', 'sunset', 4, 12],
+	] as const)('%s has a distinct palette and live catalogue layout', (id, theme, columns, limit) => {
+		const template = getStorefrontTemplate(id)
+		expect(template.id).toBe(id)
+		expect(template.defaultThemeId).toBe(theme)
+		expect(template.blocks[0].type).toBe(id === 'farmer' ? 'ProfileHeader' : 'Hero')
+		expect(template.blocks.find((block) => block.type === 'ProductGrid')?.props).toMatchObject({
+			source: 'all',
+			collectionDTag: '',
+			columns,
+			limit,
+		})
+		expect(template.blocks.filter((block) => block.type === 'Text').length).toBeGreaterThanOrEqual(2)
+		expect(template.blocks.find((block) => block.type === 'LinkList')?.props).toMatchObject({ links: [] })
+		expect(template.blocks.some((block) => block.type === 'FeaturedProduct')).toBe(false)
+		expect(template.blocks.some((block) => block.type === 'Image')).toBe(false)
+		const hero = template.blocks.find((block) => block.type === 'Hero')
+		expect(hero?.props.imageUrl).toBe(id === 'farmer' ? '/images/farmstand.svg' : '')
+		expect(hero?.props.ctaHref).toBe(id === 'farmer' ? '#harvest' : '')
+		const header = template.blocks.find((block) => block.type === 'ProfileHeader')
+		expect(header?.props.showBanner).toBe(false)
+		expect(header?.props.fullScreen ?? false).toBe(false)
+	})
+
+	test('Farmstand has an editorial shop header and working same-page destinations', () => {
+		const template = getStorefrontTemplate('farmer')
+		expect(template.typography).toBe('editorial')
+		const header = template.blocks.find((block) => block.type === 'ProfileHeader')
+		expect(header?.props.layout).toBe('compact')
+		const anchors = template.blocks.flatMap((block) =>
+			(block.type === 'Text' || block.type === 'ProductGrid') && block.props.anchor ? [block.props.anchor] : [],
+		)
+		for (const link of header?.props.navigation ?? []) {
+			expect(anchors).toContain(link.href.slice(1))
+		}
+		expect(template.blocks.find((block) => block.type === 'Hero')?.props.layout).toBe('split')
+		expect(template.blocks.find((block) => block.type === 'ProductGrid')?.props.cardStyle).toBe('storefront')
+	})
 })
 
 describe('instantiateStorefrontTemplate', () => {
@@ -65,7 +108,7 @@ describe('instantiateStorefrontTemplate', () => {
 			const page = {
 				...createEmptyStorefrontPage(),
 				enabled: true,
-				root: { props: { title: '', theme: template.defaultThemeId } },
+				root: { props: { title: '', theme: template.defaultThemeId, typography: template.typography } },
 				content: instantiateStorefrontTemplate(template),
 			}
 			const result = validateStorefrontPageForPublish(page)

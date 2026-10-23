@@ -59,7 +59,13 @@ export function StorefrontRoot({
 			// sees a storefront" must not be satisfied by either of those.
 			data-testid={isEditing ? undefined : 'storefront-page'}
 			data-storefront-theme={theme.id}
-			className={cn('w-full bg-background text-foreground', fullHeight && 'min-h-screen', className)}
+			className={cn(
+				'w-full bg-background text-foreground',
+				fullHeight && 'min-h-screen',
+				props.typography === 'editorial' && 'storefront-editorial',
+				className,
+			)}
+			data-storefront-typography={props.typography ?? 'default'}
 			style={storefrontThemeCssVars(theme)}
 		>
 			{children}

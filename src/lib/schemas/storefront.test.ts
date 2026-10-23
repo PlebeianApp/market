@@ -78,6 +78,61 @@ describe('isSafeHref', () => {
 		expect(isSafeMediaSrc('javascript:alert(1)')).toBe(false)
 		expect(isSafeMediaSrc('data:image/svg+xml,<svg onload=alert(1)>')).toBe(false)
 	})
+
+	test('allows named same-page links but never as media sources', () => {
+		expect(isSafeHref('#harvest')).toBe(true)
+		expect(isSafeHref('#our-farm')).toBe(true)
+		expect(isSafeHref('#')).toBe(false)
+		expect(isSafeHref('#<script>')).toBe(false)
+		expect(isSafeHref('#' + 'a'.repeat(81))).toBe(false)
+		expect(isSafeMediaSrc('#harvest')).toBe(false)
+		expect(isSafeMediaSrc(' \t#harvest')).toBe(false)
+	})
+})
+
+describe('storefront shop layout options', () => {
+	test('preserves editorial settings, compact navigation, split hero, and section anchors', () => {
+		const result = parseStorefrontPage(
+			documentWith(
+				[
+					block('ProfileHeader', { layout: 'compact', navigation: [{ label: 'Shop', href: '#harvest' }] }),
+					block('Hero', { layout: 'split', eyebrow: 'The farmstand', ctaHref: '#harvest' }),
+					block('ProductGrid', { anchor: 'harvest', cardStyle: 'storefront' }),
+					block('Text', { anchor: 'our-farm', markdown: 'Our story' }),
+				],
+				{ root: { props: { typography: 'editorial' } } },
+			),
+		)
+		expect(result.droppedBlocks).toBe(0)
+		expect(result.page?.root.props.typography).toBe('editorial')
+		expect(result.page?.content[0].props).toMatchObject({ layout: 'compact', navigation: [{ label: 'Shop', href: '#harvest' }] })
+		expect(result.page?.content[1].props).toMatchObject({ layout: 'split', eyebrow: 'The farmstand', ctaHref: '#harvest' })
+		expect(result.page?.content[2].props).toMatchObject({ anchor: 'harvest', cardStyle: 'storefront' })
+		expect(result.page?.content[3].props).toMatchObject({ anchor: 'our-farm' })
+	})
+
+	test('rejects unsafe navigation, malformed anchors, and unknown layout options', () => {
+		const result = parseStorefrontPage(
+			documentWith([
+				block('ProfileHeader', { layout: 'compact', navigation: [{ label: 'Unsafe', href: 'javascript:alert(1)' }] }),
+				block('Text', { anchor: 'bad anchor' }),
+				block('Hero', { layout: 'remote-html' }),
+				block('ProductGrid', { cardStyle: 'remote' }),
+			]),
+		)
+		expect(result.droppedBlocks).toBe(4)
+		expect(result.page?.content).toEqual([])
+	})
+
+	test('old documents keep their previous presentation when new settings are absent', () => {
+		const result = parseStorefrontPage(documentWith([block('ProfileHeader', {}), block('Hero', {}), block('ProductGrid', {})]))
+		expect(result.droppedBlocks).toBe(0)
+		expect(result.page?.root.props.typography).toBeUndefined()
+		for (const item of result.page?.content ?? []) {
+			expect(item.props).not.toHaveProperty('layout')
+			expect(item.props).not.toHaveProperty('cardStyle')
+		}
+	})
 })
 
 describe('parseStorefrontPage — hostile documents render inert', () => {

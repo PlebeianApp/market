@@ -78,7 +78,7 @@ export function StorefrontSetupWizard({
 	const finish = () => {
 		const page: StorefrontPage = {
 			...createEmptyStorefrontPage(),
-			root: { props: { title: '', theme: themeId } },
+			root: { props: { title: '', theme: themeId, typography: template.typography } },
 			content: instantiateStorefrontTemplate(template),
 		}
 		onComplete(page)
@@ -139,7 +139,7 @@ export function StorefrontSetupWizard({
 						<div className="overflow-hidden rounded-lg border border-border">
 							{previewBlocks.length > 0 ? (
 								<div className="pointer-events-none" aria-hidden>
-									<StorefrontRoot props={{ title: '', theme: themeId }} fullHeight={false}>
+									<StorefrontRoot props={{ title: '', theme: themeId, typography: template.typography }} fullHeight={false}>
 										{previewBlocks.slice(0, 2).map((block) => (
 											<StorefrontBlockView key={block.props.id} block={block} />
 										))}
@@ -198,10 +198,8 @@ function TemplateCard({
 	selected: boolean
 	onSelect: () => void
 }) {
-	// Recomputed per card on every render rather than lifted out: cheap (at
-	// most 3 blocks), and keeps each card's preview ids independent of
-	// whichever template is currently selected.
-	const preview = instantiateStorefrontTemplate(getStorefrontTemplate(id)).slice(0, 2)
+	const template = getStorefrontTemplate(id)
+	const preview = instantiateStorefrontTemplate(template).slice(0, 2)
 
 	return (
 		<button
@@ -221,7 +219,7 @@ function TemplateCard({
 					// `scale-[0.3]` so the content still lays out at (roughly) its
 					// normal width before shrinking, rather than reflowing narrow.
 					<div className="pointer-events-none absolute left-0 top-0 w-[333%] origin-top-left scale-[0.3]" aria-hidden>
-						<StorefrontRoot props={{ title: '', theme: themeId }} fullHeight={false}>
+						<StorefrontRoot props={{ title: '', theme: themeId, typography: template.typography }} fullHeight={false}>
 							{preview.map((block) => (
 								<StorefrontBlockView key={block.props.id} block={block} />
 							))}

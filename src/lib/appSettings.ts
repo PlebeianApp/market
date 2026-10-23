@@ -1,6 +1,7 @@
 import NDK, { type NDKFilter, type NDKEvent, type NostrEvent } from '@nostr-dev-kit/ndk'
 import { AppSettingsSchema, type AppSettings } from './schemas/app'
 import { isValidHexKey } from './utils'
+import { connectToFirstRelay } from './nostr/connect'
 
 /** Kind for NIP-89 handler information / app-config events. */
 export const APP_SETTINGS_KIND = 31990
@@ -98,32 +99,17 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string, hand
 		throw new Error(`Invalid app pubkey provided: ${appPubkey}`)
 	}
 
-	try {
-		// Create a fresh NDK instance for server-side initialization
-		// to avoid shared store issues with ndkActions
-		const ndk = new NDK({
-			explicitRelayUrls: [relayUrl],
-			// Server-side, one-off fetch of app-config events. AI guardrails are a
-			// dev-time educational tool and have no place here. NDK's default strict
-			// filter validation is retained (a malformed appPubkey fails closed
-			// rather than broadening the query).
-			aiGuardrails: false,
-		})
+	// Use a one-off client so startup does not depend on the browser store.
+	const ndk = new NDK({
+		explicitRelayUrls: [relayUrl],
+		// App settings belong to this instance relay, not public outbox relays.
+		enableOutboxModel: false,
+		aiGuardrails: false,
+	})
 
-		// Connect with timeout
-		try {
-			await Promise.race([
-				ndk.connect(),
-				new Promise<never>((_, reject) => setTimeout(() => reject(new Error('NDK connect timeout')), 5000)),
-			])
-		} catch (connectErr) {
-			console.warn('NDK connect warning (may still work):', connectErr)
-			// Check if we have any connected relays despite the timeout
-			const connected = ndk.pool?.connectedRelays() || []
-			if (connected.length === 0) {
-				throw new Error('No relays connected, cannot fetch app settings')
-			}
-			console.log(`Connected to ${connected.length} relays despite timeout`)
+	try {
+		if (!(await connectToFirstRelay(ndk, 5000))) {
+			throw new Error(`App settings relay did not connect within 5000ms: ${relayUrl}`)
 		}
 
 		// NIP-33 parameterized replaceable events (kind 31990) are indexed by pubkey+kind+d tag.
@@ -162,6 +148,8 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string, hand
 	} catch (err) {
 		console.error('Failed to fetch app settings:', err)
 		throw err
+	} finally {
+		ndk.pool.relays.forEach((relay) => relay.disconnect())
 	}
 }
 

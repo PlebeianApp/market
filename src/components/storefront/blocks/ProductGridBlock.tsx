@@ -12,6 +12,8 @@ export interface ProductGridBlockProps {
 	limit: number
 	columns: 2 | 3 | 4
 	emptyMessage: string
+	anchor?: string
+	cardStyle?: 'marketplace' | 'storefront'
 }
 
 const columnClass: Record<2 | 3 | 4, string> = {
@@ -44,7 +46,16 @@ function belongsToCollection(collectionRef: string | null, dTag: string): boolea
  * per ADR-019: a cached price on a page would be a price the seller did not
  * agree to honour.
  */
-export function ProductGridBlock({ title, source, collectionDTag, limit, columns, emptyMessage }: ProductGridBlockProps) {
+export function ProductGridBlock({
+	title,
+	source,
+	collectionDTag,
+	limit,
+	columns,
+	emptyMessage,
+	anchor,
+	cardStyle,
+}: ProductGridBlockProps) {
 	const { pubkey, isEditing } = useStorefrontContext()
 	const { data: products, isLoading, isError } = useQuery(productsByPubkeyQueryOptions(pubkey))
 
@@ -62,7 +73,7 @@ export function ProductGridBlock({ title, source, collectionDTag, limit, columns
 		.slice(0, limit)
 
 	return (
-		<StorefrontSection width="wide" className="py-10">
+		<StorefrontSection id={anchor || undefined} width="wide" className={cn('scroll-mt-6 py-10', cardStyle === 'storefront' && 'sm:py-16')}>
 			<StorefrontSectionTitle title={title} />
 
 			{isLoading && <p className="py-8 text-center text-muted-foreground">Loading products…</p>}
@@ -83,7 +94,7 @@ export function ProductGridBlock({ title, source, collectionDTag, limit, columns
 				// selects the block, and must not put anything in a cart.
 				<div className={cn('grid grid-cols-1 gap-6', columnClass[columns], isEditing && 'pointer-events-none')}>
 					{filtered.map((product) => (
-						<ProductCard key={product.id} product={product} />
+						<ProductCard key={product.id} product={product} appearance={cardStyle} />
 					))}
 				</div>
 			)}

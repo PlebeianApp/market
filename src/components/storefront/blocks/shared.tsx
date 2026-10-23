@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import type { ReactNode } from 'react'
+import type { ComponentPropsWithRef, ReactNode } from 'react'
 
 /**
  * Layout primitives shared by storefront blocks, so width/alignment vocabulary
@@ -28,12 +28,15 @@ export function StorefrontSection({
 	children,
 	width = 'normal',
 	className,
-}: {
-	children: ReactNode
+	...props
+}: ComponentPropsWithRef<'section'> & {
 	width?: StorefrontWidth
-	className?: string
 }) {
-	return <section className={cn('mx-auto w-full px-4 sm:px-6', widthClass[width], className)}>{children}</section>
+	return (
+		<section {...props} className={cn('mx-auto w-full px-4 sm:px-6', widthClass[width], className)}>
+			{children}
+		</section>
+	)
 }
 
 /**

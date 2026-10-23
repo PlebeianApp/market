@@ -99,6 +99,22 @@ h3.font-heading {
 	font-size: 1.6rem;
 }
 
+.storefront-editorial {
+	--font-sans: Arial, Helvetica, sans-serif;
+	--font-heading: Georgia, 'Times New Roman', serif;
+	font-family: var(--font-sans);
+}
+
+.storefront-editorial .font-heading {
+	font-weight: 400;
+	letter-spacing: -0.035em;
+}
+
+.storefront-editorial h1.font-heading {
+	font-size: clamp(2.75rem, 5vw, 5rem);
+	line-height: 1.05;
+}
+
 /* Make all button text uppercase */
 button {
 	text-transform: uppercase;

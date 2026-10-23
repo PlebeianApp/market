@@ -7,6 +7,8 @@ import WebSocket from 'ws'
 import { LightningMock } from '../utils/lightning-mock'
 import { RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
 import { STOREFRONT_PAGE_D_TAG, STOREFRONT_PAGE_KIND, STOREFRONT_PAGE_VERSION } from '../../src/lib/schemas/storefront'
+import { setupAuthContext } from '../fixtures/auth'
+import { ensureScenario } from '../scenarios'
 
 useWebSocketImplementation(WebSocket)
 
@@ -358,6 +360,117 @@ test.describe('storefront page builder', () => {
 		// R6: the blocks survive being switched off.
 		expect(disabledDocument.content.length).toBeGreaterThan(0)
 	})
+
+	for (const starter of [
+		{ id: 'farmer', label: 'Farmstand', theme: 'forest', heading: 'Fresh from the farm', catalogue: 'This season at the farm' },
+		{ id: 'artist', label: 'Studio', theme: 'mono', heading: 'Made to mean something.', catalogue: 'Available works' },
+		{ id: 'electrician', label: 'Local Pro', theme: 'default', heading: 'Electrical work, done right.', catalogue: 'Services' },
+		{ id: 'store', label: 'Corner Shop', theme: 'sunset', heading: 'Find your next favourite.', catalogue: 'Browse the collection' },
+	]) {
+		test(`business template ${starter.id} can be edited, published, and viewed on mobile`, async ({ browser }) => {
+			await ensureScenario('merchant')
+			const context = await browser.newContext({
+				baseURL: test.info().project.use.baseURL,
+				recordVideo: { dir: test.info().outputPath('videos') },
+			})
+			await context.route('**/*', async (route) => {
+				const host = new URL(route.request().url()).hostname
+				if (host === 'localhost' || host === '127.0.0.1') {
+					await route.continue()
+				} else if (route.request().resourceType() === 'image') {
+					await route.fulfill({ path: 'e2e/fixtures/test-product-image.png', contentType: 'image/png' })
+				} else {
+					await route.abort()
+				}
+			})
+			await context.routeWebSocket(/.*/, (socket) => {
+				const host = new URL(socket.url()).hostname
+				if (host === 'localhost' || host === '127.0.0.1') socket.connectToServer()
+				else socket.close()
+			})
+			await setupAuthContext(context, { sk: MERCHANT_SK, pk: MERCHANT_PK })
+			await context.addInitScript((pubkey) => {
+				sessionStorage.setItem('pii-warning-dismissed', JSON.stringify([pubkey]))
+			}, MERCHANT_PK)
+			const page = await context.newPage()
+			try {
+				await openBuilder(page)
+				await page.getByTestId('storefront-change-template').click()
+				await page.getByTestId('storefront-change-template-confirm').click()
+				await expect(page.getByTestId('storefront-wizard')).toBeVisible()
+				await page.getByTestId(`storefront-template-${starter.id}`).click()
+				await page.getByTestId('storefront-wizard-next').click()
+				await expect(page.getByTestId(`storefront-theme-${starter.theme}`)).toHaveAttribute('aria-pressed', 'true')
+				await page.getByTestId('storefront-wizard-finish').click()
+
+				await page.getByRole('heading', { name: starter.heading, exact: true }).click()
+				const title = page.getByRole('textbox', { name: 'Title', exact: true })
+				await expect(title).toBeVisible()
+				const customHeading = `My ${starter.label}`
+				await title.fill(customHeading)
+				await page.getByTestId('storefront-enable-toggle').check()
+				await confirmStorefrontPublish(page)
+				await expect(page.getByText(/published to \d+ relay/i)).toBeVisible({ timeout: 20_000 })
+
+				const event = await fetchStorefrontEvent(MERCHANT_PK)
+				expect(event?.kind).toBe(STOREFRONT_PAGE_KIND)
+				expect(event?.pubkey).toBe(MERCHANT_PK)
+				expect(event?.tags).toContainEqual(['d', STOREFRONT_PAGE_D_TAG])
+				const document = JSON.parse(event!.content)
+				expect(document.enabled).toBe(true)
+				expect(document.root.props.theme).toBe(starter.theme)
+				expect(document.content.find((block: { type: string }) => block.type === 'Hero').props.title).toBe(customHeading)
+
+				const liveLink = page.getByTestId('storefront-header-top-row').getByTestId('storefront-view-live')
+				await expect(liveLink).not.toHaveAttribute('href', /preview=draft/)
+				const [live] = await Promise.all([page.waitForEvent('popup'), liveLink.click()])
+				await live.setViewportSize({ width: 390, height: 844 })
+				const storefront = live.getByTestId('storefront-page')
+				await expect(storefront).toHaveAttribute('data-storefront-theme', starter.theme, { timeout: 25_000 })
+				await expect(live.getByRole('heading', { name: customHeading })).toBeVisible()
+				await expect(live.getByRole('heading', { name: starter.catalogue, exact: true })).toBeVisible()
+				await expect(live.getByTestId('product-card').first()).toBeVisible({ timeout: 20_000 })
+				if (starter.id === 'farmer') {
+					await expect(storefront).toHaveAttribute('data-storefront-typography', 'editorial')
+					await expect(live.getByTestId('storefront-profile-header')).toHaveAttribute('data-layout', 'compact')
+					const illustration = live.getByTestId('storefront-split-hero').locator('img')
+					await expect(illustration).toHaveAttribute('src', '/images/farmstand.svg')
+					await expect(illustration).toBeVisible()
+					await expect.poll(() => illustration.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
+					const headingFont = await live
+						.getByRole('heading', { name: customHeading })
+						.evaluate((element) => getComputedStyle(element).fontFamily)
+					expect(headingFont).toContain('Georgia')
+					await expect(live.getByTestId('product-card').first()).toHaveAttribute('data-appearance', 'storefront')
+					const tabsBefore = context.pages().length
+					await live.getByRole('link', { name: 'Shop the harvest', exact: true }).last().click()
+					const livePath = new URL(live.url()).pathname
+					await expect(live).toHaveURL(new RegExp(`${livePath}#harvest$`))
+					expect(context.pages().length).toBe(tabsBefore)
+					await live.getByRole('navigation', { name: 'Store navigation' }).getByRole('link', { name: 'Our farm' }).click()
+					await expect(live).toHaveURL(/#our-farm$/)
+					await live.getByRole('navigation', { name: 'Store navigation' }).getByRole('link', { name: 'Pickup & delivery' }).click()
+					await expect(live).toHaveURL(/#visit$/)
+					await live.getByRole('button', { name: /^View cart/ }).click()
+					await expect(live.getByRole('dialog').getByRole('heading', { name: /your cart/i })).toBeVisible()
+					await live.keyboard.press('Escape')
+					await expect(live.getByRole('dialog')).toBeHidden()
+					await live.evaluate(() => window.scrollTo(0, 0))
+				}
+				await expect(live.getByRole('banner')).toHaveCount(0)
+				await expect(live.getByRole('contentinfo')).toHaveCount(0)
+				expect(await live.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+				await live.screenshot({ path: test.info().outputPath('mobile.png'), fullPage: true })
+				await live.setViewportSize({ width: 1280, height: 900 })
+				await expect(live.getByRole('heading', { name: customHeading })).toBeVisible()
+				expect(await live.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+				await live.screenshot({ path: test.info().outputPath('desktop.png'), fullPage: true })
+				await live.close()
+			} finally {
+				await context.close()
+			}
+		})
+	}
 
 	test('a hostile page event renders inert', async ({ unauthenticatedPage }) => {
 		const sk = generateSecretKey()

@@ -34,6 +34,44 @@ editor open. Unsaved or unpublished pages use an author-only draft preview; afte
 publishing an enabled page, the link opens the public URL without the preview
 parameter. Publishing does not navigate the editor tab away.
 
+## CMS starter templates
+
+The setup wizard offers four business-focused starters alongside Blank page,
+Link in bio, Shop, and Showcase:
+
+| Starter     | Intended business | Suggested theme | Layout                                                                                                        |
+| ----------- | ----------------- | --------------- | ------------------------------------------------------------------------------------------------------------- |
+| Farmstand   | Farmer            | Forest          | Short welcome, six-item harvest grid, farm story, pickup and market details                                   |
+| Studio      | Artist            | Mono            | Centred introduction, eight-work two-column gallery, studio story and commissions                             |
+| Local Pro   | Electrician       | Default         | Short service introduction, enquiry links, six-service grid, service area, qualifications and booking process |
+| Corner Shop | Retail store      | Sunset          | Compact welcome, twelve-item four-column catalogue, shop story, shipping and returns                          |
+
+These are ordinary CMS blocks, not locked page types. Authors can change every
+heading, image, link, section, theme, and grid in the builder. Catalogue blocks
+read the author's actual listings; they do not create products, sort by sales,
+or invent portfolio work. Grid columns collapse to one on small screens.
+
+Farmstand uses a Shopify-inspired editorial layout: a compact profile-backed
+store header with the existing cart drawer, editable same-page navigation, a split hero with a bundled original
+farm illustration, a working "Shop the harvest" action, and borderless product
+cards. The remaining starters put their main content before a non-full-screen
+profile section. No stock imagery, sample contact destinations, testimonials, qualifications,
+or featured-product references are prefilled. Replace the instructional text
+with accurate business details before publishing. Add contact or directions
+URLs to the empty link blocks; they appear as setup hints in the CMS and remain
+hidden on the public page until configured. To add a hero action, set both its
+button label and a valid destination. Farmstand's navigation targets the `harvest`,
+`our-farm`, and `visit` section anchors. If an anchor is renamed or its block is
+removed, update the corresponding links too.
+
+These controls are also available independently in the CMS: **Typography** on
+the page, **Header layout** and navigation links on Profile header, **Hero layout**
+and eyebrow on Hero banner, **Product card style** on Product grid, and
+**Section anchor** on Text and Product grid. Existing documents retain their
+previous presentation unless these optional settings are selected. Product
+links, stock checks, and add-to-cart actions still use the existing marketplace
+implementation; no Shopify account, service, or checkout is introduced.
+
 ## The event
 
 | Field     | Value                                                          |
@@ -84,7 +122,10 @@ path from relay bytes to the DOM, no remote script or stylesheet, and no iframe.
 Consequences that follow from the same design:
 
 - **URLs are gated by scheme.** `href` and `src` accept only absolute `https:`
-  URLs and in-app absolute paths. `javascript:`, `data:`, `blob:`, `file:`,
+  URLs and in-app absolute paths. Links also accept named same-page fragments
+  such as `#harvest`; image sources do not. Section anchors start with a letter
+  and contain at most 80 letters, numbers, hyphens, or underscores.
+  `javascript:`, `data:`, `blob:`, `file:`,
   plaintext `http:`, and protocol-relative `//host` are all refused —
   including obfuscated forms like `java\tscript:`, which a browser resolves but
   a naive prefix check does not. See `isSafeHref` in
@@ -217,6 +258,12 @@ separate states. The suite also covers the ADR-019 guardrail that a hostile page
 uses throwaway keypairs for hostile cases: an enabled page replaces the profile
 view for whoever authored it, so enabling one on a shared fixture account would
 change what every other spec sees.
+
+The `business template` cases cover selecting all four starters, keeping their
+suggested theme, editing a hero in Puck, publishing to the local relay, and
+viewing the standalone mobile page with real seeded merchant listings. They
+record video, intercept external HTTP and WebSocket requests, and require only
+the local app and relay, not the Cashu mint.
 
 ## Relationship to the ADRs
 

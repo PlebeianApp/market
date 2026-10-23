@@ -59,10 +59,11 @@ const URL_IGNORED_CHARS = /[\x00-\x20\x7f]/g
 /**
  * True for values safe to place in an `href`.
  *
- * Two forms are allowed and nothing else:
+ * Three forms are allowed and nothing else:
  *   - an in-app absolute path (`/products/abc`) — note the explicit rejection of
  *     `//evil.example`, which is protocol-relative and would leave the app;
- *   - an absolute `https:` URL.
+ *   - an absolute `https:` URL;
+ *   - a named same-page fragment such as `#harvest`.
  *
  * `javascript:`, `data:`, `blob:`, `vbscript:`, `file:` and bare `http:` all
  * fail.
@@ -74,6 +75,7 @@ export function isSafeHref(value: unknown): value is string {
 	const candidate = value.replace(URL_IGNORED_CHARS, '')
 	if (candidate.length === 0) return false
 
+	if (/^#[a-zA-Z][a-zA-Z0-9_-]{0,79}$/.test(candidate)) return true
 	if (candidate.startsWith('//')) return false
 	if (candidate.startsWith('/')) return true
 
@@ -87,7 +89,7 @@ export function isSafeHref(value: unknown): value is string {
 /**
  * True for values safe to place in an image/video `src`.
  *
- * Same gate as `isSafeHref`: absolute `https:` or an in-app path. A relative
+ * Like `isSafeHref`, but without fragments: absolute `https:` or an in-app path. A relative
  * path is allowed so a page can reference the instance's own bundled art;
  * anything cross-origin must be `https:`.
  *
@@ -97,10 +99,12 @@ export function isSafeHref(value: unknown): value is string {
  * tightening of this function and needs no schema change.
  */
 export function isSafeMediaSrc(value: unknown): value is string {
-	return isSafeHref(value)
+	return isSafeHref(value) && !value.replace(URL_IGNORED_CHARS, '').startsWith('#')
 }
 
-const safeHref = z.string().refine(isSafeHref, { message: 'Link must be an https:// URL or an in-app path starting with /' })
+const safeHref = z
+	.string()
+	.refine(isSafeHref, { message: 'Link must be an https:// URL, an in-app path starting with /, or a #section anchor' })
 
 const safeMediaSrc = z.string().refine(isSafeMediaSrc, { message: 'Image must be an https:// URL or an in-app path starting with /' })
 
@@ -111,6 +115,11 @@ const longText = z.string().max(STOREFRONT_LIMITS.maxTextLength)
 const dTagRef = z.string().min(1).max(200)
 
 const alignment = z.enum(['left', 'center', 'right'])
+const sectionAnchor = z
+	.string()
+	.regex(/^[a-zA-Z][a-zA-Z0-9_-]{0,79}$/, 'Use letters, numbers, hyphens, or underscores; start with a letter')
+const optionalSectionAnchor = sectionAnchor.or(z.literal('')).optional()
+const navigationLink = z.object({ label: shortText, href: safeHref })
 
 /**
  * Every block carries the `id` Puck assigns it. Keeping Puck's own shape
@@ -130,6 +139,8 @@ export const ProfileHeaderBlockSchema = z.object({
 		showAbout: z.boolean().default(true),
 		showNip05: z.boolean().default(true),
 		align: alignment.default('center'),
+		layout: z.enum(['banner', 'compact']).optional(),
+		navigation: z.array(navigationLink).max(8).optional(),
 	}),
 })
 
@@ -144,6 +155,8 @@ export const HeroBlockSchema = z.object({
 		ctaHref: safeHref.or(z.literal('')).default(''),
 		align: alignment.default('center'),
 		minHeight: z.number().int().min(120).max(1200).default(360),
+		layout: z.enum(['banner', 'split']).optional(),
+		eyebrow: shortText.optional(),
 	}),
 })
 
@@ -155,6 +168,7 @@ export const TextBlockSchema = z.object({
 		markdown: longText.default(''),
 		align: alignment.default('left'),
 		width: z.enum(['narrow', 'normal', 'wide']).default('normal'),
+		anchor: optionalSectionAnchor,
 	}),
 })
 
@@ -169,6 +183,8 @@ export const ProductGridBlockSchema = z.object({
 		limit: z.number().int().min(1).max(STOREFRONT_LIMITS.maxProductsPerGrid).default(12),
 		columns: z.union([z.literal(2), z.literal(3), z.literal(4)]).default(3),
 		emptyMessage: shortText.default('No products yet.'),
+		anchor: optionalSectionAnchor,
+		cardStyle: z.enum(['marketplace', 'storefront']).optional(),
 	}),
 })
 
@@ -273,6 +289,7 @@ export type StorefrontThemeId = (typeof STOREFRONT_THEME_IDS)[number]
 export const StorefrontRootPropsSchema = z.object({
 	title: shortText.default(''),
 	theme: z.enum(STOREFRONT_THEME_IDS).default('default'),
+	typography: z.enum(['default', 'editorial']).optional(),
 })
 
 export type StorefrontRootProps = z.infer<typeof StorefrontRootPropsSchema>

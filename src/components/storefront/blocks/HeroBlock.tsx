@@ -13,6 +13,8 @@ export interface HeroBlockProps {
 	ctaHref: string
 	align: StorefrontAlign
 	minHeight: number
+	layout?: 'banner' | 'split'
+	eyebrow?: string
 }
 
 /**
@@ -25,7 +27,7 @@ export interface HeroBlockProps {
  * beacon the visitor's IP to an arbitrary host, which is exactly what a
  * marketplace visitor did not consent to.
  */
-export function HeroBlock({ title, subtitle, imageUrl, ctaLabel, ctaHref, align, minHeight }: HeroBlockProps) {
+export function HeroBlock({ title, subtitle, imageUrl, ctaLabel, ctaHref, align, minHeight, layout, eyebrow }: HeroBlockProps) {
 	const { isEditing } = useStorefrontContext()
 	const image = isSafeMediaSrc(imageUrl) && imageUrl.length > 0 ? imageUrl : null
 	const hasCta = ctaLabel.trim().length > 0 && ctaHref.trim().length > 0
@@ -37,6 +39,37 @@ export function HeroBlock({ title, subtitle, imageUrl, ctaLabel, ctaHref, align,
 				<StorefrontEditorHint>Give this hero a title, a background image, or a button.</StorefrontEditorHint>
 			</StorefrontSection>
 		) : null
+	}
+
+	if (layout === 'split') {
+		return (
+			<div className="bg-muted/40" data-testid="storefront-split-hero">
+				<StorefrontSection
+					width="wide"
+					className="grid items-center gap-8 py-10 sm:py-16 lg:grid-cols-2 lg:gap-16"
+					style={{ minHeight: `${minHeight}px` }}
+				>
+					<div className={cn('flex flex-col gap-6', alignClass[align])}>
+						{eyebrow?.trim() && <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">{eyebrow}</p>}
+						{title.trim() && <h1 className="max-w-xl font-heading text-5xl leading-[1.05] font-bold sm:text-6xl lg:text-7xl">{title}</h1>}
+						{subtitle.trim() && <p className="max-w-md text-base leading-relaxed text-muted-foreground sm:text-lg">{subtitle}</p>}
+						{hasCta && (
+							<StorefrontLink
+								href={ctaHref}
+								className="inline-flex min-h-12 items-center justify-center rounded-full bg-primary px-7 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+							>
+								{ctaLabel}
+							</StorefrontLink>
+						)}
+					</div>
+					{image ? (
+						<img src={image} alt="" className="aspect-[4/3] w-full rounded-[2rem] object-cover lg:aspect-square" />
+					) : (
+						isEditing && <StorefrontEditorHint>Add a farm photograph or illustration to complete this split hero.</StorefrontEditorHint>
+					)}
+				</StorefrontSection>
+			</div>
+		)
 	}
 
 	return (

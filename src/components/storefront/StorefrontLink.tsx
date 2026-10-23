@@ -1,6 +1,7 @@
 import { isSafeHref } from '@/lib/schemas/storefront'
 import type { ReactNode } from 'react'
 import { useStorefrontContext } from './StorefrontContext'
+import { useLocation } from '@tanstack/react-router'
 
 /**
  * The single anchor used by every storefront block.
@@ -17,12 +18,13 @@ import { useStorefrontContext } from './StorefrontContext'
  */
 export function StorefrontLink({ href, children, className }: { href: string; children: ReactNode; className?: string }) {
 	const { isEditing } = useStorefrontContext()
+	const location = useLocation()
 
 	if (!isSafeHref(href)) {
 		return <span className={className}>{children}</span>
 	}
 
-	const isInternal = href.startsWith('/')
+	const isInternal = href.startsWith('/') || href.startsWith('#')
 
 	// In the canvas a click means "select this block". Letting it navigate would
 	// drop the author out of the editor, unsaved work and all.
@@ -36,7 +38,7 @@ export function StorefrontLink({ href, children, className }: { href: string; ch
 
 	return (
 		<a
-			href={href}
+			href={href.startsWith('#') ? `${location.pathname}${location.searchStr}${href}` : href}
 			className={className}
 			target={isInternal ? undefined : '_blank'}
 			rel={isInternal ? undefined : 'noopener noreferrer nofollow'}

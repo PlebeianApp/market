@@ -6,7 +6,8 @@ import {
 	selectAuthoritativeAppSettingsEvent,
 	type AppSettingsEventLike,
 } from '../appSettings'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
+import NDK from '@nostr-dev-kit/ndk'
 
 const APP_PUBKEY = 'a'.repeat(64)
 const SPOOF_PUBKEY = 'b'.repeat(64)
@@ -167,5 +168,46 @@ describe('resolveFetchedAppSettings', () => {
 describe('fetchAppSettings fail-closed preflight', () => {
 	test('rejects malformed app pubkeys before relay I/O', async () => {
 		await expect(fetchAppSettings('wss://relay.invalid', 'not-a-pubkey')).rejects.toThrow(/Invalid app pubkey/)
+	})
+
+	describe('fetchAppSettings relay readiness', () => {
+		test('uses only the instance relay and fetches as soon as it connects', async () => {
+			let client: NDK | undefined
+			let disconnected = false
+			const connect = spyOn(NDK.prototype, 'connect').mockImplementation(function (this: NDK) {
+				client = this
+				expect(this.outboxPool).toBeUndefined()
+				const relays = Array.from(this.pool.relays.values())
+				expect(relays.map((relay) => relay.url)).toEqual(['wss://relay.invalid/'])
+				spyOn(this.pool, 'connectedRelays').mockReturnValue(relays)
+				spyOn(relays[0], 'disconnect').mockImplementation(() => {
+					disconnected = true
+				})
+				this.pool.emit('relay:connect', relays[0])
+				return new Promise<void>(() => {})
+			})
+			const fetch = spyOn(NDK.prototype, 'fetchEvents').mockResolvedValue(new Set())
+			try {
+				expect(await fetchAppSettings('wss://relay.invalid', APP_PUBKEY)).toBeNull()
+				expect(fetch).toHaveBeenCalledTimes(1)
+				expect(disconnected).toBe(true)
+				expect(client?.pool.listenerCount('relay:connect')).toBe(0)
+			} finally {
+				connect.mockRestore()
+				fetch.mockRestore()
+			}
+		}, 1000)
+
+		test('does not query settings when the connection completes without a connected relay', async () => {
+			const connect = spyOn(NDK.prototype, 'connect').mockResolvedValue()
+			const fetch = spyOn(NDK.prototype, 'fetchEvents').mockResolvedValue(new Set())
+			try {
+				await expect(fetchAppSettings('wss://relay.invalid', APP_PUBKEY)).rejects.toThrow('App settings relay did not connect')
+				expect(fetch).not.toHaveBeenCalled()
+			} finally {
+				connect.mockRestore()
+				fetch.mockRestore()
+			}
+		})
 	})
 })

@@ -40,7 +40,7 @@ export function LinkListBlock({ title, links, layout }: LinkListBlockProps) {
 							className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 font-medium text-card-foreground transition-colors hover:border-primary hover:text-primary"
 						>
 							{link.label}
-							{!link.href.startsWith('/') && <ExternalLink className="size-3.5 opacity-60" aria-hidden />}
+							{!link.href.startsWith('/') && !link.href.startsWith('#') && <ExternalLink className="size-3.5 opacity-60" aria-hidden />}
 						</StorefrontLink>
 					</li>
 				))}
