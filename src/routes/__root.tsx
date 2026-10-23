@@ -23,16 +23,22 @@ import { MigratePrivateKeyDialog } from '@/components/auth/MigratePrivateKeyDial
 import { PIIExposureModal } from '@/components/pii/PIIExposureModal' // Add this import
 import { AuctionWonModal } from '@/components/AuctionWonModal'
 import type { PIIScanResult } from '@/lib/utils/piiScanner'
+import { PageLayoutProvider, usePageLayout } from '@/hooks/useStandalonePage'
 
 export const Route = createRootRoute({
 	component: RootComponent,
 })
 
 function RootComponent() {
-	return <RootLayout />
+	return (
+		<PageLayoutProvider>
+			<RootLayout />
+		</PageLayoutProvider>
+	)
 }
 
 function RootLayout() {
+	const { standalone } = usePageLayout()
 	// Use configStore directly - config is already loaded by frontend.tsx before router renders
 	const config = useStore(configStore, (s) => s.config)
 	const navigate = useNavigate()
@@ -114,13 +120,13 @@ function RootLayout() {
 	return (
 		<TooltipProvider>
 			<div className="relative flex flex-col min-h-screen">
-				<Header />
+				{!standalone && <Header />}
 
 				<main className="flex flex-col flex-grow">
 					<Outlet />
 				</main>
-				<Pattern pattern="page" />
-				{!isDashboardPage && !isCheckoutPage && <Footer />}
+				{!standalone && <Pattern pattern="page" />}
+				{!standalone && !isDashboardPage && !isCheckoutPage && <Footer />}
 
 				{/* PII Exposure Modal */}
 				{showPIIModal && scanResult && (

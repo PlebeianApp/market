@@ -22,7 +22,6 @@ import { useConfigQuery } from '@/queries/config'
 import { getNip05ForPubkey, useNip05Settings } from '@/queries/nip05'
 import { useStorefrontPage, usePublishStorefrontPage } from '@/queries/storefront'
 import { getVanityForPubkey, useVanitySettings } from '@/queries/vanity'
-import { useNavigate } from '@tanstack/react-router'
 import { Puck, type Data, usePuck } from '@puckeditor/core'
 import {
 	ExternalLink,
@@ -93,23 +92,20 @@ function fromPuckData(data: Data, enabled: boolean): StorefrontPage {
 export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 	const { data: published, isLoading } = useStorefrontPage(pubkey)
 	const publish = usePublishStorefrontPage()
-	const navigate = useNavigate()
 
-	// The claimed name (if any) is bought on separate dashboard pages today — see
-	// ADR-019 — but the builder is where an author actually needs to know it: it
-	// decides what "View live page" points at and whether to nudge an author who
-	// has never claimed a name at all.
+	// Prefer the claimed vanity name, while keeping unnamed storefronts reachable by pubkey.
 	const { data: config } = useConfigQuery()
 	const { data: vanitySettings } = useVanitySettings(config?.appPublicKey, config?.handlerId)
 	const { data: nip05Settings } = useNip05Settings(config?.appPublicKey, config?.handlerId)
 	const vanityEntry = useMemo(() => getVanityForPubkey(vanitySettings, pubkey), [vanitySettings, pubkey])
 	const nip05Entry = useMemo(() => getNip05ForPubkey(nip05Settings, pubkey), [nip05Settings, pubkey])
-	const liveHref = vanityEntry ? `/${vanityEntry.vanityName}?preview=draft` : `/profile/${pubkey}?preview=draft`
+	const publicHref = vanityEntry ? `/${vanityEntry.vanityName}` : `/profile/${pubkey}`
 
 	const [mode, setMode] = useState<BuilderMode>('loading')
 	const [initialData, setInitialData] = useState<Data | null>(null)
 	const [enabled, setEnabled] = useState(false)
 	const [isDirty, setIsDirty] = useState(false)
+	const liveHref = `${publicHref}${isDirty || !published?.page?.enabled ? '?preview=draft' : ''}`
 	const [errors, setErrors] = useState<string[]>([])
 	const [confirmChangeTemplateOpen, setConfirmChangeTemplateOpen] = useState(false)
 	const [publishDialogOpen, setPublishDialogOpen] = useState(false)
@@ -253,9 +249,6 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 						? `Page published to ${result.publishedRelays.length} relay${result.publishedRelays.length === 1 ? '' : 's'}`
 						: `Saved to ${result.publishedRelays.length} relay${result.publishedRelays.length === 1 ? '' : 's'} (page is switched off)`,
 				)
-				if (page.enabled && vanityEntry) {
-					await navigate({ to: '/$vanityName', params: { vanityName: vanityEntry.vanityName } })
-				}
 				return true
 			} catch (error) {
 				const message = error instanceof Error ? error.message : 'Could not publish the page'
@@ -264,7 +257,7 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 				return false
 			}
 		},
-		[navigate, publish, pubkey, vanityEntry],
+		[publish, pubkey],
 	)
 
 	const handlePublish = useCallback(

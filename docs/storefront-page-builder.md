@@ -19,6 +19,16 @@ Nothing is gated. A user does not need to own a vanity name to build a page —
 they lose the short URL when a name lapses, never the page, which stays
 reachable at `/profile/{pubkey}`.
 
+Public storefronts and author draft previews render as standalone pages, without
+the marketplace header, footer, or background pattern. Standard profile fallbacks
+and other marketplace routes retain the normal layout. Authentication, payment
+dialogs, and notifications remain available on standalone storefronts.
+
+The builder's **View live page** link opens a separate browser tab, leaving the
+editor open. Unsaved or unpublished pages use an author-only draft preview; after
+publishing an enabled page, the link opens the public URL without the preview
+parameter. Publishing does not navigate the editor tab away.
+
 ## The event
 
 | Field     | Value                                                          |

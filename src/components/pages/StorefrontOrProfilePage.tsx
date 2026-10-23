@@ -7,6 +7,7 @@ import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { shouldRenderStorefrontPage, useStorefrontPage } from '@/queries/storefront'
 import { useQuery } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
+import { useStandalonePage } from '@/hooks/useStandalonePage'
 
 /**
  * Resolution point for any URL that names a person: the custom page if the
@@ -40,6 +41,8 @@ export function StorefrontOrProfilePage({ profileId }: { profileId: string }) {
 	const { data: storefront, isLoading: isLoadingStorefront } = useStorefrontPage(pubkey)
 	const isAuthorPreview = isDraftPreview && isValidHexKey(pubkey) && user?.pubkey === pubkey
 	const previewPage = isAuthorPreview ? (loadStorefrontDraft(pubkey) ?? storefront?.page ?? null) : null
+	const isDeciding = (needsResolution && isResolvingProfile) || (pubkey.length > 0 && isLoadingStorefront)
+	useStandalonePage(isDeciding || Boolean(previewPage?.content.length) || shouldRenderStorefrontPage(storefront))
 
 	// The preview URL is intentionally local to the signed-in author: it reads
 	// their validated local draft (or their stored page when no draft exists),
@@ -52,8 +55,6 @@ export function StorefrontOrProfilePage({ profileId }: { profileId: string }) {
 	// two requests that would have happened regardless. Deciding before they
 	// settle would flash the profile page and then replace it, which reads as a
 	// bug to the visitor and undoes the author's first impression.
-	const isDeciding = (needsResolution && isResolvingProfile) || (pubkey.length > 0 && isLoadingStorefront)
-
 	if (isDeciding) {
 		return (
 			<div className="flex min-h-screen items-center justify-center">

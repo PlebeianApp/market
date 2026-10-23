@@ -73,7 +73,7 @@ test.describe('storefront page builder', () => {
 		}
 	}
 
-	test.beforeAll(async () => {
+	test.beforeEach(async () => {
 		await publishStorefrontPage(MERCHANT_SK, baselinePage(false))
 	})
 
@@ -240,8 +240,19 @@ test.describe('storefront page builder', () => {
 
 			await expect(dialog.getByText(/Both identities are active until/i)).toBeVisible({ timeout: 20_000 })
 			await dialog.getByTestId('storefront-publish-confirm').click()
-			await expect(merchantPage).toHaveURL(new RegExp(`/${name}$`), { timeout: 20_000 })
-			await expect(merchantPage.getByTestId('storefront-page')).toBeVisible({ timeout: 20_000 })
+			await expect(dialog).toBeHidden()
+			await expect(merchantPage).toHaveURL(new RegExp(`${BUILDER_PATH}$`))
+			const liveLink = merchantPage.getByTestId('storefront-view-live')
+			await expect(liveLink).toHaveAttribute('href', `/${name}`)
+			const [storefrontTab] = await Promise.all([merchantPage.waitForEvent('popup'), liveLink.click()])
+			try {
+				await expect(storefrontTab).toHaveURL(new RegExp(`/${name}$`), { timeout: 20_000 })
+				await expect(storefrontTab.getByTestId('storefront-page')).toBeVisible({ timeout: 20_000 })
+				await expect(storefrontTab.getByRole('banner')).toHaveCount(0)
+				await expect(storefrontTab.getByRole('contentinfo')).toHaveCount(0)
+			} finally {
+				await storefrontTab.close()
+			}
 		} finally {
 			await merchantPage.unroute('**/api/zapPurchase')
 			await publishRaw(TEST_APP_PRIVATE_KEY, {
@@ -273,6 +284,8 @@ test.describe('storefront page builder', () => {
 		const [draftPreview] = await Promise.all([merchantPage.waitForEvent('popup'), draftViewLiveButton.click()])
 		await expect(draftPreview.getByTestId('storefront-page')).toBeVisible({ timeout: 25_000 })
 		await expect(draftPreview.getByRole('heading', { name: headline })).toBeVisible({ timeout: 15_000 })
+		await expect(draftPreview.getByRole('banner')).toHaveCount(0)
+		await expect(draftPreview.getByRole('contentinfo')).toHaveCount(0)
 		await draftPreview.close()
 
 		// Nothing reaches a relay until the author opts the page in and presses
@@ -285,8 +298,12 @@ test.describe('storefront page builder', () => {
 		await expect(merchantPage.getByTestId('storefront-publish-errors')).toHaveCount(0)
 		const publishedViewLiveButton = merchantPage.getByTestId('storefront-header-top-row').getByTestId('storefront-view-live')
 		await expect(publishedViewLiveButton).toBeVisible()
+		await expect(publishedViewLiveButton).not.toHaveAttribute('href', /preview=draft/)
 		const [livePage] = await Promise.all([merchantPage.waitForEvent('popup'), publishedViewLiveButton.click()])
 		await expect(livePage.getByTestId('storefront-page')).toBeVisible({ timeout: 25_000 })
+		await expect(livePage.getByRole('banner')).toHaveCount(0)
+		await expect(livePage.getByRole('contentinfo')).toHaveCount(0)
+		await expect(merchantPage).toHaveURL(new RegExp(`${BUILDER_PATH}$`))
 		await livePage.close()
 
 		// The published event is addressable at the author's coordinate.
@@ -312,6 +329,11 @@ test.describe('storefront page builder', () => {
 			await expect(visitorPage.getByText('Everything here is made to order.')).toBeVisible()
 			// The product grid block resolves the author's live listings.
 			await expect(visitorPage.getByText('What I am selling')).toBeVisible()
+			await expect(visitorPage.getByRole('banner')).toHaveCount(0)
+			await expect(visitorPage.getByRole('contentinfo')).toHaveCount(0)
+			await visitorPage.goto('/')
+			await expect(visitorPage.getByRole('banner')).toBeVisible()
+			await expect(visitorPage.getByRole('contentinfo')).toBeVisible()
 		} finally {
 			await visitorPage.close()
 			await visitor.close()
