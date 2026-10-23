@@ -47,6 +47,14 @@ export class LightningMock {
 
 	private constructor() {}
 
+	/** Associate a mocked invoice with the signed zap request that requested it. */
+	registerZapInvoice(bolt11: string, zapRequest: string | Record<string, unknown>): void {
+		const serialized = typeof zapRequest === 'string' ? zapRequest : JSON.stringify(zapRequest)
+		this.lastBolt11 = bolt11
+		this.lastZapRequest = serialized
+		this.zapRequestsByBolt11.set(bolt11, serialized)
+	}
+
 	/**
 	 * Set up all three mock layers on a Playwright page:
 	 *  1. LNURL HTTP interception

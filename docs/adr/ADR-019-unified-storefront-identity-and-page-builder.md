@@ -17,6 +17,25 @@ Proposed
 - Current code: `src/server/ZapPurchaseManager.ts`, `src/server/VanityManager.ts`,
   `src/server/Nip05Manager.ts`, `src/lib/zapPurchase.ts`, `src/routes/$vanityName.tsx`
 
+## Implementation update — 2026-10-09
+
+The unified identity purchase path is now implemented: one `storefront-register`
+zap with one `name` tag writes a kind-30000 `name` entry that backs both the
+vanity route and `/.well-known/nostr.json`. New names use the intersection of
+the vanity and NIP-05 grammars and the union of their reserved-name lists.
+Active legacy entries remain lookup-compatible and block a unified claim by a
+different pubkey; legacy purchase labels are no longer routed to a sale manager.
+Legacy managers remain registry readers only. Their purchase labels are not
+accepted for new invoices or registry activation; pending old invoices need to
+be re-created through the unified flow after cutover.
+The old dashboard URLs redirect to the combined storefront editor flow.
+
+The unified registry `d` tag is derived as
+`${handlerId}-storefront-names`, using the resolved instance handler ID. ADR-018
+does not yet provide its proposed dedicated `instanceNamespace` field; changing
+this derivation remains a follow-up when that config decision is implemented.
+The ADR remains Proposed for its other open questions and page-builder details.
+
 ## Context
 
 ### The feature in Feynman terms
@@ -317,9 +336,11 @@ sheet-based on small screens.
 
 ## Open Questions
 
-- Should one pubkey be allowed multiple names (aliases resolving to the same
-  page), or is the one-name-per-pubkey constraint permanent? Aliases complicate
-  the reverse lookup maps that both current managers maintain.
+- **Unified names per pubkey (resolved for initial implementation):** one
+  active unified name per pubkey. Legacy vanity/NIP-05 aliases remain visible
+  during compatibility, but a pubkey cannot add a second unified name until the
+  first expires. Supporting aliases would require an explicit dashboard
+  selection model and is deferred.
 - Should the page be addressable per name (`d=storefront-page-alice`) rather than
   per pubkey, so that a seller who owns two names can publish two pages? Cheaper
   to decide now than to migrate later.

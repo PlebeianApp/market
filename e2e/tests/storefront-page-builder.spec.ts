@@ -4,10 +4,19 @@ import { finalizeEvent, generateSecretKey, getPublicKey, type EventTemplate } fr
 import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
-import { RELAY_URL } from '../test-config'
+import { LightningMock } from '../utils/lightning-mock'
+import { RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
 import { STOREFRONT_PAGE_D_TAG, STOREFRONT_PAGE_KIND, STOREFRONT_PAGE_VERSION } from '../../src/lib/schemas/storefront'
 
 useWebSocketImplementation(WebSocket)
+
+async function confirmStorefrontPublish(page: Page) {
+	await page.getByTestId('storefront-publish').click()
+	const identityDialog = page.getByTestId('storefront-publish-identity-dialog')
+	await expect(identityDialog).toBeVisible()
+	await expect(identityDialog.getByText(/each is a separate Lightning purchase/i)).toBeVisible()
+	await identityDialog.getByRole('button', { name: 'Publish storefront' }).click()
+}
 
 /**
  * Feature gate for the Puck-based profile page builder (ADR-019 / ADR-0006).
@@ -99,6 +108,13 @@ test.describe('storefront page builder', () => {
 	test('toggles the editor sidebars and fullscreen mode', async ({ merchantPage }) => {
 		await merchantPage.setViewportSize({ width: 1280, height: 800 })
 		await openBuilder(merchantPage)
+		const hotkeyPageErrors: string[] = []
+		merchantPage.on('pageerror', (error) => hotkeyPageErrors.push(error.message))
+		await merchantPage.evaluate(() => {
+			document.dispatchEvent(new Event('keydown', { bubbles: true }))
+			document.dispatchEvent(new Event('keyup', { bubbles: true }))
+		})
+		expect(hotkeyPageErrors).toEqual([])
 
 		for (const testId of ['storefront-sidebar-toggle', 'storefront-right-sidebar-toggle']) {
 			const toggle = merchantPage.getByTestId(testId)
@@ -114,6 +130,125 @@ test.describe('storefront page builder', () => {
 		await expect(fullscreenToggle).toHaveAttribute('aria-pressed', 'true')
 		await fullscreenToggle.click()
 		await expect(fullscreenToggle).toHaveAttribute('aria-pressed', 'false')
+	})
+
+	test('creates a vanity invoice and keeps payment pending until its outcome is known', async ({ merchantPage }) => {
+		let zapRequest: { tags?: string[][] } | undefined
+		await merchantPage.route('**/api/zapPurchase', async (route) => {
+			const body = route.request().postDataJSON() as { zapRequest?: { tags?: string[][] } }
+			zapRequest = body.zapRequest
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ pr: 'lnbc10000n1mockstorefrontinvoice' }),
+			})
+		})
+
+		await openBuilder(merchantPage)
+		await merchantPage.getByTestId('storefront-publish').click()
+		const dialog = merchantPage.getByTestId('storefront-publish-identity-dialog')
+		await expect(dialog).toBeVisible()
+		await dialog.getByLabel('Vanity URL', { exact: true }).check()
+		const vanityName = `shop${Date.now().toString().slice(-8)}`
+		await dialog.getByLabel('Choose URL name').fill(vanityName)
+		const invoiceButton = dialog.getByTestId('storefront-vanity-invoice')
+		await expect(invoiceButton).toBeEnabled({ timeout: 10_000 })
+		await invoiceButton.click()
+		await expect(dialog.getByLabel('Lightning Invoice')).toHaveValue('lnbc10000n1mockstorefrontinvoice')
+		expect(zapRequest?.tags).toContainEqual(['L', 'vanity-register'])
+		expect(zapRequest?.tags).toContainEqual(['vanity', vanityName])
+		await expect(dialog.getByTestId('storefront-identity-payment')).toBeVisible()
+		await expect(dialog.getByRole('button', { name: 'Cancel' })).toHaveCount(0)
+		await expect(dialog.getByRole('button', { name: 'Publish without buying an identity' })).toBeDisabled()
+		await merchantPage.unroute('**/api/zapPurchase')
+	})
+
+	test('creates a NIP-05 invoice through the existing payable flow', async ({ merchantPage }) => {
+		let zapRequest: { tags?: string[][] } | undefined
+		await merchantPage.route('**/api/zapPurchase', async (route) => {
+			const body = route.request().postDataJSON() as { zapRequest?: { tags?: string[][] } }
+			zapRequest = body.zapRequest
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ pr: 'lnbc10000n1mockstorefrontinvoice' }),
+			})
+		})
+
+		await openBuilder(merchantPage)
+		await merchantPage.getByTestId('storefront-publish').click()
+		const dialog = merchantPage.getByTestId('storefront-publish-identity-dialog')
+		await expect(dialog).toBeVisible()
+		await dialog.getByLabel('NIP-05 address', { exact: true }).check()
+		const nip05Name = `user${Date.now().toString().slice(-8)}`
+		await dialog.getByLabel('Choose NIP-05 username').fill(nip05Name)
+		const invoiceButton = dialog.getByTestId('storefront-nip05-invoice')
+		await expect(invoiceButton).toBeEnabled({ timeout: 10_000 })
+		await invoiceButton.click()
+		await expect(dialog.getByLabel('Lightning Invoice')).toHaveValue('lnbc10000n1mockstorefrontinvoice')
+		expect(zapRequest?.tags).toContainEqual(['L', 'nip05-register'])
+		expect(zapRequest?.tags).toContainEqual(['nip05', nip05Name])
+		await expect(dialog.getByRole('button', { name: 'Cancel' })).toHaveCount(0)
+		await expect(dialog.getByRole('button', { name: 'Publish without buying an identity' })).toBeDisabled()
+		await merchantPage.unroute('**/api/zapPurchase')
+	})
+
+	test('accepts a mocked vanity payment receipt and redirects after publishing', async ({ merchantPage }) => {
+		const lightningMock = await LightningMock.setup(merchantPage)
+		let zapRequest: Record<string, unknown> | undefined
+		await merchantPage.route('**/api/zapPurchase', async (route) => {
+			const body = route.request().postDataJSON() as { zapRequest?: Record<string, unknown> }
+			zapRequest = body.zapRequest
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ pr: 'lnbc10000n1acceptedmockinvoice' }),
+			})
+		})
+
+		const vanityName = `shop${Date.now().toString().slice(-8)}`
+		const oldRegistry = await fetchLatestRegistry(TEST_APP_PUBLIC_KEY, 'vanity-urls')
+		const previousTags = oldRegistry?.tags ?? [['d', 'vanity-urls']]
+		const vanityTag: string[] = ['vanity', vanityName, MERCHANT_PK, String(Math.floor(Date.now() / 1000) + 180 * 24 * 60 * 60)]
+
+		try {
+			await openBuilder(merchantPage)
+			await merchantPage.getByTestId('storefront-publish').click()
+			const dialog = merchantPage.getByTestId('storefront-publish-identity-dialog')
+			await expect(dialog).toBeVisible()
+			await dialog.getByLabel('Vanity URL', { exact: true }).check()
+			await dialog.getByLabel('Choose URL name').fill(vanityName)
+			await dialog.getByTestId('storefront-vanity-invoice').click()
+			await expect(dialog.getByLabel('Lightning Invoice')).toHaveValue('lnbc10000n1acceptedmockinvoice')
+
+			lightningMock.registerZapInvoice('lnbc10000n1acceptedmockinvoice', zapRequest!)
+			await dialog.getByRole('button', { name: 'Pay with WebLN' }).click()
+			await expect(dialog.getByText(/Zap receipt observed\. Waiting for the identity registry/i)).toBeVisible({ timeout: 15_000 })
+			expect(lightningMock.paidInvoices).toContain('lnbc10000n1acceptedmockinvoice')
+
+			// The mocked receipt confirms the payment evidence. Publish the
+			// corresponding app registry update separately to model activation.
+			await publishRaw(TEST_APP_PRIVATE_KEY, {
+				kind: 30000,
+				created_at: Math.floor(Date.now() / 1000),
+				content: '',
+				tags: [...previousTags.filter((tag) => !(tag[0] === 'vanity' && tag[1] === vanityName)), vanityTag],
+			})
+
+			await expect(dialog.getByText('Selected identities are active in the app registry.')).toBeVisible({ timeout: 20_000 })
+			await merchantPage.getByTestId('storefront-enable-toggle').click()
+			await dialog.getByTestId('storefront-publish-confirm').click()
+			await expect(merchantPage).toHaveURL(new RegExp(`/${vanityName}$`), { timeout: 20_000 })
+			await expect(merchantPage.getByTestId('storefront-page')).toBeVisible({ timeout: 20_000 })
+		} finally {
+			await merchantPage.unroute('**/api/zapPurchase')
+			await publishRaw(TEST_APP_PRIVATE_KEY, {
+				kind: 30000,
+				created_at: Math.floor(Date.now() / 1000),
+				content: '',
+				tags: previousTags.filter((tag) => !(tag[0] === 'vanity' && tag[1] === vanityName)),
+			})
+		}
 	})
 
 	test('builds, publishes, and serves a custom profile page', async ({ merchantPage }) => {
@@ -141,7 +276,7 @@ test.describe('storefront page builder', () => {
 		// Nothing reaches a relay until the author opts the page in and presses
 		// Publish — the editor's single network write.
 		await merchantPage.getByTestId('storefront-enable-toggle').click()
-		await merchantPage.getByTestId('storefront-publish').click()
+		await confirmStorefrontPublish(merchantPage)
 
 		// The toast names the relays that acknowledged, not merely "saved".
 		await expect(merchantPage.getByText(/published to \d+ relay/i)).toBeVisible({ timeout: 20_000 })
@@ -184,7 +319,7 @@ test.describe('storefront page builder', () => {
 		await openBuilder(merchantPage)
 		await expect(merchantPage.getByRole('heading', { name: headline })).toBeVisible({ timeout: 20_000 })
 		await merchantPage.getByTestId('storefront-enable-toggle').click()
-		await merchantPage.getByTestId('storefront-publish').click()
+		await confirmStorefrontPublish(merchantPage)
 		await expect(merchantPage.getByText(/page is switched off/i)).toBeVisible({ timeout: 20_000 })
 
 		const disabled = await fetchStorefrontEvent(MERCHANT_PK)
@@ -317,7 +452,7 @@ test.describe('storefront setup wizard', () => {
 		await expect(newUserPage.getByText('More from this shop')).toBeVisible({ timeout: 20_000 })
 
 		await newUserPage.getByTestId('storefront-enable-toggle').click()
-		await newUserPage.getByTestId('storefront-publish').click()
+		await confirmStorefrontPublish(newUserPage)
 		await expect(newUserPage.getByText(/published to \d+ relay/i)).toBeVisible({ timeout: 20_000 })
 
 		const event = await fetchStorefrontEvent(NEW_USER_PK)
@@ -417,6 +552,30 @@ async function fetchStorefrontEvent(pubkey: string) {
 				sub.close()
 				resolve(latest)
 			}, 8_000)
+		})
+	} finally {
+		relay.close()
+	}
+}
+
+async function fetchLatestRegistry(pubkey: string, dTag: string): Promise<{ tags: string[][] } | null> {
+	const relay = await Relay.connect(RELAY_URL)
+	try {
+		return await new Promise((resolve) => {
+			let latest: { tags: string[][]; created_at: number } | null = null
+			const sub = relay.subscribe([{ kinds: [30000], authors: [pubkey], '#d': [dTag] }], {
+				onevent(event) {
+					if (!latest || event.created_at > latest.created_at) latest = event
+				},
+				oneose() {
+					sub.close()
+					resolve(latest)
+				},
+			})
+			setTimeout(() => {
+				sub.close()
+				resolve(latest)
+			}, 5_000)
 		})
 	} finally {
 		relay.close()

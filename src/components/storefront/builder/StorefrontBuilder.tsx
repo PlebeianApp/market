@@ -22,6 +22,7 @@ import { useConfigQuery } from '@/queries/config'
 import { getNip05ForPubkey, useNip05Settings } from '@/queries/nip05'
 import { useStorefrontPage, usePublishStorefrontPage } from '@/queries/storefront'
 import { getVanityForPubkey, useVanitySettings } from '@/queries/vanity'
+import { useNavigate } from '@tanstack/react-router'
 import { Puck, type Data, usePuck } from '@puckeditor/core'
 import {
 	ExternalLink,
@@ -42,6 +43,7 @@ import type { ReactNode } from 'react'
 import { toast } from 'sonner'
 import { StorefrontProvider } from '../StorefrontContext'
 import { StorefrontSetupWizard } from './StorefrontSetupWizard'
+import { StorefrontPublishDialog } from './StorefrontPublishDialog'
 import { clearStorefrontDraft, loadStorefrontDraft, saveStorefrontDraft } from './draftStorage'
 
 import '@puckeditor/core/puck.css'
@@ -91,6 +93,7 @@ function fromPuckData(data: Data, enabled: boolean): StorefrontPage {
 export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 	const { data: published, isLoading } = useStorefrontPage(pubkey)
 	const publish = usePublishStorefrontPage()
+	const navigate = useNavigate()
 
 	// The claimed name (if any) is bought on separate dashboard pages today — see
 	// ADR-019 — but the builder is where an author actually needs to know it: it
@@ -109,6 +112,8 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 	const [isDirty, setIsDirty] = useState(false)
 	const [errors, setErrors] = useState<string[]>([])
 	const [confirmChangeTemplateOpen, setConfirmChangeTemplateOpen] = useState(false)
+	const [publishDialogOpen, setPublishDialogOpen] = useState(false)
+	const [pendingPublishPage, setPendingPublishPage] = useState<StorefrontPage | null>(null)
 	const [isFullscreen, setIsFullscreen] = useState(false)
 
 	// The live document. Held in a ref rather than state because Puck fires
@@ -116,6 +121,34 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 	// remount the editor and steal focus mid-word.
 	const currentData = useRef<Data | null>(null)
 	const editorShellRef = useRef<HTMLDivElement | null>(null)
+
+	useEffect(() => {
+		// Puck assumes every keydown/keyup event implements KeyboardEvent's
+		// getModifierState(). Some embedded browsers and test shims dispatch a
+		// plain Event instead; normalize it during capture so Puck's document
+		// listener can safely detect AltGraph. A missing modifier reports false.
+		const ensureModifierState = (event: Event) => {
+			const keyboardEvent = event as Event & { getModifierState?: (keyArg: string) => boolean }
+			if (typeof keyboardEvent.getModifierState === 'function') return
+
+			try {
+				Object.defineProperty(event, 'getModifierState', {
+					configurable: true,
+					value: () => false,
+				})
+			} catch {
+				// Native DOM events are extensible in supported browsers. If an
+				// embedder supplies a frozen event, do not interfere with dispatch.
+			}
+		}
+
+		document.addEventListener('keydown', ensureModifierState, true)
+		document.addEventListener('keyup', ensureModifierState, true)
+		return () => {
+			document.removeEventListener('keydown', ensureModifierState, true)
+			document.removeEventListener('keyup', ensureModifierState, true)
+		}
+	}, [])
 
 	useEffect(() => {
 		const updateFullscreenState = () => setIsFullscreen(document.fullscreenElement === editorShellRef.current)
@@ -204,39 +237,50 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 		[pubkey],
 	)
 
+	const publishValidatedPage = useCallback(
+		async (page: StorefrontPage): Promise<boolean> => {
+			setErrors([])
+			try {
+				const result = await publish.mutateAsync(page)
+				clearStorefrontDraft(pubkey)
+				setIsDirty(false)
+				setPendingPublishPage(null)
+				setPublishDialogOpen(false)
+				// Report the relays that actually acknowledged. "Published" on its
+				// own would be a claim about retention we cannot make.
+				toast.success(
+					page.enabled
+						? `Page published to ${result.publishedRelays.length} relay${result.publishedRelays.length === 1 ? '' : 's'}`
+						: `Saved to ${result.publishedRelays.length} relay${result.publishedRelays.length === 1 ? '' : 's'} (page is switched off)`,
+				)
+				if (page.enabled && vanityEntry) {
+					await navigate({ to: '/$vanityName', params: { vanityName: vanityEntry.vanityName } })
+				}
+				return true
+			} catch (error) {
+				const message = error instanceof Error ? error.message : 'Could not publish the page'
+				setErrors([message])
+				toast.error(message)
+				return false
+			}
+		},
+		[navigate, publish, pubkey, vanityEntry],
+	)
+
 	const handlePublish = useCallback(
 		async (data: Data) => {
-			const page = fromPuckData(data, enabled)
-
-			// Strict validation happens here, not at render: a block the renderer
-			// would silently drop becomes a message the author can act on while
-			// they still have the editor open.
-			const validation = validateStorefrontPageForPublish(page)
+			const validation = validateStorefrontPageForPublish(fromPuckData(data, enabled))
 			if (!validation.ok) {
 				setErrors(validation.errors)
 				toast.error('Fix the highlighted problems before publishing')
 				return
 			}
-			setErrors([])
 
-			try {
-				const result = await publish.mutateAsync(validation.page)
-				clearStorefrontDraft(pubkey)
-				setIsDirty(false)
-				// Report the relays that actually acknowledged. "Published" on its
-				// own would be a claim about retention we cannot make.
-				toast.success(
-					enabled
-						? `Page published to ${result.publishedRelays.length} relay${result.publishedRelays.length === 1 ? '' : 's'}`
-						: `Saved to ${result.publishedRelays.length} relay${result.publishedRelays.length === 1 ? '' : 's'} (page is switched off)`,
-				)
-			} catch (error) {
-				const message = error instanceof Error ? error.message : 'Could not publish the page'
-				setErrors([message])
-				toast.error(message)
-			}
+			setErrors([])
+			setPendingPublishPage(validation.page)
+			setPublishDialogOpen(true)
 		},
-		[enabled, publish, pubkey],
+		[enabled],
 	)
 
 	const handleDiscardDraft = useCallback(() => {
@@ -370,24 +414,6 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 										View live page <ExternalLink className="size-3.5" aria-hidden="true" />
 									</a>
 								</Button>
-								<div className="flex items-center gap-1 pl-1 text-xs text-muted-foreground" data-testid="storefront-identity">
-									<Link2 className="size-3" aria-hidden="true" />
-									{vanityEntry || nip05Entry ? (
-										<span>
-											{[vanityEntry && `${hostname}/${vanityEntry.vanityName}`, nip05Entry && `${nip05Entry.username}@${hostname}`]
-												.filter(Boolean)
-												.join(' · ')}
-										</span>
-									) : (
-										<a
-											href="/dashboard/account/vanity-url"
-											className="underline decoration-dotted hover:text-foreground"
-											data-testid="storefront-claim-identity"
-										>
-											Claim a custom URL &amp; Nostr address
-										</a>
-									)}
-								</div>
 							</div>
 							<h1 className="text-center text-base font-semibold tracking-tight sm:text-lg">Your Storefront</h1>
 							<div className="flex min-w-0 justify-center sm:justify-end">{actions}</div>
@@ -572,6 +598,17 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 					/>
 				</div>
 			</div>
+
+			<StorefrontPublishDialog
+				open={publishDialogOpen}
+				onOpenChange={(open) => {
+					setPublishDialogOpen(open)
+					if (!open) setPendingPublishPage(null)
+				}}
+				pubkey={pubkey}
+				page={pendingPublishPage}
+				onPublish={publishValidatedPage}
+			/>
 
 			<ChangeTemplateDialog
 				open={confirmChangeTemplateOpen}

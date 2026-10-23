@@ -6,11 +6,22 @@ This feature allows users to register custom vanity URLs for their profile/shop 
 
 Vanity URLs provide users with memorable, shareable links like `/alice-store` that display their profile page directly. URLs are time-limited subscriptions purchased via Bitcoin Lightning zaps.
 
+## Unified storefront identity
+
+New registrations use the unified storefront identity flow in the storefront
+builder: one `storefront-register` zap and one `name` tag grant both
+`/{name}` and `{name}@{configured-domain}` for the same pubkey and expiry.
+The `vanity-urls` registry and this guide's `vanity-register` flow are legacy
+read/compatibility paths only; new invoices under the old label are not
+accepted. Existing legacy entries resolve until expiry and prevent a different
+pubkey from claiming the same name in the unified registry. Pending legacy
+invoices must be recreated through the unified storefront identity flow.
+
 ## Architecture
 
 ### Backend (`src/server/`)
 
-- **VanityManager.ts** - Manages the vanity URL registry
+- **VanityManager.ts** - Reads the legacy vanity URL registry during migration
   - Handles kind `30000` events with `d=vanity-urls` tag
   - Processes zap receipts (kind `9735`) with `["L", "vanity-register"]` label
   - Validates reserved names and name format
@@ -26,7 +37,7 @@ Vanity URLs provide users with memorable, shareable links like `/alice-store` th
 
 ## Data Format
 
-### Vanity Registry Event (Kind 30000)
+### Legacy Vanity Registry Event (Kind 30000)
 
 ```json
 {
@@ -39,7 +50,7 @@ Vanity URLs provide users with memorable, shareable links like `/alice-store` th
 }
 ```
 
-### Zap Request for Registration
+### Legacy Vanity-only Zap Request
 
 ```json
 {
@@ -73,7 +84,12 @@ The following patterns are reserved and cannot be registered:
 
 See full list in `src/server/VanityManager.ts` and `src/lib/stores/vanity.ts`.
 
-## Registration Flow
+## Legacy Registration Flow
+
+The following flow documents old invoices and events. The dashboard redirects
+legacy purchase-page bookmarks to the storefront builder, and the server no
+longer creates invoices for `vanity-register`; use the unified `storefront-register`
+flow described above for new identities.
 
 1. User chooses vanity name in dashboard
 2. User clicks on a pricing tier

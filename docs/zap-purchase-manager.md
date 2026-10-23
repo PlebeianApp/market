@@ -2,6 +2,22 @@
 
 The ZapPurchaseManager manages the whole workflow of buying Lightning-powered(zaps) "purchasables"(nip05 addresses, badges and vanity url) on Plebeian market.
 
+For new storefront identities, `StorefrontIdentityManager` is the only active
+name-sale manager. A single `storefront-register` zap with a `name` tag writes
+one app registry entry used for both the vanity path and NIP-05 response.
+`VanityManagerImpl` and `Nip05ManagerImpl` remain loaded as legacy registry
+readers during migration, but their separate purchase labels no longer create
+invoices through the application.
+
+Purchase registration verifies the signed zap request and kind-9735 receipt,
+matches the receipt's exact BOLT11 and request against an issued invoice, checks
+the receipt signer against the app Lightning endpoint's `nostrPubkey`, and
+reserves the name/account while invoice creation is in flight. After a server
+restart, receipt reconciliation resolves the configured LNURL-pay receipt key
+again, so a valid in-flight receipt does not depend only on volatile invoice
+memory. Receipt presence alone is still distinct from the subsequent registry
+event publication and client observation.
+
 It handled verification of tiers for the various "purchasables", checking their validity, creating their payment receipts, verifying the paid receipts and registering/publishing records for the "purchasable items".
 
 The typical purchase for a zap purchase looks like this:

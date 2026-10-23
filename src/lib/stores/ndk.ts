@@ -946,7 +946,13 @@ export const ndkActions = {
 	 */
 	createZapReceiptSubscription: (onZapEvent: (event: NDKEvent) => void, bolt11?: string): (() => void) => {
 		const state = ndkStore.state
-		if (!state.zapNdk || !state.isZapNdkConnected) {
+		// When external zap relays are disabled (e.g. local-only test or staging
+		// configuration), the dedicated zap NDK is intentionally absent. The
+		// already-configured application NDK can still observe receipts published
+		// to its own relay without opening any additional network path.
+		const receiptNdk = state.zapNdk ?? state.ndk
+		const isReceiptNdkConnected = state.zapNdk ? state.isZapNdkConnected : state.isConnected
+		if (!receiptNdk || !isReceiptNdkConnected) {
 			console.warn('Zap NDK not connected. Cannot create zap subscription.')
 			return () => {}
 		}
@@ -956,7 +962,7 @@ export const ndkActions = {
 			since: Math.floor(Date.now() / 1000) - 60, // Look back 1 minute for recent zaps
 		}
 
-		const subscription = state.zapNdk.subscribe(filters, { closeOnEose: false })
+		const subscription = receiptNdk.subscribe(filters, { closeOnEose: false })
 
 		subscription.on('event', (event: NDKEvent) => {
 			// If we're monitoring a specific invoice, filter by bolt11
