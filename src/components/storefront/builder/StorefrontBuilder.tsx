@@ -100,8 +100,8 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 	// decides what "View live page" points at and whether to nudge an author who
 	// has never claimed a name at all.
 	const { data: config } = useConfigQuery()
-	const { data: vanitySettings } = useVanitySettings(config?.appPublicKey)
-	const { data: nip05Settings } = useNip05Settings(config?.appPublicKey)
+	const { data: vanitySettings } = useVanitySettings(config?.appPublicKey, config?.handlerId)
+	const { data: nip05Settings } = useNip05Settings(config?.appPublicKey, config?.handlerId)
 	const vanityEntry = useMemo(() => getVanityForPubkey(vanitySettings, pubkey), [vanitySettings, pubkey])
 	const nip05Entry = useMemo(() => getNip05ForPubkey(nip05Settings, pubkey), [nip05Settings, pubkey])
 	const liveHref = vanityEntry ? `/${vanityEntry.vanityName}?preview=draft` : `/profile/${pubkey}?preview=draft`

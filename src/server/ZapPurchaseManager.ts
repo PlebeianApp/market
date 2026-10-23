@@ -51,6 +51,8 @@ export interface LnurlInvoiceData {
 
 export type LnurlResolver = (lightningIdentifier: string) => string
 
+export type PurchaseValidationStage = 'invoice' | 'receipt'
+
 export interface ZapPurchaseConfig {
 	zapLabel: string
 	registryEventKind: number
@@ -89,6 +91,26 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 	// --- Optional hooks (override in subclass) ---
 	protected onEntryRegistered?(key: string, entry: TEntry): void
 	protected onRegistryRebuilt?(): void
+	protected validatePurchaseAmount?(
+		amountSats: number,
+		key: string,
+		pubkey: string,
+		zapRequest: NostrEvent,
+		stage: PurchaseValidationStage,
+	): string | null
+	protected async applyPurchase(key: string, requesterPubkey: string, validitySeconds: number, now: number): Promise<void> {
+		let validUntil = now + validitySeconds
+		const existing = this.registry.get(key)
+		if (existing && existing.pubkey === requesterPubkey && existing.validUntil > now) {
+			validUntil = existing.validUntil + validitySeconds
+		}
+
+		const entry = this.createEntry(key, requesterPubkey, validUntil)
+		this.registry.set(key, entry)
+		this.onEntryRegistered?.(key, entry)
+		await this.publishRegistry()
+	}
+
 	public setNDK(ndk: NDK): void {
 		this.ndk = ndk
 	}
@@ -215,27 +237,20 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		const amountSats = Math.floor(amountMsats / 1000)
 		console.log(`[${this.config.registryDTag}] Zap amount: ${amountSats} sats`)
 
+		const amountValidationError = this.validatePurchaseAmount?.(amountSats, key, requesterPubkey, zapRequest, 'receipt')
+		if (amountValidationError) {
+			console.error(`[${this.config.registryDTag}] Purchase amount validation failed: ${amountValidationError}`)
+			return
+		}
+
 		const validitySeconds = this.matchPricingTier(amountSats)
 		if (validitySeconds === null) {
 			console.error(`[${this.config.registryDTag}] Insufficient amount: ${amountSats} sats`)
 			return
 		}
 
-		// Calculate validity, extending if same owner renews
 		const now = Math.floor(Date.now() / 1000)
-		let validUntil = now + validitySeconds
-
-		const existing = this.registry.get(key)
-		if (existing && existing.pubkey === requesterPubkey && existing.validUntil > now) {
-			validUntil = existing.validUntil + validitySeconds
-		}
-
-		console.log(`[${this.config.registryDTag}] Registration valid until: ${new Date(validUntil * 1000).toISOString()}`)
-
-		// Create and store the entry
-		const entry = this.createEntry(key, requesterPubkey, validUntil)
-		this.registry.set(key, entry)
-		this.onEntryRegistered?.(key, entry)
+		await this.applyPurchase(key, requesterPubkey, validitySeconds, now)
 		this.issuedInvoices.delete(bolt11)
 		this.processedReceipts.add(eventId)
 		if (this.processedReceipts.size > 2000) {
@@ -243,11 +258,7 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 			this.processedReceipts.add(eventId)
 		}
 
-		await this.publishRegistry()
-
-		console.log(
-			`[${this.config.registryDTag}] Registered: ${key} -> ${requesterPubkey} (valid until ${new Date(validUntil * 1000).toISOString()})`,
-		)
+		console.log(`[${this.config.registryDTag}] Registered: ${key} -> ${requesterPubkey}`)
 	}
 
 	private async resolveReceiptProviderPubkey(): Promise<string | null> {
@@ -384,6 +395,16 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		const validationError = this.validateRegistration(registryKey, zapRequest.pubkey)
 		if (validationError) {
 			throw new ZapInvoiceError(validationError, 400)
+		}
+		const amountValidationError = this.validatePurchaseAmount?.(
+			amountSats,
+			registryKey,
+			zapRequest.pubkey,
+			zapRequest as NostrEvent,
+			'invoice',
+		)
+		if (amountValidationError) {
+			throw new ZapInvoiceError(amountValidationError, 400)
 		}
 
 		// --- Resolve LNURL-pay endpoint ---

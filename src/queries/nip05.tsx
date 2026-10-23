@@ -8,6 +8,7 @@ export interface Nip05Entry {
 	username: string
 	pubkey: string
 	validUntil: number
+	isUnified?: boolean
 }
 
 export interface Nip05Settings {
@@ -19,7 +20,7 @@ export interface Nip05Settings {
 /**
  * Fetches NIP-05 registry (kind 30000 with d=nip05-names) for the app
  */
-export const fetchNip05Settings = async (appPubkey?: string): Promise<Nip05Settings | null> => {
+export const fetchNip05Settings = async (appPubkey?: string, handlerId?: string): Promise<Nip05Settings | null> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -34,9 +35,13 @@ export const fetchNip05Settings = async (appPubkey?: string): Promise<Nip05Setti
 		'#d': ['nip05-names'],
 		limit: 1,
 	}
+	const unifiedDTag = `${handlerId || 'plebeian-market-handler'}-storefront-names`
+	const unifiedFilter: NDKFilter = { ...nip05Filter, '#d': [unifiedDTag] }
 
-	const events = await ndk.fetchEvents(nip05Filter)
-	const eventArray = Array.from(events)
+	const [legacyEvents, unifiedEvents] = await Promise.all([ndk.fetchEvents(nip05Filter), ndk.fetchEvents(unifiedFilter)])
+	const eventArray = [...legacyEvents, ...unifiedEvents].sort(
+		(a, b) => (b.created_at ?? 0) - (a.created_at ?? 0) || a.id.localeCompare(b.id),
+	)
 
 	if (eventArray.length === 0) {
 		return {
@@ -46,30 +51,46 @@ export const fetchNip05Settings = async (appPubkey?: string): Promise<Nip05Setti
 		}
 	}
 
-	// Get the latest event
-	const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
-
-	// Extract nip05 entries from 'nip05' tags
-	// Format: ["nip05", username, pubkey, validUntil]
-	const entries = latestEvent.tags
-		.filter((tag) => tag[0] === 'nip05' && tag[1] && tag[2] && tag[3])
-		.map((tag) => ({
-			username: tag[1].toLowerCase(),
-			pubkey: tag[2],
-			validUntil: parseInt(tag[3]) || 0,
-		}))
+	const entriesByName = new Map<string, Nip05Entry>()
+	const now = Math.floor(Date.now() / 1000)
+	for (const event of [...eventArray].reverse()) {
+		const isUnified = event.tags.some((tag) => tag[0] === 'd' && tag[1] === unifiedDTag)
+		const entries = isUnified
+			? event.tags
+					.filter((tag) => tag[0] === 'name' && tag[1] && tag[2] && tag[3])
+					.map((tag) => ({
+						username: tag[1].toLowerCase(),
+						pubkey: tag[2],
+						validUntil: Number.parseInt(tag[3], 10) || 0,
+						isUnified: true,
+					}))
+			: event.tags
+					.filter((tag) => tag[0] === 'nip05' && tag[1] && tag[2] && tag[3])
+					.map((tag) => ({
+						username: tag[1].toLowerCase(),
+						pubkey: tag[2],
+						validUntil: Number.parseInt(tag[3], 10) || 0,
+						isUnified: false,
+					}))
+		for (const entry of entries) {
+			const current = entriesByName.get(entry.username)
+			if (!current || (entry.isUnified && (entry.validUntil > now || current.validUntil <= now))) {
+				entriesByName.set(entry.username, entry)
+			}
+		}
+	}
 
 	return {
-		entries,
-		lastUpdated: latestEvent.created_at ?? 0,
-		event: latestEvent,
+		entries: Array.from(entriesByName.values()),
+		lastUpdated: eventArray[0].created_at ?? 0,
+		event: eventArray[0],
 	}
 }
 
 /**
  * Hook to fetch NIP-05 settings for the app
  */
-export const useNip05Settings = (appPubkey?: string) => {
+export const useNip05Settings = (appPubkey?: string, handlerId?: string) => {
 	const queryClient = useQueryClient()
 	const ndk = ndkActions.getNDK()
 
@@ -80,7 +101,7 @@ export const useNip05Settings = (appPubkey?: string) => {
 		const nip05Filter = {
 			kinds: [30000],
 			authors: [appPubkey],
-			'#d': ['nip05-names'],
+			'#d': ['nip05-names', `${handlerId || 'plebeian-market-handler'}-storefront-names`],
 		}
 
 		const subscription = ndk.subscribe(nip05Filter, {
@@ -88,17 +109,17 @@ export const useNip05Settings = (appPubkey?: string) => {
 		})
 
 		subscription.on('event', () => {
-			queryClient.invalidateQueries({ queryKey: configKeys.nip05(appPubkey) })
+			queryClient.invalidateQueries({ queryKey: configKeys.nip05(appPubkey, handlerId) })
 		})
 
 		return () => {
 			subscription.stop()
 		}
-	}, [appPubkey, ndk, queryClient])
+	}, [appPubkey, handlerId, ndk, queryClient])
 
 	return useQuery({
-		queryKey: configKeys.nip05(appPubkey || ''),
-		queryFn: () => fetchNip05Settings(appPubkey),
+		queryKey: configKeys.nip05(appPubkey || '', handlerId),
+		queryFn: () => fetchNip05Settings(appPubkey, handlerId),
 		enabled: !!appPubkey,
 		staleTime: 30000,
 		refetchOnMount: true,

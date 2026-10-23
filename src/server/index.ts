@@ -6,6 +6,7 @@ export { AdminManagerImpl } from './AdminManager'
 export { EditorManagerImpl } from './EditorManager'
 export { BootstrapManagerImpl } from './BootstrapManager'
 export { VanityManagerImpl, VANITY_PRICING, type VanityEntry } from './VanityManager'
+export { StorefrontIdentityManager, STOREFRONT_IDENTITY_PRICING, type StorefrontIdentityEntry } from './StorefrontIdentityManager'
 export {
 	ZapPurchaseManager,
 	ZapInvoiceError,

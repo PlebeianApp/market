@@ -152,19 +152,22 @@ consumes.
 Drafts go to `localStorage` on every change, keyed per pubkey, and are
 re-validated when read back (localStorage is writable by anything on the origin).
 Pressing **Publish** opens an optional identity step before the page event is
-published. Authors can keep or purchase a vanity URL and/or a NIP-05 address
-using the existing, separate Lightning zap purchase flows. Each selected name
-is checked against its registry before an invoice is created; availability is
-advisory and the server remains authoritative. After payment, the UI waits for
-the zap receipt and then for the matching active app-registry entry before it
-allows publication with that selected identity. A wallet acknowledgement or
-receipt alone is not treated as registration activation.
+published. Authors enter one name; the current site's domain is added to form
+the NIP-05 address, and that name becomes the vanity URL path. One Lightning zap invoice
+registers both names in the unified storefront identity registry. A matching
+legacy identity owned by the author is migrated on renewal, and the combined
+validity is extended from the later existing expiry. If exactly one matching
+legacy identity exists, the invoice covers the missing identity only;
+otherwise it covers both. Availability is advisory and the server remains
+authoritative. After payment, the UI waits for the zap receipt and then for the
+matching active unified registry entry before it allows publication with that
+identity. A wallet acknowledgement or receipt alone is not treated as
+registration activation.
 
 Neither identity is required to publish. **Publish without buying an identity**
 publishes the page normally, and it remains reachable by profile pubkey. This
 preserves the page/identity separation: a name controls the short route, not
-ownership of the page. Vanity and NIP-05 remain separate purchases and can be
-partially completed; they are not presented as an atomic bundle.
+ownership of the page.
 
 Draft edits remain local until the author explicitly continues to publication;
 the editor does not relay-publish half-finished content on each change.
@@ -184,12 +187,12 @@ bun test --isolate src/lib/schemas/storefront.test.ts \
 bun run test:e2e -- e2e/tests/storefront-page-builder.spec.ts
 ```
 
-The e2e spec covers build → optional identity purchase step → publish → visit →
-render. The accepted-payment case uses a mocked invoice, a locally signed zap
-receipt on the test relay, then a separate synthetic registry update; it does
-not contact an external payment service or claim to test server-side invoice
-acceptance. Payment receipt and identity activation remain separate states. The
-suite also covers the ADR-019 guardrail that a hostile page event (script URLs,
+The e2e spec covers build → optional combined identity purchase step → publish
+→ visit → render. The accepted-payment case uses a mocked invoice, a locally
+signed zap receipt on the test relay, then a separate synthetic unified registry
+update; it does not contact an external payment service or claim to test
+server-side invoice acceptance. Payment receipt and identity activation remain
+separate states. The suite also covers the ADR-019 guardrail that a hostile page event (script URLs,
 `javascript:` hrefs, unknown block types, oversized payloads) renders inert. It
 uses throwaway keypairs for hostile cases: an enabled page replaces the profile
 view for whoever authored it, so enabling one on a shared fixture account would
@@ -197,13 +200,11 @@ change what every other spec sees.
 
 ## Relationship to the ADRs
 
-- **ADR-019** supplies the page half: kind 30024, `d=storefront-page`,
-  user-signed, closed block union, no raw HTML, `$vanityName` fallback chain.
-  Its _identity_ half (merging the NIP-05 and vanity registries into one
-  `StorefrontIdentityManager`) remains proposed and is not implemented here.
-  The publish dialog reuses the existing independent vanity and NIP-05 invoice
-  flows; it does not make them an atomic bundle or require either purchase to
-  publish a page.
+- **ADR-019** supplies both halves: kind 30024, `d=storefront-page`,
+  user-signed, closed block union, no raw HTML, `$vanityName` fallback chain,
+  and a unified `StorefrontIdentityManager`. Its one invoice activates the
+  NIP-05 and vanity forms together; neither identity nor purchase is required
+  to publish a page.
 - **ADR-0006** supplies the editor: Puck, with components registered through a
   config that maps block types to sidebar fields.
 - ADR-019 rejects "third-party CMS or headless builder integration" on the

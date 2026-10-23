@@ -23,9 +23,10 @@ invoices must be recreated through the unified storefront identity flow.
 
 - **VanityManager.ts** - Reads the legacy vanity URL registry during migration
   - Handles kind `30000` events with `d=vanity-urls` tag
-  - Processes zap receipts (kind `9735`) with `["L", "vanity-register"]` label
-  - Validates reserved names and name format
-  - Calculates validity period based on zap amount
+- **StorefrontIdentityManager.ts** - Handles new unified identity purchases
+  - One `storefront-register` zap writes a single `name` record
+  - The record powers both `/{name}` and `{name}@{domain}`
+  - Legacy vanity and NIP-05 registries remain read-only during migration
 
 ### Frontend
 
@@ -50,27 +51,34 @@ invoices must be recreated through the unified storefront identity flow.
 }
 ```
 
-### Legacy Vanity-only Zap Request
+### Unified Identity Zap Request
 
 ```json
 {
 	"kind": 9734,
 	"tags": [
-		["L", "vanity-register"],
-		["vanity", "alice-store"],
+		["L", "storefront-register"],
+		["name", "alice-store"],
+		["tier", "6mo"],
+		["count", "2"],
 		["p", "<app_pubkey>"],
-		["amount", "10000000"]
+		["amount", "20000000"]
 	]
 }
 ```
 
 ## Pricing
 
-| Duration   | Amount      | Validity   |
-| ---------- | ----------- | ---------- |
-| Dev (test) | 10 sats     | 90 seconds |
-| 6 Months   | 10,000 sats | 180 days   |
-| 1 Year     | 18,000 sats | 365 days   |
+| Duration   | Both identities | One matching legacy identity |
+| ---------- | --------------- | ---------------------------- |
+| Dev (test) | 20 sats         | 10 sats                      |
+| 6 Months   | 20,000 sats     | 10,000 sats                  |
+| 1 Year     | 36,000 sats     | 18,000 sats                  |
+
+The single invoice price is the sum of the existing vanity and NIP-05 prices.
+When the buyer already owns exactly one matching legacy entry, the invoice
+covers the missing identity and the unified expiry is extended from the later
+legacy expiry.
 
 > Note: Dev tier only available in development mode (`NODE_ENV=development`)
 

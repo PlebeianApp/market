@@ -24,7 +24,7 @@ export class NDKService {
 		if (!relayUrl) return
 
 		try {
-			this.ndk = new NDK({ explicitRelayUrls: [relayUrl] })
+			this.ndk = new NDK({ explicitRelayUrls: [relayUrl], enableOutboxModel: false })
 			await this.ndk.connect()
 			console.log('NDK service connected to relay:', relayUrl)
 		} catch (e) {

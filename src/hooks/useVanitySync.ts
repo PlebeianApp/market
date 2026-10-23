@@ -9,7 +9,7 @@ import { useEffect } from 'react'
  */
 export const useVanitySync = () => {
 	const { data: config } = useConfigQuery()
-	const { data: vanitySettings, isLoading } = useVanitySettings(config?.appPublicKey)
+	const { data: vanitySettings, isLoading } = useVanitySettings(config?.appPublicKey, config?.handlerId)
 
 	useEffect(() => {
 		if (!vanitySettings || isLoading) return

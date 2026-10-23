@@ -1,6 +1,7 @@
 # Workflow: Registration, Verification, Validation, and Purchase
 
-The ZapPurchaseManager manages the whole workflow of buying Lightning-powered(zaps) "purchasables"(nip05 addresses, badges and vanity url) on Plebeian market.
+`ZapPurchaseManager` provides the shared invoice and receipt validation flow
+for Lightning purchases.
 
 For new storefront identities, `StorefrontIdentityManager` is the only active
 name-sale manager. A single `storefront-register` zap with a `name` tag writes
@@ -9,14 +10,27 @@ one app registry entry used for both the vanity path and NIP-05 response.
 readers during migration, but their separate purchase labels no longer create
 invoices through the application.
 
-Purchase registration verifies the signed zap request and kind-9735 receipt,
-matches the receipt's exact BOLT11 and request against an issued invoice, checks
-the receipt signer against the app Lightning endpoint's `nostrPubkey`, and
-reserves the name/account while invoice creation is in flight. After a server
-restart, receipt reconciliation resolves the configured LNURL-pay receipt key
-again, so a valid in-flight receipt does not depend only on volatile invoice
-memory. Receipt presence alone is still distinct from the subsequent registry
-event publication and client observation.
+The unified identity uses one `storefront-register` zap with a `name` tag. Its
+signed request carries the selected price tier and whether the invoice covers
+one missing legacy identity or both identity forms. The server validates these
+against current registry ownership when creating the invoice, then validates
+the signed request and receipt before registering and publishing one unified
+entry. Issued-invoice authorization is kept in memory; receipt evidence remains
+distinct from registry publication and client observation.
+
+## Relay connection readiness
+
+The browser marks each NDK connection ready as soon as its first relay connects.
+Unreachable peers do not delay readiness until the overall connection timeout;
+remaining peers continue connecting in the background. If no relay connects,
+the connection remains unavailable and a warning is logged. This is transport
+readiness only, not confirmation of a payment or identity registration.
+
+Server app-relay connections and dedicated zap-monitoring connections disable
+NDK's automatic outbox pool. They connect to their explicitly configured relays
+instead of also waiting for NDK's default public outbox relays. The configured
+zap receipt relay set is preserved. Bug-report history is fetched only when its
+viewer is opened, not when the closed dialog mounts during app startup.
 
 It handled verification of tiers for the various "purchasables", checking their validity, creating their payment receipts, verifying the paid receipts and registering/publishing records for the "purchasable items".
 
@@ -39,9 +53,9 @@ M --> N[Client can use purchased resource]
 
 ### 1. Registration (Invoice Request for the Purchasable item)
 
-- The client initiates a purchase by calling a helper (e.g., `purchaseVanityForPubkey`).
+- The client initiates a storefront identity purchase with `purchaseStorefrontIdentity`.
 - This builds and signs a Nostr zap request (kind 9734) with the correct tags and sends it to the server’s `/api/zapPurchase` endpoint.
-- The server resolves the correct ZapPurchaseManager subclass by the zap label (L tag) i.e vanity-register for vanityurls, nip05 for nip05 addresses.
+- The server resolves `StorefrontIdentityManager` by the `storefront-register` zap label.
 
 ### 2. Verification (Invoice Generation)
 

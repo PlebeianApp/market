@@ -3,20 +3,20 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LightningPaymentProcessor } from '@/components/lightning/LightningPaymentProcessor'
-import { useConfigQuery } from '@/queries/config'
-import { getNip05ForPubkey, isNip05Available, useNip05Settings } from '@/queries/nip05'
-import { getVanityForPubkey, isVanityAvailable, useVanitySettings } from '@/queries/vanity'
-import { ndkStore } from '@/lib/stores/ndk'
 import { nip05Actions } from '@/lib/stores/nip05'
+import { ndkStore } from '@/lib/stores/ndk'
 import { vanityActions } from '@/lib/stores/vanity'
-import { purchaseNip05ForPubkey, purchaseVanityForPubkey } from '@/lib/zapPurchase'
+import { purchaseStorefrontIdentity } from '@/lib/zapPurchase'
 import type { StorefrontPage } from '@/lib/schemas/storefront'
 import { NIP05_PRICING } from '@/server/Nip05Manager'
 import { VANITY_PRICING } from '@/server/VanityManager'
-import { AlertCircle, CheckCircle2, ExternalLink, Loader2, Zap } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Loader2, Zap } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { toast } from 'sonner'
+import { useConfigQuery } from '@/queries/config'
+import { useNip05Settings } from '@/queries/nip05'
+import { useVanitySettings } from '@/queries/vanity'
 
 interface StorefrontPublishDialogProps {
 	open: boolean
@@ -26,9 +26,7 @@ interface StorefrontPublishDialogProps {
 	onPublish: (page: StorefrontPage) => Promise<boolean>
 }
 
-type IdentityKind = 'vanity' | 'nip05'
 type PaymentInvoice = {
-	kind: IdentityKind
 	name: string
 	amountSats: number
 	invoice: string
@@ -36,84 +34,79 @@ type PaymentInvoice = {
 	stage: 'paying' | 'awaiting-registration'
 }
 
-const vanityTiers = Object.entries(VANITY_PRICING)
-const nip05Tiers = Object.entries(NIP05_PRICING)
+const identityTiers = Object.entries(VANITY_PRICING).filter(([key]) => NIP05_PRICING[key])
 
-/**
- * Optional storefront identity step. Vanity and NIP-05 remain separate legacy
- * purchases, each using its existing zap invoice and receipt-driven registry.
- * A selected purchase must appear in the active app registry before this dialog
- * allows publishing with that identity selected. Publishing without buying an
- * identity remains available: a storefront is still reachable by pubkey.
- */
 export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPublish }: StorefrontPublishDialogProps) {
 	const { data: config } = useConfigQuery()
-	const { data: vanitySettings, isLoading: isLoadingVanity, refetch: refetchVanity } = useVanitySettings(config?.appPublicKey)
-	const { data: nip05Settings, isLoading: isLoadingNip05, refetch: refetchNip05 } = useNip05Settings(config?.appPublicKey)
+	const {
+		data: vanitySettings,
+		isLoading: isLoadingVanity,
+		refetch: refetchVanity,
+	} = useVanitySettings(config?.appPublicKey, config?.handlerId)
+	const {
+		data: nip05Settings,
+		isLoading: isLoadingNip05,
+		refetch: refetchNip05,
+	} = useNip05Settings(config?.appPublicKey, config?.handlerId)
 	const { ndk } = useStore(ndkStore)
-	const [wantVanity, setWantVanity] = useState(false)
-	const [wantNip05, setWantNip05] = useState(false)
-	const [vanityName, setVanityName] = useState('')
-	const [nip05Name, setNip05Name] = useState('')
-	const [vanityTierKey, setVanityTierKey] = useState('6mo')
-	const [nip05TierKey, setNip05TierKey] = useState('6mo')
+	const [nameInput, setNameInput] = useState('')
+	const [domain, setDomain] = useState('')
+	const [tierKey, setTierKey] = useState('6mo')
 	const [invoice, setInvoice] = useState<PaymentInvoice | null>(null)
 	const [isCreatingInvoice, setIsCreatingInvoice] = useState(false)
 	const [isCheckingRegistration, setIsCheckingRegistration] = useState(false)
 	const [registrationTimedOut, setRegistrationTimedOut] = useState(false)
 	const [purchaseError, setPurchaseError] = useState('')
 	const [isPublishing, setIsPublishing] = useState(false)
-	const domain = typeof window === 'undefined' ? '' : window.location.hostname
+	const username = nameInput.trim().toLowerCase()
+	const nameValid =
+		!!domain &&
+		!username.includes('@') &&
+		vanityActions.isValidVanityName(username) &&
+		!vanityActions.isReservedName(username) &&
+		nip05Actions.isValidUsername(username) &&
+		!nip05Actions.isReservedName(username)
+	const nowSeconds = Date.now() / 1000
+	const unifiedVanity = vanitySettings?.entries.find(
+		(entry) => entry.vanityName === username && entry.pubkey === pubkey && entry.isUnified && entry.validUntil > nowSeconds,
+	)
+	const unifiedNip05 = nip05Settings?.entries.find(
+		(entry) => entry.username === username && entry.pubkey === pubkey && entry.isUnified && entry.validUntil > nowSeconds,
+	)
+	const unifiedRegistered = Boolean(unifiedVanity && unifiedNip05 && unifiedVanity.validUntil === unifiedNip05.validUntil)
+	const vanityEntry = vanitySettings?.entries.find((entry) => entry.vanityName === username && entry.validUntil > nowSeconds)
+	const nip05Entry = nip05Settings?.entries.find((entry) => entry.username === username && entry.validUntil > nowSeconds)
+	const isTakenByOther = Boolean((vanityEntry && vanityEntry.pubkey !== pubkey) || (nip05Entry && nip05Entry.pubkey !== pubkey))
+	const ownedLegacyCount = [vanityEntry, nip05Entry].filter((entry) => entry?.pubkey === pubkey && !entry.isUnified).length
+	const chargeCount = unifiedRegistered ? 2 : ownedLegacyCount === 1 ? 1 : 2
+	const tier = VANITY_PRICING[tierKey]
+	const amountSats = tier ? tier.sats * chargeCount : 0
+	const namesLoading = isLoadingVanity || isLoadingNip05
+	const nameAvailable = nameValid && !namesLoading && !isTakenByOther
+	const haveIdentityRequest = username.length > 0
 
-	const currentVanity = useMemo(() => getVanityForPubkey(vanitySettings, pubkey), [pubkey, vanitySettings])
-	const currentNip05 = useMemo(() => getNip05ForPubkey(nip05Settings, pubkey), [nip05Settings, pubkey])
-	const vanityNormalized = vanityName.trim().toLowerCase()
-	const nip05Normalized = nip05Name.trim().toLowerCase()
-	const vanityNameValid = vanityActions.isValidVanityName(vanityNormalized) && !vanityActions.isReservedName(vanityNormalized)
-	const nip05NameValid = nip05Actions.isValidUsername(nip05Normalized) && !nip05Actions.isReservedName(nip05Normalized)
-	const vanityNameAvailable = !isLoadingVanity && vanityNameValid && isVanityAvailable(vanitySettings, vanityNormalized)
-	const nip05NameAvailable = !isLoadingNip05 && nip05NameValid && isNip05Available(nip05Settings, nip05Normalized)
-	const vanityRegistered = Boolean(
-		vanitySettings?.entries.some(
-			(entry) => entry.vanityName === vanityNormalized && entry.pubkey === pubkey && entry.validUntil > Date.now() / 1000,
-		),
-	)
-	const nip05Registered = Boolean(
-		nip05Settings?.entries.some(
-			(entry) => entry.username === nip05Normalized && entry.pubkey === pubkey && entry.validUntil > Date.now() / 1000,
-		),
-	)
-	const selectionsReady = (!wantVanity || vanityRegistered) && (!wantNip05 || nip05Registered)
-	const haveSelections = wantVanity || wantNip05
-	const canCreateVanityInvoice =
-		!!ndk?.activeUser?.pubkey &&
-		ndk.activeUser.pubkey === pubkey &&
-		!!config?.appPublicKey &&
-		!!config.appRelay &&
-		vanityNameAvailable &&
-		!!VANITY_PRICING[vanityTierKey]
-	const canCreateNip05Invoice =
-		!!ndk?.activeUser?.pubkey &&
-		ndk.activeUser.pubkey === pubkey &&
-		!!config?.appPublicKey &&
-		!!config.appRelay &&
-		nip05NameAvailable &&
-		!!NIP05_PRICING[nip05TierKey]
+	useEffect(() => {
+		setDomain(window.location.hostname.toLowerCase())
+	}, [])
+
+	useEffect(() => {
+		if (nameInput || namesLoading) return
+		const activeName = vanitySettings?.entries.find((entry) => entry.pubkey === pubkey && entry.validUntil > Date.now() / 1000)?.vanityName
+		if (activeName && nip05Actions.isValidUsername(activeName)) setNameInput(activeName)
+	}, [nameInput, namesLoading, pubkey, vanitySettings?.entries])
 
 	useEffect(() => {
 		if (!invoice || invoice.stage !== 'awaiting-registration') return
-		const registered = invoice.kind === 'vanity' ? vanityRegistered : nip05Registered
-		if (!registered) return
+		if (!unifiedRegistered) return
 		setInvoice(null)
 		setRegistrationTimedOut(false)
-	}, [invoice, nip05Registered, vanityRegistered])
+	}, [invoice, unifiedRegistered])
 
 	const recheckRegistration = useCallback(async () => {
 		if (!invoice || invoice.stage !== 'awaiting-registration') return
 		setIsCheckingRegistration(true)
 		try {
-			if (invoice.kind === 'vanity') await refetchVanity()
-			else await refetchNip05()
+			await Promise.all([refetchVanity(), refetchNip05()])
 		} finally {
 			setIsCheckingRegistration(false)
 		}
@@ -127,31 +120,24 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 
 		const check = async () => {
 			try {
+				const [vanityResult, nip05Result] = await Promise.all([refetchVanity(), refetchNip05()])
 				const now = Date.now() / 1000
-				let registered = false
-				if (invoice.kind === 'vanity') {
-					const result = await refetchVanity()
-					registered = Boolean(
-						result.data?.entries.some((entry) => entry.vanityName === invoice.name && entry.pubkey === pubkey && entry.validUntil > now),
-					)
-				} else {
-					const result = await refetchNip05()
-					registered = Boolean(
-						result.data?.entries.some((entry) => entry.username === invoice.name && entry.pubkey === pubkey && entry.validUntil > now),
-					)
-				}
-
-				if (registered) {
+				const vanity = vanityResult.data?.entries.find(
+					(entry) => entry.vanityName === invoice.name && entry.pubkey === pubkey && entry.isUnified && entry.validUntil > now,
+				)
+				const nip05 = nip05Result.data?.entries.find(
+					(entry) => entry.username === invoice.name && entry.pubkey === pubkey && entry.isUnified && entry.validUntil > now,
+				)
+				if (vanity && nip05 && vanity.validUntil === nip05.validUntil) {
 					if (!cancelled) {
 						setInvoice(null)
 						setRegistrationTimedOut(false)
-						toast.success(`${invoice.kind === 'vanity' ? 'Vanity URL' : 'NIP-05 address'} is active. You can publish your storefront.`)
+						toast.success('Your NIP-05 address and vanity URL are active.')
 					}
 					return
 				}
 			} catch {
-				// Relay errors are transient. Keep the payment and registration
-				// states separate and continue checking while the dialog is open.
+				// Relay reads can fail transiently; continue checking while the dialog remains open.
 			}
 
 			attempts += 1
@@ -170,10 +156,8 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 		}
 	}, [invoice, pubkey, refetchNip05, refetchVanity, registrationTimedOut])
 
-	const makeInvoice = async (kind: IdentityKind) => {
-		const name = kind === 'vanity' ? vanityNormalized : nip05Normalized
-		const tier = kind === 'vanity' ? VANITY_PRICING[vanityTierKey] : NIP05_PRICING[nip05TierKey]
-		if (!tier || !ndk || !config?.appPublicKey || !config.appRelay) return
+	const makeInvoice = async () => {
+		if (!tier || !ndk || !config?.appPublicKey || !config.appRelay || !nameAvailable || unifiedRegistered) return
 		if (ndk.activeUser?.pubkey !== pubkey) {
 			setPurchaseError('Reconnect the account that owns this storefront before creating an invoice.')
 			return
@@ -182,12 +166,11 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 		setIsCreatingInvoice(true)
 		setPurchaseError('')
 		try {
-			const context = { ndk, appPubkey: config.appPublicKey, appRelay: config.appRelay }
-			const result =
-				kind === 'vanity'
-					? await purchaseVanityForPubkey(context, { name, amountSats: tier.sats })
-					: await purchaseNip05ForPubkey(context, { username: name, amountSats: tier.sats })
-			setInvoice({ kind, name, amountSats: tier.sats, invoice: result.pr, invoiceId: result.invoiceId, stage: 'paying' })
+			const result = await purchaseStorefrontIdentity(
+				{ ndk, appPubkey: config.appPublicKey, appRelay: config.appRelay },
+				{ name: username, tier: tierKey, count: chargeCount, amountSats },
+			)
+			setInvoice({ name: username, amountSats, invoice: result.pr, invoiceId: result.invoiceId, stage: 'paying' })
 		} catch (error) {
 			setPurchaseError(error instanceof Error ? error.message : 'Could not create a payment invoice.')
 		} finally {
@@ -197,15 +180,12 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 
 	const finishPublish = async (skipIdentityPurchase: boolean) => {
 		if (!page || isPublishing || invoice?.stage === 'paying' || isCreatingInvoice) return
-		if (!skipIdentityPurchase && !selectionsReady) return
+		if (!skipIdentityPurchase && haveIdentityRequest && !unifiedRegistered) return
 		setIsPublishing(true)
 		try {
 			const published = await onPublish(page)
 			if (published) {
-				setWantVanity(false)
-				setWantNip05(false)
-				setVanityName('')
-				setNip05Name('')
+				setNameInput('')
 				setInvoice(null)
 				onOpenChange(false)
 			}
@@ -215,6 +195,14 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 	}
 
 	const canDismiss = invoice?.stage !== 'paying' && !isCreatingInvoice && !isPublishing
+	const canCreateInvoice =
+		!!ndk?.activeUser?.pubkey &&
+		ndk.activeUser.pubkey === pubkey &&
+		!!config?.appPublicKey &&
+		!!config.appRelay &&
+		nameAvailable &&
+		!!tier &&
+		!unifiedRegistered
 
 	return (
 		<Dialog
@@ -227,63 +215,99 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 				<DialogHeader>
 					<DialogTitle>Publish your storefront</DialogTitle>
 					<DialogDescription>
-						Choose whether to add a paid custom URL or Nostr address first. Each is a separate Lightning purchase; neither is required to
-						publish.
+						Choose a name. The site's domain is added to create your NIP-05 address, and one Lightning invoice activates both identities.
 					</DialogDescription>
 				</DialogHeader>
 
 				<div className="space-y-4">
-					<IdentityPurchaseOption
-						kind="vanity"
-						domain={domain}
-						currentName={currentVanity?.vanityName}
-						checked={wantVanity}
-						name={vanityName}
-						nameValid={vanityNameValid}
-						nameAvailable={vanityNameAvailable}
-						nameLoading={isLoadingVanity}
-						tierKey={vanityTierKey}
-						tiers={vanityTiers}
-						disabled={!!invoice || isCreatingInvoice || !!currentVanity}
-						onCheckedChange={setWantVanity}
-						onNameChange={(name) => setVanityName(name.toLowerCase())}
-						onTierChange={setVanityTierKey}
-					/>
-					<IdentityPurchaseOption
-						kind="nip05"
-						domain={domain}
-						currentName={currentNip05?.username}
-						checked={wantNip05}
-						name={nip05Name}
-						nameValid={nip05NameValid}
-						nameAvailable={nip05NameAvailable}
-						nameLoading={isLoadingNip05}
-						tierKey={nip05TierKey}
-						tiers={nip05Tiers}
-						disabled={!!invoice || isCreatingInvoice || !!currentNip05}
-						onCheckedChange={setWantNip05}
-						onNameChange={(name) => setNip05Name(name.toLowerCase())}
-						onTierChange={setNip05TierKey}
-					/>
+					<section className="space-y-3 rounded-lg border p-4" data-testid="storefront-identity">
+						<div className="space-y-1.5">
+							<Label htmlFor="storefront-identity-name">Storefront name</Label>
+							<Input
+								id="storefront-identity-name"
+								value={nameInput}
+								onChange={(event) => setNameInput(event.target.value.toLowerCase())}
+								placeholder="your-name"
+								disabled={!!invoice || isCreatingInvoice}
+								data-testid="storefront-identity-name"
+							/>
+							<p className="text-xs text-muted-foreground">
+								Only enter the name. The current site domain is added to the NIP-05 address and vanity URL.
+							</p>
+						</div>
 
-					{wantVanity && !vanityRegistered && !invoice && !isCreatingInvoice && (
-						<Button
-							className="w-full"
-							disabled={!canCreateVanityInvoice}
-							onClick={() => void makeInvoice('vanity')}
-							data-testid="storefront-vanity-invoice"
-						>
-							<Zap className="size-4" /> Create vanity URL invoice
-						</Button>
+						{username && (
+							<div className="rounded-md bg-muted/50 p-3 text-sm">
+								<p>
+									NIP-05:{' '}
+									<span className="font-mono">
+										{username}@{domain}
+									</span>
+								</p>
+								<p>
+									Vanity URL:{' '}
+									<span className="font-mono">
+										{domain}/{username}
+									</span>
+								</p>
+							</div>
+						)}
+
+						{nameInput && !namesLoading && (
+							<p className={`flex items-center gap-1 text-xs ${nameAvailable ? 'text-green-700' : 'text-destructive'}`}>
+								{nameAvailable ? <CheckCircle2 className="size-3.5" /> : <AlertCircle className="size-3.5" />}
+								{!domain
+									? "Could not determine this site's domain."
+									: username.includes('@')
+										? "Enter a name only; the site's domain is added automatically."
+										: !nameValid
+											? 'This name is invalid or reserved.'
+											: isTakenByOther
+												? 'This name is already held by another account.'
+												: 'Name appears available; the server checks again when the invoice is created.'}
+							</p>
+						)}
+						{namesLoading && <p className="text-xs text-muted-foreground">Loading registered names…</p>}
+						{unifiedRegistered && (
+							<p className="flex items-center gap-2 text-sm text-green-700" role="status">
+								<CheckCircle2 className="size-4" /> Both identities are active until{' '}
+								{new Date(unifiedVanity!.validUntil * 1000).toLocaleDateString()}.
+							</p>
+						)}
+					</section>
+
+					{!unifiedRegistered && (
+						<section className="space-y-2">
+							<Label htmlFor="storefront-identity-tier">Registration duration</Label>
+							<select
+								id="storefront-identity-tier"
+								className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+								value={tierKey}
+								disabled={!!invoice || isCreatingInvoice}
+								onChange={(event) => setTierKey(event.target.value)}
+							>
+								{identityTiers.map(([key, option]) => (
+									<option key={key} value={key}>
+										{option.label} · {(option.sats + NIP05_PRICING[key].sats).toLocaleString()} sats for both
+									</option>
+								))}
+							</select>
+							<p className="text-xs text-muted-foreground">
+								{ownedLegacyCount === 1
+									? `One matching legacy identity is already active; this invoice covers the missing identity (${amountSats.toLocaleString()} sats).`
+									: `One invoice covers both registrations (${amountSats.toLocaleString()} sats).`}
+							</p>
+						</section>
 					)}
-					{wantNip05 && !nip05Registered && !invoice && !isCreatingInvoice && (
+
+					{!unifiedRegistered && !invoice && !isCreatingInvoice && (
 						<Button
 							className="w-full"
-							disabled={!canCreateNip05Invoice}
-							onClick={() => void makeInvoice('nip05')}
-							data-testid="storefront-nip05-invoice"
+							disabled={!canCreateInvoice}
+							onClick={() => void makeInvoice()}
+							data-testid="storefront-identity-invoice"
 						>
-							<Zap className="size-4" /> Create NIP-05 invoice
+							<Zap className="size-4" /> Create one invoice for both identities
 						</Button>
 					)}
 					{isCreatingInvoice && (
@@ -300,28 +324,25 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 					{invoice?.stage === 'paying' && (
 						<div className="space-y-2" data-testid="storefront-identity-payment">
 							<p className="text-sm text-muted-foreground">
-								Keep this step open while payment is being checked. The purchase remains pending until a zap receipt and registry activation
-								are observed.
+								Keep this step open while payment is being checked. The purchase remains pending until a zap receipt and unified registry
+								activation are observed.
 							</p>
 							<LightningPaymentProcessor
 								data={{
 									amount: invoice.amountSats,
 									invoiceId: invoice.invoiceId,
-									description:
-										invoice.kind === 'vanity'
-											? `Vanity URL registration: ${invoice.name}`
-											: `NIP-05 registration: ${invoice.name}@${domain}`,
+									description: `NIP-05 and vanity identity registration: ${invoice.name}@${domain}`,
 									bolt11: invoice.invoice,
 									isZap: true,
 									monitorZapReceipt: true,
 									requireZapReceipt: true,
 								}}
-								title="Pay to register this identity"
+								title="Pay to register both identities"
 								onPaymentComplete={(result) => {
 									if (!result.success) return
 									setRegistrationTimedOut(false)
 									setInvoice((current) => (current ? { ...current, stage: 'awaiting-registration' } : current))
-									toast.info('Zap receipt observed. Waiting for the identity registry to confirm activation.')
+									toast.info('Zap receipt observed. Waiting for the storefront identity registry to activate.')
 								}}
 								onPaymentFailed={(result) => setPurchaseError(result.error ?? 'Payment could not be confirmed.')}
 							/>
@@ -331,8 +352,8 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 					{invoice?.stage === 'awaiting-registration' && (
 						<div className="space-y-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-4" role="status">
 							<p className="flex items-center gap-2 text-sm font-medium">
-								<Loader2 className="size-4 animate-spin" /> Payment receipt observed; waiting for the app registry to activate this
-								identity.
+								<Loader2 className="size-4 animate-spin" /> Payment receipt observed; waiting for the unified registry to activate both
+								identities.
 							</p>
 							{registrationTimedOut && (
 								<p className="text-sm text-muted-foreground">
@@ -346,33 +367,26 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 						</div>
 					)}
 
-					{selectionsReady && haveSelections && (
-						<p className="flex items-center gap-2 text-sm text-green-700" role="status">
-							<CheckCircle2 className="size-4" /> Selected identities are active in the app registry.
-						</p>
-					)}
-					{haveSelections && !selectionsReady && !invoice && !isCreatingInvoice && !purchaseError && (
+					{haveIdentityRequest && !unifiedRegistered && !invoice && !isCreatingInvoice && !purchaseError && (
 						<p className="flex items-center gap-2 text-sm text-muted-foreground">
-							<AlertCircle className="size-4" /> Pay each selected invoice and wait for registry activation before publishing with these
-							identities.
+							<AlertCircle className="size-4" /> Pay the single invoice and wait for the registry to activate both identities before
+							publishing.
 						</p>
 					)}
 
 					<div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-between">
-						{haveSelections && (
+						{haveIdentityRequest && (
 							<Button
 								variant="ghost"
 								onClick={() => void finishPublish(true)}
 								disabled={isPublishing || isCreatingInvoice || invoice?.stage === 'paying'}
 							>
-								{invoice?.stage === 'awaiting-registration'
-									? 'Publish without waiting for activation'
-									: 'Publish without buying an identity'}
+								{invoice?.stage === 'awaiting-registration' ? 'Publish without waiting for activation' : 'Publish without an identity'}
 							</Button>
 						)}
 						<Button
 							onClick={() => void finishPublish(false)}
-							disabled={!selectionsReady || isPublishing || isCreatingInvoice || !!invoice}
+							disabled={(haveIdentityRequest && !unifiedRegistered) || isPublishing || isCreatingInvoice || !!invoice}
 							data-testid="storefront-publish-confirm"
 						>
 							{isPublishing && <Loader2 className="size-4 animate-spin" />}
@@ -382,124 +396,5 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 				</div>
 			</DialogContent>
 		</Dialog>
-	)
-}
-
-function IdentityPurchaseOption({
-	kind,
-	domain,
-	currentName,
-	checked,
-	name,
-	nameValid,
-	nameAvailable,
-	nameLoading,
-	tierKey,
-	tiers,
-	disabled,
-	onCheckedChange,
-	onNameChange,
-	onTierChange,
-}: {
-	kind: IdentityKind
-	domain: string
-	currentName?: string
-	checked: boolean
-	name: string
-	nameValid: boolean
-	nameAvailable: boolean
-	nameLoading: boolean
-	tierKey: string
-	tiers: [string, (typeof VANITY_PRICING)[string]][] | [string, (typeof NIP05_PRICING)[string]][]
-	disabled: boolean
-	onCheckedChange: (checked: boolean) => void
-	onNameChange: (name: string) => void
-	onTierChange: (tier: string) => void
-}) {
-	const isVanity = kind === 'vanity'
-	const inputId = `storefront-${kind}-identity-name`
-	const tier = tiers.find(([key]) => key === tierKey)?.[1]
-	const help = isVanity
-		? '3–30 characters: letters, numbers, hyphens, or underscores.'
-		: '1–30 characters: letters, numbers, dots, hyphens, or underscores.'
-
-	return (
-		<section className="space-y-3 rounded-lg border p-4" data-testid={`storefront-identity-${kind}`}>
-			<div className="flex items-start gap-3">
-				<input
-					id={`storefront-identity-${kind}-enabled`}
-					type="checkbox"
-					checked={!!currentName || checked}
-					disabled={disabled || !!currentName}
-					onChange={(event) => onCheckedChange(event.target.checked)}
-					className="mt-1 size-4 accent-primary"
-				/>
-				<div className="min-w-0 flex-1">
-					<Label htmlFor={`storefront-identity-${kind}-enabled`} className="font-semibold">
-						{isVanity ? 'Vanity URL' : 'NIP-05 address'}
-					</Label>
-					<p className="text-sm text-muted-foreground">
-						{currentName
-							? `Already active: ${isVanity ? `${domain}/${currentName}` : `${currentName}@${domain}`}`
-							: isVanity
-								? 'An optional paid short URL for your storefront.'
-								: 'An optional paid Nostr verification address.'}
-					</p>
-				</div>
-			</div>
-
-			{checked && !currentName && (
-				<div className="space-y-3 pl-7">
-					<div className="space-y-1.5">
-						<Label htmlFor={inputId}>{isVanity ? 'Choose URL name' : 'Choose NIP-05 username'}</Label>
-						<div className="flex items-center gap-2">
-							{isVanity ? <span className="shrink-0 text-sm text-muted-foreground">{domain}/</span> : null}
-							<Input
-								id={inputId}
-								value={name}
-								onChange={(event) => onNameChange(event.target.value)}
-								placeholder={isVanity ? 'your-shop' : 'your-name'}
-								disabled={disabled}
-							/>
-							{!isVanity ? <span className="shrink-0 text-sm text-muted-foreground">@{domain}</span> : null}
-						</div>
-						<p className="text-xs text-muted-foreground">{help}</p>
-						{name && !nameLoading && (
-							<p className={`flex items-center gap-1 text-xs ${nameValid && nameAvailable ? 'text-green-700' : 'text-destructive'}`}>
-								{nameValid && nameAvailable ? <CheckCircle2 className="size-3.5" /> : <AlertCircle className="size-3.5" />}
-								{!nameValid
-									? 'This name is invalid or reserved.'
-									: nameAvailable
-										? 'Name appears available; the server checks again when the invoice is created.'
-										: 'Name is unavailable.'}
-							</p>
-						)}
-						{nameLoading && <p className="text-xs text-muted-foreground">Loading registered names…</p>}
-					</div>
-
-					<div className="space-y-1.5">
-						<Label htmlFor={`storefront-${kind}-identity-tier`}>Registration duration</Label>
-						<select
-							id={`storefront-${kind}-identity-tier`}
-							className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-							value={tierKey}
-							disabled={disabled}
-							onChange={(event) => onTierChange(event.target.value)}
-						>
-							{tiers.map(([key, option]) => (
-								<option key={key} value={key}>
-									{option.label} · {option.sats.toLocaleString()} sats
-								</option>
-							))}
-						</select>
-						{tier && (
-							<p className="text-xs text-muted-foreground">
-								Payment uses the existing Lightning zap purchase flow ({tier.sats.toLocaleString()} sats).
-							</p>
-						)}
-					</div>
-				</div>
-			)}
-		</section>
 	)
 }

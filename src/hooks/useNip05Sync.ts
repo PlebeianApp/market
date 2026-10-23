@@ -9,7 +9,7 @@ import { useEffect } from 'react'
  */
 export const useNip05Sync = () => {
 	const { data: config } = useConfigQuery()
-	const { data: nip05Settings, isLoading } = useNip05Settings(config?.appPublicKey)
+	const { data: nip05Settings, isLoading } = useNip05Settings(config?.appPublicKey, config?.handlerId)
 
 	useEffect(() => {
 		if (!nip05Settings || isLoading) return

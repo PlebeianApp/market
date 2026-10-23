@@ -14,7 +14,7 @@ async function confirmStorefrontPublish(page: Page) {
 	await page.getByTestId('storefront-publish').click()
 	const identityDialog = page.getByTestId('storefront-publish-identity-dialog')
 	await expect(identityDialog).toBeVisible()
-	await expect(identityDialog.getByText(/each is a separate Lightning purchase/i)).toBeVisible()
+	await expect(identityDialog.getByText(/one Lightning invoice activates both/i)).toBeVisible()
 	await identityDialog.getByRole('button', { name: 'Publish storefront' }).click()
 }
 
@@ -132,15 +132,17 @@ test.describe('storefront page builder', () => {
 		await expect(fullscreenToggle).toHaveAttribute('aria-pressed', 'false')
 	})
 
-	test('creates a vanity invoice and keeps payment pending until its outcome is known', async ({ merchantPage }) => {
+	test('creates one invoice from a name for the current domain NIP-05 address and vanity URL', async ({ merchantPage }) => {
 		let zapRequest: { tags?: string[][] } | undefined
+		let amountSats: number | undefined
 		await merchantPage.route('**/api/zapPurchase', async (route) => {
-			const body = route.request().postDataJSON() as { zapRequest?: { tags?: string[][] } }
+			const body = route.request().postDataJSON() as { amountSats?: number; zapRequest?: { tags?: string[][] } }
 			zapRequest = body.zapRequest
+			amountSats = body.amountSats
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
-				body: JSON.stringify({ pr: 'lnbc10000n1mockstorefrontinvoice' }),
+				body: JSON.stringify({ pr: 'lnbc20000n1mockstorefrontinvoice' }),
 			})
 		})
 
@@ -148,52 +150,25 @@ test.describe('storefront page builder', () => {
 		await merchantPage.getByTestId('storefront-publish').click()
 		const dialog = merchantPage.getByTestId('storefront-publish-identity-dialog')
 		await expect(dialog).toBeVisible()
-		await dialog.getByLabel('Vanity URL', { exact: true }).check()
-		const vanityName = `shop${Date.now().toString().slice(-8)}`
-		await dialog.getByLabel('Choose URL name').fill(vanityName)
-		const invoiceButton = dialog.getByTestId('storefront-vanity-invoice')
+		const name = `user${Date.now().toString().slice(-8)}`
+		const domain = await merchantPage.evaluate(() => window.location.hostname)
+		await dialog.getByLabel('Storefront name').fill(name)
+		await expect(dialog.getByText(`${name}@${domain}`)).toBeVisible()
+		await expect(dialog.getByText(`${domain}/${name}`)).toBeVisible()
+		const invoiceButton = dialog.getByTestId('storefront-identity-invoice')
 		await expect(invoiceButton).toBeEnabled({ timeout: 10_000 })
 		await invoiceButton.click()
-		await expect(dialog.getByLabel('Lightning Invoice')).toHaveValue('lnbc10000n1mockstorefrontinvoice')
-		expect(zapRequest?.tags).toContainEqual(['L', 'vanity-register'])
-		expect(zapRequest?.tags).toContainEqual(['vanity', vanityName])
-		await expect(dialog.getByTestId('storefront-identity-payment')).toBeVisible()
+		await expect(dialog.getByLabel('Lightning Invoice')).toHaveValue('lnbc20000n1mockstorefrontinvoice')
+		expect(amountSats).toBe(20_000)
+		expect(zapRequest?.tags).toContainEqual(['L', 'storefront-register'])
+		expect(zapRequest?.tags).toContainEqual(['name', name])
+		expect(zapRequest?.tags).toContainEqual(['count', '2'])
 		await expect(dialog.getByRole('button', { name: 'Cancel' })).toHaveCount(0)
-		await expect(dialog.getByRole('button', { name: 'Publish without buying an identity' })).toBeDisabled()
+		await expect(dialog.getByRole('button', { name: 'Publish without an identity' })).toBeDisabled()
 		await merchantPage.unroute('**/api/zapPurchase')
 	})
 
-	test('creates a NIP-05 invoice through the existing payable flow', async ({ merchantPage }) => {
-		let zapRequest: { tags?: string[][] } | undefined
-		await merchantPage.route('**/api/zapPurchase', async (route) => {
-			const body = route.request().postDataJSON() as { zapRequest?: { tags?: string[][] } }
-			zapRequest = body.zapRequest
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ pr: 'lnbc10000n1mockstorefrontinvoice' }),
-			})
-		})
-
-		await openBuilder(merchantPage)
-		await merchantPage.getByTestId('storefront-publish').click()
-		const dialog = merchantPage.getByTestId('storefront-publish-identity-dialog')
-		await expect(dialog).toBeVisible()
-		await dialog.getByLabel('NIP-05 address', { exact: true }).check()
-		const nip05Name = `user${Date.now().toString().slice(-8)}`
-		await dialog.getByLabel('Choose NIP-05 username').fill(nip05Name)
-		const invoiceButton = dialog.getByTestId('storefront-nip05-invoice')
-		await expect(invoiceButton).toBeEnabled({ timeout: 10_000 })
-		await invoiceButton.click()
-		await expect(dialog.getByLabel('Lightning Invoice')).toHaveValue('lnbc10000n1mockstorefrontinvoice')
-		expect(zapRequest?.tags).toContainEqual(['L', 'nip05-register'])
-		expect(zapRequest?.tags).toContainEqual(['nip05', nip05Name])
-		await expect(dialog.getByRole('button', { name: 'Cancel' })).toHaveCount(0)
-		await expect(dialog.getByRole('button', { name: 'Publish without buying an identity' })).toBeDisabled()
-		await merchantPage.unroute('**/api/zapPurchase')
-	})
-
-	test('accepts a mocked vanity payment receipt and redirects after publishing', async ({ merchantPage }) => {
+	test('waits for one unified identity registry entry after payment', async ({ merchantPage }) => {
 		const lightningMock = await LightningMock.setup(merchantPage)
 		let zapRequest: Record<string, unknown> | undefined
 		await merchantPage.route('**/api/zapPurchase', async (route) => {
@@ -202,43 +177,48 @@ test.describe('storefront page builder', () => {
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
-				body: JSON.stringify({ pr: 'lnbc10000n1acceptedmockinvoice' }),
+				body: JSON.stringify({ pr: 'lnbc20000n1acceptedmockinvoice' }),
 			})
 		})
 
-		const vanityName = `shop${Date.now().toString().slice(-8)}`
-		const oldRegistry = await fetchLatestRegistry(TEST_APP_PUBLIC_KEY, 'vanity-urls')
-		const previousTags = oldRegistry?.tags ?? [['d', 'vanity-urls']]
-		const vanityTag: string[] = ['vanity', vanityName, MERCHANT_PK, String(Math.floor(Date.now() / 1000) + 180 * 24 * 60 * 60)]
+		const name = `shop${Date.now().toString().slice(-8)}`
+		const appConfig = await merchantPage.evaluate(async () => (await fetch('/api/config')).json())
+		const identityDTag = `${appConfig.handlerId}-storefront-names`
+		const domain = await merchantPage.evaluate(() => window.location.hostname)
+		const oldRegistry = await fetchLatestRegistry(TEST_APP_PUBLIC_KEY, identityDTag)
+		const previousTags = oldRegistry?.tags ?? [['d', identityDTag]]
+		const identityTag: string[] = ['name', name, MERCHANT_PK, String(Math.floor(Date.now() / 1000) + 180 * 24 * 60 * 60)]
 
 		try {
 			await openBuilder(merchantPage)
 			await merchantPage.getByTestId('storefront-publish').click()
 			const dialog = merchantPage.getByTestId('storefront-publish-identity-dialog')
 			await expect(dialog).toBeVisible()
-			await dialog.getByLabel('Vanity URL', { exact: true }).check()
-			await dialog.getByLabel('Choose URL name').fill(vanityName)
-			await dialog.getByTestId('storefront-vanity-invoice').click()
-			await expect(dialog.getByLabel('Lightning Invoice')).toHaveValue('lnbc10000n1acceptedmockinvoice')
+			await dialog.getByLabel('Storefront name').fill(name)
+			await expect(dialog.getByText(`${name}@${domain}`)).toBeVisible()
+			await dialog.getByTestId('storefront-identity-invoice').click()
+			await expect(dialog.getByLabel('Lightning Invoice')).toHaveValue('lnbc20000n1acceptedmockinvoice')
 
-			lightningMock.registerZapInvoice('lnbc10000n1acceptedmockinvoice', zapRequest!)
+			lightningMock.registerZapInvoice('lnbc20000n1acceptedmockinvoice', zapRequest!)
 			await dialog.getByRole('button', { name: 'Pay with WebLN' }).click()
-			await expect(dialog.getByText(/Zap receipt observed\. Waiting for the identity registry/i)).toBeVisible({ timeout: 15_000 })
-			expect(lightningMock.paidInvoices).toContain('lnbc10000n1acceptedmockinvoice')
+			await expect(dialog.getByText(/Zap receipt observed\. Waiting for the storefront identity registry/i)).toBeVisible({
+				timeout: 15_000,
+			})
+			expect(lightningMock.paidInvoices).toContain('lnbc20000n1acceptedmockinvoice')
 
 			// The mocked receipt confirms the payment evidence. Publish the
-			// corresponding app registry update separately to model activation.
+			// corresponding unified registry update separately to model activation.
 			await publishRaw(TEST_APP_PRIVATE_KEY, {
 				kind: 30000,
 				created_at: Math.floor(Date.now() / 1000),
 				content: '',
-				tags: [...previousTags.filter((tag) => !(tag[0] === 'vanity' && tag[1] === vanityName)), vanityTag],
+				tags: [...previousTags.filter((tag) => !(tag[0] === 'name' && tag[1] === name)), identityTag],
 			})
 
-			await expect(dialog.getByText('Selected identities are active in the app registry.')).toBeVisible({ timeout: 20_000 })
+			await expect(dialog.getByText(/Both identities are active until/i)).toBeVisible({ timeout: 20_000 })
 			await merchantPage.getByTestId('storefront-enable-toggle').click()
 			await dialog.getByTestId('storefront-publish-confirm').click()
-			await expect(merchantPage).toHaveURL(new RegExp(`/${vanityName}$`), { timeout: 20_000 })
+			await expect(merchantPage).toHaveURL(new RegExp(`/${name}$`), { timeout: 20_000 })
 			await expect(merchantPage.getByTestId('storefront-page')).toBeVisible({ timeout: 20_000 })
 		} finally {
 			await merchantPage.unroute('**/api/zapPurchase')
@@ -246,7 +226,7 @@ test.describe('storefront page builder', () => {
 				kind: 30000,
 				created_at: Math.floor(Date.now() / 1000),
 				content: '',
-				tags: previousTags.filter((tag) => !(tag[0] === 'vanity' && tag[1] === vanityName)),
+				tags: previousTags.filter((tag) => !(tag[0] === 'name' && tag[1] === name)),
 			})
 		}
 	})

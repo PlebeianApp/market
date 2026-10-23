@@ -6,8 +6,10 @@ export const nip05Routes: BunRoutes = {
 		GET: (req: Request) => {
 			const url = new URL(req.url)
 			const name = url.searchParams.get('name') ?? undefined
-			const nip05Manager = getEventHandler().getNip05Manager()
-			const result = nip05Manager.buildNostrJson(name)
+			const handler = getEventHandler()
+			const legacy = handler.getNip05Manager().buildNostrJson(name)
+			const unified = handler.getStorefrontIdentityManager().buildNostrJson(name)
+			const result = { names: { ...legacy.names, ...unified.names } }
 			return Response.json(result, {
 				headers: {
 					'Access-Control-Allow-Origin': '*',
