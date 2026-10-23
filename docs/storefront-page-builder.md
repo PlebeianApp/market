@@ -19,6 +19,11 @@ Nothing is gated. A user does not need to own a vanity name to build a page —
 they lose the short URL when a name lapses, never the page, which stays
 reachable at `/profile/{pubkey}`.
 
+When a storefront has an active registered vanity name, opening it through
+`/profile/{identifier}` redirects to `/{vanityName}` using history replacement.
+Draft-preview parameters and URL fragments are preserved. Storefronts without
+an active name keep the profile URL; ordinary profile fallbacks are not redirected.
+
 Public storefronts and author draft previews render as standalone pages, without
 the marketplace header, footer, or background pattern. Standard profile fallbacks
 and other marketplace routes retain the normal layout. Authentication, payment

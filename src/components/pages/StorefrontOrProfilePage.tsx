@@ -8,6 +8,8 @@ import { shouldRenderStorefrontPage, useStorefrontPage } from '@/queries/storefr
 import { useQuery } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { useStandalonePage } from '@/hooks/useStandalonePage'
+import { vanityStore } from '@/lib/stores/vanity'
+import { Navigate, useLocation } from '@tanstack/react-router'
 
 /**
  * Resolution point for any URL that names a person: the custom page if the
@@ -24,6 +26,8 @@ import { useStandalonePage } from '@/hooks/useStandalonePage'
  */
 export function StorefrontOrProfilePage({ profileId }: { profileId: string }) {
 	const { user } = useStore(authStore)
+	const location = useLocation()
+	const vanity = useStore(vanityStore)
 	const isDraftPreview = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('preview') === 'draft'
 	// npub, nprofile and NIP-05 identifiers all have to become a hex pubkey
 	// before a page can be addressed. Hex skips the lookup; everything else
@@ -42,7 +46,13 @@ export function StorefrontOrProfilePage({ profileId }: { profileId: string }) {
 	const isAuthorPreview = isDraftPreview && isValidHexKey(pubkey) && user?.pubkey === pubkey
 	const previewPage = isAuthorPreview ? (loadStorefrontDraft(pubkey) ?? storefront?.page ?? null) : null
 	const isDeciding = (needsResolution && isResolvingProfile) || (pubkey.length > 0 && isLoadingStorefront)
-	useStandalonePage(isDeciding || Boolean(previewPage?.content.length) || shouldRenderStorefrontPage(storefront))
+	const rendersStorefront = Boolean(previewPage?.content.length) || shouldRenderStorefrontPage(storefront)
+	useStandalonePage(isDeciding || rendersStorefront)
+	const vanityEntry = Array.from(vanity.entries.values()).find((entry) => entry.pubkey === pubkey && entry.validUntil > Date.now() / 1000)
+
+	if (rendersStorefront && vanityEntry && location.pathname.startsWith('/profile/')) {
+		return <Navigate to="/$vanityName" params={{ vanityName: vanityEntry.vanityName }} search hash={location.hash} replace />
+	}
 
 	// The preview URL is intentionally local to the signed-in author: it reads
 	// their validated local draft (or their stored page when no draft exists),

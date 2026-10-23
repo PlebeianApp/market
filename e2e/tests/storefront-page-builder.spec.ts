@@ -250,6 +250,12 @@ test.describe('storefront page builder', () => {
 				await expect(storefrontTab.getByTestId('storefront-page')).toBeVisible({ timeout: 20_000 })
 				await expect(storefrontTab.getByRole('banner')).toHaveCount(0)
 				await expect(storefrontTab.getByRole('contentinfo')).toHaveCount(0)
+				await storefrontTab.goto(`/profile/${MERCHANT_PK}?preview=draft#storefront`)
+				await expect(storefrontTab).toHaveURL(new RegExp(`/${name}\\?preview=draft#storefront$`), { timeout: 20_000 })
+				await expect(storefrontTab.getByTestId('storefront-page')).toBeVisible()
+				await storefrontTab.goto(`/profile/${MERCHANT_PK}`)
+				await expect(storefrontTab).toHaveURL(new RegExp(`/${name}$`), { timeout: 20_000 })
+				await expect(storefrontTab.getByTestId('storefront-page')).toBeVisible()
 			} finally {
 				await storefrontTab.close()
 			}
