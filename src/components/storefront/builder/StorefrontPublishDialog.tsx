@@ -205,124 +205,190 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 		!unifiedRegistered
 
 	return (
-		<Dialog
-			open={open}
-			onOpenChange={(nextOpen) => {
-				if (nextOpen || canDismiss) onOpenChange(nextOpen)
-			}}
-		>
-			<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl" data-testid="storefront-publish-identity-dialog">
-				<DialogHeader>
-					<DialogTitle>Publish your storefront</DialogTitle>
-					<DialogDescription>
-						Choose a name. The site's domain is added to create your NIP-05 address, and one Lightning invoice activates both identities.
-					</DialogDescription>
-				</DialogHeader>
+		<>
+			<Dialog
+				open={open && invoice?.stage !== 'paying'}
+				onOpenChange={(nextOpen) => {
+					if (nextOpen || canDismiss) onOpenChange(nextOpen)
+				}}
+			>
+				<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl" data-testid="storefront-publish-identity-dialog">
+					<DialogHeader>
+						<DialogTitle>Publish your storefront</DialogTitle>
+						<DialogDescription>
+							Choose a name. The site's domain is added to create your NIP-05 address, and one Lightning invoice activates both identities.
+						</DialogDescription>
+					</DialogHeader>
 
-				<div className="space-y-4">
-					<section className="space-y-3 rounded-lg border p-4" data-testid="storefront-identity">
-						<div className="space-y-1.5">
-							<Label htmlFor="storefront-identity-name">Storefront name</Label>
-							<Input
-								id="storefront-identity-name"
-								value={nameInput}
-								onChange={(event) => setNameInput(event.target.value.toLowerCase())}
-								placeholder="your-name"
-								disabled={!!invoice || isCreatingInvoice}
-								data-testid="storefront-identity-name"
-							/>
-							<p className="text-xs text-muted-foreground">
-								Only enter the name. The current site domain is added to the NIP-05 address and vanity URL.
+					<div className="space-y-4">
+						<section className="space-y-3 rounded-lg border p-4" data-testid="storefront-identity">
+							<div className="space-y-1.5">
+								<Label htmlFor="storefront-identity-name">Storefront name</Label>
+								<Input
+									id="storefront-identity-name"
+									value={nameInput}
+									onChange={(event) => setNameInput(event.target.value.toLowerCase())}
+									placeholder="your-name"
+									disabled={!!invoice || isCreatingInvoice}
+									data-testid="storefront-identity-name"
+								/>
+								<p className="text-xs text-muted-foreground">
+									Only enter the name. The current site domain is added to the NIP-05 address and vanity URL.
+								</p>
+							</div>
+
+							{username && (
+								<div className="rounded-md bg-muted/50 p-3 text-sm">
+									<p>
+										NIP-05:{' '}
+										<span className="font-mono">
+											{username}@{domain}
+										</span>
+									</p>
+									<p>
+										Vanity URL:{' '}
+										<span className="font-mono">
+											{domain}/{username}
+										</span>
+									</p>
+								</div>
+							)}
+
+							{nameInput && !namesLoading && (
+								<p className={`flex items-center gap-1 text-xs ${nameAvailable ? 'text-green-700' : 'text-destructive'}`}>
+									{nameAvailable ? <CheckCircle2 className="size-3.5" /> : <AlertCircle className="size-3.5" />}
+									{!domain
+										? "Could not determine this site's domain."
+										: username.includes('@')
+											? "Enter a name only; the site's domain is added automatically."
+											: !nameValid
+												? 'This name is invalid or reserved.'
+												: isTakenByOther
+													? 'This name is already held by another account.'
+													: 'Name appears available; the server checks again when the invoice is created.'}
+								</p>
+							)}
+							{namesLoading && <p className="text-xs text-muted-foreground">Loading registered names…</p>}
+							{unifiedRegistered && (
+								<p className="flex items-center gap-2 text-sm text-green-700" role="status">
+									<CheckCircle2 className="size-4" /> Both identities are active until{' '}
+									{new Date(unifiedVanity!.validUntil * 1000).toLocaleDateString()}.
+								</p>
+							)}
+						</section>
+
+						{!unifiedRegistered && (
+							<section className="space-y-2">
+								<Label htmlFor="storefront-identity-tier">Registration duration</Label>
+								<select
+									id="storefront-identity-tier"
+									className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+									value={tierKey}
+									disabled={!!invoice || isCreatingInvoice}
+									onChange={(event) => setTierKey(event.target.value)}
+								>
+									{identityTiers.map(([key, option]) => (
+										<option key={key} value={key}>
+											{option.label} · {(option.sats + NIP05_PRICING[key].sats).toLocaleString()} sats for both
+										</option>
+									))}
+								</select>
+								<p className="text-xs text-muted-foreground">
+									{ownedLegacyCount === 1
+										? `One matching legacy identity is already active; this invoice covers the missing identity (${amountSats.toLocaleString()} sats).`
+										: `One invoice covers both registrations (${amountSats.toLocaleString()} sats).`}
+								</p>
+							</section>
+						)}
+
+						{!unifiedRegistered && !invoice && !isCreatingInvoice && (
+							<Button
+								className="w-full"
+								disabled={!canCreateInvoice}
+								onClick={() => void makeInvoice()}
+								data-testid="storefront-identity-invoice"
+							>
+								<Zap className="size-4" /> Create one invoice for both identities
+							</Button>
+						)}
+						{isCreatingInvoice && (
+							<div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+								<Loader2 className="size-4 animate-spin" /> Creating invoice…
+							</div>
+						)}
+						{purchaseError && (
+							<p role="alert" className="text-sm text-destructive">
+								{purchaseError}
 							</p>
-						</div>
+						)}
 
-						{username && (
-							<div className="rounded-md bg-muted/50 p-3 text-sm">
-								<p>
-									NIP-05:{' '}
-									<span className="font-mono">
-										{username}@{domain}
-									</span>
+						{invoice?.stage === 'awaiting-registration' && (
+							<div className="space-y-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-4" role="status">
+								<p className="flex items-center gap-2 text-sm font-medium">
+									<Loader2 className="size-4 animate-spin" /> Payment receipt observed; waiting for the unified registry to activate both
+									identities.
 								</p>
-								<p>
-									Vanity URL:{' '}
-									<span className="font-mono">
-										{domain}/{username}
-									</span>
-								</p>
+								{registrationTimedOut && (
+									<p className="text-sm text-muted-foreground">
+										Activation is taking longer than expected. Publishing with this identity stays disabled until the registry confirms it.
+									</p>
+								)}
+								<Button variant="outline" size="sm" disabled={isCheckingRegistration} onClick={() => void recheckRegistration()}>
+									{isCheckingRegistration && <Loader2 className="size-4 animate-spin" />}
+									Check registration
+								</Button>
 							</div>
 						)}
 
-						{nameInput && !namesLoading && (
-							<p className={`flex items-center gap-1 text-xs ${nameAvailable ? 'text-green-700' : 'text-destructive'}`}>
-								{nameAvailable ? <CheckCircle2 className="size-3.5" /> : <AlertCircle className="size-3.5" />}
-								{!domain
-									? "Could not determine this site's domain."
-									: username.includes('@')
-										? "Enter a name only; the site's domain is added automatically."
-										: !nameValid
-											? 'This name is invalid or reserved.'
-											: isTakenByOther
-												? 'This name is already held by another account.'
-												: 'Name appears available; the server checks again when the invoice is created.'}
+						{haveIdentityRequest && !unifiedRegistered && !invoice && !isCreatingInvoice && !purchaseError && (
+							<p className="flex items-center gap-2 text-sm text-muted-foreground">
+								<AlertCircle className="size-4" /> Pay the single invoice and wait for the registry to activate both identities before
+								publishing.
 							</p>
 						)}
-						{namesLoading && <p className="text-xs text-muted-foreground">Loading registered names…</p>}
-						{unifiedRegistered && (
-							<p className="flex items-center gap-2 text-sm text-green-700" role="status">
-								<CheckCircle2 className="size-4" /> Both identities are active until{' '}
-								{new Date(unifiedVanity!.validUntil * 1000).toLocaleDateString()}.
-							</p>
-						)}
-					</section>
 
-					{!unifiedRegistered && (
-						<section className="space-y-2">
-							<Label htmlFor="storefront-identity-tier">Registration duration</Label>
-							<select
-								id="storefront-identity-tier"
-								className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-								value={tierKey}
-								disabled={!!invoice || isCreatingInvoice}
-								onChange={(event) => setTierKey(event.target.value)}
+						<div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-between">
+							{haveIdentityRequest && (
+								<Button
+									variant="ghost"
+									onClick={() => void finishPublish(true)}
+									disabled={isPublishing || isCreatingInvoice || invoice?.stage === 'paying'}
+								>
+									{invoice?.stage === 'awaiting-registration' ? 'Publish without waiting for activation' : 'Publish without an identity'}
+								</Button>
+							)}
+							<Button
+								onClick={() => void finishPublish(false)}
+								disabled={(haveIdentityRequest && !unifiedRegistered) || isPublishing || isCreatingInvoice || !!invoice}
+								data-testid="storefront-publish-confirm"
 							>
-								{identityTiers.map(([key, option]) => (
-									<option key={key} value={key}>
-										{option.label} · {(option.sats + NIP05_PRICING[key].sats).toLocaleString()} sats for both
-									</option>
-								))}
-							</select>
-							<p className="text-xs text-muted-foreground">
-								{ownedLegacyCount === 1
-									? `One matching legacy identity is already active; this invoice covers the missing identity (${amountSats.toLocaleString()} sats).`
-									: `One invoice covers both registrations (${amountSats.toLocaleString()} sats).`}
-							</p>
-						</section>
-					)}
-
-					{!unifiedRegistered && !invoice && !isCreatingInvoice && (
-						<Button
-							className="w-full"
-							disabled={!canCreateInvoice}
-							onClick={() => void makeInvoice()}
-							data-testid="storefront-identity-invoice"
-						>
-							<Zap className="size-4" /> Create one invoice for both identities
-						</Button>
-					)}
-					{isCreatingInvoice && (
-						<div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-							<Loader2 className="size-4 animate-spin" /> Creating invoice…
+								{isPublishing && <Loader2 className="size-4 animate-spin" />}
+								Publish storefront
+							</Button>
 						</div>
-					)}
-					{purchaseError && (
-						<p role="alert" className="text-sm text-destructive">
-							{purchaseError}
-						</p>
-					)}
-
+					</div>
+				</DialogContent>
+			</Dialog>
+			<Dialog open={open && invoice?.stage === 'paying'} onOpenChange={() => {}}>
+				<DialogContent
+					className="max-h-[90vh] overflow-y-auto sm:max-w-lg"
+					showCloseButton={false}
+					onEscapeKeyDown={(event) => event.preventDefault()}
+					onPointerDownOutside={(event) => event.preventDefault()}
+					data-testid="storefront-identity-payment-dialog"
+				>
+					<DialogHeader>
+						<DialogTitle>Pay for your storefront identity</DialogTitle>
+						<DialogDescription>
+							One invoice registers your NIP-05 address and vanity URL. After a zap receipt is observed, you will return to the publish step
+							while registration is confirmed.
+						</DialogDescription>
+					</DialogHeader>
 					{invoice?.stage === 'paying' && (
-						<div className="space-y-2" data-testid="storefront-identity-payment">
+						<div className="space-y-3" data-testid="storefront-identity-payment">
+							<p className="break-all font-mono text-sm">
+								{invoice.name}@{domain}
+							</p>
 							<p className="text-sm text-muted-foreground">
 								Keep this step open while payment is being checked. The purchase remains pending until a zap receipt and unified registry
 								activation are observed.
@@ -340,61 +406,22 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 								title="Pay to register both identities"
 								onPaymentComplete={(result) => {
 									if (!result.success) return
+									setPurchaseError('')
 									setRegistrationTimedOut(false)
 									setInvoice((current) => (current ? { ...current, stage: 'awaiting-registration' } : current))
 									toast.info('Zap receipt observed. Waiting for the storefront identity registry to activate.')
 								}}
 								onPaymentFailed={(result) => setPurchaseError(result.error ?? 'Payment could not be confirmed.')}
 							/>
-						</div>
-					)}
-
-					{invoice?.stage === 'awaiting-registration' && (
-						<div className="space-y-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-4" role="status">
-							<p className="flex items-center gap-2 text-sm font-medium">
-								<Loader2 className="size-4 animate-spin" /> Payment receipt observed; waiting for the unified registry to activate both
-								identities.
-							</p>
-							{registrationTimedOut && (
-								<p className="text-sm text-muted-foreground">
-									Activation is taking longer than expected. Publishing with this identity stays disabled until the registry confirms it.
+							{purchaseError && (
+								<p role="alert" className="text-sm text-destructive">
+									{purchaseError}
 								</p>
 							)}
-							<Button variant="outline" size="sm" disabled={isCheckingRegistration} onClick={() => void recheckRegistration()}>
-								{isCheckingRegistration && <Loader2 className="size-4 animate-spin" />}
-								Check registration
-							</Button>
 						</div>
 					)}
-
-					{haveIdentityRequest && !unifiedRegistered && !invoice && !isCreatingInvoice && !purchaseError && (
-						<p className="flex items-center gap-2 text-sm text-muted-foreground">
-							<AlertCircle className="size-4" /> Pay the single invoice and wait for the registry to activate both identities before
-							publishing.
-						</p>
-					)}
-
-					<div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-between">
-						{haveIdentityRequest && (
-							<Button
-								variant="ghost"
-								onClick={() => void finishPublish(true)}
-								disabled={isPublishing || isCreatingInvoice || invoice?.stage === 'paying'}
-							>
-								{invoice?.stage === 'awaiting-registration' ? 'Publish without waiting for activation' : 'Publish without an identity'}
-							</Button>
-						)}
-						<Button
-							onClick={() => void finishPublish(false)}
-							disabled={(haveIdentityRequest && !unifiedRegistered) || isPublishing || isCreatingInvoice || !!invoice}
-							data-testid="storefront-publish-confirm"
-						>
-							{isPublishing && <Loader2 className="size-4 animate-spin" />}
-							Publish storefront
-						</Button>
-					</div>
-				</div>
-			</DialogContent>
-		</Dialog>
+				</DialogContent>
+			</Dialog>
+		</>
 	)
 }

@@ -88,6 +88,12 @@ test.describe('storefront page builder', () => {
 	const MERCHANT_PK = '86a82cab18b293f53cbaaae8cdcbee3f7ec427fdf9f9c933db77800bb5ef38a0'
 
 	async function openBuilder(page: Page) {
+		// Existing order fixtures on a reused relay can trigger an unrelated privacy dialog.
+		await page.addInitScript((pubkey) => {
+			const dismissed: string[] = JSON.parse(sessionStorage.getItem('pii-warning-dismissed') || '[]')
+			if (!dismissed.includes(pubkey)) dismissed.push(pubkey)
+			sessionStorage.setItem('pii-warning-dismissed', JSON.stringify(dismissed))
+		}, MERCHANT_PK)
 		await page.goto(BUILDER_PATH)
 		await expect(page.getByTestId('storefront-builder')).toBeVisible({ timeout: 20_000 })
 		const header = page.getByTestId('storefront-editor-header')
@@ -158,13 +164,22 @@ test.describe('storefront page builder', () => {
 		const invoiceButton = dialog.getByTestId('storefront-identity-invoice')
 		await expect(invoiceButton).toBeEnabled({ timeout: 10_000 })
 		await invoiceButton.click()
-		await expect(dialog.getByLabel('Lightning Invoice')).toHaveValue('lnbc20000n1mockstorefrontinvoice')
+		const paymentDialog = merchantPage.getByTestId('storefront-identity-payment-dialog')
+		await expect(paymentDialog).toBeVisible()
+		await expect(dialog).toBeHidden()
+		await expect(paymentDialog.getByRole('heading', { name: 'Pay for your storefront identity' })).toBeVisible()
+		await expect(paymentDialog.getByText(`${name}@${domain}`, { exact: true })).toBeVisible()
+		await expect(paymentDialog.getByLabel('Lightning Invoice')).toHaveValue('lnbc20000n1mockstorefrontinvoice')
 		expect(amountSats).toBe(20_000)
 		expect(zapRequest?.tags).toContainEqual(['L', 'storefront-register'])
 		expect(zapRequest?.tags).toContainEqual(['name', name])
 		expect(zapRequest?.tags).toContainEqual(['count', '2'])
-		await expect(dialog.getByRole('button', { name: 'Cancel' })).toHaveCount(0)
-		await expect(dialog.getByRole('button', { name: 'Publish without an identity' })).toBeDisabled()
+		await expect(paymentDialog.getByRole('button', { name: 'Cancel' })).toHaveCount(0)
+		await expect(paymentDialog.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0)
+		await expect(paymentDialog.getByRole('button', { name: 'Publish without an identity' })).toHaveCount(0)
+		await merchantPage.keyboard.press('Escape')
+		await expect(paymentDialog).toBeVisible()
+		await expect(paymentDialog.getByLabel('Lightning Invoice')).toHaveValue('lnbc20000n1mockstorefrontinvoice')
 		await merchantPage.unroute('**/api/zapPurchase')
 	})
 
@@ -191,19 +206,27 @@ test.describe('storefront page builder', () => {
 
 		try {
 			await openBuilder(merchantPage)
+			await merchantPage.getByTestId('storefront-enable-toggle').check()
 			await merchantPage.getByTestId('storefront-publish').click()
 			const dialog = merchantPage.getByTestId('storefront-publish-identity-dialog')
 			await expect(dialog).toBeVisible()
 			await dialog.getByLabel('Storefront name').fill(name)
 			await expect(dialog.getByText(`${name}@${domain}`)).toBeVisible()
 			await dialog.getByTestId('storefront-identity-invoice').click()
-			await expect(dialog.getByLabel('Lightning Invoice')).toHaveValue('lnbc20000n1acceptedmockinvoice')
+			const paymentDialog = merchantPage.getByTestId('storefront-identity-payment-dialog')
+			await expect(paymentDialog).toBeVisible()
+			await expect(dialog).toBeHidden()
+			await expect(paymentDialog.getByLabel('Lightning Invoice')).toHaveValue('lnbc20000n1acceptedmockinvoice')
 
 			lightningMock.registerZapInvoice('lnbc20000n1acceptedmockinvoice', zapRequest!)
-			await dialog.getByRole('button', { name: 'Pay with WebLN' }).click()
-			await expect(dialog.getByText(/Zap receipt observed\. Waiting for the storefront identity registry/i)).toBeVisible({
-				timeout: 15_000,
-			})
+			await paymentDialog.getByRole('button', { name: 'Pay with WebLN' }).click()
+			await expect(paymentDialog).toBeHidden()
+			await expect(dialog).toBeVisible()
+			await expect(dialog.getByText(/Payment receipt observed; waiting for the unified registry to activate both identities/i)).toBeVisible(
+				{
+					timeout: 15_000,
+				},
+			)
 			expect(lightningMock.paidInvoices).toContain('lnbc20000n1acceptedmockinvoice')
 
 			// The mocked receipt confirms the payment evidence. Publish the
@@ -216,7 +239,6 @@ test.describe('storefront page builder', () => {
 			})
 
 			await expect(dialog.getByText(/Both identities are active until/i)).toBeVisible({ timeout: 20_000 })
-			await merchantPage.getByTestId('storefront-enable-toggle').click()
 			await dialog.getByTestId('storefront-publish-confirm').click()
 			await expect(merchantPage).toHaveURL(new RegExp(`/${name}$`), { timeout: 20_000 })
 			await expect(merchantPage.getByTestId('storefront-page')).toBeVisible({ timeout: 20_000 })

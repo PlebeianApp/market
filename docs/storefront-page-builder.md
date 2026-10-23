@@ -159,7 +159,12 @@ legacy identity owned by the author is migrated on renewal, and the combined
 validity is extended from the later existing expiry. If exactly one matching
 legacy identity exists, the invoice covers the missing identity only;
 otherwise it covers both. Availability is advisory and the server remains
-authoritative. After payment, the UI waits for the zap receipt and then for the
+authoritative. Creating an invoice opens a separate payment modal, hiding the
+name and publication controls while payment is pending. The payment modal keeps
+the invoice visible and cannot be dismissed until a zap receipt is observed;
+payment errors remain visible there so the author can retry. Once the receipt
+is observed, the payment modal closes and the publish dialog returns.
+The UI then waits for the
 matching active unified registry entry before it allows publication with that
 identity. A wallet acknowledgement or receipt alone is not treated as
 registration activation.
