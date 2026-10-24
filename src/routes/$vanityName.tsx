@@ -1,5 +1,7 @@
 import { ProfilePage } from '@/components/pages/ProfilePage'
+import { StorefrontRenderer } from '@/components/storefront/StorefrontRenderer'
 import { vanityActions, vanityStore } from '@/lib/stores/vanity'
+import { useStorefrontPage } from '@/queries/storefront'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo } from 'react'
 import { useStore } from '@tanstack/react-store'
@@ -19,6 +21,7 @@ function VanityRouteComponent() {
 		const entry = vanityActions.resolveVanity(vanityName)
 		return entry?.pubkey ?? null
 	}, [vanityName, isLoaded, lastUpdated])
+	const { data: storefront } = useStorefrontPage(resolvedPubkey)
 
 	// Re-check resolution when store updates
 	useEffect(() => {
@@ -39,6 +42,7 @@ function VanityRouteComponent() {
 
 	// Vanity URL resolved - render profile page directly
 	if (resolvedPubkey) {
+		if (storefront?.page) return <StorefrontRenderer page={storefront.page} />
 		return <ProfilePage profileId={resolvedPubkey} />
 	}
 

@@ -43,6 +43,7 @@ import { Route as DashboardLayoutDashboardAppSettingsBlacklistsRouteImport } fro
 import { Route as DashboardLayoutDashboardAppSettingsAppMiscelleneousRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/app-miscelleneous'
 import { Route as DashboardLayoutDashboardAccountYourPurchasesRouteImport } from './routes/_dashboard-layout/dashboard/account/your-purchases'
 import { Route as DashboardLayoutDashboardAccountVanityUrlRouteImport } from './routes/_dashboard-layout/dashboard/account/vanity-url'
+import { Route as DashboardLayoutDashboardAccountStorefrontRouteImport } from './routes/_dashboard-layout/dashboard/account/storefront'
 import { Route as DashboardLayoutDashboardAccountReceivingPaymentsRouteImport } from './routes/_dashboard-layout/dashboard/account/receiving-payments'
 import { Route as DashboardLayoutDashboardAccountProfileRouteImport } from './routes/_dashboard-layout/dashboard/account/profile'
 import { Route as DashboardLayoutDashboardAccountPreferencesRouteImport } from './routes/_dashboard-layout/dashboard/account/preferences'
@@ -225,6 +226,11 @@ const DashboardLayoutDashboardAccountVanityUrlRoute = DashboardLayoutDashboardAc
 	path: '/dashboard/account/vanity-url',
 	getParentRoute: () => DashboardLayoutRoute,
 } as any)
+const DashboardLayoutDashboardAccountStorefrontRoute = DashboardLayoutDashboardAccountStorefrontRouteImport.update({
+	id: '/dashboard/account/storefront',
+	path: '/dashboard/account/storefront',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 const DashboardLayoutDashboardAccountReceivingPaymentsRoute = DashboardLayoutDashboardAccountReceivingPaymentsRouteImport.update({
 	id: '/dashboard/account/receiving-payments',
 	path: '/dashboard/account/receiving-payments',
@@ -311,6 +317,7 @@ export interface FileRoutesByFullPath {
 	'/dashboard/account/preferences': typeof DashboardLayoutDashboardAccountPreferencesRoute
 	'/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
 	'/dashboard/account/receiving-payments': typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
+	'/dashboard/account/storefront': typeof DashboardLayoutDashboardAccountStorefrontRoute
 	'/dashboard/account/vanity-url': typeof DashboardLayoutDashboardAccountVanityUrlRoute
 	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
@@ -358,6 +365,7 @@ export interface FileRoutesByTo {
 	'/dashboard/account/preferences': typeof DashboardLayoutDashboardAccountPreferencesRoute
 	'/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
 	'/dashboard/account/receiving-payments': typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
+	'/dashboard/account/storefront': typeof DashboardLayoutDashboardAccountStorefrontRoute
 	'/dashboard/account/vanity-url': typeof DashboardLayoutDashboardAccountVanityUrlRoute
 	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
@@ -407,6 +415,7 @@ export interface FileRoutesById {
 	'/_dashboard-layout/dashboard/account/preferences': typeof DashboardLayoutDashboardAccountPreferencesRoute
 	'/_dashboard-layout/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
 	'/_dashboard-layout/dashboard/account/receiving-payments': typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
+	'/_dashboard-layout/dashboard/account/storefront': typeof DashboardLayoutDashboardAccountStorefrontRoute
 	'/_dashboard-layout/dashboard/account/vanity-url': typeof DashboardLayoutDashboardAccountVanityUrlRoute
 	'/_dashboard-layout/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/_dashboard-layout/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
@@ -456,6 +465,7 @@ export interface FileRouteTypes {
 		| '/dashboard/account/preferences'
 		| '/dashboard/account/profile'
 		| '/dashboard/account/receiving-payments'
+		| '/dashboard/account/storefront'
 		| '/dashboard/account/vanity-url'
 		| '/dashboard/account/your-purchases'
 		| '/dashboard/app-settings/app-miscelleneous'
@@ -503,6 +513,7 @@ export interface FileRouteTypes {
 		| '/dashboard/account/preferences'
 		| '/dashboard/account/profile'
 		| '/dashboard/account/receiving-payments'
+		| '/dashboard/account/storefront'
 		| '/dashboard/account/vanity-url'
 		| '/dashboard/account/your-purchases'
 		| '/dashboard/app-settings/app-miscelleneous'
@@ -551,6 +562,7 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout/dashboard/account/preferences'
 		| '/_dashboard-layout/dashboard/account/profile'
 		| '/_dashboard-layout/dashboard/account/receiving-payments'
+		| '/_dashboard-layout/dashboard/account/storefront'
 		| '/_dashboard-layout/dashboard/account/vanity-url'
 		| '/_dashboard-layout/dashboard/account/your-purchases'
 		| '/_dashboard-layout/dashboard/app-settings/app-miscelleneous'
@@ -834,6 +846,13 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardAccountVanityUrlRouteImport
 			parentRoute: typeof DashboardLayoutRoute
 		}
+		'/_dashboard-layout/dashboard/account/storefront': {
+			id: '/_dashboard-layout/dashboard/account/storefront'
+			path: '/dashboard/account/storefront'
+			fullPath: '/dashboard/account/storefront'
+			preLoaderRoute: typeof DashboardLayoutDashboardAccountStorefrontRouteImport
+			parentRoute: typeof DashboardLayoutRoute
+		}
 		'/_dashboard-layout/dashboard/account/receiving-payments': {
 			id: '/_dashboard-layout/dashboard/account/receiving-payments'
 			path: '/dashboard/account/receiving-payments'
@@ -982,6 +1001,7 @@ interface DashboardLayoutRouteChildren {
 	DashboardLayoutDashboardAccountPreferencesRoute: typeof DashboardLayoutDashboardAccountPreferencesRoute
 	DashboardLayoutDashboardAccountProfileRoute: typeof DashboardLayoutDashboardAccountProfileRoute
 	DashboardLayoutDashboardAccountReceivingPaymentsRoute: typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
+	DashboardLayoutDashboardAccountStorefrontRoute: typeof DashboardLayoutDashboardAccountStorefrontRoute
 	DashboardLayoutDashboardAccountVanityUrlRoute: typeof DashboardLayoutDashboardAccountVanityUrlRoute
 	DashboardLayoutDashboardAccountYourPurchasesRoute: typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute: typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
@@ -1009,6 +1029,7 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
 	DashboardLayoutDashboardAccountPreferencesRoute: DashboardLayoutDashboardAccountPreferencesRoute,
 	DashboardLayoutDashboardAccountProfileRoute: DashboardLayoutDashboardAccountProfileRoute,
 	DashboardLayoutDashboardAccountReceivingPaymentsRoute: DashboardLayoutDashboardAccountReceivingPaymentsRoute,
+	DashboardLayoutDashboardAccountStorefrontRoute: DashboardLayoutDashboardAccountStorefrontRoute,
 	DashboardLayoutDashboardAccountVanityUrlRoute: DashboardLayoutDashboardAccountVanityUrlRoute,
 	DashboardLayoutDashboardAccountYourPurchasesRoute: DashboardLayoutDashboardAccountYourPurchasesRoute,
 	DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute: DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute,
