@@ -27,25 +27,25 @@ import type { ValidationPreset } from '../../validation/ts/index'
  * a `title` tag. One rule, data only, and the engine interprets nothing else.
  */
 const LISTING_NEEDS_TITLE: ValidationPreset = {
-  name: 'listing-needs-title',
-  kinds: [30408],
-  checks: [{ kind: 'format', id: 'listing-needs-title', requires: [{ tag: 'title', atLeast: 1 }] }],
+	name: 'listing-needs-title',
+	kinds: [30408],
+	checks: [{ kind: 'format', id: 'listing-needs-title', requires: [{ tag: 'title', atLeast: 1 }] }],
 }
 
 /** A kind-30408 event that must reference a held event by `e` — the link half's own demand. */
 const LISTING_REFERENCES_HELD: ValidationPreset = {
-  name: 'listing-references-held',
-  kinds: [30408],
-  checks: [
-    {
-      kind: 'link',
-      id: 'listing-e-ref',
-      tag: 'e',
-      index: 1,
-      strategy: 'by-id',
-      compare: [{ candidate: { tag: 'e', index: 1 }, reference: 'id', comparator: 'eq' }],
-    },
-  ],
+	name: 'listing-references-held',
+	kinds: [30408],
+	checks: [
+		{
+			kind: 'link',
+			id: 'listing-e-ref',
+			tag: 'e',
+			index: 1,
+			strategy: 'by-id',
+			compare: [{ candidate: { tag: 'e', index: 1 }, reference: 'id', comparator: 'eq' }],
+		},
+	],
 }
 
 test('absent hook ⇒ accept-all: no declared validation installs no hook, and the event crosses every destination', async () => {
@@ -158,7 +158,10 @@ test('the extra fetch · a link rule makes the composition fetch the referenced 
 	const listing = signedEvent({
 		kind: 30408,
 		created_at: 60_000,
-		tags: [['e', referenced.id], ['title', 'references a held event']],
+		tags: [
+			['e', referenced.id],
+			['title', 'references a held event'],
+		],
 	})
 	const endpoint = modelEndpoint({ events: [referenced, listing] })
 	const upstream = recordingUpstream({ events: [] })

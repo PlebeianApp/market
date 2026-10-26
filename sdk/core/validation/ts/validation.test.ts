@@ -25,16 +25,7 @@ import { expect, test } from 'bun:test'
 
 import { EVICTION_RECORD_LIMIT } from './bounds'
 import { createValidator, PASS_THROUGH, ValidationError } from './index'
-import {
-	compositionContext,
-	held,
-	manualClock,
-	neverAnsweringPort,
-	recordingPort,
-	rejectingPort,
-	signedEvent,
-	slowPort,
-} from './harness'
+import { compositionContext, held, manualClock, neverAnsweringPort, recordingPort, rejectingPort, signedEvent, slowPort } from './harness'
 import type {
 	AcceptContext,
 	AcceptDecision,
@@ -57,7 +48,12 @@ test('pass-through · with no presets, both operations refuse nothing', async ()
 	const validator = createValidator()
 	const candidate = signedEvent({ kind: 1, created_at: 1, content: 'anything at all', tags: [['e', 'nonsense']] })
 	expect(await validator.validate(candidate)).toEqual({ outcome: 'accepted' })
-	expect(await validator.accept(candidate, compositionContext(async () => undefined))).toBe('accept')
+	expect(
+		await validator.accept(
+			candidate,
+			compositionContext(async () => undefined),
+		),
+	).toBe('accept')
 	expect(validator.presets).toEqual([])
 	expect(PASS_THROUGH.checks.length).toBe(0)
 	expect(PASS_THROUGH.kinds).toEqual([])
@@ -82,7 +78,12 @@ test('an accept · a declared preset that passes is accepted', async () => {
 	const validator = createValidator({ presets: [preset] })
 	const candidate = signedEvent({ kind: LISTING, created_at: 1, tags: [['title', 'a lamp']] })
 	expect(await validator.validate(candidate)).toEqual({ outcome: 'accepted' })
-	expect(await validator.accept(candidate, compositionContext(async () => undefined))).toBe('accept')
+	expect(
+		await validator.accept(
+			candidate,
+			compositionContext(async () => undefined),
+		),
+	).toBe('accept')
 })
 
 test('a format rule · refuses a malformed candidate and accepts a conforming one', async () => {
@@ -93,16 +94,44 @@ test('a format rule · refuses a malformed candidate and accepts a conforming on
 	const validator = createValidator({ presets: [preset] })
 
 	// a missing tag
-	const missing = await validator.validate(signedEvent({ kind: LISTING, created_at: 1, tags: [['image', 'x'], ['currency', 'usd']] }))
+	const missing = await validator.validate(
+		signedEvent({
+			kind: LISTING,
+			created_at: 1,
+			tags: [
+				['image', 'x'],
+				['currency', 'usd'],
+			],
+		}),
+	)
 	expect(missing.outcome === 'refused' && missing.refusal.check.id).toBe('title-required')
 	expect(missing.outcome === 'refused' && missing.refusal.cause).toBe('differs')
 	// a wrong cardinality
 	const many = await validator.validate(
-		signedEvent({ kind: LISTING, created_at: 1, tags: [['title', 't'], ['image', 'a'], ['image', 'b'], ['currency', 'usd']] }),
+		signedEvent({
+			kind: LISTING,
+			created_at: 1,
+			tags: [
+				['title', 't'],
+				['image', 'a'],
+				['image', 'b'],
+				['currency', 'usd'],
+			],
+		}),
 	)
 	expect(many.outcome === 'refused' && many.refusal.check.id).toBe('image-single')
 	// a value outside its domain
-	const outside = await validator.validate(signedEvent({ kind: LISTING, created_at: 1, tags: [['title', 't'], ['image', 'a'], ['currency', 'gbp']] }))
+	const outside = await validator.validate(
+		signedEvent({
+			kind: LISTING,
+			created_at: 1,
+			tags: [
+				['title', 't'],
+				['image', 'a'],
+				['currency', 'gbp'],
+			],
+		}),
+	)
 	expect(outside.outcome === 'refused' && outside.refusal.check.id).toBe('currency-domain')
 	// three distinct checks, so the three refusals are distinguishable in the value — by the
 	// check id here, and by the requirement each one fired (the spec's shape, one check carrying
@@ -112,7 +141,17 @@ test('a format rule · refuses a malformed candidate and accepts a conforming on
 	const requirements = [missing, many, outside].map((outcome) => (outcome.outcome === 'refused' ? outcome.refusal.requirement : ''))
 	expect(requirements).toEqual(['missing-tag', 'cardinality', 'domain'])
 	// and the conforming candidate is accepted
-	const conforming = await validator.validate(signedEvent({ kind: LISTING, created_at: 1, tags: [['title', 't'], ['image', 'a'], ['currency', 'eur']] }))
+	const conforming = await validator.validate(
+		signedEvent({
+			kind: LISTING,
+			created_at: 1,
+			tags: [
+				['title', 't'],
+				['image', 'a'],
+				['currency', 'eur'],
+			],
+		}),
+	)
 	expect(conforming).toEqual({ outcome: 'accepted' })
 })
 
@@ -137,15 +176,54 @@ test('a format rule · one check carrying several requirements: each failure nam
 	const preset: ValidationPreset = { name: 'listing', kinds: [LISTING], checks: [shape] }
 	const validator = createValidator({ presets: [preset] })
 	const candidates: readonly (readonly [ValidationRequirement, ReturnType<typeof signedEvent>])[] = [
-		['missing-tag', signedEvent({ kind: LISTING, created_at: 1, tags: [['image', 'a'], ['currency', 'usd']] })],
+		[
+			'missing-tag',
+			signedEvent({
+				kind: LISTING,
+				created_at: 1,
+				tags: [
+					['image', 'a'],
+					['currency', 'usd'],
+				],
+			}),
+		],
 		[
 			'cardinality',
-			signedEvent({ kind: LISTING, created_at: 2, tags: [['title', 't'], ['image', 'a'], ['image', 'b'], ['currency', 'usd']] }),
+			signedEvent({
+				kind: LISTING,
+				created_at: 2,
+				tags: [
+					['title', 't'],
+					['image', 'a'],
+					['image', 'b'],
+					['currency', 'usd'],
+				],
+			}),
 		],
-		['domain', signedEvent({ kind: LISTING, created_at: 3, tags: [['title', 't'], ['image', 'a'], ['currency', 'gbp']] })],
+		[
+			'domain',
+			signedEvent({
+				kind: LISTING,
+				created_at: 3,
+				tags: [
+					['title', 't'],
+					['image', 'a'],
+					['currency', 'gbp'],
+				],
+			}),
+		],
 		[
 			'content',
-			signedEvent({ kind: LISTING, created_at: 4, content: 'x'.repeat(64), tags: [['title', 't'], ['image', 'a'], ['currency', 'eur']] }),
+			signedEvent({
+				kind: LISTING,
+				created_at: 4,
+				content: 'x'.repeat(64),
+				tags: [
+					['title', 't'],
+					['image', 'a'],
+					['currency', 'eur'],
+				],
+			}),
 		],
 	]
 	const fired: string[] = []
@@ -176,7 +254,14 @@ test('a link rule · a held event whose named fields match is accepted', async (
 		compare: [{ candidate: { tag: 'p', index: 1 }, reference: 'pubkey', comparator: 'eq' }],
 	}
 	const preset: ValidationPreset = { name: 'review', kinds: [REVIEW], checks: [check] }
-	const candidate = signedEvent({ kind: REVIEW, created_at: 6, tags: [['e', referenced.id], ['p', referenced.pubkey]] })
+	const candidate = signedEvent({
+		kind: REVIEW,
+		created_at: 6,
+		tags: [
+			['e', referenced.id],
+			['p', referenced.pubkey],
+		],
+	})
 	const port = recordingPort({ [referenced.id]: held(referenced) })
 	const validator = createValidator({ presets: [preset], port })
 	expect(await validator.validate(candidate)).toEqual({ outcome: 'accepted' })
@@ -195,7 +280,14 @@ test("a link rule · a mismatched field refuses with cause 'differs'", async () 
 	}
 	const preset: ValidationPreset = { name: 'review', kinds: [REVIEW], checks: [check] }
 	// the candidate names an author who is not the referenced event's author
-	const candidate = signedEvent({ kind: REVIEW, created_at: 6, tags: [['e', referenced.id], ['p', '0'.repeat(64)]] })
+	const candidate = signedEvent({
+		kind: REVIEW,
+		created_at: 6,
+		tags: [
+			['e', referenced.id],
+			['p', '0'.repeat(64)],
+		],
+	})
 	const validator = createValidator({ presets: [preset], port: recordingPort({ [referenced.id]: held(referenced) }) })
 	const outcome = await validator.validate(candidate)
 	expect(outcome.outcome).toBe('refused')
@@ -308,7 +400,12 @@ test('pass-through · re-asserted over a candidate no preset covers', async () =
 	// an uncovered kind passes, on both operations: no preset covers it, so nothing runs
 	const uncovered = signedEvent({ kind: 1, created_at: 1 })
 	expect(await validator.validate(uncovered)).toEqual({ outcome: 'accepted' })
-	expect(await validator.accept(uncovered, compositionContext(async () => undefined))).toBe('accept')
+	expect(
+		await validator.accept(
+			uncovered,
+			compositionContext(async () => undefined),
+		),
+	).toBe('accept')
 })
 
 test('preset selection · a specific match wins over a wildcard, whatever the host declared first', async () => {
@@ -382,7 +479,14 @@ test('bound 1 · resolutions attempted per event (the fan-out ceiling counts lin
 	}
 	const second = signedEvent({ kind: 1, created_at: 3 })
 	const coordinate = `${second.kind}:${second.pubkey}:listing`
-	const both = signedEvent({ kind: 1, created_at: 4, tags: [['e', referenced.id], ['a', coordinate]] })
+	const both = signedEvent({
+		kind: 1,
+		created_at: 4,
+		tags: [
+			['e', referenced.id],
+			['a', coordinate],
+		],
+	})
 	// both references are answerable: with the ceiling honoured this candidate is over it and
 	// quarantined; with the ceiling raised by one it would be resolved and accepted, which is what
 	// makes this case fail on the careless implementation rather than pass for another reason
@@ -417,7 +521,14 @@ test('a link rule · reads the occurrence its preset names: one link is one reso
 		checks: [{ kind: 'link', id: 'coordinate', tag: 'a', index: 1, strategy: 'by-coordinate' }],
 	}
 	const coordinate = `${referenced.kind}:${referenced.pubkey}:listing`
-	const withBoth = signedEvent({ kind: 1, created_at: 5, tags: [['e', referenced.id], ['a', coordinate]] })
+	const withBoth = signedEvent({
+		kind: 1,
+		created_at: 5,
+		tags: [
+			['e', referenced.id],
+			['a', coordinate],
+		],
+	})
 	const seen: string[] = []
 	const answering: ValidationPort = {
 		now: () => 0,
@@ -430,7 +541,7 @@ test('a link rule · reads the occurrence its preset names: one link is one reso
 	expect(seen).toEqual([coordinate])
 })
 
-test("bound 2 · one hop: the referenced event carries links the engine does not follow (and a ceiling below one forbids the direct reference)", async () => {
+test('bound 2 · one hop: the referenced event carries links the engine does not follow (and a ceiling below one forbids the direct reference)', async () => {
 	const deeper = signedEvent({ kind: 1, created_at: 1 })
 	const referenced = signedEvent({ kind: 1, created_at: 2, tags: [['e', deeper.id]] })
 	const candidate = signedEvent({ kind: 1, created_at: 3, tags: [['e', referenced.id]] })
@@ -621,12 +732,10 @@ test('bound 6 · the default clock is real: with no port and no clock a quaranti
 	const validator = createValidator({ presets: [preset] }) // no port, no clock
 	let asked = 0
 	let answerable = false
-	const context = compositionContext(async (reference) =>
-		{
-			asked += 1
-			return answerable && reference === referenced.id ? referenced : undefined
-		},
-	)
+	const context = compositionContext(async (reference) => {
+		asked += 1
+		return answerable && reference === referenced.id ? referenced : undefined
+	})
 
 	// the first call: nobody can answer the reference yet — quarantined, and never admitted
 	expect(await validator.accept(candidate, context)).toBe('reject')
@@ -693,7 +802,12 @@ test('quarantine · is never admitted, and is session-scoped', async () => {
 	const validator = createValidator({ presets: [preset], port: recordingPort({}) })
 	expect((await validator.validate(candidate)).outcome).toBe('quarantined')
 	// never admitted: the hook's own two-member answer makes a quarantine a rejection
-	expect(await validator.accept(candidate, compositionContext(async () => undefined))).toBe('reject')
+	expect(
+		await validator.accept(
+			candidate,
+			compositionContext(async () => undefined),
+		),
+	).toBe('reject')
 	expect(validator.unresolved.references.length).toBeGreaterThan(0)
 	// session-scoped: nothing durable, and a fresh validator carries none of it
 	const fresh = createValidator({ presets: [preset], port: recordingPort({}) })
@@ -716,21 +830,28 @@ test("the accept operation · is the composition's hook (tier and resolve both r
 
 	// `resolve` reaches the module through the composition's context, with no port injected
 	const noPort = createValidator({ presets: [preset] })
-	const context: AcceptContext = compositionContext(
-		async (reference) => (reference === referenced.id ? referenced : undefined),
-		'remote',
-	)
+	const context: AcceptContext = compositionContext(async (reference) => (reference === referenced.id ? referenced : undefined), 'remote')
 	expect(await noPort.accept(candidate, context)).toBe('accept')
 
 	// the tier reaches the module through the injected port's `at`
 	const port = recordingPort({ [referenced.id]: held(referenced) })
 	const withPort = createValidator({ presets: [preset], port })
-	expect(await withPort.accept(candidate, compositionContext(async () => undefined, 'local'))).toBe('accept')
+	expect(
+		await withPort.accept(
+			candidate,
+			compositionContext(async () => undefined, 'local'),
+		),
+	).toBe('accept')
 	expect(port.calls[0]?.at).toEqual({ tier: 'local' })
 
 	// and to the hook's two-member answer, a refusal is a rejection just as a quarantine is
 	const refusing = createValidator({ presets: [preset], port: recordingPort({ [referenced.id]: { state: 'deleted' } }) })
-	expect(await refusing.accept(candidate, compositionContext(async () => undefined))).toBe('reject')
+	expect(
+		await refusing.accept(
+			candidate,
+			compositionContext(async () => undefined),
+		),
+	).toBe('reject')
 })
 
 test('no repair · a malformed candidate is refused, never corrected', async () => {
@@ -745,7 +866,9 @@ test('no repair · a malformed candidate is refused, never corrected', async () 
 	const referenced = signedEvent({ kind: 1, created_at: 2 })
 	const passing = signedEvent({ kind: 1, created_at: 3, tags: [['e', referenced.id]] })
 	const beforePassing = JSON.stringify(passing)
-	expect(await createValidator({ presets: [preset], port: recordingPort({ [referenced.id]: held(referenced) }) }).validate(passing)).toEqual({
+	expect(
+		await createValidator({ presets: [preset], port: recordingPort({ [referenced.id]: held(referenced) }) }).validate(passing),
+	).toEqual({
 		outcome: 'accepted',
 	})
 	expect(JSON.stringify(passing)).toBe(beforePassing)
@@ -788,7 +911,14 @@ test('the comparator vocabulary · an uninterpretable preset fails at the preset
 	const candidate = signedEvent({ kind: 1, created_at: 2, tags: [['e', referenced.id]] })
 	const comparison = (comparator: string) => [{ candidate: 'pubkey', reference: 'pubkey', comparator }]
 	const checkWith = (comparator: string) =>
-		({ kind: 'link', id: 'comparison', tag: 'e', index: 1, strategy: 'by-id', compare: comparison(comparator) }) as unknown as ValidationCheck
+		({
+			kind: 'link',
+			id: 'comparison',
+			tag: 'e',
+			index: 1,
+			strategy: 'by-id',
+			compare: comparison(comparator),
+		}) as unknown as ValidationCheck
 	const bad: ValidationPreset = { name: 'links', kinds: [1], checks: [checkWith('gt')] }
 	const good: ValidationPreset = { name: 'links', kinds: [1], checks: [checkWith('eq')] }
 	const states: readonly (readonly [string, ValidationPort])[] = [

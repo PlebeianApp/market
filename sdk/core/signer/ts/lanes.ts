@@ -77,10 +77,7 @@ export interface PasswordSignerLane {
  * password is wrong ("failed to decrypt key: …").
  */
 /** #50e8e5 — createPasswordSignerLane: the NIP-49 lane, unlocked with the password and wrapped with the locked guard. */
-export async function createPasswordSignerLane(
-	ncryptsec: string,
-	password: string,
-): Promise<PasswordSignerLane> {
+export async function createPasswordSignerLane(ncryptsec: string, password: string): Promise<PasswordSignerLane> {
 	const signer = await PasswordSigner.fromNcryptsec(ncryptsec, password)
 	return {
 		signer,

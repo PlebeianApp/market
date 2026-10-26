@@ -4,7 +4,7 @@ kind: core-module
 level: checks
 applies: core@0.1
 inherits: [platform-web, packages, modularization, schema, ui, ux, schemas]
-implements: ["#0a41a2", "#ab48fc", "#c9ece3", "#91cefc", "#b22838", "#11d72f", "#2526e3"]
+implements: ['#0a41a2', '#ab48fc', '#c9ece3', '#91cefc', '#b22838', '#11d72f', '#2526e3']
 opt-out: []
 ---
 
@@ -37,13 +37,13 @@ Cheap, mechanical, and worth never doing by hand. This is the part worth running
    the ID written on the line. A mismatch means the line was edited without re-deriving the ID, or an ID was
    typed by hand — both are findings.
 2. **Accounting** (`#ab48fc`). Walk each module directory: every file must be referenced by that module's MD,
-   and every reference must resolve. Unaccounted file → *why is it here?*; missing target → failure.
+   and every reference must resolve. Unaccounted file → _why is it here?_; missing target → failure.
 3. **Dangling references.** Every `#xxxxxxxx` reference must exist as a declaring line somewhere in the tree.
    A reference that resolves to nothing is the signal that a statement was rewritten, and the report names
    the commit that changed it.
 4. **Form and normalisation.** IDs are six lowercase hexadecimal characters; the normalisation rule
    (`#c9ece3`) is applied identically everywhere.
-5. **Duplicate identity.** The same ID in two modules is reported as a *merge signal*, never as an error
+5. **Duplicate identity.** The same ID in two modules is reported as a _merge signal_, never as an error
    (`#b22838`) — identical content legitimately has one identity.
 6. **The module graph.** The graph is declared in each module's front-matter and validated, never assumed:
    targets exist, there is exactly one root, there are no cycles, and a statement may cite only itself, an
@@ -56,13 +56,13 @@ Cheap, mechanical, and worth never doing by hand. This is the part worth running
 Every module declares its parents (`inherits:`) and the graph is checked rather than described: targets must
 exist, there must be exactly one root, there must be no cycles, and a statement may cite only itself, an
 ancestor, or core. A citation that reaches sideways to a sibling or down to a descendant is a finding — that
-is what *the graph is respected* means, mechanically.
+is what _the graph is respected_ means, mechanically.
 
 The declared order is **`ux` → `ui` → `schema` → `packages` → `platform-web` → `checks`**, with `core.md` at
 the root. It is a layering, not a class hierarchy: a level may use everything above it, and nothing below it.
 The graph exists so that a level's dependencies are a decision that is written down once, in the front-matter
 of the module itself, rather than inferred from prose — and so that a level cannot quietly start depending on
-something that is supposed to depend on *it*.
+something that is supposed to depend on _it_.
 
 The machine part is implemented in `check.py` in this directory; that file is this module's implementation,
 and it is named here because every file in a module directory must be accounted for (`#ab48fc`).
@@ -123,7 +123,7 @@ whoever writes the next document.
 
 A number is only as good as the script that printed it. Two runs have now published evidence that was **green
 because it never ran**: a test filter whose pattern matched no case, so every row behind it was scored from an
-exit code that meant *nothing matched*; and a script that wrote its own capture **in place**, so running it
+exit code that meant _nothing matched_; and a script that wrote its own capture **in place**, so running it
 dirtied the tree and overwrote the evidence it was supposed to regenerate. Neither was caught by the routine.
 Both were caught by a reviewer who thought to check, which is the expensive way.
 
@@ -131,9 +131,9 @@ Both were caught by a reviewer who thought to check, which is the expensive way.
 root — mounts are skipped (`#17e5f0`) — and reports:
 
 - **writes into the tree** — `exec >` to anything but `/dev/null`, or a redirect or `tee` whose target git
-  tracks. An evidence script *prints*; the caller redirects. A script that writes cannot be run twice.
+  tracks. An evidence script _prints_; the caller redirects. A script that writes cannot be run twice.
 - **no `set -e`** — a failed read would be scored as a result. Two remedies, and the author picks: `set -e` with
-  `|| true` only where a non-match is *intended*, or an explicit assertion on each read whose outcome matters.
+  `|| true` only where a non-match is _intended_, or an explicit assertion on each read whose outcome matters.
 - **a tool that is not on `PATH`, invoked bare** — `bun`, `node`, `bunx`, `npx`. Spell it absolutely, or set
   `PATH=` inside the script. It works in the author's shell and fails in the run's.
 - **notes** — no existence guard for the subject it reads; a name-filtered test run that does not assert it
@@ -141,7 +141,7 @@ root — mounts are skipped (`#17e5f0`) — and reports:
 
 **Its count is a ratchet, not a gate.** The scripts already written are the baseline; what the routine asks of
 new work is that it adds nothing to that count, and retrofitting an older script is an improvement rather than a
-condition of anything. That is the same shape as the identity and accounting parts above: *0 hard findings* is
+condition of anything. That is the same shape as the identity and accounting parts above: _0 hard findings_ is
 the invariant new work keeps, never a wall that a correct run cannot pass.
 
 ### `#b2f0a2` — What a check never does

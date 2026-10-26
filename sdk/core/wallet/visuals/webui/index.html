@@ -1,12 +1,15 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>wallet — the payment state machine, laid out to be driven</title>
-<meta name="description" content="An interactive model of the wallet module's semantics: the port's three operations, the rung vocabulary, the purchase and refund machines, the set-record derivation, the conservation band and the acceptance gate. A model only — no live node, mint or wallet is involved.">
-<style>
-/* =============================================================================
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>wallet — the payment state machine, laid out to be driven</title>
+		<meta
+			name="description"
+			content="An interactive model of the wallet module's semantics: the port's three operations, the rung vocabulary, the purchase and refund machines, the set-record derivation, the conservation band and the acceptance gate. A model only — no live node, mint or wallet is involved."
+		/>
+		<style>
+			/* =============================================================================
    wallet — the payment state machine, drawn so a human can drive it.
    A single self-contained document: every style, diagram and behaviour is
    inline below. No remote font and no remote asset, and no network call
@@ -14,975 +17,2172 @@
    MODEL of the semantics the modules implement, not a running payment system.
    ========================================================================== */
 
-:root{
-  --paper:#fbfaf7;
-  --card:#ffffff;
-  --ink:#17181c;
-  --ink2:#3b3f47;
-  --muted:#6c7280;
-  --line:#e6e4df;
-  --line2:#f2f1ec;
-  --accent:#3a5fd0;
-  --accent-2:#7c98ea;
-  --accent-soft:#eef1fc;
-  --ok:#1c7a4d;
-  --ok-soft:#e9f6ef;
-  --warn:#9a5510;
-  --warn-soft:#fcf3e8;
-  --bad:#a5321f;
-  --bad-soft:#fbeeeb;
-  --radius:14px;
-  --radius-sm:9px;
-  --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
-  --shadow:0 1px 2px rgba(23,24,28,.05),0 10px 30px -18px rgba(23,24,28,.28);
-}
+			:root {
+				--paper: #fbfaf7;
+				--card: #ffffff;
+				--ink: #17181c;
+				--ink2: #3b3f47;
+				--muted: #6c7280;
+				--line: #e6e4df;
+				--line2: #f2f1ec;
+				--accent: #3a5fd0;
+				--accent-2: #7c98ea;
+				--accent-soft: #eef1fc;
+				--ok: #1c7a4d;
+				--ok-soft: #e9f6ef;
+				--warn: #9a5510;
+				--warn-soft: #fcf3e8;
+				--bad: #a5321f;
+				--bad-soft: #fbeeeb;
+				--radius: 14px;
+				--radius-sm: 9px;
+				--sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+				--mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+				--shadow: 0 1px 2px rgba(23, 24, 28, 0.05), 0 10px 30px -18px rgba(23, 24, 28, 0.28);
+			}
 
-*,*::before,*::after{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:14px;-webkit-text-size-adjust:100%}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.62 var(--sans);-webkit-font-smoothing:antialiased}
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
+			}
+			html {
+				scroll-behavior: smooth;
+				scroll-padding-top: 14px;
+				-webkit-text-size-adjust: 100%;
+			}
+			@media (prefers-reduced-motion: reduce) {
+				html {
+					scroll-behavior: auto;
+				}
+			}
+			body {
+				margin: 0;
+				background: var(--paper);
+				color: var(--ink);
+				font: 16px/1.62 var(--sans);
+				-webkit-font-smoothing: antialiased;
+			}
 
-h1,h2,h3{margin:0;line-height:1.24;font-weight:650;letter-spacing:-.011em}
-h1{font-size:clamp(25px,3.2vw,37px)}
-h2{font-size:clamp(19px,2vw,24px)}
-h3{font-size:15.5px}
-p{margin:.68em 0}
-a{color:var(--accent);text-decoration:none;border-bottom:1px solid rgba(58,95,208,.3)}
-code,.mono{font-family:var(--mono);font-size:.86em}
-code{background:var(--line2);padding:1px 5px;border-radius:5px;color:#2b2e35}
-ul,ol{margin:.6em 0;padding-left:1.15em}
-li{margin:.32em 0}
-strong{font-weight:650}
-.small{font-size:13.4px;color:var(--muted)}
+			h1,
+			h2,
+			h3 {
+				margin: 0;
+				line-height: 1.24;
+				font-weight: 650;
+				letter-spacing: -0.011em;
+			}
+			h1 {
+				font-size: clamp(25px, 3.2vw, 37px);
+			}
+			h2 {
+				font-size: clamp(19px, 2vw, 24px);
+			}
+			h3 {
+				font-size: 15.5px;
+			}
+			p {
+				margin: 0.68em 0;
+			}
+			a {
+				color: var(--accent);
+				text-decoration: none;
+				border-bottom: 1px solid rgba(58, 95, 208, 0.3);
+			}
+			code,
+			.mono {
+				font-family: var(--mono);
+				font-size: 0.86em;
+			}
+			code {
+				background: var(--line2);
+				padding: 1px 5px;
+				border-radius: 5px;
+				color: #2b2e35;
+			}
+			ul,
+			ol {
+				margin: 0.6em 0;
+				padding-left: 1.15em;
+			}
+			li {
+				margin: 0.32em 0;
+			}
+			strong {
+				font-weight: 650;
+			}
+			.small {
+				font-size: 13.4px;
+				color: var(--muted);
+			}
 
-.skip{position:absolute;left:-9999px;top:0}
-.skip:focus{left:12px;top:12px;background:var(--card);padding:8px 12px;border-radius:8px;z-index:20;border:1px solid var(--line)}
+			.skip {
+				position: absolute;
+				left: -9999px;
+				top: 0;
+			}
+			.skip:focus {
+				left: 12px;
+				top: 12px;
+				background: var(--card);
+				padding: 8px 12px;
+				border-radius: 8px;
+				z-index: 20;
+				border: 1px solid var(--line);
+			}
 
-/* ---- shell: sticky text spine + reading column --------------------------- */
-.shell{display:grid;grid-template-columns:300px minmax(0,1fr);gap:44px;max-width:1240px;margin:0 auto;padding:0 26px 90px}
-@media (max-width:920px){.shell{grid-template-columns:1fr;gap:20px}.spine{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line);padding:18px 0}}
+			/* ---- shell: sticky text spine + reading column --------------------------- */
+			.shell {
+				display: grid;
+				grid-template-columns: 300px minmax(0, 1fr);
+				gap: 44px;
+				max-width: 1240px;
+				margin: 0 auto;
+				padding: 0 26px 90px;
+			}
+			@media (max-width: 920px) {
+				.shell {
+					grid-template-columns: 1fr;
+					gap: 20px;
+				}
+				.spine {
+					position: static;
+					max-height: none;
+					border-right: 0;
+					border-bottom: 1px solid var(--line);
+					padding: 18px 0;
+				}
+			}
 
-.spine{position:sticky;top:0;align-self:start;max-height:100vh;overflow-y:auto;padding:26px 22px 30px 0;border-right:1px solid var(--line)}
-.spine details>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;font:650 12.5px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
-.spine details>summary::-webkit-details-marker{display:none}
-.spine details>summary::before{content:"";width:7px;height:7px;border-right:1.6px solid var(--muted);border-bottom:1.6px solid var(--muted);transform:rotate(45deg) translateY(-1px);transition:transform .2s ease}
-.spine details:not([open])>summary::before{transform:rotate(-45deg)}
-@media (prefers-reduced-motion:reduce){.spine details>summary::before{transition:none}}
-.spine-lede{font-size:13.3px;color:var(--ink2);margin:0 0 14px}
-.spine ol{list-style:none;margin:0;padding:0}
-.spine ol>li{margin:0 0 11px}
-.spine .sp-h{display:block;font:650 13.4px/1.35 var(--sans);color:var(--ink)}
-.spine .sp-t{display:block;font-size:12.7px;color:var(--muted);line-height:1.5}
-.spine-foot{margin-top:16px;padding-top:12px;border-top:1px solid var(--line);font-size:12.4px;color:var(--muted)}
+			.spine {
+				position: sticky;
+				top: 0;
+				align-self: start;
+				max-height: 100vh;
+				overflow-y: auto;
+				padding: 26px 22px 30px 0;
+				border-right: 1px solid var(--line);
+			}
+			.spine details > summary {
+				cursor: pointer;
+				list-style: none;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				font: 650 12.5px/1 var(--sans);
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				color: var(--muted);
+				margin-bottom: 12px;
+			}
+			.spine details > summary::-webkit-details-marker {
+				display: none;
+			}
+			.spine details > summary::before {
+				content: '';
+				width: 7px;
+				height: 7px;
+				border-right: 1.6px solid var(--muted);
+				border-bottom: 1.6px solid var(--muted);
+				transform: rotate(45deg) translateY(-1px);
+				transition: transform 0.2s ease;
+			}
+			.spine details:not([open]) > summary::before {
+				transform: rotate(-45deg);
+			}
+			@media (prefers-reduced-motion: reduce) {
+				.spine details > summary::before {
+					transition: none;
+				}
+			}
+			.spine-lede {
+				font-size: 13.3px;
+				color: var(--ink2);
+				margin: 0 0 14px;
+			}
+			.spine ol {
+				list-style: none;
+				margin: 0;
+				padding: 0;
+			}
+			.spine ol > li {
+				margin: 0 0 11px;
+			}
+			.spine .sp-h {
+				display: block;
+				font: 650 13.4px/1.35 var(--sans);
+				color: var(--ink);
+			}
+			.spine .sp-t {
+				display: block;
+				font-size: 12.7px;
+				color: var(--muted);
+				line-height: 1.5;
+			}
+			.spine-foot {
+				margin-top: 16px;
+				padding-top: 12px;
+				border-top: 1px solid var(--line);
+				font-size: 12.4px;
+				color: var(--muted);
+			}
 
-/* ---- hero --------------------------------------------------------------- */
-.hero{padding:34px 0 6px}
-.hero .lede{font-size:18.4px;color:var(--ink2);max-width:66ch}
-.eyebrow{display:inline-block;font:650 11.5px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--accent)}
-.meta-row{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0}
-.pill{display:inline-block;font:650 11.4px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;padding:6px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);border:1px solid rgba(58,95,208,.16)}
-.pill.ok{background:var(--ok-soft);color:var(--ok);border-color:rgba(28,122,77,.18)}
-.pill.warn{background:var(--warn-soft);color:var(--warn);border-color:rgba(154,85,16,.2)}
-.pill.bad{background:var(--bad-soft);color:var(--bad);border-color:rgba(165,50,31,.2)}
-.pill.plain{background:var(--line2);color:var(--ink2);border-color:var(--line)}
+			/* ---- hero --------------------------------------------------------------- */
+			.hero {
+				padding: 34px 0 6px;
+			}
+			.hero .lede {
+				font-size: 18.4px;
+				color: var(--ink2);
+				max-width: 66ch;
+			}
+			.eyebrow {
+				display: inline-block;
+				font: 650 11.5px/1 var(--sans);
+				letter-spacing: 0.11em;
+				text-transform: uppercase;
+				color: var(--accent);
+			}
+			.meta-row {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+				margin: 18px 0 0;
+			}
+			.pill {
+				display: inline-block;
+				font: 650 11.4px/1 var(--sans);
+				letter-spacing: 0.05em;
+				text-transform: uppercase;
+				padding: 6px 10px;
+				border-radius: 999px;
+				background: var(--accent-soft);
+				color: var(--accent);
+				border: 1px solid rgba(58, 95, 208, 0.16);
+			}
+			.pill.ok {
+				background: var(--ok-soft);
+				color: var(--ok);
+				border-color: rgba(28, 122, 77, 0.18);
+			}
+			.pill.warn {
+				background: var(--warn-soft);
+				color: var(--warn);
+				border-color: rgba(154, 85, 16, 0.2);
+			}
+			.pill.bad {
+				background: var(--bad-soft);
+				color: var(--bad);
+				border-color: rgba(165, 50, 31, 0.2);
+			}
+			.pill.plain {
+				background: var(--line2);
+				color: var(--ink2);
+				border-color: var(--line);
+			}
 
-/* ---- honesty banner ----------------------------------------------------- */
-.model-banner{display:flex;align-items:center;gap:12px;margin:20px 0 4px;padding:14px 16px;border-radius:var(--radius);border:1px solid rgba(154,85,16,.25);background:var(--warn-soft);color:var(--warn)}
-.model-banner .dot{flex:none;width:10px;height:10px;border-radius:50%;background:currentColor}
-.model-banner strong{font:650 13px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase}
-.model-banner span{font-size:14.3px;color:var(--ink2)}
+			/* ---- honesty banner ----------------------------------------------------- */
+			.model-banner {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				margin: 20px 0 4px;
+				padding: 14px 16px;
+				border-radius: var(--radius);
+				border: 1px solid rgba(154, 85, 16, 0.25);
+				background: var(--warn-soft);
+				color: var(--warn);
+			}
+			.model-banner .dot {
+				flex: none;
+				width: 10px;
+				height: 10px;
+				border-radius: 50%;
+				background: currentColor;
+			}
+			.model-banner strong {
+				font: 650 13px/1 var(--sans);
+				letter-spacing: 0.05em;
+				text-transform: uppercase;
+			}
+			.model-banner span {
+				font-size: 14.3px;
+				color: var(--ink2);
+			}
 
-/* ---- sections ----------------------------------------------------------- */
-main{min-width:0}
-.section{padding:44px 0 6px;border-top:1px solid var(--line);scroll-margin-top:12px}
-.section:first-of-type{border-top:0}
-.section>header{margin-bottom:14px}
-.section .num{display:block;font:650 12px/1 var(--mono);letter-spacing:.12em;color:var(--accent);margin-bottom:9px}
-.section .dek{font-size:16.5px;color:var(--ink2);max-width:68ch;margin-top:10px}
-main p,main li{max-width:74ch}
+			/* ---- sections ----------------------------------------------------------- */
+			main {
+				min-width: 0;
+			}
+			.section {
+				padding: 44px 0 6px;
+				border-top: 1px solid var(--line);
+				scroll-margin-top: 12px;
+			}
+			.section:first-of-type {
+				border-top: 0;
+			}
+			.section > header {
+				margin-bottom: 14px;
+			}
+			.section .num {
+				display: block;
+				font: 650 12px/1 var(--mono);
+				letter-spacing: 0.12em;
+				color: var(--accent);
+				margin-bottom: 9px;
+			}
+			.section .dek {
+				font-size: 16.5px;
+				color: var(--ink2);
+				max-width: 68ch;
+				margin-top: 10px;
+			}
+			main p,
+			main li {
+				max-width: 74ch;
+			}
 
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
-.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:18px 0}
-.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}
-@media (max-width:820px){.grid-2,.grid-3{grid-template-columns:1fr}}
+			.card {
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: var(--radius);
+				padding: 16px 18px;
+				box-shadow: var(--shadow);
+			}
+			.grid-2 {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 14px;
+				margin: 18px 0;
+			}
+			.grid-3 {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 12px;
+				margin: 18px 0;
+			}
+			@media (max-width: 820px) {
+				.grid-2,
+				.grid-3 {
+					grid-template-columns: 1fr;
+				}
+			}
 
-.note{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 var(--radius) var(--radius) 0;padding:13px 17px;margin:18px 0}
-.note.warn{border-left-color:var(--warn);background:var(--warn-soft)}
-.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
-.note.bad{border-left-color:var(--bad);background:var(--bad-soft)}
-.note h3{font-size:14.4px;margin-bottom:4px}
-.note p{margin:.3em 0;font-size:14.5px;max-width:none}
+			.note {
+				border-left: 3px solid var(--accent);
+				background: var(--accent-soft);
+				border-radius: 0 var(--radius) var(--radius) 0;
+				padding: 13px 17px;
+				margin: 18px 0;
+			}
+			.note.warn {
+				border-left-color: var(--warn);
+				background: var(--warn-soft);
+			}
+			.note.ok {
+				border-left-color: var(--ok);
+				background: var(--ok-soft);
+			}
+			.note.bad {
+				border-left-color: var(--bad);
+				background: var(--bad-soft);
+			}
+			.note h3 {
+				font-size: 14.4px;
+				margin-bottom: 4px;
+			}
+			.note p {
+				margin: 0.3em 0;
+				font-size: 14.5px;
+				max-width: none;
+			}
 
-.chip{display:inline-block;font:650 10.8px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;padding:3px 7px;border-radius:999px;background:var(--line2);color:var(--ink2);border:1px solid var(--line);white-space:nowrap}
-.chip.crypto{background:var(--ok-soft);color:var(--ok);border-color:rgba(28,122,77,.2)}
-.chip.declared{background:var(--warn-soft);color:var(--warn);border-color:rgba(154,85,16,.2)}
-.chip.rule{background:var(--accent-soft);color:var(--accent);border-color:rgba(58,95,208,.2)}
-.chip.human{background:var(--bad-soft);color:var(--bad);border-color:rgba(165,50,31,.2)}
-.chip.never{background:#f6f6f3;color:var(--muted)}
+			.chip {
+				display: inline-block;
+				font: 650 10.8px/1 var(--sans);
+				letter-spacing: 0.05em;
+				text-transform: uppercase;
+				padding: 3px 7px;
+				border-radius: 999px;
+				background: var(--line2);
+				color: var(--ink2);
+				border: 1px solid var(--line);
+				white-space: nowrap;
+			}
+			.chip.crypto {
+				background: var(--ok-soft);
+				color: var(--ok);
+				border-color: rgba(28, 122, 77, 0.2);
+			}
+			.chip.declared {
+				background: var(--warn-soft);
+				color: var(--warn);
+				border-color: rgba(154, 85, 16, 0.2);
+			}
+			.chip.rule {
+				background: var(--accent-soft);
+				color: var(--accent);
+				border-color: rgba(58, 95, 208, 0.2);
+			}
+			.chip.human {
+				background: var(--bad-soft);
+				color: var(--bad);
+				border-color: rgba(165, 50, 31, 0.2);
+			}
+			.chip.never {
+				background: #f6f6f3;
+				color: var(--muted);
+			}
 
-.flow{margin:16px 0;display:flex;flex-direction:column;gap:8px}
-.flow .step{display:grid;grid-template-columns:180px 26px 1fr;gap:10px;align-items:center}
-@media (max-width:640px){.flow .step{grid-template-columns:130px 22px 1fr;gap:8px}}
-.flow .node{font:650 13px var(--sans);background:var(--card);border:1px solid var(--line);border-radius:var(--radius-sm);padding:9px 11px;text-align:center;box-shadow:var(--shadow)}
-.flow .node.term{background:var(--ok-soft);border-color:rgba(28,122,77,.25)}
-.flow .node.stop{background:var(--bad-soft);border-color:rgba(165,50,31,.22)}
-.flow .arrow{text-align:center;color:var(--muted);font-size:15px}
-.flow .desc{font-size:14px;color:var(--ink2)}
-.flow .desc .lbl{font:650 14px var(--sans);color:var(--ink)}
+			.flow {
+				margin: 16px 0;
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+			}
+			.flow .step {
+				display: grid;
+				grid-template-columns: 180px 26px 1fr;
+				gap: 10px;
+				align-items: center;
+			}
+			@media (max-width: 640px) {
+				.flow .step {
+					grid-template-columns: 130px 22px 1fr;
+					gap: 8px;
+				}
+			}
+			.flow .node {
+				font: 650 13px var(--sans);
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: var(--radius-sm);
+				padding: 9px 11px;
+				text-align: center;
+				box-shadow: var(--shadow);
+			}
+			.flow .node.term {
+				background: var(--ok-soft);
+				border-color: rgba(28, 122, 77, 0.25);
+			}
+			.flow .node.stop {
+				background: var(--bad-soft);
+				border-color: rgba(165, 50, 31, 0.22);
+			}
+			.flow .arrow {
+				text-align: center;
+				color: var(--muted);
+				font-size: 15px;
+			}
+			.flow .desc {
+				font-size: 14px;
+				color: var(--ink2);
+			}
+			.flow .desc .lbl {
+				font: 650 14px var(--sans);
+				color: var(--ink);
+			}
 
-.transitions{border-collapse:collapse;width:100%;font-size:14.2px;margin:14px 0}
-.transitions td,.transitions th{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line2);vertical-align:top}
-.transitions thead th{font:650 11.3px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--line2)}
-.transitions tr:last-child td{border-bottom:0}
-.transitions .t{font-family:var(--mono);font-size:12.8px;color:var(--ink2);white-space:nowrap}
+			.transitions {
+				border-collapse: collapse;
+				width: 100%;
+				font-size: 14.2px;
+				margin: 14px 0;
+			}
+			.transitions td,
+			.transitions th {
+				text-align: left;
+				padding: 8px 10px;
+				border-bottom: 1px solid var(--line2);
+				vertical-align: top;
+			}
+			.transitions thead th {
+				font: 650 11.3px/1.3 var(--sans);
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				color: var(--muted);
+				background: var(--line2);
+			}
+			.transitions tr:last-child td {
+				border-bottom: 0;
+			}
+			.transitions .t {
+				font-family: var(--mono);
+				font-size: 12.8px;
+				color: var(--ink2);
+				white-space: nowrap;
+			}
 
-table.plain{border-collapse:collapse;width:100%;font-size:14.2px;margin:12px 0}
-table.plain th,table.plain td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line2);vertical-align:top}
-table.plain thead th{font:650 11.3px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--line2)}
-table.plain tr:last-child td{border-bottom:0}
+			table.plain {
+				border-collapse: collapse;
+				width: 100%;
+				font-size: 14.2px;
+				margin: 12px 0;
+			}
+			table.plain th,
+			table.plain td {
+				text-align: left;
+				padding: 7px 10px;
+				border-bottom: 1px solid var(--line2);
+				vertical-align: top;
+			}
+			table.plain thead th {
+				font: 650 11.3px/1.3 var(--sans);
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				color: var(--muted);
+				background: var(--line2);
+			}
+			table.plain tr:last-child td {
+				border-bottom: 0;
+			}
 
-/* ---- the console -------------------------------------------------------- */
-.console{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;margin:18px 0}
-.console h3{margin-bottom:2px}
-.console .sub{font-size:13.2px;color:var(--muted);margin:0 0 12px}
-.scenarios{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 16px}
-.scenarios button{font:600 12.6px var(--sans);color:var(--ink2);background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer}
-.scenarios button:hover{border-color:var(--accent-2);color:var(--accent)}
-.scenarios button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
-.legs{display:flex;flex-direction:column;gap:12px;margin:8px 0 4px}
-.leg{border:1px solid var(--line);border-radius:var(--radius-sm);padding:11px 12px;background:var(--paper)}
-.leg .leg-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
-.leg .leg-head .leg-name{font:650 13.6px var(--sans)}
-.leg .fields{display:flex;flex-wrap:wrap;gap:12px}
-.leg label,.setctl label{display:flex;flex-direction:column;gap:4px;font:650 10.8px/1.2 var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
-.leg select,.leg input[type=number],.setctl input[type=number]{font:14px var(--sans);color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:7px;padding:6px 8px;min-width:150px}
-.setctl input[type=number]{min-width:92px}
-.leg .toggles{display:flex;gap:14px;align-items:center;margin-top:8px;flex-wrap:wrap}
-.leg .toggles label{flex-direction:row;align-items:center;gap:5px;text-transform:none;letter-spacing:0;font:600 12.8px var(--sans);color:var(--ink2)}
-.leg input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent)}
-.setctl{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:14px 0 6px;padding-top:12px;border-top:1px solid var(--line)}
-.console-actions{display:flex;gap:8px;margin-top:6px}
-.console-actions button{font:600 12.6px var(--sans);color:var(--ink2);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}
-.console-actions button:hover{border-color:var(--accent-2);color:var(--accent)}
+			/* ---- the console -------------------------------------------------------- */
+			.console {
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: var(--radius);
+				box-shadow: var(--shadow);
+				padding: 16px 18px;
+				margin: 18px 0;
+			}
+			.console h3 {
+				margin-bottom: 2px;
+			}
+			.console .sub {
+				font-size: 13.2px;
+				color: var(--muted);
+				margin: 0 0 12px;
+			}
+			.scenarios {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+				margin: 6px 0 16px;
+			}
+			.scenarios button {
+				font: 600 12.6px var(--sans);
+				color: var(--ink2);
+				background: var(--paper);
+				border: 1px solid var(--line);
+				border-radius: 999px;
+				padding: 7px 12px;
+				cursor: pointer;
+			}
+			.scenarios button:hover {
+				border-color: var(--accent-2);
+				color: var(--accent);
+			}
+			.scenarios button.on {
+				background: var(--accent-soft);
+				border-color: var(--accent);
+				color: var(--accent);
+			}
+			.legs {
+				display: flex;
+				flex-direction: column;
+				gap: 12px;
+				margin: 8px 0 4px;
+			}
+			.leg {
+				border: 1px solid var(--line);
+				border-radius: var(--radius-sm);
+				padding: 11px 12px;
+				background: var(--paper);
+			}
+			.leg .leg-head {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 10px;
+				margin-bottom: 8px;
+			}
+			.leg .leg-head .leg-name {
+				font: 650 13.6px var(--sans);
+			}
+			.leg .fields {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 12px;
+			}
+			.leg label,
+			.setctl label {
+				display: flex;
+				flex-direction: column;
+				gap: 4px;
+				font: 650 10.8px/1.2 var(--sans);
+				letter-spacing: 0.05em;
+				text-transform: uppercase;
+				color: var(--muted);
+			}
+			.leg select,
+			.leg input[type='number'],
+			.setctl input[type='number'] {
+				font: 14px var(--sans);
+				color: var(--ink);
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: 7px;
+				padding: 6px 8px;
+				min-width: 150px;
+			}
+			.setctl input[type='number'] {
+				min-width: 92px;
+			}
+			.leg .toggles {
+				display: flex;
+				gap: 14px;
+				align-items: center;
+				margin-top: 8px;
+				flex-wrap: wrap;
+			}
+			.leg .toggles label {
+				flex-direction: row;
+				align-items: center;
+				gap: 5px;
+				text-transform: none;
+				letter-spacing: 0;
+				font: 600 12.8px var(--sans);
+				color: var(--ink2);
+			}
+			.leg input[type='checkbox'] {
+				width: 15px;
+				height: 15px;
+				accent-color: var(--accent);
+			}
+			.setctl {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 12px;
+				align-items: flex-end;
+				margin: 14px 0 6px;
+				padding-top: 12px;
+				border-top: 1px solid var(--line);
+			}
+			.console-actions {
+				display: flex;
+				gap: 8px;
+				margin-top: 6px;
+			}
+			.console-actions button {
+				font: 600 12.6px var(--sans);
+				color: var(--ink2);
+				background: var(--paper);
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				padding: 7px 12px;
+				cursor: pointer;
+			}
+			.console-actions button:hover {
+				border-color: var(--accent-2);
+				color: var(--accent);
+			}
 
-.readout{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
-.readout .state-line{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
-.readout .big{font:650 22px var(--sans)}
-.readout .big.unfinished{color:var(--warn)}
-.readout .big.complete{color:var(--ok)}
-.readout .big.short-settled,.readout .big.over-settled{color:var(--bad)}
-.readout .big.abandoned{color:var(--bad)}
-.readout .metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
-@media (max-width:640px){.readout .metrics{grid-template-columns:1fr}}
-.readout .metric{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-sm);padding:9px 11px}
-.readout .metric .k{font:650 10.8px/1.2 var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
-.readout .metric .v{font-family:var(--mono);font-size:14px;color:var(--ink);margin-top:3px}
-.leg-out{display:flex;flex-direction:column;gap:6px;margin:10px 0}
-.leg-out .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13.6px}
-.leg-out .row .id{font-family:var(--mono);font-size:12.6px;color:var(--muted);min-width:34px}
-.leg-out .row .rung{font-family:var(--mono);font-size:12.8px;color:var(--ink2)}
-.why{margin-top:12px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:11px 14px;font-size:14.2px}
-.why.bad{border-left-color:var(--bad);background:var(--bad-soft)}
-.why.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+			.readout {
+				margin-top: 16px;
+				padding-top: 14px;
+				border-top: 1px solid var(--line);
+			}
+			.readout .state-line {
+				display: flex;
+				align-items: baseline;
+				gap: 12px;
+				flex-wrap: wrap;
+			}
+			.readout .big {
+				font: 650 22px var(--sans);
+			}
+			.readout .big.unfinished {
+				color: var(--warn);
+			}
+			.readout .big.complete {
+				color: var(--ok);
+			}
+			.readout .big.short-settled,
+			.readout .big.over-settled {
+				color: var(--bad);
+			}
+			.readout .big.abandoned {
+				color: var(--bad);
+			}
+			.readout .metrics {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 10px;
+				margin: 12px 0;
+			}
+			@media (max-width: 640px) {
+				.readout .metrics {
+					grid-template-columns: 1fr;
+				}
+			}
+			.readout .metric {
+				background: var(--paper);
+				border: 1px solid var(--line);
+				border-radius: var(--radius-sm);
+				padding: 9px 11px;
+			}
+			.readout .metric .k {
+				font: 650 10.8px/1.2 var(--sans);
+				letter-spacing: 0.05em;
+				text-transform: uppercase;
+				color: var(--muted);
+			}
+			.readout .metric .v {
+				font-family: var(--mono);
+				font-size: 14px;
+				color: var(--ink);
+				margin-top: 3px;
+			}
+			.leg-out {
+				display: flex;
+				flex-direction: column;
+				gap: 6px;
+				margin: 10px 0;
+			}
+			.leg-out .row {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				flex-wrap: wrap;
+				font-size: 13.6px;
+			}
+			.leg-out .row .id {
+				font-family: var(--mono);
+				font-size: 12.6px;
+				color: var(--muted);
+				min-width: 34px;
+			}
+			.leg-out .row .rung {
+				font-family: var(--mono);
+				font-size: 12.8px;
+				color: var(--ink2);
+			}
+			.why {
+				margin-top: 12px;
+				border-left: 3px solid var(--accent);
+				background: var(--accent-soft);
+				border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+				padding: 11px 14px;
+				font-size: 14.2px;
+			}
+			.why.bad {
+				border-left-color: var(--bad);
+				background: var(--bad-soft);
+			}
+			.why.ok {
+				border-left-color: var(--ok);
+				background: var(--ok-soft);
+			}
 
-.unreachable{list-style:none;margin:14px 0;padding:0}
-.unreachable li{display:grid;grid-template-columns:26px 1fr;gap:10px;align-items:start;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--card);margin-bottom:8px}
-.unreachable .mk{color:var(--bad);font-weight:700;text-align:center}
-.unreachable .u-t{font:650 14px var(--sans)}
-.unreachable .u-d{font-size:14px;color:var(--ink2)}
+			.unreachable {
+				list-style: none;
+				margin: 14px 0;
+				padding: 0;
+			}
+			.unreachable li {
+				display: grid;
+				grid-template-columns: 26px 1fr;
+				gap: 10px;
+				align-items: start;
+				padding: 10px 12px;
+				border: 1px solid var(--line);
+				border-radius: var(--radius-sm);
+				background: var(--card);
+				margin-bottom: 8px;
+			}
+			.unreachable .mk {
+				color: var(--bad);
+				font-weight: 700;
+				text-align: center;
+			}
+			.unreachable .u-t {
+				font: 650 14px var(--sans);
+			}
+			.unreachable .u-d {
+				font-size: 14px;
+				color: var(--ink2);
+			}
 
-footer{padding:40px 0 20px;border-top:1px solid var(--line);color:var(--muted);font-size:13.4px}
-</style>
-</head>
-<body>
-<a class="skip" href="#main">Skip to the content</a>
+			footer {
+				padding: 40px 0 20px;
+				border-top: 1px solid var(--line);
+				color: var(--muted);
+				font-size: 13.4px;
+			}
+		</style>
+	</head>
+	<body>
+		<a class="skip" href="#main">Skip to the content</a>
 
-<div class="shell">
+		<div class="shell">
+			<aside class="spine" id="spine" aria-label="The page in words, section by section">
+				<details open>
+					<summary>Read it without the motion</summary>
+					<p class="spine-lede">
+						Everything here is plain HTML. The console appears only when JavaScript is on; the machines, the vocabulary and the gate are
+						visible either way.
+					</p>
+					<ol>
+						<li><a class="sp-h" href="#what">1 · What this is</a><span class="sp-t">A model, and what it is not.</span></li>
+						<li><a class="sp-h" href="#port">2 · The port</a><span class="sp-t">Three operations; which a rail may omit.</span></li>
+						<li><a class="sp-h" href="#rungs">3 · The rung vocabulary</a><span class="sp-t">Cryptographic and declared kinds.</span></li>
+						<li>
+							<a class="sp-h" href="#set">4 · The set record</a><span class="sp-t">A witness becomes a rung, rungs become a state.</span>
+						</li>
+						<li><a class="sp-h" href="#purchase">5 · The purchase machine</a><span class="sp-t">Every transition, rule or human.</span></li>
+						<li><a class="sp-h" href="#refund">6 · The refund machine</a><span class="sp-t">The one human transition.</span></li>
+						<li><a class="sp-h" href="#conservation">7 · The conservation band</a><span class="sp-t">Two directions, never one.</span></li>
+						<li><a class="sp-h" href="#gate">8 · The acceptance gate</a><span class="sp-t">Its refusals, and its honest limit.</span></li>
+						<li><a class="sp-h" href="#drive">9 · Drive it</a><span class="sp-t">The console, and ten scenarios.</span></li>
+						<li><a class="sp-h" href="#never">10 · What can never happen</a><span class="sp-t">Shown unreachable, not asserted.</span></li>
+					</ol>
+					<div class="spine-foot">Declared in <span class="mono">wallet.md</span> on port <strong>4329</strong>.</div>
+				</details>
+			</aside>
 
-  <aside class="spine" id="spine" aria-label="The page in words, section by section">
-    <details open>
-      <summary>Read it without the motion</summary>
-      <p class="spine-lede">Everything here is plain HTML. The console appears only when JavaScript is
-      on; the machines, the vocabulary and the gate are visible either way.</p>
-      <ol>
-        <li><a class="sp-h" href="#what">1 · What this is</a><span class="sp-t">A model, and what it is not.</span></li>
-        <li><a class="sp-h" href="#port">2 · The port</a><span class="sp-t">Three operations; which a rail may omit.</span></li>
-        <li><a class="sp-h" href="#rungs">3 · The rung vocabulary</a><span class="sp-t">Cryptographic and declared kinds.</span></li>
-        <li><a class="sp-h" href="#set">4 · The set record</a><span class="sp-t">A witness becomes a rung, rungs become a state.</span></li>
-        <li><a class="sp-h" href="#purchase">5 · The purchase machine</a><span class="sp-t">Every transition, rule or human.</span></li>
-        <li><a class="sp-h" href="#refund">6 · The refund machine</a><span class="sp-t">The one human transition.</span></li>
-        <li><a class="sp-h" href="#conservation">7 · The conservation band</a><span class="sp-t">Two directions, never one.</span></li>
-        <li><a class="sp-h" href="#gate">8 · The acceptance gate</a><span class="sp-t">Its refusals, and its honest limit.</span></li>
-        <li><a class="sp-h" href="#drive">9 · Drive it</a><span class="sp-t">The console, and ten scenarios.</span></li>
-        <li><a class="sp-h" href="#never">10 · What can never happen</a><span class="sp-t">Shown unreachable, not asserted.</span></li>
-      </ol>
-      <div class="spine-foot">Declared in <span class="mono">wallet.md</span> on port <strong>4329</strong>.</div>
-    </details>
-  </aside>
+			<main id="main">
+				<header class="hero">
+					<span class="eyebrow">wallet · an interactive model</span>
+					<h1>The payment state machine, laid out so a human can drive it.</h1>
+					<p class="lede">
+						This page is the payment layer's semantics made visible: the port's three operations, the rung vocabulary, the purchase and
+						refund machines, the set record and its derivation, the conservation band and the acceptance gate — with a console you can drive
+						to watch a set's state change, and the cases that must never be reachable shown as unreachable.
+					</p>
+					<div class="meta-row">
+						<span class="pill" id="meta-port">port 4329</span>
+						<span class="pill plain">a model of the modules' semantics</span>
+						<span class="pill warn">no live node, mint or wallet</span>
+						<span class="pill plain">no network — nothing here calls out</span>
+					</div>
+				</header>
 
-  <main id="main">
+				<div class="model-banner" role="note">
+					<span class="dot" aria-hidden="true"></span>
+					<div>
+						<strong>This is a model, not a payment system.</strong>
+						<span
+							>Every rule below is driven by the semantics the modules implement — <span class="mono">funds-contract</span>,
+							<span class="mono">wallet</span> and the wrapper ports. No live node, mint or wallet is involved, and nothing on this page
+							reaches a relay, a mint or a wallet.</span
+						>
+					</div>
+				</div>
 
-    <header class="hero">
-      <span class="eyebrow">wallet · an interactive model</span>
-      <h1>The payment state machine, laid out so a human can drive it.</h1>
-      <p class="lede">This page is the payment layer's semantics made visible: the port's three operations,
-      the rung vocabulary, the purchase and refund machines, the set record and its derivation, the
-      conservation band and the acceptance gate — with a console you can drive to watch a set's state
-      change, and the cases that must never be reachable shown as unreachable.</p>
-      <div class="meta-row">
-        <span class="pill" id="meta-port">port 4329</span>
-        <span class="pill plain">a model of the modules' semantics</span>
-        <span class="pill warn">no live node, mint or wallet</span>
-        <span class="pill plain">no network — nothing here calls out</span>
-      </div>
-    </header>
+				<!-- =============================================================== 01 -->
+				<section class="section" id="what">
+					<header>
+						<span class="num">01</span>
+						<h2>What this is</h2>
+						<p class="dek">
+							A single self-contained page that renders the payment layer's machine and lets you drive its set state. It is the aggregator's
+							own vocabulary, drawn.
+						</p>
+					</header>
+					<p>
+						The <span class="mono">wallet</span> owns the <strong>set</strong>: it binds one frozen total to an ordered list of legs, keeps
+						each leg's <em>witness</em> rather than a verdict, derives the set state from what is proven, enforces conservation over the
+						aggregate, runs the acceptance gate every wrapper passes, and is the durable authority on whether a refund set exists for an
+						order.
+					</p>
+					<p>
+						This page shows that machine and makes it interactive. It is a <strong>model</strong>: the rules are transcribed from the
+						modules' semantics, and the console re-implements the same derivation the aggregator runs (<span class="mono"
+							>deriveSetState</span
+						>) so you can watch it work. It is not a running payment system, and it is not evidence — the module's own suite and evidence
+						are.
+					</p>
+					<div class="grid-3">
+						<div class="card">
+							<h3>What it is</h3>
+							<p class="small">
+								A model of the set's rules, a console that derives the set state live, and the machines laid out transition by transition.
+							</p>
+						</div>
+						<div class="card">
+							<h3>What it is not</h3>
+							<p class="small">Not a ledger, not a host, not a rail. It holds no record, opens no network, and settles nothing.</p>
+						</div>
+						<div class="card">
+							<h3>No live network</h3>
+							<p class="small">
+								Nothing here depends on a relay, a mint or a wallet. Turn JavaScript off and the page is still fully readable.
+							</p>
+						</div>
+					</div>
+				</section>
 
-    <div class="model-banner" role="note">
-      <span class="dot" aria-hidden="true"></span>
-      <div><strong>This is a model, not a payment system.</strong>
-      <span>Every rule below is driven by the semantics the modules implement — <span class="mono">funds-contract</span>,
-      <span class="mono">wallet</span> and the wrapper ports. No live node, mint or wallet is involved,
-      and nothing on this page reaches a relay, a mint or a wallet.</span></div>
-    </div>
+				<!-- =============================================================== 02 -->
+				<section class="section" id="port">
+					<header>
+						<span class="num">02</span>
+						<h2>The port — three operations, and the subset a rail declares</h2>
+						<p class="dek">
+							One closed set of operations. A rail declares which of them it has; the tie is one-directional and asserts only
+							self-consistency.
+						</p>
+					</header>
+					<p>The funds contract declares one port over one rail, and it is a <strong>closed set of exactly three</strong> operations:</p>
+					<table class="plain">
+						<thead>
+							<tr>
+								<th>Operation</th>
+								<th>What it does</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td class="mono">obtain(intent)</td>
+								<td>
+									Returns the leg's durable reference in the rail's own form — an invoice and its payment hash, a mint's quote — or a
+									fail-closed refusal.
+								</td>
+							</tr>
+							<tr>
+								<td class="mono">submit(quote, reference)</td>
+								<td>Hands the payable artifact to the rail so it moves money.</td>
+							</tr>
+							<tr>
+								<td class="mono">reconcile(reference)</td>
+								<td>
+									Asks the authority (through the wrapper) whether the leg settled, and returns a handle carrying the witness or its
+									explicit absence.
+								</td>
+							</tr>
+						</tbody>
+					</table>
+					<p>
+						A wrapper implements the port over one rail and owns its own durable journal. Its declared
+						<span class="mono">operations</span> is a <strong>non-empty subset</strong> of those three, and its declared
+						<span class="mono">plan</span> is that subset's <strong>ordered projection</strong> in the port's canonical order (<span
+							class="mono"
+							>obtain</span
+						>, then <span class="mono">submit</span>, then <span class="mono">reconcile</span>).
+					</p>
+					<div class="note">
+						<h3>Which operation a rail may omit — and the one that may not be omitted</h3>
+						<p>
+							A <strong>passive</strong> leg is legal by this declaration. A rail whose payable artifact is <em>broadcast</em> — an invoice
+							shown for the buyer to scan, with nothing in the app that submits it — declares <span class="mono">obtain</span> and
+							<span class="mono">reconcile</span> and <strong>omits <span class="mono">submit</span></strong
+							>. Its absent <span class="mono">submit</span> is then a <em>declared fact</em>, not a missing method. A rail that
+							<em>does</em> declare <span class="mono">submit</span> (a leg that moves money)
+							<strong>must also declare <span class="mono">reconcile</span></strong> — a money-mover with no reconcile step is a paid but
+							unlearnable leg, and the gate refuses it.
+						</p>
+					</div>
+					<div class="grid-3">
+						<div class="card">
+							<h3>A money-moving rail</h3>
+							<p class="small"><span class="mono">obtain · submit · reconcile</span></p>
+							<p class="small">Moves money and can be learned.</p>
+						</div>
+						<div class="card">
+							<h3>A passive rail</h3>
+							<p class="small"><span class="mono">obtain · reconcile</span></p>
+							<p class="small">Omits <span class="mono">submit</span>; the artifact is broadcast, not submitted.</p>
+						</div>
+						<div class="card">
+							<h3>Refused</h3>
+							<p class="small"><span class="mono">obtain · submit</span></p>
+							<p class="small">
+								A money-mover with no <span class="mono">reconcile</span> — refused as <span class="mono">plan no-reconcile-step</span>.
+							</p>
+						</div>
+					</div>
+				</section>
 
-    <!-- =============================================================== 01 -->
-    <section class="section" id="what">
-      <header>
-        <span class="num">01</span>
-        <h2>What this is</h2>
-        <p class="dek">A single self-contained page that renders the payment layer's machine and lets you
-        drive its set state. It is the aggregator's own vocabulary, drawn.</p>
-      </header>
-      <p>The <span class="mono">wallet</span> owns the <strong>set</strong>: it binds one frozen total
-      to an ordered list of legs, keeps each leg's <em>witness</em> rather than a verdict, derives the set
-      state from what is proven, enforces conservation over the aggregate, runs the acceptance gate every
-      wrapper passes, and is the durable authority on whether a refund set exists for an order.</p>
-      <p>This page shows that machine and makes it interactive. It is a <strong>model</strong>: the rules are
-      transcribed from the modules' semantics, and the console re-implements the same derivation the
-      aggregator runs (<span class="mono">deriveSetState</span>) so you can watch it work. It is not a
-      running payment system, and it is not evidence — the module's own suite and evidence are.</p>
-      <div class="grid-3">
-        <div class="card"><h3>What it is</h3><p class="small">A model of the set's rules, a console that
-        derives the set state live, and the machines laid out transition by transition.</p></div>
-        <div class="card"><h3>What it is not</h3><p class="small">Not a ledger, not a host, not a rail. It
-        holds no record, opens no network, and settles nothing.</p></div>
-        <div class="card"><h3>No live network</h3><p class="small">Nothing here depends on a relay, a mint
-        or a wallet. Turn JavaScript off and the page is still fully readable.</p></div>
-      </div>
-    </section>
+				<!-- =============================================================== 03 -->
+				<section class="section" id="rungs">
+					<header>
+						<span class="num">03</span>
+						<h2>The rung vocabulary — cryptography settles, a word does not</h2>
+						<p class="dek">
+							Progress markers prove nothing about money. The proof rungs are named by the artifact they carry, not by the party that
+							reports them.
+						</p>
+					</header>
+					<p>A leg climbs <strong>progress markers</strong> before any proof exists; none of them is a settlement:</p>
+					<p>
+						<span class="mono">intent</span> → <span class="mono">attempted</span> → <span class="mono">submitted</span>
+						<span class="chip">progress only</span>
+					</p>
+					<p>Then it carries one of four <strong>proof rungs</strong>:</p>
+					<table class="plain">
+						<thead>
+							<tr>
+								<th>Rung</th>
+								<th>What it proves</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td class="mono">witnessed-settled</td>
+								<td>
+									A <strong>cryptographic</strong> artifact checkable against the leg's own expectation (the invoice's payment hash, the
+									mint's quote state). The strongest true statement: <em>this leg settled</em>.
+								</td>
+							</tr>
+							<tr>
+								<td class="mono">attested</td>
+								<td>
+									A party's or authority's <strong>word</strong>, with no artifact behind it. Reconciliation is credited no further than
+									here.
+								</td>
+							</tr>
+							<tr>
+								<td class="mono">unresolved</td>
+								<td>No witness yet, and one may still arrive. Open — a blocked, unconfirmed leg is a sub-state of this.</td>
+							</tr>
+							<tr>
+								<td class="mono">abandoned</td>
+								<td>The window elapsed and no artifact will arrive. Closed <strong>non-settled</strong>.</td>
+							</tr>
+						</tbody>
+					</table>
+					<h3 style="margin-top: 18px">Witness kinds — cryptographic versus declared</h3>
+					<p>A witness is named by what can be forged. Two families, and only one may settle:</p>
+					<div class="grid-2">
+						<div class="card">
+							<h3>Cryptographic <span class="chip crypto">may settle</span></h3>
+							<ul>
+								<li>
+									<span class="mono">preimage</span> — checked as <span class="mono">SHA256(preimage)</span> against the invoice's own
+									<span class="mono">payment_hash</span>.
+								</li>
+								<li><span class="mono">zap_receipt</span> — a signed receipt whose <span class="mono">preimage</span> tag validates.</li>
+								<li><span class="mono">mint_quote_state</span> — a state the wrapper re-derives from a local mint.</li>
+							</ul>
+							<p class="small">Checkable <em>without trusting the reporter</em>: the proof lives in the artifact.</p>
+						</div>
+						<div class="card">
+							<h3>Declared <span class="chip declared">never settles</span></h3>
+							<ul>
+								<li><span class="mono">lnurl_verify</span> — a server answering <span class="mono">settled</span> with no preimage.</li>
+								<li><span class="mono">seller_attestation</span> — the payee's own confirmation.</li>
+								<li><span class="mono">ack</span> — a wallet's bare acknowledgement.</li>
+							</ul>
+							<p class="small">A reporter's word. It may move a leg to <span class="mono">attested</span> and no further.</p>
+						</div>
+					</div>
+					<div class="note warn">
+						<h3>The honest limit this shows rather than hides</h3>
+						<p>
+							A <strong>declared</strong> witness — even the payee's own node saying the money arrived — reaches only the
+							<em>weaker</em> rung <span class="mono">attested</span>. A leg is settled on an artifact checkable against its own
+							expectation, never on a report. And the report that must never be read as settlement is the one whose reporter
+							<em>gains</em> from the reading: the payer's acknowledgement (they get goods without paying) is beneficiary-favourable; the
+							payee's confirmation is beneficiary-adverse and is admitted as a bounded claim, never as settlement.
+						</p>
+						<p>
+							<strong>A passive leg cannot be witnessed by the app.</strong> A leg that omits <span class="mono">submit</span> broadcasts
+							its artifact and never submits it, so the app cannot <em>manufacture</em> its witness — it can only learn of settlement if an
+							artifact arrives (the buyer's own preimage, or a verify that returns one). Absent that, the window elapses and the leg is
+							<span class="mono">abandoned</span>.
+						</p>
+					</div>
+				</section>
 
-    <!-- =============================================================== 02 -->
-    <section class="section" id="port">
-      <header>
-        <span class="num">02</span>
-        <h2>The port — three operations, and the subset a rail declares</h2>
-        <p class="dek">One closed set of operations. A rail declares which of them it has; the tie is
-        one-directional and asserts only self-consistency.</p>
-      </header>
-      <p>The funds contract declares one port over one rail, and it is a <strong>closed set of exactly
-      three</strong> operations:</p>
-      <table class="plain">
-        <thead><tr><th>Operation</th><th>What it does</th></tr></thead>
-        <tbody>
-          <tr><td class="mono">obtain(intent)</td><td>Returns the leg's durable reference in the rail's own form — an invoice and its payment hash, a mint's quote — or a fail-closed refusal.</td></tr>
-          <tr><td class="mono">submit(quote, reference)</td><td>Hands the payable artifact to the rail so it moves money.</td></tr>
-          <tr><td class="mono">reconcile(reference)</td><td>Asks the authority (through the wrapper) whether the leg settled, and returns a handle carrying the witness or its explicit absence.</td></tr>
-        </tbody>
-      </table>
-      <p>A wrapper implements the port over one rail and owns its own durable journal. Its declared
-      <span class="mono">operations</span> is a <strong>non-empty subset</strong> of those three, and its
-      declared <span class="mono">plan</span> is that subset's <strong>ordered projection</strong> in the
-      port's canonical order (<span class="mono">obtain</span>, then <span class="mono">submit</span>, then
-      <span class="mono">reconcile</span>).</p>
-      <div class="note">
-        <h3>Which operation a rail may omit — and the one that may not be omitted</h3>
-        <p>A <strong>passive</strong> leg is legal by this declaration. A rail whose payable artifact is
-        <em>broadcast</em> — an invoice shown for the buyer to scan, with nothing in the app that submits it —
-        declares <span class="mono">obtain</span> and <span class="mono">reconcile</span> and
-        <strong>omits <span class="mono">submit</span></strong>. Its absent <span class="mono">submit</span>
-        is then a <em>declared fact</em>, not a missing method. A rail that <em>does</em> declare
-        <span class="mono">submit</span> (a leg that moves money) <strong>must also declare
-        <span class="mono">reconcile</span></strong> — a money-mover with no reconcile step is a paid but
-        unlearnable leg, and the gate refuses it.</p>
-      </div>
-      <div class="grid-3">
-        <div class="card"><h3>A money-moving rail</h3><p class="small"><span class="mono">obtain · submit · reconcile</span></p><p class="small">Moves money and can be learned.</p></div>
-        <div class="card"><h3>A passive rail</h3><p class="small"><span class="mono">obtain · reconcile</span></p><p class="small">Omits <span class="mono">submit</span>; the artifact is broadcast, not submitted.</p></div>
-        <div class="card"><h3>Refused</h3><p class="small"><span class="mono">obtain · submit</span></p><p class="small">A money-mover with no <span class="mono">reconcile</span> — refused as <span class="mono">plan no-reconcile-step</span>.</p></div>
-      </div>
-    </section>
+				<!-- =============================================================== 04 -->
+				<section class="section" id="set">
+					<header>
+						<span class="num">04</span>
+						<h2>The set record — a witness becomes a rung, rungs become a state</h2>
+						<p class="dek">
+							The record keeps the witness it saw, never a verdict. The set state is derived every time from what the legs prove.
+						</p>
+					</header>
+					<p>
+						The set record binds one frozen total to an ordered list of legs, and per leg it keeps the <strong>witness it saw</strong> — its
+						kind, source, when it was observed, its reference — plus the leg's expectation (the payment hash the set already holds), its
+						frozen share, and an <span class="mono">untrusted</span> marker. It is written <em>before any leg is submitted</em>.
+					</p>
+					<div class="flow" aria-label="The derivation, step by step">
+						<div class="step">
+							<div class="node">leg's witness</div>
+							<div class="arrow">→</div>
+							<div class="desc">
+								<span class="lbl">a rung.</span> A cryptographic kind that meets the expectation is
+								<span class="mono">witnessed-settled</span>; a declared kind, or a cryptographic one that disagrees, is
+								<span class="mono">attested</span>; none and the window open is <span class="mono">unresolved</span>; none and the window
+								elapsed is <span class="mono">abandoned</span>.
+							</div>
+						</div>
+						<div class="step">
+							<div class="node">the legs' rungs</div>
+							<div class="arrow">→</div>
+							<div class="desc">
+								<span class="lbl">the settled sum.</span> A leg counts toward the settled sum only when it is
+								<span class="mono">witnessed-settled</span> <strong>and not <span class="mono">untrusted</span></strong
+								>. An untrusted leg is excluded from the derivation <em>and from its amounts</em>.
+							</div>
+						</div>
+						<div class="step">
+							<div class="node">the settled sum</div>
+							<div class="arrow">→</div>
+							<div class="desc">
+								<span class="lbl">the set state.</span> All legs settled → <span class="mono">complete</span>,
+								<span class="mono">short-settled</span> or <span class="mono">over-settled</span> by the conservation band. All legs
+								terminal with at least one abandoned → <span class="mono">abandoned</span>. Otherwise <span class="mono">unfinished</span>.
+							</div>
+						</div>
+					</div>
+					<div class="note bad">
+						<h3>The exclusion that stops an untrusted leg counting</h3>
+						<p>
+							A leg marked <span class="mono">untrusted</span> is dropped from the derivation <em>and</em> from the amounts. So a set can
+							<strong>never</strong> be reported <span class="mono">complete</span> while one of its legs is untrusted: an untrusted leg is
+							never settled, so the completeness condition is never satisfied. This is forbidden <strong>by construction</strong>, not by
+							care.
+						</p>
+					</div>
+					<p class="small">
+						The record holds each leg's witness <em>expectation</em> and the handle by which the owning wrapper is asked — never a copy of
+						any leg's reference. A returned witness that disagrees with the stored expectation is surfaced as a
+						<span class="mono">mismatch</span> and the set stays <span class="mono">unfinished</span>; the wrapper's leg is the leg's truth
+						and the aggregator's expectation is the set's, and a disagreement is never merged into either.
+					</p>
+				</section>
 
-    <!-- =============================================================== 03 -->
-    <section class="section" id="rungs">
-      <header>
-        <span class="num">03</span>
-        <h2>The rung vocabulary — cryptography settles, a word does not</h2>
-        <p class="dek">Progress markers prove nothing about money. The proof rungs are named by the artifact
-        they carry, not by the party that reports them.</p>
-      </header>
-      <p>A leg climbs <strong>progress markers</strong> before any proof exists; none of them is a
-      settlement:</p>
-      <p><span class="mono">intent</span> → <span class="mono">attempted</span> →
-      <span class="mono">submitted</span> <span class="chip">progress only</span></p>
-      <p>Then it carries one of four <strong>proof rungs</strong>:</p>
-      <table class="plain">
-        <thead><tr><th>Rung</th><th>What it proves</th></tr></thead>
-        <tbody>
-          <tr><td class="mono">witnessed-settled</td><td>A <strong>cryptographic</strong> artifact checkable against the leg's own expectation (the invoice's payment hash, the mint's quote state). The strongest true statement: <em>this leg settled</em>.</td></tr>
-          <tr><td class="mono">attested</td><td>A party's or authority's <strong>word</strong>, with no artifact behind it. Reconciliation is credited no further than here.</td></tr>
-          <tr><td class="mono">unresolved</td><td>No witness yet, and one may still arrive. Open — a blocked, unconfirmed leg is a sub-state of this.</td></tr>
-          <tr><td class="mono">abandoned</td><td>The window elapsed and no artifact will arrive. Closed <strong>non-settled</strong>.</td></tr>
-        </tbody>
-      </table>
-      <h3 style="margin-top:18px">Witness kinds — cryptographic versus declared</h3>
-      <p>A witness is named by what can be forged. Two families, and only one may settle:</p>
-      <div class="grid-2">
-        <div class="card">
-          <h3>Cryptographic <span class="chip crypto">may settle</span></h3>
-          <ul>
-            <li><span class="mono">preimage</span> — checked as <span class="mono">SHA256(preimage)</span> against the invoice's own <span class="mono">payment_hash</span>.</li>
-            <li><span class="mono">zap_receipt</span> — a signed receipt whose <span class="mono">preimage</span> tag validates.</li>
-            <li><span class="mono">mint_quote_state</span> — a state the wrapper re-derives from a local mint.</li>
-          </ul>
-          <p class="small">Checkable <em>without trusting the reporter</em>: the proof lives in the artifact.</p>
-        </div>
-        <div class="card">
-          <h3>Declared <span class="chip declared">never settles</span></h3>
-          <ul>
-            <li><span class="mono">lnurl_verify</span> — a server answering <span class="mono">settled</span> with no preimage.</li>
-            <li><span class="mono">seller_attestation</span> — the payee's own confirmation.</li>
-            <li><span class="mono">ack</span> — a wallet's bare acknowledgement.</li>
-          </ul>
-          <p class="small">A reporter's word. It may move a leg to <span class="mono">attested</span> and no further.</p>
-        </div>
-      </div>
-      <div class="note warn">
-        <h3>The honest limit this shows rather than hides</h3>
-        <p>A <strong>declared</strong> witness — even the payee's own node saying the money arrived — reaches
-        only the <em>weaker</em> rung <span class="mono">attested</span>. A leg is settled on an artifact
-        checkable against its own expectation, never on a report. And the report that must never be read as
-        settlement is the one whose reporter <em>gains</em> from the reading: the payer's acknowledgement
-        (they get goods without paying) is beneficiary-favourable; the payee's confirmation is
-        beneficiary-adverse and is admitted as a bounded claim, never as settlement.</p>
-        <p><strong>A passive leg cannot be witnessed by the app.</strong> A leg that omits
-        <span class="mono">submit</span> broadcasts its artifact and never submits it, so the app cannot
-        <em>manufacture</em> its witness — it can only learn of settlement if an artifact arrives (the buyer's
-        own preimage, or a verify that returns one). Absent that, the window elapses and the leg is
-        <span class="mono">abandoned</span>.</p>
-      </div>
-    </section>
+				<!-- =============================================================== 05 -->
+				<section class="section" id="purchase">
+					<header>
+						<span class="num">05</span>
+						<h2>The purchase machine — every transition, rule or human</h2>
+						<p class="dek">
+							The buyer pays the seller. Every transition of this direction is reached by a rule; time is a rule input, not a human.
+						</p>
+					</header>
+					<div class="flow" aria-label="The purchase machine">
+						<div class="step">
+							<div class="node">intent</div>
+							<div class="arrow">→</div>
+							<div class="desc">the durable intent is written, the payable artifact exposed</div>
+						</div>
+						<div class="step">
+							<div class="node">attempted</div>
+							<div class="arrow">→</div>
+							<div class="desc">the transport echo (an NWC request published, a bolt11 handed to a signer, a melt claimed)</div>
+						</div>
+						<div class="step">
+							<div class="node">submitted</div>
+							<div class="arrow">→</div>
+							<div class="desc">an authority's word with no artifact — the <span class="mono">attested</span> rung</div>
+						</div>
+						<div class="step">
+							<div class="node term">witnessed-settled</div>
+							<div class="arrow">→</div>
+							<div class="desc">a cryptographic artifact validates against the leg's own expectation — terminal and write-once</div>
+						</div>
+						<div class="step">
+							<div class="node stop">abandoned</div>
+							<div class="arrow">→</div>
+							<div class="desc">the settleability window elapsed — terminal, non-settled</div>
+						</div>
+					</div>
+					<table class="transitions">
+						<caption class="small" style="text-align: left; padding: 6px 0">
+							Each transition of the purchase direction, and who reaches it.
+						</caption>
+						<thead>
+							<tr>
+								<th>Transition</th>
+								<th>Reached by</th>
+								<th>Why</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td class="t">intent → attempted</td>
+								<td><span class="chip rule">rule</span></td>
+								<td>The intent is journaled and the artifact exposed.</td>
+							</tr>
+							<tr>
+								<td class="t">attempted → submitted</td>
+								<td><span class="chip rule">rule</span></td>
+								<td>The transport echo.</td>
+							</tr>
+							<tr>
+								<td class="t">submitted → attested</td>
+								<td><span class="chip rule">rule</span></td>
+								<td>An authority's word, with no artifact.</td>
+							</tr>
+							<tr>
+								<td class="t">{attempted, submitted, attested, unresolved} → witnessed-settled</td>
+								<td><span class="chip rule">rule</span> <span class="chip human">human input possible</span></td>
+								<td>
+									A cryptographic artifact validates. A QR leg reaches this directly on the buyer's hand-entered preimage — a human-supplied
+									<em>input</em>, but the artifact that closes it is cryptographic.
+								</td>
+							</tr>
+							<tr>
+								<td class="t">{attempted, attested, unresolved} → abandoned</td>
+								<td><span class="chip rule">rule</span></td>
+								<td>
+									The settleability window elapsed. Time alone reaches the non-settlement terminal — it can never write
+									<span class="mono">witnessed-settled</span>.
+								</td>
+							</tr>
+							<tr>
+								<td class="t">unfinished → complete</td>
+								<td><span class="chip rule">rule</span></td>
+								<td>All legs settled, sum inside the aggregate band.</td>
+							</tr>
+							<tr>
+								<td class="t">unfinished → abandoned</td>
+								<td><span class="chip rule">rule</span></td>
+								<td>Every leg terminal, at least one abandoned.</td>
+							</tr>
+							<tr>
+								<td class="t">abandoned → complete</td>
+								<td><span class="chip rule">rule</span></td>
+								<td>A late artifact promotes the last leg and the sum is whole.</td>
+							</tr>
+						</tbody>
+					</table>
+					<p>
+						The contract states that a transition is <strong>human-reached</strong> if and only if its only trigger is a human-supplied
+						input, and that there are exactly three in the whole layer: the <strong>buyer's manual preimage</strong> (a hand-entered
+						preimage validated against the leg's own expectation); the <strong>seller's confirmation</strong> moving a leg to the declared
+						non-settlement rung; and the <strong>seller opening a refund set</strong>. Every other transition — the time-reached terminal
+						included — is rule-reached.
+					</p>
+				</section>
 
-    <!-- =============================================================== 04 -->
-    <section class="section" id="set">
-      <header>
-        <span class="num">04</span>
-        <h2>The set record — a witness becomes a rung, rungs become a state</h2>
-        <p class="dek">The record keeps the witness it saw, never a verdict. The set state is derived every
-        time from what the legs prove.</p>
-      </header>
-      <p>The set record binds one frozen total to an ordered list of legs, and per leg it keeps the
-      <strong>witness it saw</strong> — its kind, source, when it was observed, its reference — plus the
-      leg's expectation (the payment hash the set already holds), its frozen share, and an
-      <span class="mono">untrusted</span> marker. It is written <em>before any leg is submitted</em>.</p>
-      <div class="flow" aria-label="The derivation, step by step">
-        <div class="step"><div class="node">leg's witness</div><div class="arrow">→</div><div class="desc"><span class="lbl">a rung.</span> A cryptographic kind that meets the expectation is <span class="mono">witnessed-settled</span>; a declared kind, or a cryptographic one that disagrees, is <span class="mono">attested</span>; none and the window open is <span class="mono">unresolved</span>; none and the window elapsed is <span class="mono">abandoned</span>.</div></div>
-        <div class="step"><div class="node">the legs' rungs</div><div class="arrow">→</div><div class="desc"><span class="lbl">the settled sum.</span> A leg counts toward the settled sum only when it is <span class="mono">witnessed-settled</span> <strong>and not <span class="mono">untrusted</span></strong>. An untrusted leg is excluded from the derivation <em>and from its amounts</em>.</div></div>
-        <div class="step"><div class="node">the settled sum</div><div class="arrow">→</div><div class="desc"><span class="lbl">the set state.</span> All legs settled → <span class="mono">complete</span>, <span class="mono">short-settled</span> or <span class="mono">over-settled</span> by the conservation band. All legs terminal with at least one abandoned → <span class="mono">abandoned</span>. Otherwise <span class="mono">unfinished</span>.</div></div>
-      </div>
-      <div class="note bad">
-        <h3>The exclusion that stops an untrusted leg counting</h3>
-        <p>A leg marked <span class="mono">untrusted</span> is dropped from the derivation <em>and</em> from
-        the amounts. So a set can <strong>never</strong> be reported <span class="mono">complete</span> while
-        one of its legs is untrusted: an untrusted leg is never settled, so the completeness condition is
-        never satisfied. This is forbidden <strong>by construction</strong>, not by care.</p>
-      </div>
-      <p class="small">The record holds each leg's witness <em>expectation</em> and the handle by which the
-      owning wrapper is asked — never a copy of any leg's reference. A returned witness that disagrees with
-      the stored expectation is surfaced as a <span class="mono">mismatch</span> and the set stays
-      <span class="mono">unfinished</span>; the wrapper's leg is the leg's truth and the aggregator's
-      expectation is the set's, and a disagreement is never merged into either.</p>
-    </section>
+				<!-- =============================================================== 06 -->
+				<section class="section" id="refund">
+					<header>
+						<span class="num">06</span>
+						<h2>The refund machine — the one transition that needs a human</h2>
+						<p class="dek">
+							The refund is the same machine run backwards, as a separate set. Its initiation is the layer's single human transition;
+							everything after it is reached by a rule.
+						</p>
+					</header>
+					<p>
+						A refund is a <strong>separate set</strong> whose payee is the buyer — a seller-side second payment, never a mutation of the
+						purchase set. It names the purchase set it reverses, and its legs are the same kinds, so the same rung reachability applies.
+					</p>
+					<div class="flow" aria-label="The refund machine">
+						<div class="step">
+							<div class="node stop">human</div>
+							<div class="arrow">→</div>
+							<div class="desc">the seller opens a refund set (off-protocol trigger, on-protocol state)</div>
+						</div>
+						<div class="step">
+							<div class="node">intent</div>
+							<div class="arrow">→</div>
+							<div class="desc">the refund set record is written before any refund leg moves money <span class="chip rule">rule</span></div>
+						</div>
+						<div class="step">
+							<div class="node">attempted · submitted · attested | unresolved</div>
+							<div class="arrow">→</div>
+							<div class="desc">the same rail calls as the purchase direction <span class="chip rule">rule</span></div>
+						</div>
+						<div class="step">
+							<div class="node term">witnessed-settled</div>
+							<div class="arrow">→</div>
+							<div class="desc">a cryptographic artifact validates — settles the refund leg <span class="chip rule">rule</span></div>
+						</div>
+					</div>
+					<table class="transitions">
+						<thead>
+							<tr>
+								<th>Transition</th>
+								<th>Reached by</th>
+								<th>Why</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td class="t">— → refund set opened</td>
+								<td><span class="chip human">human</span></td>
+								<td>
+									The seller opens a refund set for an abandoned order. The market has no automated refund path and no dispute channel, so
+									the trigger is off-protocol; the human is the seller.
+								</td>
+							</tr>
+							<tr>
+								<td class="t">record → intent</td>
+								<td><span class="chip rule">rule</span></td>
+								<td>The refund set record is written before any refund leg moves money.</td>
+							</tr>
+							<tr>
+								<td class="t">intent → attempted → submitted → attested | unresolved → witnessed-settled</td>
+								<td><span class="chip rule">rule</span></td>
+								<td>The same rail calls and the same cryptographic settle as the purchase direction.</td>
+							</tr>
+							<tr>
+								<td class="t">refund leg with no witness → abandoned</td>
+								<td><span class="chip rule">rule</span></td>
+								<td>The refund leg's own unresolved terminal — the last money-moving act cannot sit in limbo.</td>
+							</tr>
+							<tr>
+								<td class="t">refund set → complete | abandoned</td>
+								<td><span class="chip rule">rule</span></td>
+								<td>The same conservation and terminal rules as the purchase set.</td>
+							</tr>
+						</tbody>
+					</table>
+					<div class="note bad">
+						<h3>The refund guard — a second refund set for one order is unreachable</h3>
+						<p>
+							The aggregator's durable store is the sole authority on whether a refund set exists for an order.
+							<span class="mono">openRefund</span> resolves the named purchase set and keys on
+							<strong>that resolved set's own identity</strong> — never on an identifier the caller supplies unchecked. Before writing any
+							refund record or calling any wrapper it refuses, fail-closed: a <strong>duplicate</strong> (a refund set already exists for
+							the resolved order), an <strong>unresolvable correlation</strong> (the named purchase set does not exist), and a refund whose
+							frozen total <strong>exceeds the purchase total</strong>.
+						</p>
+					</div>
+				</section>
 
-    <!-- =============================================================== 05 -->
-    <section class="section" id="purchase">
-      <header>
-        <span class="num">05</span>
-        <h2>The purchase machine — every transition, rule or human</h2>
-        <p class="dek">The buyer pays the seller. Every transition of this direction is reached by a rule;
-        time is a rule input, not a human.</p>
-      </header>
-      <div class="flow" aria-label="The purchase machine">
-        <div class="step"><div class="node">intent</div><div class="arrow">→</div><div class="desc">the durable intent is written, the payable artifact exposed</div></div>
-        <div class="step"><div class="node">attempted</div><div class="arrow">→</div><div class="desc">the transport echo (an NWC request published, a bolt11 handed to a signer, a melt claimed)</div></div>
-        <div class="step"><div class="node">submitted</div><div class="arrow">→</div><div class="desc">an authority's word with no artifact — the <span class="mono">attested</span> rung</div></div>
-        <div class="step"><div class="node term">witnessed-settled</div><div class="arrow">→</div><div class="desc">a cryptographic artifact validates against the leg's own expectation — terminal and write-once</div></div>
-        <div class="step"><div class="node stop">abandoned</div><div class="arrow">→</div><div class="desc">the settleability window elapsed — terminal, non-settled</div></div>
-      </div>
-      <table class="transitions">
-        <caption class="small" style="text-align:left;padding:6px 0">Each transition of the purchase direction, and who reaches it.</caption>
-        <thead><tr><th>Transition</th><th>Reached by</th><th>Why</th></tr></thead>
-        <tbody>
-          <tr><td class="t">intent → attempted</td><td><span class="chip rule">rule</span></td><td>The intent is journaled and the artifact exposed.</td></tr>
-          <tr><td class="t">attempted → submitted</td><td><span class="chip rule">rule</span></td><td>The transport echo.</td></tr>
-          <tr><td class="t">submitted → attested</td><td><span class="chip rule">rule</span></td><td>An authority's word, with no artifact.</td></tr>
-          <tr><td class="t">{attempted, submitted, attested, unresolved} → witnessed-settled</td><td><span class="chip rule">rule</span> <span class="chip human">human input possible</span></td><td>A cryptographic artifact validates. A QR leg reaches this directly on the buyer's hand-entered preimage — a human-supplied <em>input</em>, but the artifact that closes it is cryptographic.</td></tr>
-          <tr><td class="t">{attempted, attested, unresolved} → abandoned</td><td><span class="chip rule">rule</span></td><td>The settleability window elapsed. Time alone reaches the non-settlement terminal — it can never write <span class="mono">witnessed-settled</span>.</td></tr>
-          <tr><td class="t">unfinished → complete</td><td><span class="chip rule">rule</span></td><td>All legs settled, sum inside the aggregate band.</td></tr>
-          <tr><td class="t">unfinished → abandoned</td><td><span class="chip rule">rule</span></td><td>Every leg terminal, at least one abandoned.</td></tr>
-          <tr><td class="t">abandoned → complete</td><td><span class="chip rule">rule</span></td><td>A late artifact promotes the last leg and the sum is whole.</td></tr>
-        </tbody>
-      </table>
-      <p>The contract states that a transition is <strong>human-reached</strong> if and only if its only
-      trigger is a human-supplied input, and that there are exactly three in the whole layer: the
-      <strong>buyer's manual preimage</strong> (a hand-entered preimage validated against the leg's own
-      expectation); the <strong>seller's confirmation</strong> moving a leg to the declared non-settlement
-      rung; and the <strong>seller opening a refund set</strong>. Every other transition — the time-reached
-      terminal included — is rule-reached.</p>
-    </section>
+				<!-- =============================================================== 07 -->
+				<section class="section" id="conservation">
+					<header>
+						<span class="num">07</span>
+						<h2>The conservation band — and the two directions a settled set can take</h2>
+						<p class="dek">
+							A per-leg band, summed for the aggregate. A fully settled set is never reported incomplete; a settled set beyond the band is
+							short or over, never one state and never abandoned.
+						</p>
+					</header>
+					<p>
+						The basis is <strong>net</strong>, and the residual has an owner: the aggregate is derived from the parts — the frozen total is
+						the sum of the legs' frozen shares, fees are netted before the comparison, and the merchant's share is the residual
+						<em>by construction</em>.
+					</p>
+					<p>
+						Each settled leg's observed amount is compared against <strong>that leg's own frozen share</strong> with a per-leg band. The
+						band that applies to the <strong>aggregate</strong> is the <strong>sum of the per-leg bands</strong>,
+						<span class="mono">N × tolerance</span>, by the triangle inequality — never a flat per-leg bound applied to a sum.
+					</p>
+					<div class="grid-2">
+						<div class="card">
+							<h3>Inside the band <span class="chip ok">complete</span></h3>
+							<p>
+								Every leg settled and the sum within <span class="mono">N × tolerance</span> of the frozen total: the set is
+								<span class="mono">complete</span>.
+							</p>
+							<p class="small">
+								A fully settled set is <strong>impossible to report as incomplete</strong> — that is a case that must never be reachable.
+							</p>
+						</div>
+						<div class="card">
+							<h3>Beyond the band — two directions, never one</h3>
+							<p>A fully settled set beyond the aggregate band takes the direction its <strong>signed residual</strong> implies:</p>
+							<ul>
+								<li>
+									<span class="mono">short-settled</span> — the residual falls <em>below</em> the band; the merchant is owed
+									(under-collected).
+								</li>
+								<li>
+									<span class="mono">over-settled</span> — the residual rises <em>above</em> the band; the merchant holds extra
+									(over-collected).
+								</li>
+							</ul>
+							<p class="small">
+								Two states, never one, and <strong>neither is <span class="mono">abandoned</span></strong
+								>.
+							</p>
+						</div>
+					</div>
+				</section>
 
-    <!-- =============================================================== 06 -->
-    <section class="section" id="refund">
-      <header>
-        <span class="num">06</span>
-        <h2>The refund machine — the one transition that needs a human</h2>
-        <p class="dek">The refund is the same machine run backwards, as a separate set. Its initiation is the
-        layer's single human transition; everything after it is reached by a rule.</p>
-      </header>
-      <p>A refund is a <strong>separate set</strong> whose payee is the buyer — a seller-side second payment,
-      never a mutation of the purchase set. It names the purchase set it reverses, and its legs are the same
-      kinds, so the same rung reachability applies.</p>
-      <div class="flow" aria-label="The refund machine">
-        <div class="step"><div class="node stop">human</div><div class="arrow">→</div><div class="desc">the seller opens a refund set (off-protocol trigger, on-protocol state)</div></div>
-        <div class="step"><div class="node">intent</div><div class="arrow">→</div><div class="desc">the refund set record is written before any refund leg moves money <span class="chip rule">rule</span></div></div>
-        <div class="step"><div class="node">attempted · submitted · attested | unresolved</div><div class="arrow">→</div><div class="desc">the same rail calls as the purchase direction <span class="chip rule">rule</span></div></div>
-        <div class="step"><div class="node term">witnessed-settled</div><div class="arrow">→</div><div class="desc">a cryptographic artifact validates — settles the refund leg <span class="chip rule">rule</span></div></div>
-      </div>
-      <table class="transitions">
-        <thead><tr><th>Transition</th><th>Reached by</th><th>Why</th></tr></thead>
-        <tbody>
-          <tr><td class="t">— → refund set opened</td><td><span class="chip human">human</span></td><td>The seller opens a refund set for an abandoned order. The market has no automated refund path and no dispute channel, so the trigger is off-protocol; the human is the seller.</td></tr>
-          <tr><td class="t">record → intent</td><td><span class="chip rule">rule</span></td><td>The refund set record is written before any refund leg moves money.</td></tr>
-          <tr><td class="t">intent → attempted → submitted → attested | unresolved → witnessed-settled</td><td><span class="chip rule">rule</span></td><td>The same rail calls and the same cryptographic settle as the purchase direction.</td></tr>
-          <tr><td class="t">refund leg with no witness → abandoned</td><td><span class="chip rule">rule</span></td><td>The refund leg's own unresolved terminal — the last money-moving act cannot sit in limbo.</td></tr>
-          <tr><td class="t">refund set → complete | abandoned</td><td><span class="chip rule">rule</span></td><td>The same conservation and terminal rules as the purchase set.</td></tr>
-        </tbody>
-      </table>
-      <div class="note bad">
-        <h3>The refund guard — a second refund set for one order is unreachable</h3>
-        <p>The aggregator's durable store is the sole authority on whether a refund set exists for an order.
-        <span class="mono">openRefund</span> resolves the named purchase set and keys on <strong>that resolved
-        set's own identity</strong> — never on an identifier the caller supplies unchecked. Before writing any
-        refund record or calling any wrapper it refuses, fail-closed: a <strong>duplicate</strong> (a refund
-        set already exists for the resolved order), an <strong>unresolvable correlation</strong> (the named
-        purchase set does not exist), and a refund whose frozen total <strong>exceeds the purchase
-        total</strong>.</p>
-      </div>
-    </section>
+				<!-- =============================================================== 08 -->
+				<section class="section" id="gate">
+					<header>
+						<span class="num">08</span>
+						<h2>The acceptance gate — what it refuses, and its honest limit</h2>
+						<p class="dek">
+							Every wrapper is accepted or refused at registration. The gate refuses fail-closed from two closed enums that interpolate no
+							value.
+						</p>
+					</header>
+					<p>
+						A wrapper hands the aggregator a <strong>declaration</strong>. The gate checks the shape the contract owns and refuses,
+						fail-closed, with one error constructed from two closed enums — a <strong>field</strong> and a <strong>reason</strong> — that
+						echoes no value, so no payload can reach the message and a value with a hostile <span class="mono">toString</span> cannot turn a
+						refusal into another error.
+					</p>
+					<table class="plain">
+						<thead>
+							<tr>
+								<th>Field</th>
+								<th>Reasons it may name</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td class="mono">wrapperId</td>
+								<td class="mono">missing · empty · too-long · untrimmed · control-character</td>
+							</tr>
+							<tr>
+								<td class="mono">method</td>
+								<td class="mono">empty · too-long · untrimmed · control-character · duplicate-method</td>
+							</tr>
+							<tr>
+								<td class="mono">authorityKind</td>
+								<td class="mono">not-in-union</td>
+							</tr>
+							<tr>
+								<td class="mono">operations</td>
+								<td class="mono">empty · not-in-union</td>
+							</tr>
+							<tr>
+								<td class="mono">plan</td>
+								<td class="mono">empty · unknown-step · duplicate-step · no-reconcile-step · wrong-projection</td>
+							</tr>
+							<tr>
+								<td class="mono">witnessKinds</td>
+								<td class="mono">empty · not-in-union</td>
+							</tr>
+							<tr>
+								<td class="mono">store · storeKind</td>
+								<td class="mono">empty</td>
+							</tr>
+							<tr>
+								<td class="mono">reconcileDeadlineMs</td>
+								<td class="mono">not-positive-integer</td>
+							</tr>
+							<tr>
+								<td class="mono">journalReference</td>
+								<td class="mono">incomplete · missing · not-in-union</td>
+							</tr>
+							<tr>
+								<td class="mono">ceiling</td>
+								<td class="mono">not-positive-integer</td>
+							</tr>
+							<tr>
+								<td class="mono">contractVersion</td>
+								<td class="mono">stale-version</td>
+							</tr>
+						</tbody>
+					</table>
+					<div class="note warn">
+						<h3>The gate's honest limit, stated once so the spec does not overclaim</h3>
+						<p>
+							It enforces the <strong>shape and self-consistency of a declaration, never its conduct</strong>. It cannot make a declared
+							plan the plan that runs, make <span class="mono">reconcile</span> truthful, make a declared witness producible, make a store
+							durable or its compare-and-set atomic, or make a ceiling the cart's own number. A well-formed declaration that lies is
+							<em>accepted</em>. So the gate is worth building — a malformed registration is a real failure mode — but the behavioural
+							enforcement the design wants is the conformance suite, a deliverable. The gate refuses a wrapper with no reconciliation in its
+							plan; whether a wrapper can <em>produce</em> the witness kinds it declares is not mechanically checkable, and the suite, not
+							the gate, carries that obligation.
+						</p>
+					</div>
+				</section>
 
-    <!-- =============================================================== 07 -->
-    <section class="section" id="conservation">
-      <header>
-        <span class="num">07</span>
-        <h2>The conservation band — and the two directions a settled set can take</h2>
-        <p class="dek">A per-leg band, summed for the aggregate. A fully settled set is never reported
-        incomplete; a settled set beyond the band is short or over, never one state and never abandoned.</p>
-      </header>
-      <p>The basis is <strong>net</strong>, and the residual has an owner: the aggregate is derived from the
-      parts — the frozen total is the sum of the legs' frozen shares, fees are netted before the comparison,
-      and the merchant's share is the residual <em>by construction</em>.</p>
-      <p>Each settled leg's observed amount is compared against <strong>that leg's own frozen share</strong>
-      with a per-leg band. The band that applies to the <strong>aggregate</strong> is the <strong>sum of the
-      per-leg bands</strong>, <span class="mono">N × tolerance</span>, by the triangle inequality — never a
-      flat per-leg bound applied to a sum.</p>
-      <div class="grid-2">
-        <div class="card">
-          <h3>Inside the band <span class="chip ok">complete</span></h3>
-          <p>Every leg settled and the sum within <span class="mono">N × tolerance</span> of the frozen total:
-          the set is <span class="mono">complete</span>.</p>
-          <p class="small">A fully settled set is <strong>impossible to report as incomplete</strong> — that
-          is a case that must never be reachable.</p>
-        </div>
-        <div class="card">
-          <h3>Beyond the band — two directions, never one</h3>
-          <p>A fully settled set beyond the aggregate band takes the direction its <strong>signed
-          residual</strong> implies:</p>
-          <ul>
-            <li><span class="mono">short-settled</span> — the residual falls <em>below</em> the band; the merchant is owed (under-collected).</li>
-            <li><span class="mono">over-settled</span> — the residual rises <em>above</em> the band; the merchant holds extra (over-collected).</li>
-          </ul>
-          <p class="small">Two states, never one, and <strong>neither is <span class="mono">abandoned</span></strong>.</p>
-        </div>
-      </div>
-    </section>
+				<!-- =============================================================== 09 -->
+				<section class="section" id="drive">
+					<header>
+						<span class="num">09</span>
+						<h2>Drive it</h2>
+						<p class="dek">
+							Pick each leg's method and witness, withhold a witness, mark a leg untrusted, or let the window elapsed — and watch the
+							derived set state change.
+						</p>
+					</header>
 
-    <!-- =============================================================== 08 -->
-    <section class="section" id="gate">
-      <header>
-        <span class="num">08</span>
-        <h2>The acceptance gate — what it refuses, and its honest limit</h2>
-        <p class="dek">Every wrapper is accepted or refused at registration. The gate refuses fail-closed
-        from two closed enums that interpolate no value.</p>
-      </header>
-      <p>A wrapper hands the aggregator a <strong>declaration</strong>. The gate checks the shape the contract
-      owns and refuses, fail-closed, with one error constructed from two closed enums — a
-      <strong>field</strong> and a <strong>reason</strong> — that echoes no value, so no payload can reach the
-      message and a value with a hostile <span class="mono">toString</span> cannot turn a refusal into
-      another error.</p>
-      <table class="plain">
-        <thead><tr><th>Field</th><th>Reasons it may name</th></tr></thead>
-        <tbody>
-          <tr><td class="mono">wrapperId</td><td class="mono">missing · empty · too-long · untrimmed · control-character</td></tr>
-          <tr><td class="mono">method</td><td class="mono">empty · too-long · untrimmed · control-character · duplicate-method</td></tr>
-          <tr><td class="mono">authorityKind</td><td class="mono">not-in-union</td></tr>
-          <tr><td class="mono">operations</td><td class="mono">empty · not-in-union</td></tr>
-          <tr><td class="mono">plan</td><td class="mono">empty · unknown-step · duplicate-step · no-reconcile-step · wrong-projection</td></tr>
-          <tr><td class="mono">witnessKinds</td><td class="mono">empty · not-in-union</td></tr>
-          <tr><td class="mono">store · storeKind</td><td class="mono">empty</td></tr>
-          <tr><td class="mono">reconcileDeadlineMs</td><td class="mono">not-positive-integer</td></tr>
-          <tr><td class="mono">journalReference</td><td class="mono">incomplete · missing · not-in-union</td></tr>
-          <tr><td class="mono">ceiling</td><td class="mono">not-positive-integer</td></tr>
-          <tr><td class="mono">contractVersion</td><td class="mono">stale-version</td></tr>
-        </tbody>
-      </table>
-      <div class="note warn">
-        <h3>The gate's honest limit, stated once so the spec does not overclaim</h3>
-        <p>It enforces the <strong>shape and self-consistency of a declaration, never its conduct</strong>. It
-        cannot make a declared plan the plan that runs, make <span class="mono">reconcile</span> truthful,
-        make a declared witness producible, make a store durable or its compare-and-set atomic, or make a
-        ceiling the cart's own number. A well-formed declaration that lies is <em>accepted</em>. So the gate
-        is worth building — a malformed registration is a real failure mode — but the behavioural
-        enforcement the design wants is the conformance suite, a deliverable. The gate refuses a wrapper
-        with no reconciliation in its plan; whether a wrapper can <em>produce</em> the witness kinds it
-        declares is not mechanically checkable, and the suite, not the gate, carries that obligation.</p>
-      </div>
-    </section>
+					<div class="console" id="console">
+						<h3>Pick the setup, then drive it</h3>
+						<p class="sub">
+							Ten scenarios, then free control. The derivation below is the aggregator's own <span class="mono">deriveSetState</span>,
+							re-implemented.
+						</p>
+						<div class="scenarios" id="scenarios"></div>
 
-    <!-- =============================================================== 09 -->
-    <section class="section" id="drive">
-      <header>
-        <span class="num">09</span>
-        <h2>Drive it</h2>
-        <p class="dek">Pick each leg's method and witness, withhold a witness, mark a leg untrusted, or let
-        the window elapsed — and watch the derived set state change.</p>
-      </header>
+						<div class="legs" id="legs"></div>
 
-      <div class="console" id="console">
-        <h3>Pick the setup, then drive it</h3>
-        <p class="sub">Ten scenarios, then free control. The derivation below is the aggregator's own
-        <span class="mono">deriveSetState</span>, re-implemented.</p>
-        <div class="scenarios" id="scenarios"></div>
+						<div class="console-actions">
+							<button type="button" id="add-leg">Add a third leg</button>
+							<button type="button" id="reset">Reset</button>
+						</div>
 
-        <div class="legs" id="legs"></div>
+						<div class="setctl">
+							<label>Frozen total (sat) <input type="number" id="frozenTotal" value="900" min="0" step="10" /></label>
+							<label>Tolerance per leg (sat) <input type="number" id="tolerance" value="2" min="1" step="1" /></label>
+							<label
+								>Direction
+								<select id="direction">
+									<option value="purchase">purchase (buyer → seller)</option>
+									<option value="refund">refund (seller → buyer)</option>
+								</select>
+							</label>
+						</div>
 
-        <div class="console-actions">
-          <button type="button" id="add-leg">Add a third leg</button>
-          <button type="button" id="reset">Reset</button>
-        </div>
+						<div class="readout" id="readout" role="status" aria-live="polite">
+							<div class="state-line">
+								<span class="small">Derived set state</span>
+								<span class="big" id="set-state">—</span>
+								<span class="pill plain" id="direction-pill">purchase</span>
+							</div>
+							<div class="leg-out" id="legs-out"></div>
+							<div class="metrics">
+								<div class="metric">
+									<div class="k">Frozen total</div>
+									<div class="v" id="m-total">—</div>
+								</div>
+								<div class="metric">
+									<div class="k">Settled sum (counted)</div>
+									<div class="v" id="m-sum">—</div>
+								</div>
+								<div class="metric">
+									<div class="k">Aggregate band (N × tolerance)</div>
+									<div class="v" id="m-band">—</div>
+								</div>
+								<div class="metric">
+									<div class="k">Residual (sum − total)</div>
+									<div class="v" id="m-residual">—</div>
+								</div>
+								<div class="metric">
+									<div class="k">Merchant share (residual by construction)</div>
+									<div class="v" id="m-merchant">—</div>
+								</div>
+								<div class="metric">
+									<div class="k">Legs settled &amp; counted</div>
+									<div class="v" id="m-counted">—</div>
+								</div>
+							</div>
+							<div class="why" id="why">Pick a scenario or change a control; the state above is derived from the legs below.</div>
+						</div>
+					</div>
+				</section>
 
-        <div class="setctl">
-          <label>Frozen total (sat) <input type="number" id="frozenTotal" value="900" min="0" step="10"></label>
-          <label>Tolerance per leg (sat) <input type="number" id="tolerance" value="2" min="1" step="1"></label>
-          <label>Direction
-            <select id="direction">
-              <option value="purchase">purchase (buyer → seller)</option>
-              <option value="refund">refund (seller → buyer)</option>
-            </select>
-          </label>
-        </div>
+				<!-- =============================================================== 10 -->
+				<section class="section" id="never">
+					<header>
+						<span class="num">10</span>
+						<h2>What can never happen</h2>
+						<p class="dek">
+							These are shown as unreachable rather than asserted: the console above will not let you drive the set into any of them.
+						</p>
+					</header>
+					<ul class="unreachable">
+						<li>
+							<span class="mk">✕</span>
+							<div>
+								<div class="u-t">
+									A set reported <span class="mono">complete</span> (or otherwise paid) while one of its legs is untrusted.
+								</div>
+								<div class="u-d">
+									An untrusted leg is excluded from the derivation and from its amounts, so it is never settled and the completeness
+									condition is never satisfied. Try scenario 9: mark a settled leg untrusted and the state falls back to
+									<span class="mono">unfinished</span>.
+								</div>
+							</div>
+						</li>
+						<li>
+							<span class="mk">✕</span>
+							<div>
+								<div class="u-t">
+									A fully settled set, every leg within its own per-leg band, reported as anything but <span class="mono">complete</span>.
+								</div>
+								<div class="u-d">
+									When every leg is reconciled to a settlement and the sum is inside the aggregate band, the derivation can only produce
+									<span class="mono">complete</span>. Try scenario 3.
+								</div>
+							</div>
+						</li>
+						<li>
+							<span class="mk">✕</span>
+							<div>
+								<div class="u-t">
+									A leg settled on a <strong>declared</strong> witness, or on a cryptographic witness that disagrees with the expectation.
+								</div>
+								<div class="u-d">
+									A declared kind, or a mismatch, moves a leg no further than <span class="mono">attested</span>. Try scenario 8 (a seller
+									attestation) or withhold the "matches expectation" box under a preimage.
+								</div>
+							</div>
+						</li>
+						<li>
+							<span class="mk">✕</span>
+							<div>
+								<div class="u-t">Time alone writing a settlement.</div>
+								<div class="u-d">
+									The deadline is a wait bound and the trigger for the non-settlement terminal, never a settleability bound. Let the window
+									elapse with no witness and the leg becomes <span class="mono">abandoned</span>, never
+									<span class="mono">witnessed-settled</span>.
+								</div>
+							</div>
+						</li>
+						<li>
+							<span class="mk">✕</span>
+							<div>
+								<div class="u-t">A second refund set for one order.</div>
+								<div class="u-d">
+									The refund guard refuses a duplicate on the resolved order's own identity, so it is unreachable by construction.
+								</div>
+							</div>
+						</li>
+					</ul>
+					<p class="small">
+						This page is a model, not evidence. The module's spec (<span class="mono">wallet.md</span>) and its executed evidence are
+						authoritative.
+					</p>
+				</section>
 
-        <div class="readout" id="readout" role="status" aria-live="polite">
-          <div class="state-line">
-            <span class="small">Derived set state</span>
-            <span class="big" id="set-state">—</span>
-            <span class="pill plain" id="direction-pill">purchase</span>
-          </div>
-          <div class="leg-out" id="legs-out"></div>
-          <div class="metrics">
-            <div class="metric"><div class="k">Frozen total</div><div class="v" id="m-total">—</div></div>
-            <div class="metric"><div class="k">Settled sum (counted)</div><div class="v" id="m-sum">—</div></div>
-            <div class="metric"><div class="k">Aggregate band (N × tolerance)</div><div class="v" id="m-band">—</div></div>
-            <div class="metric"><div class="k">Residual (sum − total)</div><div class="v" id="m-residual">—</div></div>
-            <div class="metric"><div class="k">Merchant share (residual by construction)</div><div class="v" id="m-merchant">—</div></div>
-            <div class="metric"><div class="k">Legs settled &amp; counted</div><div class="v" id="m-counted">—</div></div>
-          </div>
-          <div class="why" id="why">Pick a scenario or change a control; the state above is derived from the legs below.</div>
-        </div>
-      </div>
-    </section>
+				<noscript>
+					<div class="note">
+						<p>
+							<strong>JavaScript is off.</strong> The machines, the port, the rung vocabulary, the conservation band and the gate above are
+							all fully readable as they stand. Turn JavaScript on to drive the console in §09 and watch the derived set state change.
+						</p>
+					</div>
+				</noscript>
 
-    <!-- =============================================================== 10 -->
-    <section class="section" id="never">
-      <header>
-        <span class="num">10</span>
-        <h2>What can never happen</h2>
-        <p class="dek">These are shown as unreachable rather than asserted: the console above will not let you
-        drive the set into any of them.</p>
-      </header>
-      <ul class="unreachable">
-        <li><span class="mk">✕</span><div><div class="u-t">A set reported <span class="mono">complete</span> (or otherwise paid) while one of its legs is untrusted.</div><div class="u-d">An untrusted leg is excluded from the derivation and from its amounts, so it is never settled and the completeness condition is never satisfied. Try scenario 9: mark a settled leg untrusted and the state falls back to <span class="mono">unfinished</span>.</div></div></li>
-        <li><span class="mk">✕</span><div><div class="u-t">A fully settled set, every leg within its own per-leg band, reported as anything but <span class="mono">complete</span>.</div><div class="u-d">When every leg is reconciled to a settlement and the sum is inside the aggregate band, the derivation can only produce <span class="mono">complete</span>. Try scenario 3.</div></div></li>
-        <li><span class="mk">✕</span><div><div class="u-t">A leg settled on a <strong>declared</strong> witness, or on a cryptographic witness that disagrees with the expectation.</div><div class="u-d">A declared kind, or a mismatch, moves a leg no further than <span class="mono">attested</span>. Try scenario 8 (a seller attestation) or withhold the "matches expectation" box under a preimage.</div></div></li>
-        <li><span class="mk">✕</span><div><div class="u-t">Time alone writing a settlement.</div><div class="u-d">The deadline is a wait bound and the trigger for the non-settlement terminal, never a settleability bound. Let the window elapse with no witness and the leg becomes <span class="mono">abandoned</span>, never <span class="mono">witnessed-settled</span>.</div></div></li>
-        <li><span class="mk">✕</span><div><div class="u-t">A second refund set for one order.</div><div class="u-d">The refund guard refuses a duplicate on the resolved order's own identity, so it is unreachable by construction.</div></div></li>
-      </ul>
-      <p class="small">This page is a model, not evidence. The module's spec
-      (<span class="mono">wallet.md</span>) and its executed evidence are authoritative.</p>
-    </section>
+				<footer>
+					<p>
+						wallet — the payment state machine, declared in <span class="mono">wallet.md</span> on port <strong>4329</strong>. A model
+						driven by the semantics the modules implement; no live node, mint or wallet is involved, and nothing here opens a network.
+					</p>
+				</footer>
+			</main>
+		</div>
 
-    <noscript>
-      <div class="note">
-        <p><strong>JavaScript is off.</strong> The machines, the port, the rung vocabulary, the conservation
-        band and the gate above are all fully readable as they stand. Turn JavaScript on to drive the console
-        in §09 and watch the derived set state change.</p>
-      </div>
-    </noscript>
-
-    <footer>
-      <p>wallet — the payment state machine, declared in
-      <span class="mono">wallet.md</span> on port <strong>4329</strong>. A model driven by the
-      semantics the modules implement; no live node, mint or wallet is involved, and nothing here opens a
-      network.</p>
-    </footer>
-
-  </main>
-</div>
-
-<script>
-/* ---------------------------------------------------------------------------
+		<script>
+			/* ---------------------------------------------------------------------------
    The only behaviour on this page. It re-implements the aggregator's own
    derivation (deriveSetState) and the witness-to-rung step so a visitor can
    watch a set state change. It is a MODEL: it holds no record, opens no
    network, and reaches no relay, mint or wallet. With JavaScript off, every
    section above is still visible and still.
    --------------------------------------------------------------------------- */
-(function () {
-  "use strict";
+			;(function () {
+				'use strict'
 
-  /* The witness kinds, split exactly as the contract and the gate split them. */
-  var CRYPTO = ["preimage", "zap_receipt", "mint_quote_state"];
-  var DECLARED = ["lnurl_verify", "seller_attestation", "ack"];
-  var WITNESS_LABEL = {
-    preimage: "preimage (cryptographic)",
-    zap_receipt: "zap_receipt (cryptographic)",
-    mint_quote_state: "mint_quote_state (cryptographic)",
-    lnurl_verify: "lnurl_verify (declared)",
-    seller_attestation: "seller_attestation (declared)",
-    ack: "ack (declared)"
-  };
+				/* The witness kinds, split exactly as the contract and the gate split them. */
+				var CRYPTO = ['preimage', 'zap_receipt', 'mint_quote_state']
+				var DECLARED = ['lnurl_verify', 'seller_attestation', 'ack']
+				var WITNESS_LABEL = {
+					preimage: 'preimage (cryptographic)',
+					zap_receipt: 'zap_receipt (cryptographic)',
+					mint_quote_state: 'mint_quote_state (cryptographic)',
+					lnurl_verify: 'lnurl_verify (declared)',
+					seller_attestation: 'seller_attestation (declared)',
+					ack: 'ack (declared)',
+				}
 
-  /* Each method: the authority kind it derives, the operations it exposes and
+				/* Each method: the authority kind it derives, the operations it exposes and
      their ordered plan (the port's canonical projection), and the witness kinds
      it can produce (its declared witnessKinds). A passive rail omits submit. */
-  var METHODS = {
-    "bolt11-qr": {
-      label: "bolt11 invoice — passive QR",
-      authorityKind: "remote-and-observable",
-      operations: ["obtain", "reconcile"],
-      witnessKinds: ["preimage", "lnurl_verify", "seller_attestation"]
-    },
-    "nwc": {
-      label: "NWC — session",
-      authorityKind: "remote-and-observable",
-      operations: ["obtain", "submit", "reconcile"],
-      witnessKinds: ["preimage", "ack", "lnurl_verify"]
-    },
-    "melt": {
-      label: "Cashu melt — local mint",
-      authorityKind: "local",
-      operations: ["obtain", "submit", "reconcile"],
-      witnessKinds: ["mint_quote_state", "preimage"]
-    }
-  };
-  var METHOD_ORDER = ["nwc", "bolt11-qr", "melt"];
+				var METHODS = {
+					'bolt11-qr': {
+						label: 'bolt11 invoice — passive QR',
+						authorityKind: 'remote-and-observable',
+						operations: ['obtain', 'reconcile'],
+						witnessKinds: ['preimage', 'lnurl_verify', 'seller_attestation'],
+					},
+					nwc: {
+						label: 'NWC — session',
+						authorityKind: 'remote-and-observable',
+						operations: ['obtain', 'submit', 'reconcile'],
+						witnessKinds: ['preimage', 'ack', 'lnurl_verify'],
+					},
+					melt: {
+						label: 'Cashu melt — local mint',
+						authorityKind: 'local',
+						operations: ['obtain', 'submit', 'reconcile'],
+						witnessKinds: ['mint_quote_state', 'preimage'],
+					},
+				}
+				var METHOD_ORDER = ['nwc', 'bolt11-qr', 'melt']
 
-  function isCryptographic(kind) { return CRYPTO.indexOf(kind) !== -1; }
+				function isCryptographic(kind) {
+					return CRYPTO.indexOf(kind) !== -1
+				}
 
-  /* The witness-to-rung step, exactly as applyHandle does it: a returned settle
+				/* The witness-to-rung step, exactly as applyHandle does it: a returned settle
      is credited only when a cryptographic witness meets the expectation; a
      declared kind, or a disagreement, reaches attested; no witness reaches the
      window (abandoned if elapsed, otherwise unresolved). */
-  function rungFor(leg) {
-    if (leg.witness && leg.witness !== "none") {
-      if (isCryptographic(leg.witness)) {
-        return leg.matches ? "witnessed-settled" : "attested";
-      }
-      return "attested";
-    }
-    return leg.deadlinePassed ? "abandoned" : "unresolved";
-  }
+				function rungFor(leg) {
+					if (leg.witness && leg.witness !== 'none') {
+						if (isCryptographic(leg.witness)) {
+							return leg.matches ? 'witnessed-settled' : 'attested'
+						}
+						return 'attested'
+					}
+					return leg.deadlinePassed ? 'abandoned' : 'unresolved'
+				}
 
-  function isSettledLeg(leg) { return leg.rung === "witnessed-settled" && !leg.untrusted; }
-  function isTerminalLeg(leg) { return isSettledLeg(leg) || leg.rung === "abandoned"; }
+				function isSettledLeg(leg) {
+					return leg.rung === 'witnessed-settled' && !leg.untrusted
+				}
+				function isTerminalLeg(leg) {
+					return isSettledLeg(leg) || leg.rung === 'abandoned'
+				}
 
-  /* deriveSetState — transcribed from wallet/ts/aggregator.ts. */
-  function deriveSetState(legs, frozenTotal, tolerance) {
-    if (legs.length === 0) return "unfinished";
-    var allSettled = legs.every(isSettledLeg);
-    var allTerminal = legs.every(isTerminalLeg);
-    var anyAbandoned = legs.some(function (l) { return l.rung === "abandoned"; });
-    if (allSettled) {
-      var sum = legs.reduce(function (t, l) {
-        return t + (l.observedAmount !== null && l.observedAmount !== undefined ? l.observedAmount : l.frozenShare);
-      }, 0);
-      var residual = sum - frozenTotal;
-      var band = legs.length * tolerance;
-      if (residual < -band) return "short-settled";
-      if (residual > band) return "over-settled";
-      return "complete";
-    }
-    if (allTerminal && anyAbandoned) return "abandoned";
-    return "unfinished";
-  }
+				/* deriveSetState — transcribed from wallet/ts/aggregator.ts. */
+				function deriveSetState(legs, frozenTotal, tolerance) {
+					if (legs.length === 0) return 'unfinished'
+					var allSettled = legs.every(isSettledLeg)
+					var allTerminal = legs.every(isTerminalLeg)
+					var anyAbandoned = legs.some(function (l) {
+						return l.rung === 'abandoned'
+					})
+					if (allSettled) {
+						var sum = legs.reduce(function (t, l) {
+							return t + (l.observedAmount !== null && l.observedAmount !== undefined ? l.observedAmount : l.frozenShare)
+						}, 0)
+						var residual = sum - frozenTotal
+						var band = legs.length * tolerance
+						if (residual < -band) return 'short-settled'
+						if (residual > band) return 'over-settled'
+						return 'complete'
+					}
+					if (allTerminal && anyAbandoned) return 'abandoned'
+					return 'unfinished'
+				}
 
-  /* ---- the model the console drives --------------------------------------- */
-  var state = { legs: [], frozenTotal: 900, tolerance: 2, direction: "purchase" };
-  var activeScenario = null;
+				/* ---- the model the console drives --------------------------------------- */
+				var state = { legs: [], frozenTotal: 900, tolerance: 2, direction: 'purchase' }
+				var activeScenario = null
 
-  function leg(id, method, opts) {
-    opts = opts || {};
-    return {
-      id: id,
-      method: method,
-      witness: opts.witness || "none",
-      matches: opts.matches !== false,
-      untrusted: !!opts.untrusted,
-      deadlinePassed: !!opts.deadlinePassed,
-      frozenShare: opts.frozenShare === undefined ? 300 : opts.frozenShare
-    };
-  }
+				function leg(id, method, opts) {
+					opts = opts || {}
+					return {
+						id: id,
+						method: method,
+						witness: opts.witness || 'none',
+						matches: opts.matches !== false,
+						untrusted: !!opts.untrusted,
+						deadlinePassed: !!opts.deadlinePassed,
+						frozenShare: opts.frozenShare === undefined ? 300 : opts.frozenShare,
+					}
+				}
 
-  var SCENARIOS = [
-    { n: 1, name: "Both legs open (no witness)", build: function () {
-        return { legs: [leg("L1", "nwc", { frozenShare: 500 }), leg("L2", "bolt11-qr", { frozenShare: 400 })], frozenTotal: 900, tolerance: 2, direction: "purchase" };
-    }},
-    { n: 2, name: "One leg settled by preimage", build: function () {
-        return { legs: [leg("L1", "nwc", { witness: "preimage", frozenShare: 500 }), leg("L2", "bolt11-qr", { frozenShare: 400 })], frozenTotal: 900, tolerance: 2, direction: "purchase" };
-    }},
-    { n: 3, name: "All settled, inside the band → complete", build: function () {
-        return { legs: [leg("L1", "nwc", { witness: "preimage", frozenShare: 500 }), leg("L2", "melt", { witness: "mint_quote_state", frozenShare: 400 })], frozenTotal: 900, tolerance: 2, direction: "purchase" };
-    }},
-    { n: 4, name: "All settled, below the band → short-settled", build: function () {
-        return { legs: [leg("L1", "nwc", { witness: "preimage", frozenShare: 400 }), leg("L2", "melt", { witness: "mint_quote_state", frozenShare: 300 })], frozenTotal: 900, tolerance: 2, direction: "purchase" };
-    }},
-    { n: 5, name: "All settled, above the band → over-settled", build: function () {
-        return { legs: [leg("L1", "nwc", { witness: "preimage", frozenShare: 500 }), leg("L2", "melt", { witness: "mint_quote_state", frozenShare: 450 })], frozenTotal: 900, tolerance: 2, direction: "purchase" };
-    }},
-    { n: 6, name: "One settled, one abandoned → abandoned", build: function () {
-        return { legs: [leg("L1", "nwc", { witness: "preimage", frozenShare: 500 }), leg("L2", "bolt11-qr", { deadlinePassed: true, frozenShare: 400 })], frozenTotal: 900, tolerance: 2, direction: "purchase" };
-    }},
-    { n: 7, name: "Both abandoned", build: function () {
-        return { legs: [leg("L1", "nwc", { deadlinePassed: true, frozenShare: 500 }), leg("L2", "bolt11-qr", { deadlinePassed: true, frozenShare: 400 })], frozenTotal: 900, tolerance: 2, direction: "purchase" };
-    }},
-    { n: 8, name: "A declared witness (seller attestation) → attested", build: function () {
-        return { legs: [leg("L1", "bolt11-qr", { witness: "seller_attestation", frozenShare: 500 }), leg("L2", "nwc", { witness: "preimage", frozenShare: 400 })], frozenTotal: 900, tolerance: 2, direction: "purchase" };
-    }},
-    { n: 9, name: "An untrusted settled leg → excluded", build: function () {
-        return { legs: [leg("L1", "nwc", { witness: "preimage", untrusted: true, frozenShare: 500 }), leg("L2", "melt", { witness: "mint_quote_state", frozenShare: 400 })], frozenTotal: 900, tolerance: 2, direction: "purchase" };
-    }},
-    { n: 10, name: "Open a refund set (human trigger)", build: function () {
-        return { legs: [leg("R1", "bolt11-qr", { frozenShare: 400 }), leg("R2", "nwc", { frozenShare: 500 })], frozenTotal: 900, tolerance: 2, direction: "refund" };
-    }}
-  ];
+				var SCENARIOS = [
+					{
+						n: 1,
+						name: 'Both legs open (no witness)',
+						build: function () {
+							return {
+								legs: [leg('L1', 'nwc', { frozenShare: 500 }), leg('L2', 'bolt11-qr', { frozenShare: 400 })],
+								frozenTotal: 900,
+								tolerance: 2,
+								direction: 'purchase',
+							}
+						},
+					},
+					{
+						n: 2,
+						name: 'One leg settled by preimage',
+						build: function () {
+							return {
+								legs: [leg('L1', 'nwc', { witness: 'preimage', frozenShare: 500 }), leg('L2', 'bolt11-qr', { frozenShare: 400 })],
+								frozenTotal: 900,
+								tolerance: 2,
+								direction: 'purchase',
+							}
+						},
+					},
+					{
+						n: 3,
+						name: 'All settled, inside the band → complete',
+						build: function () {
+							return {
+								legs: [
+									leg('L1', 'nwc', { witness: 'preimage', frozenShare: 500 }),
+									leg('L2', 'melt', { witness: 'mint_quote_state', frozenShare: 400 }),
+								],
+								frozenTotal: 900,
+								tolerance: 2,
+								direction: 'purchase',
+							}
+						},
+					},
+					{
+						n: 4,
+						name: 'All settled, below the band → short-settled',
+						build: function () {
+							return {
+								legs: [
+									leg('L1', 'nwc', { witness: 'preimage', frozenShare: 400 }),
+									leg('L2', 'melt', { witness: 'mint_quote_state', frozenShare: 300 }),
+								],
+								frozenTotal: 900,
+								tolerance: 2,
+								direction: 'purchase',
+							}
+						},
+					},
+					{
+						n: 5,
+						name: 'All settled, above the band → over-settled',
+						build: function () {
+							return {
+								legs: [
+									leg('L1', 'nwc', { witness: 'preimage', frozenShare: 500 }),
+									leg('L2', 'melt', { witness: 'mint_quote_state', frozenShare: 450 }),
+								],
+								frozenTotal: 900,
+								tolerance: 2,
+								direction: 'purchase',
+							}
+						},
+					},
+					{
+						n: 6,
+						name: 'One settled, one abandoned → abandoned',
+						build: function () {
+							return {
+								legs: [
+									leg('L1', 'nwc', { witness: 'preimage', frozenShare: 500 }),
+									leg('L2', 'bolt11-qr', { deadlinePassed: true, frozenShare: 400 }),
+								],
+								frozenTotal: 900,
+								tolerance: 2,
+								direction: 'purchase',
+							}
+						},
+					},
+					{
+						n: 7,
+						name: 'Both abandoned',
+						build: function () {
+							return {
+								legs: [
+									leg('L1', 'nwc', { deadlinePassed: true, frozenShare: 500 }),
+									leg('L2', 'bolt11-qr', { deadlinePassed: true, frozenShare: 400 }),
+								],
+								frozenTotal: 900,
+								tolerance: 2,
+								direction: 'purchase',
+							}
+						},
+					},
+					{
+						n: 8,
+						name: 'A declared witness (seller attestation) → attested',
+						build: function () {
+							return {
+								legs: [
+									leg('L1', 'bolt11-qr', { witness: 'seller_attestation', frozenShare: 500 }),
+									leg('L2', 'nwc', { witness: 'preimage', frozenShare: 400 }),
+								],
+								frozenTotal: 900,
+								tolerance: 2,
+								direction: 'purchase',
+							}
+						},
+					},
+					{
+						n: 9,
+						name: 'An untrusted settled leg → excluded',
+						build: function () {
+							return {
+								legs: [
+									leg('L1', 'nwc', { witness: 'preimage', untrusted: true, frozenShare: 500 }),
+									leg('L2', 'melt', { witness: 'mint_quote_state', frozenShare: 400 }),
+								],
+								frozenTotal: 900,
+								tolerance: 2,
+								direction: 'purchase',
+							}
+						},
+					},
+					{
+						n: 10,
+						name: 'Open a refund set (human trigger)',
+						build: function () {
+							return {
+								legs: [leg('R1', 'bolt11-qr', { frozenShare: 400 }), leg('R2', 'nwc', { frozenShare: 500 })],
+								frozenTotal: 900,
+								tolerance: 2,
+								direction: 'refund',
+							}
+						},
+					},
+				]
 
-  /* ---- DOM ---------------------------------------------------------------- */
-  var $ = function (id) { return document.getElementById(id); };
-  var scenariosEl = $("scenarios");
-  var legsEl = $("legs");
-  var frozenEl = $("frozenTotal");
-  var tolEl = $("tolerance");
-  var dirEl = $("direction");
+				/* ---- DOM ---------------------------------------------------------------- */
+				var $ = function (id) {
+					return document.getElementById(id)
+				}
+				var scenariosEl = $('scenarios')
+				var legsEl = $('legs')
+				var frozenEl = $('frozenTotal')
+				var tolEl = $('tolerance')
+				var dirEl = $('direction')
 
-  function esc(v) {
-    return String(v == null ? "" : v)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
+				function esc(v) {
+					return String(v == null ? '' : v)
+						.replace(/&/g, '&amp;')
+						.replace(/</g, '&lt;')
+						.replace(/>/g, '&gt;')
+						.replace(/"/g, '&quot;')
+				}
 
-  function readControls() {
-    state.frozenTotal = Number(frozenEl.value) || 0;
-    state.tolerance = Math.max(1, Number(tolEl.value) || 1);
-    state.direction = dirEl.value;
-    var rows = legsEl.querySelectorAll(".leg");
-    state.legs = Array.prototype.map.call(rows, function (row) {
-      return {
-        id: row.getAttribute("data-id"),
-        method: row.querySelector(".leg-method").value,
-        witness: row.querySelector(".leg-witness").value,
-        matches: row.querySelector(".leg-matches").checked,
-        untrusted: row.querySelector(".leg-untrusted").checked,
-        deadlinePassed: row.querySelector(".leg-deadline").checked,
-        frozenShare: Number(row.querySelector(".leg-share").value) || 0
-      };
-    });
-  }
+				function readControls() {
+					state.frozenTotal = Number(frozenEl.value) || 0
+					state.tolerance = Math.max(1, Number(tolEl.value) || 1)
+					state.direction = dirEl.value
+					var rows = legsEl.querySelectorAll('.leg')
+					state.legs = Array.prototype.map.call(rows, function (row) {
+						return {
+							id: row.getAttribute('data-id'),
+							method: row.querySelector('.leg-method').value,
+							witness: row.querySelector('.leg-witness').value,
+							matches: row.querySelector('.leg-matches').checked,
+							untrusted: row.querySelector('.leg-untrusted').checked,
+							deadlinePassed: row.querySelector('.leg-deadline').checked,
+							frozenShare: Number(row.querySelector('.leg-share').value) || 0,
+						}
+					})
+				}
 
-  function witnessOptions(method, selected) {
-    var kinds = (METHODS[method] ? METHODS[method].witnessKinds : []);
-    var out = ['<option value="none">none (no witness yet)</option>'];
-    kinds.forEach(function (k) {
-      out.push('<option value="' + k + '"' + (k === selected ? " selected" : "") + ">" + esc(WITNESS_LABEL[k] || k) + "</option>");
-    });
-    return out.join("");
-  }
+				function witnessOptions(method, selected) {
+					var kinds = METHODS[method] ? METHODS[method].witnessKinds : []
+					var out = ['<option value="none">none (no witness yet)</option>']
+					kinds.forEach(function (k) {
+						out.push('<option value="' + k + '"' + (k === selected ? ' selected' : '') + '>' + esc(WITNESS_LABEL[k] || k) + '</option>')
+					})
+					return out.join('')
+				}
 
-  function buildControls() {
-    legsEl.innerHTML = "";
-    state.legs.forEach(function (l) {
-      var row = document.createElement("div");
-      row.className = "leg";
-      row.setAttribute("data-id", l.id);
-      var m = METHODS[l.method] ? l.method : METHOD_ORDER[0];
-      row.innerHTML =
-        '<div class="leg-head"><span class="leg-name">Leg ' + esc(l.id) + "</span></div>" +
-        '<div class="fields">' +
-          "<label>Method <select class=\"leg-method\">" +
-            METHOD_ORDER.map(function (k) {
-              return '<option value="' + k + '"' + (k === m ? " selected" : "") + ">" + esc(METHODS[k].label) + "</option>";
-            }).join("") +
-          "</select></label>" +
-          '<label>Witness <select class="leg-witness">' + witnessOptions(m, l.witness) + "</select></label>" +
-          '<label>Frozen share (sat) <input type="number" class="leg-share" min="0" step="10" value="' + esc(l.frozenShare) + '"></label>' +
-        "</div>" +
-        '<div class="toggles">' +
-          '<label><input type="checkbox" class="leg-matches"' + (l.matches ? " checked" : "") + "> witness matches the leg's expectation</label>" +
-          '<label><input type="checkbox" class="leg-untrusted"' + (l.untrusted ? " checked" : "") + "> untrusted (exclude from the derivation)</label>" +
-          '<label><input type="checkbox" class="leg-deadline"' + (l.deadlinePassed ? " checked" : "") + "> let the reconcile window elapse</label>" +
-        "</div>";
-      legsEl.appendChild(row);
+				function buildControls() {
+					legsEl.innerHTML = ''
+					state.legs.forEach(function (l) {
+						var row = document.createElement('div')
+						row.className = 'leg'
+						row.setAttribute('data-id', l.id)
+						var m = METHODS[l.method] ? l.method : METHOD_ORDER[0]
+						row.innerHTML =
+							'<div class="leg-head"><span class="leg-name">Leg ' +
+							esc(l.id) +
+							'</span></div>' +
+							'<div class="fields">' +
+							'<label>Method <select class="leg-method">' +
+							METHOD_ORDER.map(function (k) {
+								return '<option value="' + k + '"' + (k === m ? ' selected' : '') + '>' + esc(METHODS[k].label) + '</option>'
+							}).join('') +
+							'</select></label>' +
+							'<label>Witness <select class="leg-witness">' +
+							witnessOptions(m, l.witness) +
+							'</select></label>' +
+							'<label>Frozen share (sat) <input type="number" class="leg-share" min="0" step="10" value="' +
+							esc(l.frozenShare) +
+							'"></label>' +
+							'</div>' +
+							'<div class="toggles">' +
+							'<label><input type="checkbox" class="leg-matches"' +
+							(l.matches ? ' checked' : '') +
+							"> witness matches the leg's expectation</label>" +
+							'<label><input type="checkbox" class="leg-untrusted"' +
+							(l.untrusted ? ' checked' : '') +
+							'> untrusted (exclude from the derivation)</label>' +
+							'<label><input type="checkbox" class="leg-deadline"' +
+							(l.deadlinePassed ? ' checked' : '') +
+							'> let the reconcile window elapse</label>' +
+							'</div>'
+						legsEl.appendChild(row)
 
-      var methodSel = row.querySelector(".leg-method");
-      var witnessSel = row.querySelector(".leg-witness");
-      methodSel.addEventListener("change", function () {
-        var current = witnessSel.value;
-        witnessSel.innerHTML = witnessOptions(methodSel.value, current);
-        render();
-      });
-      row.addEventListener("change", function () { activeScenario = null; markScenarios(); render(); });
-      row.addEventListener("input", function () { activeScenario = null; markScenarios(); render(); });
-    });
-    frozenEl.addEventListener("change", function () { activeScenario = null; markScenarios(); render(); });
-    tolEl.addEventListener("change", function () { activeScenario = null; markScenarios(); render(); });
-    dirEl.addEventListener("change", function () { activeScenario = null; markScenarios(); render(); });
-  }
+						var methodSel = row.querySelector('.leg-method')
+						var witnessSel = row.querySelector('.leg-witness')
+						methodSel.addEventListener('change', function () {
+							var current = witnessSel.value
+							witnessSel.innerHTML = witnessOptions(methodSel.value, current)
+							render()
+						})
+						row.addEventListener('change', function () {
+							activeScenario = null
+							markScenarios()
+							render()
+						})
+						row.addEventListener('input', function () {
+							activeScenario = null
+							markScenarios()
+							render()
+						})
+					})
+					frozenEl.addEventListener('change', function () {
+						activeScenario = null
+						markScenarios()
+						render()
+					})
+					tolEl.addEventListener('change', function () {
+						activeScenario = null
+						markScenarios()
+						render()
+					})
+					dirEl.addEventListener('change', function () {
+						activeScenario = null
+						markScenarios()
+						render()
+					})
+				}
 
-  function buildScenarios() {
-    scenariosEl.innerHTML = "";
-    SCENARIOS.forEach(function (s) {
-      var b = document.createElement("button");
-      b.type = "button";
-      b.setAttribute("data-scn", String(s.n));
-      b.textContent = s.n + ". " + s.name;
-      b.addEventListener("click", function () { applyScenario(s.n); });
-      scenariosEl.appendChild(b);
-    });
-  }
+				function buildScenarios() {
+					scenariosEl.innerHTML = ''
+					SCENARIOS.forEach(function (s) {
+						var b = document.createElement('button')
+						b.type = 'button'
+						b.setAttribute('data-scn', String(s.n))
+						b.textContent = s.n + '. ' + s.name
+						b.addEventListener('click', function () {
+							applyScenario(s.n)
+						})
+						scenariosEl.appendChild(b)
+					})
+				}
 
-  function markScenarios() {
-    Array.prototype.forEach.call(scenariosEl.querySelectorAll("button"), function (b) {
-      b.classList.toggle("on", String(activeScenario) === b.getAttribute("data-scn"));
-    });
-  }
+				function markScenarios() {
+					Array.prototype.forEach.call(scenariosEl.querySelectorAll('button'), function (b) {
+						b.classList.toggle('on', String(activeScenario) === b.getAttribute('data-scn'))
+					})
+				}
 
-  function applyScenario(n) {
-    var s = null;
-    for (var i = 0; i < SCENARIOS.length; i++) if (SCENARIOS[i].n === n) s = SCENARIOS[i];
-    if (!s) return;
-    var built = s.build();
-    state.legs = built.legs;
-    state.frozenTotal = built.frozenTotal;
-    state.tolerance = built.tolerance;
-    state.direction = built.direction;
-    frozenEl.value = String(built.frozenTotal);
-    tolEl.value = String(built.tolerance);
-    dirEl.value = built.direction;
-    activeScenario = n;
-    buildControls();
-    markScenarios();
-    render();
-  }
+				function applyScenario(n) {
+					var s = null
+					for (var i = 0; i < SCENARIOS.length; i++) if (SCENARIOS[i].n === n) s = SCENARIOS[i]
+					if (!s) return
+					var built = s.build()
+					state.legs = built.legs
+					state.frozenTotal = built.frozenTotal
+					state.tolerance = built.tolerance
+					state.direction = built.direction
+					frozenEl.value = String(built.frozenTotal)
+					tolEl.value = String(built.tolerance)
+					dirEl.value = built.direction
+					activeScenario = n
+					buildControls()
+					markScenarios()
+					render()
+				}
 
-  function render() {
-    readControls();
-    var legs = state.legs.map(function (l) {
-      var r = rungFor(l);
-      return {
-        id: l.id, method: l.method, witness: l.witness, untrusted: l.untrusted,
-        frozenShare: l.frozenShare, rung: r,
-        observedAmount: r === "witnessed-settled" ? l.frozenShare : null
-      };
-    });
-    var st = deriveSetState(legs, state.frozenTotal, state.tolerance);
+				function render() {
+					readControls()
+					var legs = state.legs.map(function (l) {
+						var r = rungFor(l)
+						return {
+							id: l.id,
+							method: l.method,
+							witness: l.witness,
+							untrusted: l.untrusted,
+							frozenShare: l.frozenShare,
+							rung: r,
+							observedAmount: r === 'witnessed-settled' ? l.frozenShare : null,
+						}
+					})
+					var st = deriveSetState(legs, state.frozenTotal, state.tolerance)
 
-    var allSettled = legs.length > 0 && legs.every(isSettledLeg);
-    var sum = legs.reduce(function (t, l) { return t + (isSettledLeg(l) ? (l.observedAmount != null ? l.observedAmount : l.frozenShare) : 0); }, 0);
-    var band = legs.length * state.tolerance;
-    var residual = sum - state.frozenTotal;
-    var merchant = state.frozenTotal - legs.reduce(function (t, l) { return t + l.frozenShare; }, 0);
-    var counted = legs.filter(isSettledLeg).length;
+					var allSettled = legs.length > 0 && legs.every(isSettledLeg)
+					var sum = legs.reduce(function (t, l) {
+						return t + (isSettledLeg(l) ? (l.observedAmount != null ? l.observedAmount : l.frozenShare) : 0)
+					}, 0)
+					var band = legs.length * state.tolerance
+					var residual = sum - state.frozenTotal
+					var merchant =
+						state.frozenTotal -
+						legs.reduce(function (t, l) {
+							return t + l.frozenShare
+						}, 0)
+					var counted = legs.filter(isSettledLeg).length
 
-    var big = $("set-state");
-    big.textContent = st;
-    big.className = "big " + st;
-    $("direction-pill").textContent = state.direction;
-    $("m-total").textContent = String(state.frozenTotal);
-    $("m-sum").textContent = String(sum);
-    $("m-band").textContent = legs.length + " × " + state.tolerance + " = " + band;
-    $("m-residual").textContent = allSettled ? String(residual) : "—";
-    $("m-merchant").textContent = String(merchant);
-    $("m-counted").textContent = counted + " / " + legs.length;
+					var big = $('set-state')
+					big.textContent = st
+					big.className = 'big ' + st
+					$('direction-pill').textContent = state.direction
+					$('m-total').textContent = String(state.frozenTotal)
+					$('m-sum').textContent = String(sum)
+					$('m-band').textContent = legs.length + ' × ' + state.tolerance + ' = ' + band
+					$('m-residual').textContent = allSettled ? String(residual) : '—'
+					$('m-merchant').textContent = String(merchant)
+					$('m-counted').textContent = counted + ' / ' + legs.length
 
-    var out = $("legs-out");
-    out.innerHTML = "";
-    legs.forEach(function (l) {
-      var kind = (l.witness && l.witness !== "none") ? (isCryptographic(l.witness) ? "crypto" : "declared") : null;
-      var rungChip = '<span class="rung">' + esc(l.rung) + "</span>";
-      var kindChip = kind ? ' <span class="chip ' + kind + '">' + (kind === "crypto" ? "cryptographic" : "declared") + "</span>" : "";
-      var exclusion = l.untrusted ? ' <span class="chip never">untrusted — excluded, not counted</span>' : "";
-      var row = document.createElement("div");
-      row.className = "row";
-      row.innerHTML = '<span class="id">' + esc(l.id) + '</span>' +
-        '<span class="small">' + esc(METHODS[l.method].label) + "</span>" +
-        rungChip + kindChip + exclusion;
-      out.appendChild(row);
-    });
+					var out = $('legs-out')
+					out.innerHTML = ''
+					legs.forEach(function (l) {
+						var kind = l.witness && l.witness !== 'none' ? (isCryptographic(l.witness) ? 'crypto' : 'declared') : null
+						var rungChip = '<span class="rung">' + esc(l.rung) + '</span>'
+						var kindChip = kind ? ' <span class="chip ' + kind + '">' + (kind === 'crypto' ? 'cryptographic' : 'declared') + '</span>' : ''
+						var exclusion = l.untrusted ? ' <span class="chip never">untrusted — excluded, not counted</span>' : ''
+						var row = document.createElement('div')
+						row.className = 'row'
+						row.innerHTML =
+							'<span class="id">' +
+							esc(l.id) +
+							'</span>' +
+							'<span class="small">' +
+							esc(METHODS[l.method].label) +
+							'</span>' +
+							rungChip +
+							kindChip +
+							exclusion
+						out.appendChild(row)
+					})
 
-    var why = $("why");
-    why.className = "why";
-    var untrustedSettled = legs.some(function (l) { return l.untrusted && l.rung === "witnessed-settled"; });
-    var declaredOnly = legs.some(function (l) { return l.rung === "attested" && l.witness && isCryptographic(l.witness) === false; });
-    if (untrustedSettled) {
-      why.classList.add("bad");
-      why.innerHTML = "<strong>UNREACHABLE (complete while a leg is untrusted).</strong> A leg is marked untrusted, so it is excluded from the derivation and its amounts — it can never be settled. The set therefore stays <span class=\"mono\">unfinished</span>: it can never be reported <span class=\"mono\">complete</span> while one of its legs is untrusted.";
-    } else if (st === "complete") {
-      why.classList.add("ok");
-      why.innerHTML = "Every leg is <span class=\"mono\">witnessed-settled</span> and not untrusted, and the sum (" + sum + ") is inside the aggregate band (±" + band + ") of the frozen total (" + state.frozenTotal + ") — so the set is <span class=\"mono\">complete</span>, and could not be reported as anything else.";
-    } else if (st === "short-settled") {
-      why.classList.add("bad");
-      why.innerHTML = "A fully settled set whose residual (" + residual + ") falls <em>below</em> the aggregate band (−" + band + "): the merchant is owed — <span class=\"mono\">short-settled</span>, one of the two directions a beyond-band settled set can take.";
-    } else if (st === "over-settled") {
-      why.classList.add("bad");
-      why.innerHTML = "A fully settled set whose residual (" + residual + ") rises <em>above</em> the aggregate band (+" + band + "): the merchant holds extra — <span class=\"mono\">over-settled</span>, the other direction. Neither direction is <span class=\"mono\">abandoned</span>.";
-    } else if (st === "abandoned") {
-      why.classList.add("bad");
-      why.innerHTML = "Every leg is terminal (settled or abandoned) and at least one is <span class=\"mono\">abandoned</span> — the set reaches <span class=\"mono\">abandoned</span> by a rule, with no human. Time alone reached the abandoned leg; it never wrote a settlement.";
-    } else if (declaredOnly) {
-      why.innerHTML = "A declared witness on a leg (or a cryptographic witness that disagrees with the expectation) moves that leg no further than <span class=\"mono\">attested</span>: it settles nothing. The set stays <span class=\"mono\">unfinished</span> until a cryptographic artifact closes every leg.";
-    } else {
-      why.innerHTML = "At least one leg is still open, so the set is <span class=\"mono\">unfinished</span>. Supply a cryptographic witness (and keep \u201cmatches expectation\u201d on) to settle a leg, or let the reconcile window elapse to reach the non-settlement terminal.";
-    }
-  }
+					var why = $('why')
+					why.className = 'why'
+					var untrustedSettled = legs.some(function (l) {
+						return l.untrusted && l.rung === 'witnessed-settled'
+					})
+					var declaredOnly = legs.some(function (l) {
+						return l.rung === 'attested' && l.witness && isCryptographic(l.witness) === false
+					})
+					if (untrustedSettled) {
+						why.classList.add('bad')
+						why.innerHTML =
+							'<strong>UNREACHABLE (complete while a leg is untrusted).</strong> A leg is marked untrusted, so it is excluded from the derivation and its amounts — it can never be settled. The set therefore stays <span class="mono">unfinished</span>: it can never be reported <span class="mono">complete</span> while one of its legs is untrusted.'
+					} else if (st === 'complete') {
+						why.classList.add('ok')
+						why.innerHTML =
+							'Every leg is <span class="mono">witnessed-settled</span> and not untrusted, and the sum (' +
+							sum +
+							') is inside the aggregate band (±' +
+							band +
+							') of the frozen total (' +
+							state.frozenTotal +
+							') — so the set is <span class="mono">complete</span>, and could not be reported as anything else.'
+					} else if (st === 'short-settled') {
+						why.classList.add('bad')
+						why.innerHTML =
+							'A fully settled set whose residual (' +
+							residual +
+							') falls <em>below</em> the aggregate band (−' +
+							band +
+							'): the merchant is owed — <span class="mono">short-settled</span>, one of the two directions a beyond-band settled set can take.'
+					} else if (st === 'over-settled') {
+						why.classList.add('bad')
+						why.innerHTML =
+							'A fully settled set whose residual (' +
+							residual +
+							') rises <em>above</em> the aggregate band (+' +
+							band +
+							'): the merchant holds extra — <span class="mono">over-settled</span>, the other direction. Neither direction is <span class="mono">abandoned</span>.'
+					} else if (st === 'abandoned') {
+						why.classList.add('bad')
+						why.innerHTML =
+							'Every leg is terminal (settled or abandoned) and at least one is <span class="mono">abandoned</span> — the set reaches <span class="mono">abandoned</span> by a rule, with no human. Time alone reached the abandoned leg; it never wrote a settlement.'
+					} else if (declaredOnly) {
+						why.innerHTML =
+							'A declared witness on a leg (or a cryptographic witness that disagrees with the expectation) moves that leg no further than <span class="mono">attested</span>: it settles nothing. The set stays <span class="mono">unfinished</span> until a cryptographic artifact closes every leg.'
+					} else {
+						why.innerHTML =
+							'At least one leg is still open, so the set is <span class="mono">unfinished</span>. Supply a cryptographic witness (and keep \u201cmatches expectation\u201d on) to settle a leg, or let the reconcile window elapse to reach the non-settlement terminal.'
+					}
+				}
 
-  $("add-leg").addEventListener("click", function () {
-    if (state.legs.length >= 3) return;
-    state.legs.push(leg("L" + (state.legs.length + 1), "bolt11-qr", { frozenShare: 200 }));
-    activeScenario = null; markScenarios(); buildControls(); render();
-  });
-  $("reset").addEventListener("click", function () { applyScenario(1); });
+				$('add-leg').addEventListener('click', function () {
+					if (state.legs.length >= 3) return
+					state.legs.push(leg('L' + (state.legs.length + 1), 'bolt11-qr', { frozenShare: 200 }))
+					activeScenario = null
+					markScenarios()
+					buildControls()
+					render()
+				})
+				$('reset').addEventListener('click', function () {
+					applyScenario(1)
+				})
 
-  buildScenarios();
-  applyScenario(1);
-  markScenarios();
-})();
-</script>
-</body>
+				buildScenarios()
+				applyScenario(1)
+				markScenarios()
+			})()
+		</script>
+	</body>
 </html>

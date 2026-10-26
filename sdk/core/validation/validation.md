@@ -4,11 +4,11 @@ kind: module
 schema: architecture
 applies: core@0.1
 inherits: [platform-core]
-implements: ["#465561", "#818798"]
+implements: ['#465561', '#818798']
 opt-out: []
 # R3 (runs/2026-10-02-content-addressing/FANOUT.md): the files whose exports are the host side of this
 # module's ports. Test tooling is exempt by this declaration rather than re-litigated per module.
-test-support: ["ts/harness.ts", "ts/*.test.ts"]
+test-support: ['ts/harness.ts', 'ts/*.test.ts']
 levels:
   objective: present
   technical-spec: present — presets in, checks run, nothing by default, and the boundary it is not
@@ -20,16 +20,16 @@ contract:
   exports: [createValidator, PASS_THROUGH, ValidationError]
   types: [Event, ValidationPreset, ValidationCheck, ValidationOutcome, ValidationRefusal, ValidationPort, ValidatorOptions, Validator]
 implementations:
-  - id: ts                       # the selector a composition names
+  - id: ts # the selector a composition names
     lang: typescript
-    dir: ts                      # relative to the module directory
+    dir: ts # relative to the module directory
     entry: ts/index.ts
-    package: null                # consumed as a directory, not shipped as a package
-    install: [bun, install]      # every action is a token array, never a shell string
+    package: null # consumed as a directory, not shipped as a package
+    install: [bun, install] # every action is a token array, never a shell string
     build: []
     test: [bun, test]
     typecheck: [bun, run, typecheck]
-    needs: []                    # independent, composed by whoever wants it
+    needs: [] # independent, composed by whoever wants it
 access:
   group: m_validation
   read: [self]
@@ -87,11 +87,12 @@ rather than a later increment of this run" is read through this same amendment: 
 this is it landing. What the statement's `#465561` anticipates — the Rust, Angular and Flutter implementations
 the maintainer named — is still absent, so "a spec with many implementations" is unchanged; the first one
 simply exists now, and this amendment is the only place the change is recorded.
+
 - `#716ee2` — It is **not** the store's integrity check: the event id and its schnorr signature are verified by the store on every write, always and with no preset, and an event that is correctly signed with nonsense content is stored because that is the store's rule and not this module's.
 - `#4b58be` — It is **not** part of the IO seam and **not** the composition's ordering: no sentence here needs a socket, a relay, a deadline or a merge, and a sentence that did would be an architecture contradiction.
 
 **Amended 2026-09-30 — the maintainer's decision D-O25, the bounded half.** The statement above says no sentence
-here needs a *deadline*; read it with this amendment, which adds bounds **without** giving this module a socket,
+here needs a _deadline_; read it with this amendment, which adds bounds **without** giving this module a socket,
 and the distinction is the whole point: a bound is on how long **this module waits for a resolver the host
 injected**, never on the network it does not touch. The module still opens nothing.
 
@@ -124,7 +125,7 @@ Both kinds are **data a consumer passes in**, never an opaque function: a rule a
 cannot falsify, which is the standard the composition's write-back policy already meets
 (`event-access/event-access.md`, the statement that declares `WriteBackPolicy`). **The engine interprets no
 kind-specific semantics at all** — not the meaning of a tag, and not an `e`-tag's fourth element in particular,
-whose meaning is kind-specific and is therefore the *preset's* to declare, never the engine's to assume. A preset
+whose meaning is kind-specific and is therefore the _preset's_ to declare, never the engine's to assume. A preset
 set with no rules is pass-through, which is the statement above's own default and the reason a host that declares
 nothing gets exactly today's behaviour.
 
@@ -140,7 +141,7 @@ declared data instead of inventing a rule. The first application's own concrete 
 **Amended 2026-09-30 — the maintainer's decision D-O24, recorded at his instruction** (the decision text is in
 `runs/2026-09-30-first-usable-version/decisions-i2-open-items.md`; the shape it cites is printed in
 `event-access/event-access.md`, in the amendment beneath the statement that declares the accept hook). Read the
-statement above with this amendment, which settles the *placement* it left to the maintainer:
+statement above with this amendment, which settles the _placement_ it left to the maintainer:
 
 **This module is one implementation of the composition's single gate — it does not get a boundary of its own.**
 The hook this spec names is the composition's `AcceptHook` with its `AcceptContext` (the endpoint's declared tier,
@@ -181,7 +182,7 @@ includes the host's resolver **rejecting** or throwing: that is quarantine, as a
 never an exception escaping the module. A preset the engine cannot interpret — a comparator outside the closed
 vocabulary, or a bound asking for a **chain** this engine does not take — is refused **at the preset, before any
 candidate is judged**, so it fails the same way whatever the candidate's state; the chain itself is still not
-followed, because what a *referenced* event's own links are is not this spec's to invent. Bound 1 counts
+followed, because what a _referenced_ event's own links are is not this spec's to invent. Bound 1 counts
 **resolutions attempted** — one per link, from the occurrence the preset names — and bound 5's **eviction
 record is bounded** too, a count with the last few names rather than a log that grows with every eviction. A
 **specific preset wins over a wildcard**, whatever order the host declared them in. The adjudication, with the
@@ -208,7 +209,7 @@ thirty-two cases and the falsification table thirty-two mutations, one per case.
 
 **Amended 2026-09-30 — the maintainer's decision D-O25, the link half.** The statement above is exactly why a
 **link** is a declared rule and not engine code: this module carries no kind table, so it cannot know that a given
-kind's `e` tag names an auction root, or that an `a` tag names a coordinate. A link therefore *names* what to
+kind's `e` tag names an auction root, or that an `a` tag names a coordinate. A link therefore _names_ what to
 follow and what to compare — the reference, the fetch strategy (by id, by coordinate, or by id with a coordinate
 fallback), and the named fields to compare together with the comparison each requires — while the **kind's
 meaning stays the preset's claim**. A chain of links is bounded by the depth bound stated above, and a link's
@@ -233,7 +234,7 @@ on: a **format** rule that refuses a malformed candidate and accepts a conformin
 the three outcomes — matched, mismatched, unresolved — with the refusal causes distinguishable in the value; the
 **pass-through default** re-asserted over a candidate no preset covers; a **bound** exceeded becoming an outcome
 rather than an exception; and **one falsification mutation per case**, so no case is green because it never ran.
-The composition side of the boundary — that a query's answer is really *filtered* and that `publish` writes
+The composition side of the boundary — that a query's answer is really _filtered_ and that `publish` writes
 nothing a gate dropped — is `event-access`'s obligation and is stated there, in
 `runs/2026-09-30-first-usable-version/order-increment-2b-gate.md`.
 
@@ -266,13 +267,13 @@ flowchart LR
 
 ## The target → increment map
 
-| spec surface | increment | what exists instead, today |
-| --- | --- | --- |
-| this document | **I4 — this run's fourth item, spec only** | nothing else: no ts/, no evidence/, no import anywhere |
-| ts/ — presets, the hook, the typed refusal | **a later decision**, not an increment of this run | nothing |
-| where the hook composes: the composition's write-back accept boundary, with the publish path passing through the same boundary | **decided 2026-09-30 (D-O9)** — the composition's write-back accept boundary, one choke point | nothing: the boundary is a decision, not a build |
-| the store's own integrity check | **not this module** — the store's, always | built, and unchanged by this document |
-| the fail-closed identity rule | **not this module** — the store's predicate, applied at `event-access`'s boundary | repaired in `fb304df` and owned there |
+| spec surface                                                                                                                   | increment                                                                                     | what exists instead, today                             |
+| ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| this document                                                                                                                  | **I4 — this run's fourth item, spec only**                                                    | nothing else: no ts/, no evidence/, no import anywhere |
+| ts/ — presets, the hook, the typed refusal                                                                                     | **a later decision**, not an increment of this run                                            | nothing                                                |
+| where the hook composes: the composition's write-back accept boundary, with the publish path passing through the same boundary | **decided 2026-09-30 (D-O9)** — the composition's write-back accept boundary, one choke point | nothing: the boundary is a decision, not a build       |
+| the store's own integrity check                                                                                                | **not this module** — the store's, always                                                     | built, and unchanged by this document                  |
+| the fail-closed identity rule                                                                                                  | **not this module** — the store's predicate, applied at `event-access`'s boundary             | repaired in `fb304df` and owned there                  |
 
 ## Findings reported rather than repaired
 
@@ -288,8 +289,9 @@ flowchart LR
    boundary**, so there is exactly **one choke point** where unvalidated content can enter the store — two
    composition points would be two implementations of one accept decision, and one boundary is testable with one
    fake port. **No presets means pass-through** continues to hold at that boundary.
+
 2. **A preset language is not chosen here.** JSON Schema, a structural predicate and a typed schema library are
-   all satisfiable, and the module's rule is that the *spec's* nouns are its own; whichever an implementation
+   all satisfiable, and the module's rule is that the _spec's_ nouns are its own; whichever an implementation
    adopts is that implementation's named exception. Choosing one now would decide for four future hosts.
 
    **Decided 2026-09-30 — the orchestrator's decision D-O9**
@@ -297,6 +299,7 @@ flowchart LR
    kinds it applies to and the requirement it imposes, **selecting among host-supplied typed predicates** — and
    **no presets means pass-through**, so the module never invents a check. The spec's nouns stay the spec's, and
    whichever library an implementation adopts for a predicate remains that implementation's named exception.
+
 3. **The module is not on any critical path, and that is recorded so nobody schedules it.** Nothing in this run
    imports it, nothing in this run's increments needs it, and the store ships without it — which is also why the
    spec is the whole deliverable.

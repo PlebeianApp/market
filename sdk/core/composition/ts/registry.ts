@@ -379,9 +379,7 @@ class RegistryImpl implements PresetRegistry {
 		const checks: ValidationCheck[] = []
 		for (const [contributor, entry] of this.entries) {
 			const ownerEntry = this.entries.get(owner)
-			const granted = ownerEntry?.declaration.accepts.some(
-				(grant) => grant.from === contributor && grant.kinds.includes(kind),
-			)
+			const granted = ownerEntry?.declaration.accepts.some((grant) => grant.from === contributor && grant.kinds.includes(kind))
 			if (granted !== true) continue
 			for (const contribution of entry.declaration.contributions) {
 				if (contribution.via === owner && contribution.kind === kind) checks.push(...contribution.checks)

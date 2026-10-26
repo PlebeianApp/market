@@ -52,9 +52,7 @@ export function composeCommerce(options: ComposeCommerceOptions): ComposedCommer
 	const presets = registry.snapshot()
 	// The one branch that preserves R1: an empty snapshot must NOT become a declared empty option set.
 	const validation: ValidatorOptions | undefined =
-		presets.length === 0
-			? undefined
-			: { presets, port: options.port, bounds: options.bounds, clock: options.clock }
+		presets.length === 0 ? undefined : { presets, port: options.port, bounds: options.bounds, clock: options.clock }
 
 	const composed = composeEventAccess({
 		endpoint: options.endpoint,

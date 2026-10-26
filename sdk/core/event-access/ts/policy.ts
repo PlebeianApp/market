@@ -52,22 +52,22 @@ import type { Event, WriteBackPolicy } from './types'
  * everything through `validation`'s pass-through default (the hook is absent, `#c8e35c`).
  */
 export const DEFAULT_WRITE_BACK: WriteBackPolicy = {
-  writeBack: 'network',
-  honourPersist: true,
-  excluded: [],
-  onReject: 'skip',
+	writeBack: 'network',
+	honourPersist: true,
+	excluded: [],
+	onReject: 'skip',
 }
 
 /** #fe552a — exclusionLabel: the `d` tag's value, or the empty string. The one place a label is read. */
 export function exclusionLabel(event: Event): string {
-  const tag = event.tags.find((candidate) => candidate[0] === 'd')
-  return tag?.[1] ?? ''
+	const tag = event.tags.find((candidate) => candidate[0] === 'd')
+	return tag?.[1] ?? ''
 }
 
 /** #7aa770 — isExcluded: is this event declared excluded by the policy? An empty list excludes nothing. */
 export function isExcluded(event: Event, excluded: readonly string[]): boolean {
-  if (excluded.length === 0) return false
-  return excluded.includes(`${event.kind}:${exclusionLabel(event)}`)
+	if (excluded.length === 0) return false
+	return excluded.includes(`${event.kind}:${exclusionLabel(event)}`)
 }
 
 /**
@@ -101,15 +101,15 @@ export function isExcluded(event: Event, excluded: readonly string[]): boolean {
  * the answer cannot carry the report, the module says so rather than inventing a channel.
  */
 export async function applyWriteBack(
-  write: (events: Event[]) => Promise<{ stored: number; refused: number }>,
-  policy: WriteBackPolicy,
-  fresh: readonly Event[],
-  persist: boolean,
+	write: (events: Event[]) => Promise<{ stored: number; refused: number }>,
+	policy: WriteBackPolicy,
+	fresh: readonly Event[],
+	persist: boolean,
 ): Promise<{ written: Event[]; refused: number } | undefined> {
-  if (policy.writeBack === 'never') return undefined
-  if (policy.honourPersist && !persist) return undefined
-  const written = fresh.filter((event) => !isExcluded(event, policy.excluded))
-  if (written.length === 0) return undefined
-  const outcome = await write(written)
-  return { written, refused: outcome.refused }
+	if (policy.writeBack === 'never') return undefined
+	if (policy.honourPersist && !persist) return undefined
+	const written = fresh.filter((event) => !isExcluded(event, policy.excluded))
+	if (written.length === 0) return undefined
+	const outcome = await write(written)
+	return { written, refused: outcome.refused }
 }

@@ -33,14 +33,14 @@ and a resolver that **rejects or throws** is a reference the host could not answ
 `undefined` answer and no rejection escapes. The only throw is a **preset the engine cannot interpret**, in
 three shapes: a comparator outside the closed vocabulary (refused at the link check, before any resolution), a
 `maxChainDepth` above one hop (refused at the preset, before any candidate is judged — the engine takes exactly
-one hop and must not invent what a *referenced* event's own links are), and a third rule kind.
+one hop and must not invent what a _referenced_ event's own links are), and a third rule kind.
 
 **The six bounds are declared values** (D-O25's bounded half, `#d4f95d`): ten references per event, one chain
 hop, five seconds per reference, thirty seconds per event, one mebibyte of held unresolved references, and
 three revisits five minutes apart — the suggested defaults of
 `runs/2026-09-30-first-usable-version/research/11-event-to-event-link-protocol.md` §4, each overridable per
 preset and each readable without driving a call. **A bound exceeded is an outcome, never an exception**: the
-fan-out ceiling and a chain ceiling below one, and both budgets, resolve as *unresolved*, which is the
+fan-out ceiling and a chain ceiling below one, and both budgets, resolve as _unresolved_, which is the
 quarantine outcome. Bound 1 counts **resolutions attempted** — one per link check, from the occurrence each
 link names — and bound 5's book is bounded on both sides: its held bytes by the ceiling, and its eviction
 record by a count plus the last few names, so the loss log cannot become the leak it exists to prove absent.

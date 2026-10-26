@@ -4,9 +4,9 @@ kind: module
 schema: architecture
 applies: core@0.1
 inherits: [platform-core]
-implements: ["#120968", "#465561", "#75322f"]
+implements: ['#120968', '#465561', '#75322f']
 opt-out: []
-test-support: ["ts/harness.ts", "ts/*.test.ts"]
+test-support: ['ts/harness.ts', 'ts/*.test.ts']
 levels:
   objective: present
   technical-spec: present — the operations and their options, the envelope, the normative sequence, the provenance mechanism, the write-back policy and the filter boundary
@@ -16,18 +16,44 @@ contract:
   entry: ts/index.ts
   operations: [query, subscribe, publish, count, delete, the events-complete envelope]
   exports: [createEventAccess, DEFAULT_WRITE_BACK, EventAccessError, originOf]
-  types: [Event, FilterIn, Unsub, Reason, AnswerOrigin, QueryOptions, QueryResult, SubscribeOptions, Subscription, PublishOptions, PublishOutcome, CountResult, DeleteRef, DeleteOutcome, StoreEndpoint, EndpointReadOptions, NostrIo, WriteBackPolicy, AcceptHook, AcceptDecision, AcceptContext, ReferenceResolver, EventAccessOptions, EventAccess]
+  types:
+    [
+      Event,
+      FilterIn,
+      Unsub,
+      Reason,
+      AnswerOrigin,
+      QueryOptions,
+      QueryResult,
+      SubscribeOptions,
+      Subscription,
+      PublishOptions,
+      PublishOutcome,
+      CountResult,
+      DeleteRef,
+      DeleteOutcome,
+      StoreEndpoint,
+      EndpointReadOptions,
+      NostrIo,
+      WriteBackPolicy,
+      AcceptHook,
+      AcceptDecision,
+      AcceptContext,
+      ReferenceResolver,
+      EventAccessOptions,
+      EventAccess,
+    ]
 implementations:
-  - id: ts                       # the selector a composition names
+  - id: ts # the selector a composition names
     lang: typescript
-    dir: ts                      # relative to the module directory
+    dir: ts # relative to the module directory
     entry: ts/index.ts
-    package: null                # consumed as a directory, not shipped as a package
-    install: [bun, install]      # every action is a token array, never a shell string
+    package: null # consumed as a directory, not shipped as a package
+    install: [bun, install] # every action is a token array, never a shell string
     build: []
     test: [bun, test]
     typecheck: [bun, run, typecheck]
-    needs: [nostr-io, event-store]  # the two ports this composition takes as a code dependency; it imports neither
+    needs: [nostr-io, event-store] # the two ports this composition takes as a code dependency; it imports neither
 access:
   group: m_event-access
   read: [self]
@@ -126,7 +152,7 @@ One statement per behaviour, each a line of its own with its content-hash identi
 - `#043f40` — **LF-2 · the fill's events are written back through the store endpoint**, asserted on the query fill path and on the subscription fill path, with the one exception the read itself declares through `persist:false`.
 
 **Amended 2026-09-30 — the orchestrator's decision D-O17.** Read the LF-2 criterion with this amendment: it
-carries an **expected write count** on the endpoint fake, which **records every write** (the count *and* the
+carries an **expected write count** on the endpoint fake, which **records every write** (the count _and_ the
 events written are asserted, so no criterion is satisfied by a fixture that recorded nothing); and the
 `persist:false` criterion carries its **positive companion** — the same fake with `persist:true` **does** write
 back, counted. Both halves are asserted, because "a later read does not see it" is satisfied by an
@@ -198,7 +224,7 @@ list as current; this pointer exists so that `#6c19d5` alone cannot mislead.
 
 **Amended 2026-09-30 — the orchestrator's decision D-O18, on `adjudication-w2d.md` finding 1.** Read the
 filter-boundary requirement above with this amendment: at I2 the injected fake **models** the store's two
-branches rather than importing the store's predicate, and the requirement that it apply *the real predicate* is
+branches rather than importing the store's predicate, and the requirement that it apply _the real predicate_ is
 not executable here for two measured reasons — the store exports the predicate nowhere
 (`event-store/ts/index.ts` → 0 hits for `matchesNothing`/`assertIdentityFilters`, and its `contract.exports`
 names them nowhere), and this module's own M6 statement (`#0c7fe3`) forbids a specifier that leaves the module
@@ -218,12 +244,12 @@ too, because it settles the half of that criterion which no case could assert un
 
 **One extension point, applied at the three destinations and nowhere else, never a second accept rule.** The
 composition keeps exactly **one** declared, inspectable gate, applied where content leaves: the **store write**,
-the **consumer delivery**, and the **wire publish** — so a query's result is really *filtered*, not merely
+the **consumer delivery**, and the **wire publish** — so a query's result is really _filtered_, not merely
 unreported, one decision governs what enters the store, and the same decision governs what reaches a relay. The
-decision, in full: *the accept decision applies where content crosses a boundary — the store write, the consumer
+decision, in full: _the accept decision applies where content crosses a boundary — the store write, the consumer
 delivery, the wire publish; `event-access` takes one declared, bounded gate; it may keep or drop an event with a
 stated reason; it may not rewrite, reorder, or delay past the read's own wall-clock budget; and a dropped event is
-not an incomplete answer.* D-O9's "one choke point and not two" is read as **one decision**, not as one call site:
+not an incomplete answer._ D-O9's "one choke point and not two" is read as **one decision**, not as one call site:
 **one rule, applied at the three destinations** — the store write, the consumer delivery, the wire publish — and
 nowhere else, with no second implementation of it anywhere.
 
@@ -244,7 +270,7 @@ to the rule.
 
 **What the gate may see, and what it may not do.** It is given the event, the endpoint's declared
 tier, and a `resolve` for a referenced event — the link half
-of the validation work, whose *capability* this document fixes and whose *rules* stay the consumer's declared
+of the validation work, whose _capability_ this document fixes and whose _rules_ stay the consumer's declared
 data. It answers with a decision, and on a drop with the reason for it: a refusal is a value and never a silent
 absence (E5, `#c65b19`), and a reference absent from the local set is a different fact from a reference that
 mismatches (`#7f4e0a`). It may **not** rewrite or reorder an event, because the union's id-uniqueness
@@ -268,8 +294,8 @@ type AcceptDecision = 'accept' | 'reject'
  *  the link half needs. `resolve` answers `undefined` for a reference the local set does not hold — a
  *  different fact from a reference that is held and mismatches (`#7f4e0a`). */
 interface AcceptContext {
-  readonly tier: 'local' | 'remote'
-  resolve(reference: string): Promise<Event | undefined>
+	readonly tier: 'local' | 'remote'
+	resolve(reference: string): Promise<Event | undefined>
 }
 
 /** `AcceptHook` keeps its name and its place on `WriteBackPolicy`; its signature widens from one argument to
@@ -320,8 +346,8 @@ thereafter be reconciled to an invention. This module is the consumer, so the po
 `event-store` **adopts this shape at I3** (D-O16), which is why nothing here re-declares a sibling's type — a
 sibling's or the seam's declared type is cited by `path:line` instead.
 
-**One frozen wording, read and not rewritten.** The statement above that names the second port as *the seam's pool
-contract* is read here as **the seam's contract, `NostrIo`** (D-O13): the pool shapes are the seam's injection
+**One frozen wording, read and not rewritten.** The statement above that names the second port as _the seam's pool
+contract_ is read here as **the seam's contract, `NostrIo`** (D-O13): the pool shapes are the seam's injection
 vocabulary — its business, not this module's port — and the port this module takes is the seam's own handle. A
 correction beneath a declaring line is an amendment, so that line is left byte-identical and this paragraph governs
 it.
@@ -330,35 +356,35 @@ it.
 
 ```ts
 interface StoreEndpoint {
-  /** E4 — the endpoint declares its own tier; the merge never guesses from a URL or a type name. */
-  readonly tier: 'local' | 'remote'
-  /** The local read. A malformed identity filter is rejected here with a typed refusal this module surfaces —
-   *  the fail-closed filter boundary, reached by call and not by a named member (D-O5). It answers a set of raw
-   *  events and makes no completeness claim: `complete` is this module's fact. */
-  read(filters: FilterIn | FilterIn[], options?: EndpointReadOptions): Promise<Event[]>
-  /** The local write, first and independent of any relay attempt. Its outcome is the local counts, so the
-   *  policy's `onReject` has something to report. `refused` here is a **count of events this endpoint
-   *  declined to store**, beside `stored` — it is not the list of refusing relays that
-   *  `PublishOutcome.refused` carries. */
-  write(events: Event[]): Promise<{ stored: number; refused: number }>
-  /** The local count, from the store's own index, `approximate: false`. It never fetches (D-O4). */
-  count(filters: FilterIn | FilterIn[]): Promise<CountResult>
-  /** The local removal, by id or by filter — where the composition's `delete` routes (P7). */
-  remove(refs: DeleteRef[]): Promise<DeleteOutcome>
-  /** The local change notification, typed here because the store's own spec leaves it untyped while this
-   *  composition depends on it. That a written event, a kind-5 deletion and an expiry all arrive on this
-   *  stream is **what this composition requires of the endpoint** (LF-3 needs it), not a claim about today's
-   *  store: the store's own `#4757d0` says the notification is untyped today and that removals are not yet
-   *  delivered on it, and the store **conforms to this requirement at I3** (D-O16). The module's caller-facing
-   *  `Subscription` adapts it to the seam's `Observable` (E1). */
-  readonly changes: AsyncIterable<Event>
+	/** E4 — the endpoint declares its own tier; the merge never guesses from a URL or a type name. */
+	readonly tier: 'local' | 'remote'
+	/** The local read. A malformed identity filter is rejected here with a typed refusal this module surfaces —
+	 *  the fail-closed filter boundary, reached by call and not by a named member (D-O5). It answers a set of raw
+	 *  events and makes no completeness claim: `complete` is this module's fact. */
+	read(filters: FilterIn | FilterIn[], options?: EndpointReadOptions): Promise<Event[]>
+	/** The local write, first and independent of any relay attempt. Its outcome is the local counts, so the
+	 *  policy's `onReject` has something to report. `refused` here is a **count of events this endpoint
+	 *  declined to store**, beside `stored` — it is not the list of refusing relays that
+	 *  `PublishOutcome.refused` carries. */
+	write(events: Event[]): Promise<{ stored: number; refused: number }>
+	/** The local count, from the store's own index, `approximate: false`. It never fetches (D-O4). */
+	count(filters: FilterIn | FilterIn[]): Promise<CountResult>
+	/** The local removal, by id or by filter — where the composition's `delete` routes (P7). */
+	remove(refs: DeleteRef[]): Promise<DeleteOutcome>
+	/** The local change notification, typed here because the store's own spec leaves it untyped while this
+	 *  composition depends on it. That a written event, a kind-5 deletion and an expiry all arrive on this
+	 *  stream is **what this composition requires of the endpoint** (LF-3 needs it), not a claim about today's
+	 *  store: the store's own `#4757d0` says the notification is untyped today and that removals are not yet
+	 *  delivered on it, and the store **conforms to this requirement at I3** (D-O16). The module's caller-facing
+	 *  `Subscription` adapts it to the seam's `Observable` (E1). */
+	readonly changes: AsyncIterable<Event>
 }
 
 /** E8 — the endpoint's own `keep*` read options, beside this module's `QueryOptions` (`#8cd1d6`). */
 interface EndpointReadOptions {
-  keepDeleted?: boolean
-  keepExpired?: boolean
-  keepOldVersions?: boolean
+	keepDeleted?: boolean
+	keepExpired?: boolean
+	keepOldVersions?: boolean
 }
 ```
 
@@ -380,48 +406,69 @@ type AnswerOrigin = 'local' | 'network'
 type Reason = RelayReason
 
 /** A read's options (`#8cd1d6`), beside the endpoint's own `EndpointReadOptions`. */
-interface QueryOptions { localFirst?: boolean; deadlineMs?: number; persist?: boolean }
+interface QueryOptions {
+	localFirst?: boolean
+	deadlineMs?: number
+	persist?: boolean
+}
 /** The envelope (`#dce3ab`): never a bare array, because a bare array cannot carry "the deadline fired". */
-interface QueryResult { events: Event[]; complete: boolean }
-interface SubscribeOptions { onlyNew?: boolean; closeOnEose?: boolean; signal?: AbortSignal }
+interface QueryResult {
+	events: Event[]
+	complete: boolean
+}
+interface SubscribeOptions {
+	onlyNew?: boolean
+	closeOnEose?: boolean
+	signal?: AbortSignal
+}
 /** Mirrors the seam's own `Subscription` (nostr-io/ts/types.ts:139-143): `errors` is the stated reason a
  *  subscription ends rather than being silently dropped (M13, `#239d01`). E1 covers the `Observable`. */
-interface Subscription { events: Observable<Event>; errors: Observable<EventAccessError>; unsubscribe: Unsub }
+interface Subscription {
+	events: Observable<Event>
+	errors: Observable<EventAccessError>
+	unsubscribe: Unsub
+}
 /** Relay choice is the seam's injected policy (`nostr-io/ts/types.ts:152`), so no `relayUrls` member here. */
-interface PublishOptions { signal?: AbortSignal }
+interface PublishOptions {
+	signal?: AbortSignal
+}
 /** `stored` is the local write's outcome; `accepted`/`refused` come from the seam's own outcome (D-O13).
  *  `refused` here is a **list of the relays that declined the event** (`{url, reason}`) — it is not the
  *  refused *count* that `StoreEndpoint.write` returns beside `stored`. */
 interface PublishOutcome {
-  stored: boolean
-  accepted: string[]
-  refused: { url: string; reason: Reason }[]
+	stored: boolean
+	accepted: string[]
+	refused: { url: string; reason: Reason }[]
 }
 type DeleteRef = string | FilterIn | FilterIn[]
-interface DeleteOutcome { removed: number }
+interface DeleteOutcome {
+	removed: number
+}
 
 /** E5 — a refusal is a value, never a bare string and never a silent drop. */
-class EventAccessError extends Error { readonly reason: Reason }
+class EventAccessError extends Error {
+	readonly reason: Reason
+}
 
 interface EventAccessOptions {
-  endpoint: StoreEndpoint          // the first port, printed above
-  upstream: NostrIo                // the second port: the seam's contract, cited above
-  policy?: WriteBackPolicy         // default DEFAULT_WRITE_BACK
-  // SUPERSEDED IN PART by D-O21 — that amendment ADDS one member and retracts nothing: the four lines
-  // above stand, and `resolver?: ReferenceResolver` joins them (printed with the widened `AcceptHook`
-  // beneath the accept-hook statement, which is the current shape of both).
-  resolver?: ReferenceResolver     // default absent: a reference resolves against the endpoint's own set
+	endpoint: StoreEndpoint // the first port, printed above
+	upstream: NostrIo // the second port: the seam's contract, cited above
+	policy?: WriteBackPolicy // default DEFAULT_WRITE_BACK
+	// SUPERSEDED IN PART by D-O21 — that amendment ADDS one member and retracts nothing: the four lines
+	// above stand, and `resolver?: ReferenceResolver` joins them (printed with the widened `AcceptHook`
+	// beneath the accept-hook statement, which is the current shape of both).
+	resolver?: ReferenceResolver // default absent: a reference resolves against the endpoint's own set
 }
 
 /** The handle `createEventAccess` returns: the five verbs, the envelope, and the companion read. */
 interface EventAccess {
-  readonly policy: WriteBackPolicy
-  query(filters: FilterIn | FilterIn[], options?: QueryOptions): Promise<QueryResult>
-  subscribe(filters: FilterIn | FilterIn[], options?: SubscribeOptions): Subscription
-  publish(events: Event[], options?: PublishOptions): Promise<PublishOutcome>
-  count(filters: FilterIn | FilterIn[]): Promise<CountResult>
-  delete(refs: DeleteRef | DeleteRef[]): Promise<DeleteOutcome>
-  originOf(answer: QueryResult, id: string): AnswerOrigin
+	readonly policy: WriteBackPolicy
+	query(filters: FilterIn | FilterIn[], options?: QueryOptions): Promise<QueryResult>
+	subscribe(filters: FilterIn | FilterIn[], options?: SubscribeOptions): Subscription
+	publish(events: Event[], options?: PublishOptions): Promise<PublishOutcome>
+	count(filters: FilterIn | FilterIn[]): Promise<CountResult>
+	delete(refs: DeleteRef | DeleteRef[]): Promise<DeleteOutcome>
+	originOf(answer: QueryResult, id: string): AnswerOrigin
 }
 ```
 
@@ -508,7 +555,7 @@ type AcceptHook = (event: Event) => 'accept' | 'reject'
 (`event-store/event-store.md`, its `EvictionPolicy` statement): four answers here, plus the one optional accept
 hook that carries `validation`'s preset decision (added 2026-09-30 by the orchestrator's decision D-O14(d),
 below). The policy says nothing about
-*which* relays answer and nothing about eviction — relay policy is `nostr-io`'s input and the eviction floor
+_which_ relays answer and nothing about eviction — relay policy is `nostr-io`'s input and the eviction floor
 stays the store's (`#75322f`).
 
 **Amended 2026-09-30 — the orchestrator's decision D-O3**
@@ -531,16 +578,16 @@ declared owner is strictly better than a convention every call site must remembe
 Nothing but this document is delivered by this run. Every increment named here is one of the reframing run's
 (`runs/2026-09-29-reframing/order.md` §1).
 
-| spec surface | increment | what exists instead, today |
-| --- | --- | --- |
-| ts/ — the six operations over two ports, the merge, the provenance companion read, the declared policy and the filter boundary | **I2 — this run's second increment** | `ts/` exists — the increment landed; the spec was written first |
-| LF-1 to LF-7 asserted on their named paths, with both ports faked | **I2**, as its acceptance surface | `ts/composition.test.ts` asserts LF-1 to LF-7 on their named paths, both ports faked |
-| the two no-socket cases (a recording, throwing endpoint and an import allow-list with its expected hits) | **I2** | the no-socket cases are in `ts/` — a recording, throwing endpoint and an import allow-list with its expected hits |
-| the store's endpoint contract itself — its local read/write surface, its head rule, its three deletions, its count | **I3 — the `event-store` shrink**, spec written in this run, code in its own later increment | the store is built and still holds the operations (`#75322f`) |
-| `nostr-io`'s pool contract — the wire half of every read here | **I1 — this run's first increment** | the seam is specified, not implemented (`#9f5778`) |
-| the market's read path re-pointed onto this contract | not this run, and not any increment of it | the market keeps its own read path |
-| content validation of what is written back | **I4 — `validation`**, spec only | a separate module, its own document |
-| the persistence medium, eviction mechanisms, cross-tab a shared store | not this run | named as out of scope by the re-cut |
+| spec surface                                                                                                                   | increment                                                                                    | what exists instead, today                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| ts/ — the six operations over two ports, the merge, the provenance companion read, the declared policy and the filter boundary | **I2 — this run's second increment**                                                         | `ts/` exists — the increment landed; the spec was written first                                                   |
+| LF-1 to LF-7 asserted on their named paths, with both ports faked                                                              | **I2**, as its acceptance surface                                                            | `ts/composition.test.ts` asserts LF-1 to LF-7 on their named paths, both ports faked                              |
+| the two no-socket cases (a recording, throwing endpoint and an import allow-list with its expected hits)                       | **I2**                                                                                       | the no-socket cases are in `ts/` — a recording, throwing endpoint and an import allow-list with its expected hits |
+| the store's endpoint contract itself — its local read/write surface, its head rule, its three deletions, its count             | **I3 — the `event-store` shrink**, spec written in this run, code in its own later increment | the store is built and still holds the operations (`#75322f`)                                                     |
+| `nostr-io`'s pool contract — the wire half of every read here                                                                  | **I1 — this run's first increment**                                                          | the seam is specified, not implemented (`#9f5778`)                                                                |
+| the market's read path re-pointed onto this contract                                                                           | not this run, and not any increment of it                                                    | the market keeps its own read path                                                                                |
+| content validation of what is written back                                                                                     | **I4 — `validation`**, spec only                                                             | a separate module, its own document                                                                               |
+| the persistence medium, eviction mechanisms, cross-tab a shared store                                                          | not this run                                                                                 | named as out of scope by the re-cut                                                                               |
 
 **Amended 2026-09-30 — the orchestrator's decision D-O9**
 (`runs/2026-09-30-first-usable-version/decisions-orchestrator.md`). Validation composes at **this composition's
@@ -555,7 +602,7 @@ already declares (`WriteBackPolicy`, above), so one fake port tests it. The modu
 ## Findings reported rather than repaired
 
 1. **One line of the store's contract is missing and this module needs it.** The fail-closed predicate lives in
-   the store's *implementation* (`event-store/ts/filters.ts`, repaired in `fb304df`) and is not in the store's
+   the store's _implementation_ (`event-store/ts/filters.ts`, repaired in `fb304df`) and is not in the store's
    `contract.exports`, so a composition cannot reach it without importing the implementation. This spec requires
    the endpoint port to expose the rule — and D-O5 settles **how**, and D-O14(e) settles the diagram: the
    endpoint's own `read` rejects a malformed filter and this module surfaces that typed refusal, so the boundary
@@ -573,6 +620,7 @@ already declares (`WriteBackPolicy`, above), so one fake port tests it. The modu
    `contract.exports` line that would name the predicate **is deferred to increment I3** rather than edited now:
    adding a name to an export list before the symbol exists would be a claim about an entry that does not exist
    yet, and it would put two writers on one file region.
+
 2. **The provenance mechanism is a companion read, and the envelope is left exactly as the re-cut fixes it.**
    The order carries `{events, complete}` with the operations, so this module does not widen it: `origins` is
    **not** a third envelope member here. The mechanism M12 needs is a declared companion read
@@ -585,6 +633,7 @@ already declares (`WriteBackPolicy`, above), so one fake port tests it. The modu
    → `AnswerOrigin` is the mechanism, **per answer and per id**; `{events, complete}` keeps exactly two members
    and is **not widened**; and the third-member alternative **remains named and not taken**, with its cost as
    stated above — one less call per event, against a shape another module's spec already states.
+
 3. **"The six operations" does not reconcile arithmetically with the store's own list.** The store's
    `contract.operations` names seven entries (`query`, `subscribe`, `publish`, `count`, `delete`, the persistence
    seam, the event view) and its prose counts six, while the re-cut's five caller-facing verbs are five. This
@@ -597,6 +646,7 @@ already declares (`WriteBackPolicy`, above), so one fake port tests it. The modu
    envelope**, and the store's seven-name `contract.operations` list is a disagreement this module does not
    inherit. That list is **corrected at I3**, together with the store's prose count — the increment that removes
    the operations from the store.
+
 4. **Where a non-identity list condition still broadens** is left as it was found: the repair in `fb304df`
    closed the identity keys and left the general `#`-key case (`#d`, `#a`, `#t`) broadened, because NIP-01's rule
    is general and the widening is a decision for an order rather than for a spec author. This module applies the
@@ -628,12 +678,12 @@ longer load-bearing.
 
 1. **The live change path is unfiltered, and the printed port gives it no filter.** A subscription opened on
    `{kinds: [1]}` receives a kind-7 event pushed onto `changes`, because the declared member is a raw
-   `changes: AsyncIterable<Event>` with no filter argument, while the replay *is* filtered by the endpoint's own
+   `changes: AsyncIterable<Event>` with no filter argument, while the replay _is_ filtered by the endpoint's own
    read. Matching here would be the second implementation of one predicate that `#d80075` and `#f64bec` refuse,
    so this module does not grow one. Two bounded options, both the orchestrator's: give the endpoint a
    **filtered** change read (a port change, and therefore I3's, which adopts this shape anyway), or declare the
    live path unfiltered and say so where a caller reads it.
-2. **`onReject` on a *read* has no field to report on.** The envelope is frozen at `{events, complete}` (D-O2),
+2. **`onReject` on a _read_ has no field to report on.** The envelope is frozen at `{events, complete}` (D-O2),
    so a refused write-back during `query` is computed with nowhere to go; the subscription path reports it on
    `errors`, and the query path is silent. Either the envelope gains a channel, or `onReject` is stated as
    carried for the paths that have one.

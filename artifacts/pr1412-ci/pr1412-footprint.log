@@ -1,0 +1,166 @@
+footprint	UNKNOWN STEP	﻿2026-10-15T12:45:48.0511351Z Current runner version: '2.337.0'
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0538284Z ##[group]Runner Image Provisioner
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0539310Z Hosted Compute Agent
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0539926Z Version: 20261002.596
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0540558Z Commit: c3d12f3313a95f25162a1503be624f3b0617f8c0
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0541360Z Build Date: 2026-10-02T22:28:27Z
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0542066Z Worker ID: {fc2496c0-c3fc-4791-a6a9-99594ea6dbee}
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0542854Z Region: canadaeast
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0543448Z Cloud: Azure
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0544337Z ##[endgroup]
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0546040Z ##[group]Operating System
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0546708Z Ubuntu
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0547393Z 24.04.5
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0547945Z LTS
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0548474Z ##[endgroup]
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0549088Z ##[group]Runner Image
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0549708Z Image: ubuntu-24.04
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0550304Z Version: 20261004.327.1
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0551701Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261004.327/images/ubuntu/Ubuntu2404-Readme.md
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0553342Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261004.327
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0554758Z ##[endgroup]
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0558055Z ##[group]GITHUB_TOKEN Permissions
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0560291Z Actions: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0561011Z ArtifactMetadata: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0561667Z Attestations: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0562289Z Checks: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0562899Z CodeQuality: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0563469Z Contents: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0564425Z CopilotRequests: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0565169Z Deployments: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0565776Z Discussions: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0566419Z Drives: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0566956Z Issues: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0567665Z Metadata: read
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0568285Z Models: read
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0568868Z Packages: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0569460Z Pages: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0570061Z PullRequests: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0570673Z RepositoryProjects: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0571348Z SecurityEvents: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0571999Z Statuses: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0572607Z VulnerabilityAlerts: read
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0573223Z ##[endgroup]
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0575950Z Secret source: Actions
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0577078Z Cache mode: write
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.0577904Z Prepare workflow directory
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.1231779Z Prepare all required actions
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.1312232Z Getting action download info
+footprint	UNKNOWN STEP	2026-10-15T12:45:48.3919562Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.1572863Z Complete job name: footprint
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2977684Z ##[group]Run actions/checkout@v4
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2978708Z with:
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2979234Z   repository: PlebeianApp/market
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2983447Z   token: ***
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2983925Z   ssh-strict: true
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2984704Z   ssh-user: git
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2985215Z   persist-credentials: true
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2985783Z   clean: true
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2986291Z   sparse-checkout-cone-mode: true
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2986870Z   fetch-depth: 1
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2987369Z   fetch-tags: false
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2987861Z   show-progress: true
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2988377Z   lfs: false
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2988849Z   submodules: false
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2989371Z   set-safe-directory: true
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2989931Z   allow-unsafe-pr-checkout: false
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.2990805Z ##[endgroup]
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.4045003Z Syncing repository: PlebeianApp/market
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.4047026Z ##[group]Getting Git version info
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.4048173Z Working directory is '/home/runner/work/market/market'
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.4049392Z [command]/usr/bin/git version
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.4759224Z git version 2.55.0
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.4786790Z ##[endgroup]
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.4804531Z Temporarily overriding HOME='/home/runner/work/_temp/fb07cbaf-6340-4558-a930-a4f6d495a635' before making global git config changes
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.4832902Z Adding repository directory to the temporary git global config as a safe directory
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.4835899Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/market/market
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.4935910Z Deleting the contents of '/home/runner/work/market/market'
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.4939109Z ##[group]Initializing the repository
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.4941154Z [command]/usr/bin/git init /home/runner/work/market/market
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5817540Z hint: Using 'master' as the name for the initial branch. This default branch name
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5820864Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5823062Z hint: to use in all of your new repositories, which will suppress this warning,
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5824823Z hint: call:
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5825761Z hint:
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5826883Z hint: 	git config --global init.defaultBranch <name>
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5828329Z hint:
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5829742Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5831583Z hint: 'development'. The just-created branch can be renamed via this command:
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5833097Z hint:
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5833856Z hint: 	git branch -m <name>
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5835102Z hint:
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5836333Z hint: Disable this message with "git config set advice.defaultBranchName false"
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5838222Z Initialized empty Git repository in /home/runner/work/market/market/.git/
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5845507Z [command]/usr/bin/git remote add origin https://github.com/PlebeianApp/market
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5954865Z ##[endgroup]
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5955937Z ##[group]Disabling automatic garbage collection
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.5959287Z [command]/usr/bin/git config --local gc.auto 0
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.6001449Z ##[endgroup]
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.6002306Z ##[group]Setting up auth
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.6009392Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+footprint	UNKNOWN STEP	2026-10-15T12:45:49.6047369Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+footprint	UNKNOWN STEP	2026-10-15T12:45:50.2046084Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+footprint	UNKNOWN STEP	2026-10-15T12:45:50.2087904Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+footprint	UNKNOWN STEP	2026-10-15T12:45:50.2327386Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+footprint	UNKNOWN STEP	2026-10-15T12:45:50.2366748Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+footprint	UNKNOWN STEP	2026-10-15T12:45:50.2599288Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+footprint	UNKNOWN STEP	2026-10-15T12:45:50.2648108Z ##[endgroup]
+footprint	UNKNOWN STEP	2026-10-15T12:45:50.2650910Z ##[group]Fetching the repository
+footprint	UNKNOWN STEP	2026-10-15T12:45:50.2657018Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +5226677bcfe69b892152822e8ca3eb72f97b1bc4:refs/remotes/pull/1412/merge
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.3816551Z From https://github.com/PlebeianApp/market
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.3817885Z  * [new ref]         5226677bcfe69b892152822e8ca3eb72f97b1bc4 -> pull/1412/merge
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.3821533Z ##[endgroup]
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.3822825Z ##[group]Determining the checkout info
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.3826230Z ##[endgroup]
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.3832814Z [command]/usr/bin/git sparse-checkout disable
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.3894631Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.3930276Z ##[group]Checking out the ref
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.3936082Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/1412/merge
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5107406Z Note: switching to 'refs/remotes/pull/1412/merge'.
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5108194Z 
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5108438Z You are in 'detached HEAD' state. You can look around, make experimental
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5109016Z changes and commit them, and you can discard any commits you make in this
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5109578Z state without impacting any branches by switching back to a branch.
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5109928Z 
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5110199Z If you want to create a new branch to retain commits you create, you may
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5110746Z do so (now or later) by using -c with the switch command. Example:
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5111057Z 
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5111203Z   git switch -c <new-branch-name>
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5111408Z 
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5111585Z Or undo this operation with:
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5111776Z 
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5111873Z   git switch -
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5112026Z 
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5112272Z Turn off this advice by setting config variable advice.detachedHead to false
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5112652Z 
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5113072Z HEAD is now at 5226677 Merge 9172219ef2c59e21a79fb5fc9a81706ef36b3f52 into 6be7496cc2089db2e2da04bb083312ae6d43a79d
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5122453Z ##[endgroup]
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5170595Z [command]/usr/bin/git log -1 --format=%H
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5199495Z 5226677bcfe69b892152822e8ca3eb72f97b1bc4
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5430695Z ##[group]Run bash scripts/check-ndk-footprint.sh
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5431162Z ^[[36;1mbash scripts/check-ndk-footprint.sh^[[0m
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5766056Z shell: /usr/bin/bash -e {0}
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.5766518Z ##[endgroup]
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.6060375Z NDK footprint: 148 file(s) import @nostr-dev-kit (baseline: 147)
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.6061149Z 
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.6080538Z ##[error]NDK footprint increased from 147 to 148.
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.6089061Z New NDK usage is blocked during the migration. Route subscribe/fetch/publish
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.6089691Z through src/lib/nostr/io.ts (the strangler-fig seam) instead. See
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.6090182Z docs/ndk-to-applesauce-migration-plan.md for the pattern.
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.6095417Z ##[error]Process completed with exit code 1.
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.6311510Z Post job cleanup.
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.7191442Z [command]/usr/bin/git version
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.7238620Z git version 2.55.0
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.7285379Z Temporarily overriding HOME='/home/runner/work/_temp/6982df24-2299-4a35-ae41-9314d74db807' before making global git config changes
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.7286899Z Adding repository directory to the temporary git global config as a safe directory
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.7290672Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/market/market
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.7333407Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.7370184Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.7622320Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.7651888Z http.https://github.com/.extraheader
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.7672872Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.7711292Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.7967396Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.8009980Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.8423845Z Cleaning up orphan processes
+footprint	UNKNOWN STEP	2026-10-15T12:45:51.8704290Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -33,17 +33,7 @@ import { NEVER, Observable, Subject, filter, firstValueFrom, map, share, takeUnt
 
 import { RelaySeamError } from './errors'
 import { mapClosedReason, normalizeRelayUrl } from './pool'
-import type {
-	CountResult,
-	Event,
-	FilterIn,
-	PoolPort,
-	PoolSubscription,
-	RelayAck,
-	RelayFailure,
-	RelayStatus,
-	RelayUrl,
-} from './types'
+import type { CountResult, Event, FilterIn, PoolPort, PoolSubscription, RelayAck, RelayFailure, RelayStatus, RelayUrl } from './types'
 
 /** The vendor's per-relay EVENT message, narrowed without a cast. */
 type EventMessage = Extract<GroupReqMessage, { type: 'EVENT' }>

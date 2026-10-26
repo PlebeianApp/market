@@ -34,7 +34,7 @@ fill from outside, so the loader carries no budget of its own) and the failure c
 answer returns its refusal as a value, so the local answer is never unseated and completeness stays honest).
 
 **The vendor's write-back operators, settled by this module's own install.** E6 labels them `UNVERIFIED` and the
-spec adopts them as *implementations* of the policy. The install inside this directory (`applesauce-loaders`
+spec adopts them as _implementations_ of the policy. The install inside this directory (`applesauce-loaders`
 **6.2.0** exactly) is what settles the label, and it settles it **against** the spec's attribution: the package
 exports none of the three names — `mapEventsToStore` and `filterDuplicateEvents` are **imported from
 `applesauce-core`** by its loaders, and `storeEvents` is `applesauce-relay`'s and is absent from this tree.

@@ -29,13 +29,13 @@ motion library is vendored in `vendor/` beside the page and referenced by a rela
 
 ## What is in this folder
 
-| file | what it is |
-| --- | --- |
-| `index.html` | the page. One file, everything inline except the two vendored scripts. |
-| `vendor/gsap.min.js` | GSAP 3.12.5, vendored so scroll motion never depends on a CDN. |
-| `vendor/ScrollTrigger.min.js` | GSAP's ScrollTrigger plugin, same reasoning. |
-| `SKILL.md` | the skill companion: how the page is served, what it shows, and its Status. |
-| `README.md` | this file. |
+| file                          | what it is                                                                  |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| `index.html`                  | the page. One file, everything inline except the two vendored scripts.      |
+| `vendor/gsap.min.js`          | GSAP 3.12.5, vendored so scroll motion never depends on a CDN.              |
+| `vendor/ScrollTrigger.min.js` | GSAP's ScrollTrigger plugin, same reasoning.                                |
+| `SKILL.md`                    | the skill companion: how the page is served, what it shows, and its Status. |
+| `README.md`                   | this file.                                                                  |
 
 ## What the page contains
 

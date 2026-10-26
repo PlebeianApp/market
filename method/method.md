@@ -1,4 +1,3 @@
-
 # method — rules
 
 **Version `core@0.1`.** Normative. This repository **is** core (`#0d9077`): there is no project here yet, so
@@ -9,7 +8,7 @@ someone assigned; it is derived from the content that follows it. Two rules with
 same ID in every fork, and two rules with different wording can never quietly take each other's place.
 
 The method has one purpose: make **design, architecture and spec agree before implementation**, and make the
-*placement* of every decision a consequence of written rules rather than of taste.
+_placement_ of every decision a consequence of written rules rather than of taste.
 
 A rule changes only by a **confirmed increment** (`#85f5da`), and the change is visible as a diff plus a
 transcript that backs it (`#f58404`).
@@ -20,10 +19,10 @@ transcript that backs it (`#f58404`).
 
 A decision has two independent properties, and conflating them is the root of most spec drift:
 
-- **Axis 1 — semantics.** *What kind of decision is this?* The distillation levels: intention → UX → UI →
+- **Axis 1 — semantics.** _What kind of decision is this?_ The distillation levels: intention → UX → UI →
   data structures → platform/packages → verification. This is separation of concerns. The file a statement
-  lives in *is* its level, and that is the only place its level is recorded.
-- **Axis 2 — scope.** *Who consumes it?* The assembly graph of modules. This determines where it must live
+  lives in _is_ its level, and that is the only place its level is recorded.
+- **Axis 2 — scope.** _Who consumes it?_ The assembly graph of modules. This determines where it must live
   so that nothing is duplicated.
 
 An item lives at an **instance of a level** (Axis 1) chosen by **scope** (Axis 2). The ladder never
@@ -42,7 +41,7 @@ modules. Past core, everything is a module **implementing** core, not a tool cor
 ### `#ab48fc` — Accounting
 
 Every file inside a module directory is referenced by that module's MD. A file that is not accounted for is
-a finding: *why is it here?* A reference to a file that does not exist is a failure. This is the anti-rot
+a finding: _why is it here?_ A reference to a file that does not exist is a failure. This is the anti-rot
 mechanism, and it is deliberately cheap.
 
 ### `#a04103` — Spec and implementation exist at every level
@@ -89,7 +88,7 @@ does not put the colour in a shared module; it puts it in the owner's scope, onc
 
 One consumer: keep it where it is. Hoisting on the first consumer creates exactly the coupling that trust
 boundaries exist to prevent. Two consumers: hoist (`#91cefc`, `#4ebec2`). This is DRY applied at every
-level, and it is the *timing* half of the placement rule.
+level, and it is the _timing_ half of the placement rule.
 
 ### `#b22838` — Duplication, precisely defined
 
@@ -98,7 +97,7 @@ level, and it is the *timing* half of the placement rule.
   is itself a statement with an ID.
 - **Two implementations of one spec is not duplication.** It is one intention realised twice — the web
   implementation and a sandboxed implementation sharing one contract is the canonical case. They are not the
-  same language used twice; they are the same *spec* used twice.
+  same language used twice; they are the same _spec_ used twice.
 - A duplicate that must exist across a spec or trust boundary is allowed **only when the shared parent spec
   declares it with its reason**. Declared → a known exception any reviewer can verify in seconds. Undeclared
   → a failure.
@@ -178,8 +177,8 @@ content yields a different ID, so nothing can silently take another statement's 
 
 **Consequences, stated plainly.**
 
-- Editing the **declaring line** changes the statement's identity. That is intended: identity means *this
-  exact content*. Body text below the declaring line may be edited freely — the declaring line is the
+- Editing the **declaring line** changes the statement's identity. That is intended: identity means _this
+  exact content_. Body text below the declaring line may be edited freely — the declaring line is the
   statement, its continuation is its explanation.
 - A reference to an ID that no longer exists is a **dangling reference**, and that is exactly what a reader
   should see after a statement was rewritten. The retired hash belongs in the commit message, not in a
@@ -235,9 +234,9 @@ and a **lock file for statement identities**, which content addressing makes unn
 ## Decisions and divergences, recorded honestly
 
 **The layout question was answered three times, and the third answer is the one that stands.** On
-2026-09-23 Maxime first answered *"let's go with the parent one"* (core containing its projects), then *"I'd
-agree with siblings"* (core beside its projects), and finally *"there is no project yet, only core … we
-should actually just move all the files in there up by one"* — which is neither: core is its own repository
+2026-09-23 Maxime first answered _"let's go with the parent one"_ (core containing its projects), then _"I'd
+agree with siblings"_ (core beside its projects), and finally _"there is no project yet, only core … we
+should actually just move all the files in there up by one"_ — which is neither: core is its own repository
 and a project pulls it in (`#0d9077`).
 
 **A collision that never happened — recorded because it was written down as if it had.** For a period this
@@ -248,7 +247,7 @@ the check routine — **the provenance of a transcript is established by reading
 from its content.**
 
 **A false statement can be manufactured by tooling, and it was.** During the identity migration a wrapped
-prose line that happened to *begin* with a citation was read as a statement, given a derived identity, and the
+prose line that happened to _begin_ with a citation was read as a statement, given a derived identity, and the
 resulting rename was then propagated to every citation of the real rule — so a rule silently lost its name and
 the tree pointed at a statement that never existed. The check routine found it, and the rule now carries its
 own guard: a declaring line is a heading, a bullet, or a paragraph of its own, never a wrapped continuation of
@@ -259,24 +258,24 @@ inference written down as fact — and it is the reason the check is a routine r
 can both serve one conversation, and the desktop shows more than one row for a chat whose lane was reset.
 That is product behaviour, diagnosed separately, and it belongs to collaboration rather than to the method.
 
-**The symlink architecture** was retracted by its author: *"I might have pushed a little bit hard on the
-sim-linking architecture … we don't need to rebuild an entire alternative to git just yet."*
+**The symlink architecture** was retracted by its author: _"I might have pushed a little bit hard on the
+sim-linking architecture … we don't need to rebuild an entire alternative to git just yet."_
 
-**The two determinism rules.** *Content-kind* ("deterministically, based on what kind of content it has")
-and *scope* ("the lowest possible level that captures the full underlying scope") were both stated. The
+**The two determinism rules.** _Content-kind_ ("deterministically, based on what kind of content it has")
+and _scope_ ("the lowest possible level that captures the full underlying scope") were both stated. The
 placement rule (`#91cefc`) makes them one rule with an explicit precedence order rather than two competing
 ones.
 
 ## Open items
 
-| # | Item | Where it belongs |
-| --- | --- | --- |
-| O1 | What an **approval** physically is while the collaboration transport is deferred (`#85f5da` step 3) | collaboration, deferred |
-| O2 | Does the machine-readable shape **generate** types, or do types generate the shape | the data-structures level |
-| O3 | How many concurrent increment proposals may exist before the human confirmation gate is the bottleneck | the loop |
-| O4 | Whether module ownership belongs in the filesystem at all | deferred (`#f0a4c3`) |
-| O5 | Whether the git commit or a Nostr event is the record of record for an increment | deferred (`#f0a4c3`) |
-| O6 | Whether the check routine's model pass is one prompt over the whole tree or a pass per module | `checks/` |
+| #   | Item                                                                                                   | Where it belongs          |
+| --- | ------------------------------------------------------------------------------------------------------ | ------------------------- |
+| O1  | What an **approval** physically is while the collaboration transport is deferred (`#85f5da` step 3)    | collaboration, deferred   |
+| O2  | Does the machine-readable shape **generate** types, or do types generate the shape                     | the data-structures level |
+| O3  | How many concurrent increment proposals may exist before the human confirmation gate is the bottleneck | the loop                  |
+| O4  | Whether module ownership belongs in the filesystem at all                                              | deferred (`#f0a4c3`)      |
+| O5  | Whether the git commit or a Nostr event is the record of record for an increment                       | deferred (`#f0a4c3`)      |
+| O6  | Whether the check routine's model pass is one prompt over the whole tree or a pass per module          | `checks/`                 |
 
 The `O` labels are the one place a name-and-number survives, and they are deliberately not identities: they
 are rows in one table in one file, they are never referenced from another level, and their wording is
@@ -297,7 +296,7 @@ lowered mid-run.
   The flow is **Architect → Builder → one Red Team → human**: one adversarial pass, and the Builder's diff is
   what gets reviewed.
 - **Hardened** — for payment, signer, identity, persistence, migration, production infrastructure, or
-  cryptographic work. The flow adds **Red Team B** (an invariant falsifier, which must produce an *executed*
+  cryptographic work. The flow adds **Red Team B** (an invariant falsifier, which must produce an _executed_
   counterexample, not a suspicion) and a **blind Final Reviewer** (which must not read the earlier reviews).
   Here the evidence is not the diff; it is the reproduction.
 
@@ -310,7 +309,7 @@ mid-run and never lowered; lowering it is the one move this rule refuses.
 
 ### `#3c9212` — The levels that survive here, and the ones deferred
 
-Core declares eight levels. This repository carries **two**: **`modularization`** — whose rules *are* this
+Core declares eight levels. This repository carries **two**: **`modularization`** — whose rules _are_ this
 file, and whose tool is `checks/audit.py`; **its own procedure document has not been imported yet** — and
 **`checks`** (the routine and its tools). The other six — `schemas`,
 `schema`, `ux`, `ui`, `packages`, `platform-web` — are **not imported here**, and that is a trimming decision
@@ -341,7 +340,7 @@ Four tools, one question each. The prompts in `prompts/` say when to reach for w
 - **`checks/check.py` — does the tree obey the rules?** Module discovery and accounting, the `inherits` and
   `implements` citations, dangling references, and the build/coverage wells and vendored-tree hygiene. This is
   the routine (`#0a41a2`) and it exits non-zero on a finding.
-  - **What it does *not* do, stated plainly because a list of what a tool answers is a promise.** It does not
+  - **What it does _not_ do, stated plainly because a list of what a tool answers is a promise.** It does not
     detect a **second definition** of a thing, and it does not read `opt-out:`. Both are rules of this file
     (`#b22838`, `#11d72f`) that currently have **no tool**, as most of the statements here do. That is a gap in
     the toolkit and not a licence to skip them: until a check exists, **the reviewer is the check**. A gap

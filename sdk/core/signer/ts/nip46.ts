@@ -34,14 +34,7 @@ import { filter, from, mergeMap } from 'rxjs'
 
 import { withDeadline } from './capability'
 import { AuthSinkRequiredError, ClockRequiredError, LaneUnavailableError, Nip46RpcTimeoutError, TransportRequiredError } from './errors'
-import type {
-	ClockPort,
-	EventTemplate,
-	NipEncryptionCapability,
-	SignerCapability,
-	SignedEvent,
-	TransportPort,
-} from './types'
+import type { ClockPort, EventTemplate, NipEncryptionCapability, SignerCapability, SignedEvent, TransportPort } from './types'
 import { buildNostrConnectUri } from './uri'
 import type { NostrConnectUriMetadata } from './uri'
 
@@ -61,14 +54,7 @@ export const NIP46_CONNECT_TIMEOUT_MS = 5 * 60_000
 
 /** NIP-46 permissions requested at connect (get_public_key + sign + nip crypto). */
 /** #179fde — NIP46_PERMISSIONS: the permissions requested at connect (get_public_key, sign, nip04/nip44 crypto). */
-export const NIP46_PERMISSIONS = [
-	'get_public_key',
-	'sign_event',
-	'nip04_encrypt',
-	'nip04_decrypt',
-	'nip44_encrypt',
-	'nip44_decrypt',
-]
+export const NIP46_PERMISSIONS = ['get_public_key', 'sign_event', 'nip04_encrypt', 'nip04_decrypt', 'nip44_encrypt', 'nip44_decrypt']
 
 /**
  * The transport is required **in behaviour, not in the type**: a lane without an
@@ -231,9 +217,7 @@ async function refuseAuthWithoutSink(url: string) {
 /** Build a `NostrConnectSigner` whose transport is gated by the strict-bind wrapper. */
 /** #cb66c4 — createNostrConnectClient: a client signer whose transport is gated by the strict-bind wrapper (I1). */
 export function createNostrConnectClient(options: NostrConnectClientOptions): NostrConnectSigner {
-	const clientSigner = options.clientKeyHex
-		? PrivateKeySigner.fromKey(options.clientKeyHex)
-		: new PrivateKeySigner()
+	const clientSigner = options.clientKeyHex ? PrivateKeySigner.fromKey(options.clientKeyHex) : new PrivateKeySigner()
 	const transport = requireTransport(options.transport)
 	return new NostrConnectSigner({
 		relays: options.relays,
@@ -281,14 +265,9 @@ export interface BunkerConnectOptions extends Nip46Deps {
 
 /** Connect to a `bunker://` URI behind the strict-bind transport + RPC deadlines. */
 /** #cb66c4 — connectBunkerSigner: parse a bunker:// URI and connect behind the strict bind and the RPC deadlines. */
-export async function connectBunkerSigner(
-	bunkerUrl: string,
-	options: BunkerConnectOptions = {},
-): Promise<NostrConnectBundle> {
+export async function connectBunkerSigner(bunkerUrl: string, options: BunkerConnectOptions = {}): Promise<NostrConnectBundle> {
 	const { remote, relays, bunkerSecret } = NostrConnectSigner.parseBunkerURI(bunkerUrl)
-	const clientSigner = options.clientKeyHex
-		? PrivateKeySigner.fromKey(options.clientKeyHex)
-		: new PrivateKeySigner()
+	const clientSigner = options.clientKeyHex ? PrivateKeySigner.fromKey(options.clientKeyHex) : new PrivateKeySigner()
 	const transport = requireTransport(options.transport)
 	const clock = requireClock(options.clock)
 	const signer = new NostrConnectSigner({
@@ -301,12 +280,7 @@ export async function connectBunkerSigner(
 	})
 	const rpcTimeoutMs = options.rpcTimeoutMs ?? NIP46_RPC_TIMEOUT_MS
 	const connectTimeoutMs = options.connectTimeoutMs ?? NIP46_CONNECT_TIMEOUT_MS
-	await withRpcTimeout(
-		clock,
-		'connect',
-		signer.connect(bunkerSecret, options.permissions ?? NIP46_PERMISSIONS),
-		connectTimeoutMs,
-	)
+	await withRpcTimeout(clock, 'connect', signer.connect(bunkerSecret, options.permissions ?? NIP46_PERMISSIONS), connectTimeoutMs)
 	return {
 		signer,
 		capability: createNostrConnectCapability(signer, { clock, rpcTimeoutMs }),
@@ -350,10 +324,7 @@ export interface RehydrateOptions extends Nip46Deps {
  * pinned remote.
  */
 /** #cb66c4 — rehydrateNostrConnectSession: rebuild a NIP-46 session from an nbunksec; the token pins the remote. */
-export async function rehydrateNostrConnectSession(
-	nbunksec: string,
-	options: RehydrateOptions = {},
-): Promise<NostrConnectBundle> {
+export async function rehydrateNostrConnectSession(nbunksec: string, options: RehydrateOptions = {}): Promise<NostrConnectBundle> {
 	const transport = requireTransport(options.transport)
 	const clock = requireClock(options.clock)
 	const signer = await NostrConnectSigner.fromNbunksec(nbunksec, {
@@ -382,18 +353,13 @@ export interface Nip46CapabilityOptions {
  * through it. This function is internal to the implementation, not contract.
  */
 /** #cb66c4 — createNostrConnectCapability: the NIP-46 capability seam; identity binding is applied once, elsewhere (I3). */
-export function createNostrConnectCapability(
-	signer: NostrConnectSignerLike,
-	options: Nip46CapabilityOptions = {},
-): SignerCapability {
+export function createNostrConnectCapability(signer: NostrConnectSignerLike, options: Nip46CapabilityOptions = {}): SignerCapability {
 	const clock = requireClock(options.clock)
 	const timeoutMs = options.rpcTimeoutMs ?? NIP46_RPC_TIMEOUT_MS
-	const race = <T,>(lane: string, operation: Promise<T>, ms: number): Promise<T> =>
-		withRpcTimeout(clock, lane, operation, ms)
+	const race = <T>(lane: string, operation: Promise<T>, ms: number): Promise<T> => withRpcTimeout(clock, lane, operation, ms)
 	return {
 		getPublicKey: () => race('get_public_key', signer.getPublicKey(), timeoutMs),
-		signEvent: (template) =>
-			race('sign_event', signer.signEvent(template as EventTemplate & { pubkey?: string }), timeoutMs),
+		signEvent: (template) => race('sign_event', signer.signEvent(template as EventTemplate & { pubkey?: string }), timeoutMs),
 		nip44: signer.nip44 ? withDeadline(signer.nip44, 'nip44', timeoutMs, race) : undefined,
 		nip04: signer.nip04 ? withDeadline(signer.nip04, 'nip04', timeoutMs, race) : undefined,
 	}

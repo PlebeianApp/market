@@ -67,10 +67,7 @@ export interface EventFields {
 
 /** A real signed event; no fixture identity is stored anywhere. */
 export function signedEvent(fields: EventFields): Event {
-	return finalizeEvent(
-		{ kind: fields.kind, created_at: fields.created_at, tags: fields.tags ?? [], content: fields.content ?? '' },
-		KEY,
-	)
+	return finalizeEvent({ kind: fields.kind, created_at: fields.created_at, tags: fields.tags ?? [], content: fields.content ?? '' }, KEY)
 }
 
 /** One recorded pool call, with the exact arguments the seam sent. */
@@ -167,9 +164,7 @@ export function workingPool(spec: WorkingPoolSpec = {}): WorkingPool {
 			},
 			publish: (relays, event) => {
 				calls.push({ method: 'publish', relays: [...relays], event })
-				return spec.publish
-					? spec.publish(relays, event)
-					: Promise.resolve(relays.map((url) => ({ url, accepted: true })))
+				return spec.publish ? spec.publish(relays, event) : Promise.resolve(relays.map((url) => ({ url, accepted: true })))
 			},
 			count: (relays, filters) => {
 				calls.push({ method: 'count', relays: [...relays], filters: [...filters] })
@@ -415,7 +410,10 @@ export function handBackend(script: WireScript, subscription: PoolSubscription =
 		request: () => {
 			if (script.hang) return NEVER
 			if (script.boundary === 'close') {
-				return concat(thenEose(script.events), throwError(() => new RelaySeamError(script.failureReason, script.closeReason)))
+				return concat(
+					thenEose(script.events),
+					throwError(() => new RelaySeamError(script.failureReason, script.closeReason)),
+				)
 			}
 			return thenEose(script.events)
 		},
@@ -440,7 +438,18 @@ export function handBackend(script: WireScript, subscription: PoolSubscription =
 }
 
 /** NIP-01's machine-readable `CLOSED` prefixes, as the vendor's own table lists them (`relay.js`, READ at 6.2.1). */
-const CLOSED_PREFIXES = ['auth-required', 'unsupported', 'error', 'blocked', 'restricted', 'rate-limited', 'pow', 'invalid', 'duplicate', 'mute']
+const CLOSED_PREFIXES = [
+	'auth-required',
+	'unsupported',
+	'error',
+	'blocked',
+	'restricted',
+	'rate-limited',
+	'pow',
+	'invalid',
+	'duplicate',
+	'mute',
+]
 
 /**
  * The vendor's two layers, modelled: a `CLOSED` whose reason carries one of

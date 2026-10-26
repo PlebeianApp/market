@@ -33,9 +33,7 @@ describe('buildNostrConnectUri', () => {
 
 	test('fails closed (throws) when the secret is missing — a legacy token-only URI is rejected', () => {
 		expect(() => buildNostrConnectUri({ clientPubkey: CLIENT_PK, relay: RELAY, secret: '' })).toThrow(/secret/i)
-		expect(() => parseNostrConnectURI(`nostrconnect://${CLIENT_PK}?relay=${RELAY}&token=legacy`)).toThrow(
-			/missing secret/i,
-		)
+		expect(() => parseNostrConnectURI(`nostrconnect://${CLIENT_PK}?relay=${RELAY}&token=legacy`)).toThrow(/missing secret/i)
 	})
 
 	test('includes metadata when supplied', () => {

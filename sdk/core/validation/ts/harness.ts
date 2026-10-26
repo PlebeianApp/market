@@ -30,10 +30,7 @@ export interface EventFields {
 
 /** A signed event — a real id, a real signature, so a comparison over `id` compares real bytes. */
 export function signedEvent(fields: EventFields, sk: Uint8Array = KEY): Event {
-	return finalizeEvent(
-		{ kind: fields.kind, created_at: fields.created_at, tags: fields.tags ?? [], content: fields.content ?? '' },
-		sk,
-	)
+	return finalizeEvent({ kind: fields.kind, created_at: fields.created_at, tags: fields.tags ?? [], content: fields.content ?? '' }, sk)
 }
 
 /**
@@ -57,8 +54,8 @@ export function manualClock(ms = 1_700_000_000_000): { now(): number; set(value:
 /** The tier the endpoint declares — passed to the resolver. The flow was removed per the
  * maintainer's 2026-10-02 ruling: the rule never learns which boundary it is policing. */
 export interface PortCall {
-  readonly reference: string
-  readonly at: ResolutionAt | undefined
+	readonly reference: string
+	readonly at: ResolutionAt | undefined
 }
 
 /** A port with a scripted answer per reference, recording every call it is handed. */
@@ -131,10 +128,10 @@ export function rejectingPort(when: 'asynchronously' | 'synchronously' = 'asynch
  * (`#8393ac`, D-O24). `resolve` is the composition's own link resolver.
  */
 export function compositionContext(
-  resolve: (reference: string) => Promise<Event | undefined>,
-  tier: 'local' | 'remote' = 'local',
+	resolve: (reference: string) => Promise<Event | undefined>,
+	tier: 'local' | 'remote' = 'local',
 ): AcceptContext {
-  return { tier, resolve }
+	return { tier, resolve }
 }
 
 /** A held answer, for a scripted port. */

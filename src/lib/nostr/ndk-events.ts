@@ -1,10 +1,45 @@
-import { NDKEvent, type NDKFilter, type NDKRelaySet, type NDKSigner } from '@nostr-dev-kit/ndk'
+import { NDKEvent, NDKUser, type NDKFilter, type NDKRelaySet, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { verifyEvent, type Event } from 'nostr-tools'
+import { UnsupportedSignerOperationError, type EncryptingSigner, type SignableRumorLike } from '@sdk/core'
 
 import type { NostrFilter, NostrIo } from './io'
 
 export { NDKEvent }
 export type { NDKFilter, NDKRelaySet, NDKSigner }
+
+/** Adapt NDK's signer to the SDK's signing and NIP-44 encryption port. */
+export function toEncryptingSigner(signer: NDKSigner): EncryptingSigner {
+	return {
+		async getPublicKey() {
+			const user = await signer.user()
+			if (!user?.pubkey) throw new Error('Signer pubkey unavailable')
+			return user.pubkey
+		},
+		async signEvent(event: SignableRumorLike) {
+			if (typeof signer.sign !== 'function') {
+				throw new UnsupportedSignerOperationError('Signer does not support sign')
+			}
+			return await signer.sign(event as Parameters<NDKSigner['sign']>[0])
+		},
+		async encrypt(recipientPubkey: string, plaintext: string) {
+			return await signer.encrypt(new NDKUser({ pubkey: recipientPubkey }), plaintext, 'nip44')
+		},
+		async decrypt(senderPubkey: string, ciphertext: string) {
+			return await signer.decrypt(new NDKUser({ pubkey: senderPubkey }), ciphertext, 'nip44')
+		},
+		async supportsNip44(operation: 'encrypt' | 'decrypt') {
+			if (typeof signer.encryptionEnabled !== 'function') return false
+			if (operation === 'encrypt' && typeof signer.encrypt !== 'function') return false
+			if (operation === 'decrypt' && typeof signer.decrypt !== 'function') return false
+			try {
+				const enabled = await signer.encryptionEnabled('nip44')
+				return enabled.includes('nip44')
+			} catch {
+				return false
+			}
+		},
+	}
+}
 
 type NdkEventContext = ConstructorParameters<typeof NDKEvent>[0]
 

@@ -45,8 +45,7 @@ function createRelayConfig(store: RelayStoreHandle, defaults: RelayDefaults): Re
 
 	const events = () => store.modelStore()
 
-	const cap = (relays: string[] | undefined): string[] | undefined =>
-		relays === undefined ? undefined : relays.slice(0, MAX_READ_POOL)
+	const cap = (relays: string[] | undefined): string[] | undefined => (relays === undefined ? undefined : relays.slice(0, MAX_READ_POOL))
 
 	const instance = (role: InstanceRole): readonly string[] => {
 		switch (role) {

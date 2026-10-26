@@ -107,7 +107,15 @@ describe('D-O6 · the general empty-#-key rule', () => {
 describe('E3, declared', () => {
 	test('a &-key filter filters AND-wise and a search filter is accepted unhonoured', async () => {
 		const store = createEventStore()
-		const both = signedEvent({ kind: 1, content: 'both', created_at: 1000, tags: [['t', 'a'], ['t', 'b']] })
+		const both = signedEvent({
+			kind: 1,
+			content: 'both',
+			created_at: 1000,
+			tags: [
+				['t', 'a'],
+				['t', 'b'],
+			],
+		})
 		const half = signedEvent({ kind: 1, content: 'half', created_at: 1000, tags: [['t', 'a']] })
 		await store.write([both])
 		await store.write([half])

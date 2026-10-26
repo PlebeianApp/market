@@ -63,7 +63,10 @@ export function assertIdentityFilters(filters: FilterIn[]): void {
 			for (let index = 0; index < value.length; index++) {
 				const element = value[index]
 				if (typeof element !== 'string' || element.length === 0 || element.length > MAX_IDENTITY_LENGTH || !HEX.test(element)) {
-					throw new StoreError('rejected', `${key}[${index}] is not a lower-case hex identifier of at most ${MAX_IDENTITY_LENGTH} characters`)
+					throw new StoreError(
+						'rejected',
+						`${key}[${index}] is not a lower-case hex identifier of at most ${MAX_IDENTITY_LENGTH} characters`,
+					)
 				}
 			}
 		}

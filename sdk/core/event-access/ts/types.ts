@@ -59,9 +59,9 @@ export type EndpointTier = 'local' | 'remote'
 
 /** #8cd1d6 — EndpointReadOptions: the endpoint's own `keep*` read options, beside this module's `QueryOptions` (E8). */
 export interface EndpointReadOptions {
-  keepDeleted?: boolean
-  keepExpired?: boolean
-  keepOldVersions?: boolean
+	keepDeleted?: boolean
+	keepExpired?: boolean
+	keepOldVersions?: boolean
 }
 
 /**
@@ -70,14 +70,14 @@ export interface EndpointReadOptions {
  * is a different noun from the refusing *relays* in `PublishOutcome.refused` (`#9b7257`).
  */
 export interface EndpointWriteOutcome {
-  stored: number
-  refused: number
+	stored: number
+	refused: number
 }
 
 /** #6de405 — CountResult: the local count from the store's own index, `approximate: false` because the index is exact. */
 export interface CountResult {
-  count: number
-  approximate: boolean
+	count: number
+	approximate: boolean
 }
 
 /** #d80075 — DeleteRef: a removal target — an event id, one filter, or many — routing and never deciding. */
@@ -85,7 +85,7 @@ export type DeleteRef = string | FilterIn | FilterIn[]
 
 /** #68a0c1 — DeleteOutcome: the local removal's outcome (P7). */
 export interface DeleteOutcome {
-  removed: number
+	removed: number
 }
 
 /**
@@ -107,12 +107,12 @@ export interface DeleteOutcome {
  *   **what this composition requires of the endpoint** — the store conforms at I3.
  */
 export interface StoreEndpoint {
-  readonly tier: EndpointTier
-  read(filters: FilterIn | FilterIn[], options?: EndpointReadOptions): Promise<Event[]>
-  write(events: Event[]): Promise<EndpointWriteOutcome>
-  count(filters: FilterIn | FilterIn[]): Promise<CountResult>
-  remove(refs: DeleteRef[]): Promise<DeleteOutcome>
-  readonly changes: AsyncIterable<Event>
+	readonly tier: EndpointTier
+	read(filters: FilterIn | FilterIn[], options?: EndpointReadOptions): Promise<Event[]>
+	write(events: Event[]): Promise<EndpointWriteOutcome>
+	count(filters: FilterIn | FilterIn[]): Promise<CountResult>
+	remove(refs: DeleteRef[]): Promise<DeleteOutcome>
+	readonly changes: AsyncIterable<Event>
 }
 
 /**
@@ -122,22 +122,22 @@ export interface StoreEndpoint {
  * structurally (`nostr-io/ts/types.ts:106-110`).
  */
 export interface WireResult {
-  events: Event[]
-  eose: boolean
-  failures: EventAccessError[]
+	events: Event[]
+	eose: boolean
+	failures: EventAccessError[]
 }
 
 /** #ebd41f — UpstreamAck: one relay's own answer to one publish, as this module consumes it (`types.ts:69-74`). */
 export interface UpstreamAck {
-  url: string
-  accepted: boolean
-  reason?: Reason
+	url: string
+	accepted: boolean
+	reason?: Reason
 }
 
 /** #ebd41f — UpstreamPublishOutcome: the seam's publish outcome, as this module consumes it (`types.ts:81-84`). */
 export interface UpstreamPublishOutcome {
-  id: string
-  acks: UpstreamAck[]
+	id: string
+	acks: UpstreamAck[]
 }
 
 /**
@@ -148,9 +148,9 @@ export interface UpstreamPublishOutcome {
  * is why no import of a sibling is taken and none is needed.
  */
 export interface NostrIo {
-  query(filters: FilterIn | FilterIn[], opts?: { signal?: AbortSignal }): Promise<WireResult>
-  subscribe(filters: FilterIn | FilterIn[], opts?: { signal?: AbortSignal; closeOnEose?: boolean }): Subscription
-  publish(event: Event): Promise<UpstreamPublishOutcome>
+	query(filters: FilterIn | FilterIn[], opts?: { signal?: AbortSignal }): Promise<WireResult>
+	subscribe(filters: FilterIn | FilterIn[], opts?: { signal?: AbortSignal; closeOnEose?: boolean }): Subscription
+	publish(event: Event): Promise<UpstreamPublishOutcome>
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -184,9 +184,9 @@ export type UpstreamPool = NostrRequest | { request: NostrRequest }
  * never two. Its arms are the vendor's own (a stream, a promise, one event, an array of them).
  */
 export type CacheRequest =
-  | ((filters: FilterIn[]) => Observable<Event>)
-  | ((filters: FilterIn[]) => Promise<Event | Event[]>)
-  | ((filters: FilterIn[]) => Event | Event[])
+	| ((filters: FilterIn[]) => Observable<Event>)
+	| ((filters: FilterIn[]) => Promise<Event | Event[]>)
+	| ((filters: FilterIn[]) => Event | Event[])
 
 /**
  * FillRequest — **the bounded fill, supplied as a function**: the loader-backed upstream is
@@ -212,12 +212,12 @@ export type FillRequest = (filters: FilterIn[]) => Promise<WireResult>
  * - `signal` tears the loader down.
  */
 export interface LoaderFillOptions {
-  cacheRequest?: CacheRequest
-  extraRelays?: string[] | Observable<string[]>
-  followRelayHints?: boolean
-  bufferTime?: number
-  bufferSize?: number
-  signal?: AbortSignal
+	cacheRequest?: CacheRequest
+	extraRelays?: string[] | Observable<string[]>
+	followRelayHints?: boolean
+	bufferTime?: number
+	bufferSize?: number
+	signal?: AbortSignal
 }
 
 /**
@@ -229,22 +229,22 @@ export type AnswerOrigin = 'local' | 'network'
 
 /** #8cd1d6 — QueryOptions: a read's options, beside the endpoint's own `EndpointReadOptions`. */
 export interface QueryOptions {
-  localFirst?: boolean
-  deadlineMs?: number
-  persist?: boolean
+	localFirst?: boolean
+	deadlineMs?: number
+	persist?: boolean
 }
 
 /** #dce3ab — QueryResult: the envelope, never a bare array, because a bare array cannot carry "the deadline fired". */
 export interface QueryResult {
-  events: Event[]
-  complete: boolean
+	events: Event[]
+	complete: boolean
 }
 
 /** #8cd1d6 — SubscribeOptions: a subscription's options; `onlyNew` skips the replay and follows the local changes only. */
 export interface SubscribeOptions {
-  onlyNew?: boolean
-  closeOnEose?: boolean
-  signal?: AbortSignal
+	onlyNew?: boolean
+	closeOnEose?: boolean
+	signal?: AbortSignal
 }
 
 /**
@@ -252,9 +252,9 @@ export interface SubscribeOptions {
  * being silently dropped (M13). E1 covers the `Observable`.
  */
 export interface Subscription {
-  events: Observable<Event>
-  errors: Observable<EventAccessError>
-  unsubscribe: Unsub
+	events: Observable<Event>
+	errors: Observable<EventAccessError>
+	unsubscribe: Unsub
 }
 
 /**
@@ -262,7 +262,7 @@ export interface Subscription {
  * so there is no `relayUrls` member here — the composition never chooses a relay.
  */
 export interface PublishOptions {
-  signal?: AbortSignal
+	signal?: AbortSignal
 }
 
 /**
@@ -271,9 +271,9 @@ export interface PublishOptions {
  * the event** — a different noun from the refused *count* `StoreEndpoint.write` returns.
  */
 export interface PublishOutcome {
-  stored: boolean
-  accepted: string[]
-  refused: { url: string; reason: Reason }[]
+	stored: boolean
+	accepted: string[]
+	refused: { url: string; reason: Reason }[]
 }
 
 /**
@@ -290,8 +290,8 @@ export type AcceptDecision = 'accept' | 'reject'
  * wires two rules at two boundaries instead (provenance) `#496306`.
  */
 export interface AcceptContext {
-  readonly tier: 'local' | 'remote'
-  resolve(reference: string): Promise<Event | undefined>
+	readonly tier: 'local' | 'remote'
+	resolve(reference: string): Promise<Event | undefined>
 }
 
 /**
@@ -317,11 +317,11 @@ export type ReferenceResolver = (reference: string) => Promise<Event | undefined
  * The wallet rule arrives as an **input** to `excluded` and is not re-decided here (`#a1e6b7`).
  */
 export interface WriteBackPolicy {
-  writeBack: 'network' | 'never'
-  honourPersist: boolean
-  excluded: readonly string[]
-  onReject: 'skip' | 'report'
-  accept?: AcceptHook
+	writeBack: 'network' | 'never'
+	honourPersist: boolean
+	excluded: readonly string[]
+	onReject: 'skip' | 'report'
+	accept?: AcceptHook
 }
 
 /**
@@ -332,20 +332,20 @@ export interface WriteBackPolicy {
  * fill from the seam's own read; the wiring of a live pool is the composition root's (§8 gap 2 of the companion).
  */
 export interface EventAccessOptions {
-  endpoint: StoreEndpoint
-  upstream: NostrIo
-  fill?: FillRequest
-  policy?: WriteBackPolicy
-  resolver?: ReferenceResolver
+	endpoint: StoreEndpoint
+	upstream: NostrIo
+	fill?: FillRequest
+	policy?: WriteBackPolicy
+	resolver?: ReferenceResolver
 }
 
 /** #30c592 — EventAccess: the handle `createEventAccess` returns — the five verbs, the envelope, and the companion read. */
 export interface EventAccess {
-  readonly policy: WriteBackPolicy
-  query(filters: FilterIn | FilterIn[], options?: QueryOptions): Promise<QueryResult>
-  subscribe(filters: FilterIn | FilterIn[], options?: SubscribeOptions): Subscription
-  publish(events: Event[], options?: PublishOptions): Promise<PublishOutcome>
-  count(filters: FilterIn | FilterIn[]): Promise<CountResult>
-  delete(refs: DeleteRef | DeleteRef[]): Promise<DeleteOutcome>
-  originOf(answer: QueryResult, id: string): AnswerOrigin
+	readonly policy: WriteBackPolicy
+	query(filters: FilterIn | FilterIn[], options?: QueryOptions): Promise<QueryResult>
+	subscribe(filters: FilterIn | FilterIn[], options?: SubscribeOptions): Subscription
+	publish(events: Event[], options?: PublishOptions): Promise<PublishOutcome>
+	count(filters: FilterIn | FilterIn[]): Promise<CountResult>
+	delete(refs: DeleteRef | DeleteRef[]): Promise<DeleteOutcome>
+	originOf(answer: QueryResult, id: string): AnswerOrigin
 }

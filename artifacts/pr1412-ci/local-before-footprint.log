@@ -1,0 +1,6 @@
+NDK footprint: 148 file(s) import @nostr-dev-kit (baseline: 147)
+
+::error::NDK footprint increased from 147 to 148.
+New NDK usage is blocked during the migration. Route subscribe/fetch/publish
+through src/lib/nostr/io.ts (the strangler-fig seam) instead. See
+docs/ndk-to-applesauce-migration-plan.md for the pattern.

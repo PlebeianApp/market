@@ -1,874 +1,1907 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>event-access — what it is, what it does, what it does not do yet</title>
-<meta name="description" content="A plain-language guide to the event-access module: merging a local store and the relay seam into one answer, the accept gate, what was measured, and what is not yet true.">
-<style>
-:root{
-  --paper:#fbfbf8;
-  --card:#ffffff;
-  --ink:#15171b;
-  --ink2:#3c4149;
-  --muted:#6d7380;
-  --line:#e5e6e2;
-  --line2:#f1f2ee;
-  --accent:#5a49d1;
-  --accent-2:#8b7cf0;
-  --accent-soft:#f1effc;
-  --ok:#1b7a4d;
-  --ok-soft:#e9f6ef;
-  --warn:#9c5209;
-  --warn-soft:#fdf4e9;
-  --radius:14px;
-  --radius-sm:9px;
-  --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
-  --shadow:0 1px 2px rgba(21,23,27,.05),0 10px 30px -18px rgba(21,23,27,.28);
-}
-*,*::before,*::after{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:14px;-webkit-text-size-adjust:100%}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.62 var(--sans);-webkit-font-smoothing:antialiased}
-h1,h2,h3,h4{margin:0;line-height:1.24;font-weight:650;letter-spacing:-.011em}
-h1{font-size:clamp(26px,3.3vw,38px)}
-h2{font-size:clamp(20px,2.1vw,26px)}
-h3{font-size:16.5px}
-p{margin:.68em 0}
-a{color:var(--accent);text-decoration:none;border-bottom:1px solid rgba(90,73,209,.3)}
-a:hover{border-bottom-color:var(--accent)}
-a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
-code,.mono{font-family:var(--mono);font-size:.86em}
-code{background:var(--line2);padding:1px 5px;border-radius:5px;color:#2b2e35}
-ul,ol{margin:.6em 0;padding-left:1.15em}
-li{margin:.28em 0}
-strong{font-weight:650}
-.small{font-size:13.5px;color:var(--muted)}
-.skip{position:absolute;left:-9999px;top:0}
-.skip:focus{left:12px;top:12px;background:var(--card);padding:8px 12px;border-radius:8px;z-index:20;border:1px solid var(--line)}
-.shell{display:grid;grid-template-columns:306px minmax(0,1fr);gap:46px;max-width:1240px;margin:0 auto;padding:0 28px 90px}
-.spine{position:sticky;top:0;align-self:start;max-height:100vh;overflow-y:auto;padding:26px 22px 30px 0;border-right:1px solid var(--line);font-size:14px}
-.spine details>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;font:650 12.5px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
-.spine details>summary::-webkit-details-marker{display:none}
-.spine details>summary::before{content:"";width:7px;height:7px;border-right:1.6px solid var(--muted);border-bottom:1.6px solid var(--muted);transform:rotate(45deg) translateY(-1px);transition:transform .2s ease}
-.spine details:not([open])>summary::before{transform:rotate(-45deg)}
-.spine-lede{font-size:13.5px;color:var(--ink2);margin:0 0 14px}
-.spine ol{list-style:none;margin:0;padding:0}
-.spine ol>li{margin:0 0 12px}
-.spine .sp-h{display:block;font:650 13.5px/1.35 var(--sans);color:var(--ink)}
-.spine .sp-t{display:block;font-size:12.8px;color:var(--muted);line-height:1.5}
-.spine-foot{margin-top:16px;padding-top:12px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
-.hero{padding:34px 0 6px}
-.hero .lede{font-size:18.5px;color:var(--ink2);max-width:66ch}
-.eyebrow{display:inline-block;font:650 11.5px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--accent)}
-.meta-row{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0}
-.pill{display:inline-block;font:650 11.5px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;padding:6px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);border:1px solid rgba(90,73,209,.16)}
-.pill.ok{background:var(--ok-soft);color:var(--ok);border-color:rgba(27,122,77,.18)}
-.pill.warn{background:var(--warn-soft);color:var(--warn);border-color:rgba(156,82,9,.2)}
-.pill.plain{background:var(--line2);color:var(--ink2);border-color:var(--line)}
-.toc{margin:26px 0 8px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
-.toc h2{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:650}
-.toc ol{margin:12px 0 0;padding:0;list-style:none;columns:2;column-gap:28px}
-.toc li{margin:0 0 7px;font-size:14.6px;break-inside:avoid}
-.toc li .n{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-right:8px}
-@media (max-width:640px){.toc ol{columns:1}}
-main{min-width:0}
-.chapter{padding:48px 0 6px;border-top:1px solid var(--line);scroll-margin-top:12px}
-.chapter:first-of-type{border-top:0}
-.chapter>header{margin-bottom:16px}
-.chapter .num{display:block;font:650 12px/1 var(--mono);letter-spacing:.12em;color:var(--accent);margin-bottom:9px}
-.chapter .dek{font-size:17.5px;color:var(--ink2);max-width:66ch;margin-top:10px}
-main p,main li{max-width:70ch}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
-.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:18px 0}
-.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0}
-@media (max-width:760px){.grid-2,.grid-3{grid-template-columns:1fr}}
-.note{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 var(--radius) var(--radius) 0;padding:13px 17px;margin:18px 0}
-.note.warn{border-left-color:var(--warn);background:var(--warn-soft)}
-.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
-.note p{margin:.3em 0;font-size:14.6px;max-width:none}
-.figure{margin:20px 0 8px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;overflow:hidden;box-shadow:var(--shadow)}
-.figure svg{display:block;width:100%;height:auto}
-.figure figcaption{font-size:13.4px;color:var(--muted);margin-top:12px;line-height:1.5}
-.tablewrap{overflow-x:auto;margin:16px 0;border:1px solid var(--line);border-radius:var(--radius);background:var(--card)}
-table{border-collapse:collapse;width:100%;font-size:14.4px}
-th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
-tr:last-child td{border-bottom:0}
-th{font:650 11.5px/1.3 var(--sans);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--line2)}
-td.n{font-family:var(--mono);font-size:13.6px;white-space:nowrap}
-.stat{display:flex;flex-direction:column;gap:3px}
-.stat b{font:650 25px/1.1 var(--sans);letter-spacing:-.02em}
-.stat span{font-size:13.2px;color:var(--muted)}
-.stat.ok b{color:var(--ok)}
-.gate-buttons{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 14px}
-.gate-buttons button{font:650 13px var(--sans);padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink2);cursor:pointer}
-.gate-buttons button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
-.path-buttons{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 10px}
-.path-buttons button{font:650 13px var(--mono);padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink2);cursor:pointer}
-.path-buttons button[aria-pressed="true"]{background:var(--ok);border-color:var(--ok);color:#fff}
-.gate-readout,.path-readout{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:15px 17px;box-shadow:var(--shadow);margin:16px 0}
-.gate-readout h3,.path-readout h3{font-size:15.5px;margin-bottom:2px}
-.gate-readout p,.path-readout p{margin:.35em 0;font-size:14.5px;color:var(--ink2)}
-.gate-node{cursor:pointer}
-.gate-node rect{fill:var(--card);stroke:#d9dbd5;stroke-width:1.4}
-.gate-node:hover rect{stroke:var(--accent-2)}
-.gate-node.is-sel rect{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2.2}
-.gate-node text{font:600 12.5px var(--sans);fill:var(--ink);pointer-events:none}
-.gate-node.is-sel text{fill:var(--accent)}
-.gate-edge{fill:none;stroke:#d2d5ce;stroke-width:1.6}
-.gate-edge.is-on{stroke:var(--accent);stroke-width:2.6}
-.gate-edge-label{font:11.5px var(--sans);fill:var(--muted)}
-.gate-edge-label.is-on{fill:var(--accent);font-weight:650}
-.foot{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);font-size:13.6px;color:var(--muted)}
-.reveal{will-change:opacity,transform}
-@media (prefers-reduced-motion:reduce){
-  .anim,.pulse{animation:none!important}
-}
-@media (max-width:920px){
-  .shell{grid-template-columns:1fr;gap:22px;padding:0 18px 64px}
-  .spine{position:static;max-height:none;overflow:visible;border-right:0;border-bottom:1px solid var(--line);padding:16px 0 18px}
-  .chapter{padding:36px 0 6px}
-  .hero{padding:22px 0 4px}
-}
-</style>
-</head>
-<body>
-<a class="skip" href="#main">Skip to the content</a>
-<div class="shell">
-
-<aside class="spine" id="spine" aria-label="The page in words, chapter by chapter">
-  <details open>
-    <summary>Read it without the motion</summary>
-    <p class="spine-lede">The same nine chapters, condensed to a paragraph each. Nothing is moving here.</p>
-    <ol>
-      <li><span class="sp-h">1 · What the module is, and why it exists</span><span class="sp-t">The composition over two tiers — the store's local endpoint and the relay seam. Neither knows about the other; this module is the one place that speaks to both. It was written at its final state and does not exist in the market's code today: what it replaces is a decision nobody owned.</span></li>
-      <li><span class="sp-h">2 · Two tiers, one answer</span><span class="sp-t">The local-first sequence (P1, P2), the id-unique merged union, and the per-id provenance that tells which tier produced which event. The envelope is never a bare array: <code>{events, complete}</code> carries the completeness fact honestly.</span></li>
-      <li><span class="sp-h">3 · Six operations / seven named paths</span><span class="sp-t">Five verbs plus the envelope — query, subscribe, publish, count, delete and the <code>{events, complete}</code> envelope — over the seven named paths P1…P7. One named path per operation, each with its own ordering claim.</span></li>
-      <li><span class="sp-h">4 · The one accept gate</span><span class="sp-t">One declared, inspectable hook, applied at the three destinations and nowhere else — the store write, the consumer delivery and the wire publish. It is bounded by the flow's wall-clock budget and may not rewrite, delay or withhold the answer.</span></li>
-      <li><span class="sp-h">5 · The bounds it refuses to cross</span><span class="sp-t">Four boundaries: the filter predicate is the store's; no socket, no store, no app import; the completeness fact is a wire fact, never about what the gate kept; and the module grows no second predicate of its own. Each was measured at zero across the source.</span></li>
-      <li><span class="sp-h">6 · How the rules were attacked, and the story of the block</span><span class="sp-t">40 mutations, each breaking one rule, each restoring the file byte-for-byte. A blind wave blocked this module on P2; the repair moved the ordering, not the sentence; a third blind reviewer returned CLEAR; then a regression was found by measurement and fixed.</span></li>
-      <li><span class="sp-h">7 · The measured evidence</span><span class="sp-t">43 tests, 180 expectations, all green. 40 mutations, 0 falsification failures. 24 resolved packages, 10 files, 13 import specifiers. 318 statements across 10 modules (the capture's count, 2026-09-30). Every isolation check reads zero.</span></li>
-      <li><span class="sp-h">8 · What is not yet true</span><span class="sp-t">Nothing imports this module. Its ports are hand-written fakes. The gate's validation implementation is not wired in. No real endpoint is wired in here; no real relay was ever contacted. Two open readings — the never-torn-down change pump and the deadline that strands the pending upstream promise — remain unaddressed.</span></li>
-      <li><span class="sp-h">9 · Open questions and my assumptions</span><span class="sp-t">Four questions the spec leaves open, plus what this page invented: the grouping of the operations, the plain-language names for the paths, the order of the chapters, and the balance between wins and gaps.</span></li>
-    </ol>
-    <p class="spine-foot">Source of truth: <code>event-access/event-access.md</code> (the spec), <code>event-access/ts/</code> (the first implementation), <code>event-access/evidence/</code> (what was run). This page is art, not evidence.</p>
-  </details>
-</aside>
-
-<main id="main">
-<section class="hero" aria-labelledby="hero-h">
-  <span class="eyebrow">A reading guide to one module</span>
-  <h1 id="hero-h">event-access, in plain language</h1>
-  <p class="lede">One module that answers event operations over <strong>both tiers</strong> — the store's own local
-  endpoint and the injected relay seam — merging them local-first with <strong>one declared, inspectable
-  write-back policy</strong> and reporting, honestly, whether the answer is complete.</p>
-
-  <div class="meta-row">
-    <span class="pill plain">spec · event-access/event-access.md</span>
-    <span class="pill plain">implementation · event-access/ts (TypeScript)</span>
-    <span class="pill ok">43 tests green</span>
-    <span class="pill warn">nothing consumes it yet</span>
-  </div>
-
-  <figure class="figure">
-    <svg viewBox="0 0 900 330" role="img" aria-labelledby="hero-t hero-d">
-      <title id="hero-t">event-access sits between a caller and two lower modules, merging their answers with one inspectable policy and an honest completeness fact.</title>
-      <desc id="hero-d">A central box labelled event-access, the composition. Above it, a box labelled a caller. Lines cross downward into the seam below, leading to two boxes: the store's local endpoint and the relay seam. A third line goes into a box labelled one write-back policy and accept gate. Out of the central box, arrows go to two results: {events, complete} and per-id provenance. At the bottom a note says writes back through the endpoint only.</desc>
-      <text x="16" y="30" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" font-weight="650" letter-spacing="1.4" fill="#6d7380">THE COMPOSITION</text>
-      <rect x="360" y="40" width="180" height="36" rx="9" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="450" y="63" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" fill="#3c4149">a caller</text>
-      <path d="M450,76 H360" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#ha)" />
-      <rect x="300" y="104" width="300" height="96" rx="16" fill="#f1effc" stroke="#5a49d1" stroke-width="2"/>
-      <text x="450" y="134" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18" font-weight="650" fill="#3b2fa8">event-access</text>
-      <text x="450" y="160" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" fill="#5a49d1">the composition — one contract, six operations</text>
-      <text x="450" y="182" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#4a4f58">owns no store, no socket, no cache</text>
-      <path d="M300,208 H180" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#ha)" />
-      <path d="M300,208 H180" transform="translate(300,0)" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#ha)" />
-      <rect x="132" y="226" width="156" height="40" rx="9" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="210" y="252" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11.5" fill="#3c4149">store endpoint</text>
-      <rect x="300" y="226" width="156" height="40" rx="9" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="378" y="252" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11.5" fill="#3c4149">relay seam</text>
-      <path d="M468,252 H558" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#ha)" />
-      <rect x="558" y="226" width="160" height="40" rx="9" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="638" y="252" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#3c4149">policy + gate</text>
-      <line x1="300" y1="278" x2="600" y2="278" stroke="#d7d2f6" stroke-width="1" stroke-dasharray="4 5"/>
-      <text x="450" y="300" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11.5" fill="#6d7380">{events, complete} + per‑id provenance</text>
-      <defs><marker id="ha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b9bdb4"/></marker></defs>
-    </svg>
-    <figcaption>The whole design in one picture: a caller composes event-access, which composes two lower modules — the store's local endpoint and the relay seam — through one declared policy and an optional accept gate. The two lower modules never learn about each other.</figcaption>
-  </figure>
-
-  <nav class="toc" aria-labelledby="toc-h">
-    <h2 id="toc-h">The nine chapters</h2>
-    <ol>
-      <li><a href="#c1"><span class="n">01</span>What the module is, and why it exists</a></li>
-      <li><a href="#c2"><span class="n">02</span>Two tiers, one answer</a></li>
-      <li><a href="#c3"><span class="n">03</span>Six operations, seven named paths</a></li>
-      <li><a href="#c4"><span class="n">04</span>The one accept gate, applied at three destinations</a></li>
-      <li><a href="#c5"><span class="n">05</span>The bounds it refuses to cross</a></li>
-      <li><a href="#c6"><span class="n">06</span>How the rules were attacked — the story of the block</a></li>
-      <li><a href="#c7"><span class="n">07</span>The measured evidence</a></li>
-      <li><a href="#c8"><span class="n">08</span>What is not yet true</a></li>
-      <li><a href="#c9"><span class="n">09</span>Open questions, and my assumptions</a></li>
-    </ol>
-  </nav>
-</section>
-
-<section class="chapter" id="c1" aria-labelledby="c1-h">
-  <header class="reveal">
-    <span class="num">CHAPTER 01</span>
-    <h2 id="c1-h">What the module is, and why it exists</h2>
-    <p class="dek">A composition that knows both tiers — the store's local endpoint and the relay seam — and is the
-    only module that does. Neither of them knows the other exists.</p>
-  </header>
-
-  <div class="reveal">
-    <p><strong>The job, in one sentence.</strong> Answer a caller's event operations — query, subscribe, publish,
-    count, delete and the <code>{events, complete}</code> envelope — over the store's local endpoint and the
-    injected relay seam, merging them local-first with one declared write-back policy, and reporting, honestly,
-    whether the answer is complete.</p>
-
-    <figure class="figure">
-      <svg viewBox="0 0 900 280" role="img" aria-labelledby="c1-t c1-d">
-        <title id="c1-t">The module sits between the caller above and the two ports below, and it is the only place that knows both.</title>
-        <desc id="c1-d">Caller above, two ports below; the module in the middle. Labels to its sides say it holds no socket, no store, no cache, no app import.</desc>
-        <rect x="300" y="40" width="300" height="100" rx="14" fill="#f1effc" stroke="#5a49d1" stroke-width="2"/>
-        <text x="450" y="80" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18" font-weight="650" fill="#3b2fa8">event-access</text>
-        <text x="450" y="110" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" fill="#5a49d1">the only module that knows both tiers</text>
-        <rect x="100" y="180" width="200" height="44" rx="9" fill="#ffffff" stroke="#e5e6e2"/>
-        <text x="200" y="206" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#3c4149">store endpoint (local)</text>
-        <rect x="600" y="180" width="200" height="44" rx="9" fill="#ffffff" stroke="#e5e6e2"/>
-        <text x="700" y="206" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#3c4149">relay seam (upstream)</text>
-        <path d="M450,140 H200" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#h1)"/>
-        <path d="M450,140 H700" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#h1)"/>
-        <text x="20" y="220" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#9c5209">no store · no cache · no socket · no app import</text>
-        <line x1="0" y1="238" x2="900" y2="238" stroke="#d7d2f6" stroke-width="1" stroke-dasharray="4 5"/>
-        <text x="450" y="262" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">the two lower modules never learn about each other — the composition is the seam</text>
-        <defs><marker id="h1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b9bdb4"/></marker></defs>
-      </svg>
-      <figcaption>The composition rule: the store never learns about a relay, the relay seam never learns about a store, and the caller never assembles the union itself.</figcaption>
-    </figure>
-
-    <p><strong>Where it came from.</strong> The spec was written at its final state — the module as it should be, not
-    as it is today. The TypeScript implementation in <code>ts/</code> is the first one, written in the same run
-    the spec was frozen. What it replaces is a <strong>decision nobody owned</strong>: the write-back was scattered —
-    4 of 11 loader modules in the vendor's own ecosystem applied it, and each market read site decided the local-first
-    sequence for itself. One declared owner is better than a convention every call site remembers.</p>
-
-    <div class="note">
-      <h3>What this module is not</h3>
-      <p>It is not the store — it never opens a database, never keeps a cache, and never decides what to evict. It
-      is not the relay seam — it holds no socket, owns no relay handle, and never decides which relay a read reaches.
-      It is not a filter validator — the fail-closed predicate is the store's and is reached by calling the endpoint's
-      <code>read</code>, not by growing a second predicate here.</p>
-    </div>
-  </div>
-</section>
-
-<section class="chapter" id="c2" aria-labelledby="c2-h">
-  <header class="reveal">
-    <span class="num">CHAPTER 02</span>
-    <h2 id="c2-h">Two tiers, one answer</h2>
-    <p class="dek">The local store answers first; the seam's fill follows. The events are merged into an id-unique
-    union with per-id provenance, and the answer reports whether it is complete.</p>
-  </header>
-
-  <div class="reveal">
-    <p><strong>The local-first sequence.</strong> On the default path <strong>P1</strong> (<code>query{localFirst:true}</code>),
-    the endpoint's local read answers first. The upstream seam is then asked for the fill — events the local store
-    does not yet have. The fill's events are written back into the store (the write-back policy, chapter 4) and both
-    sets are merged into one id-unique answer. On <strong>P2</strong> (<code>query{localFirst:false}</code>) the fill is
-    attempted first, then merged; the <strong>merge order</strong> inverts but the provenance rule does not move with
-    it — an id the local read carried is <code>'local'</code> on both paths.</p>
-
-    <figure class="figure">
-      <svg viewBox="0 0 900 300" role="img" aria-labelledby="c2-t c2-d">
-        <title id="c2-t">The merge: local set and network fill enter a union, the union produces an id-unique answer with per-id provenance, and the envelope carries {events, complete}.</title>
-        <desc id="c2-d">Two boxes on the left: local set, network fill. Arrows into a union box. The union has a checked mark for id-unique, and a grid showing local origin and network origin. Out of the union, an answer box with {events, complete} on top and provenance underneath.</desc>
-        <rect x="60" y="60" width="160" height="44" rx="9" fill="#e9f6ef" stroke="#c3e2d0"/>
-        <text x="140" y="86" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#1b7a4d">local set</text>
-        <rect x="60" y="130" width="160" height="44" rx="9" fill="#ffffff" stroke="#e5e6e2"/>
-        <text x="140" y="156" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#3c4149">network fill</text>
-        <path d="M220,82 H320" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#h2)"/>
-        <path d="M220,152 H320" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#h2)"/>
-        <rect x="320" y="60" width="200" height="156" rx="14" fill="#f1effc" stroke="#5a49d1" stroke-width="2"/>
-        <text x="420" y="100" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16" font-weight="650" fill="#3b2fa8">union</text>
-        <text x="420" y="124" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#5a49d1">id-unique</text>
-        <text x="420" y="164" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" fill="#4a4f58">shared event → 'local'</text>
-        <text x="420" y="186" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" fill="#4a4f58">fill‑only event → 'network'</text>
-        <path d="M520,138 H660" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#h2)"/>
-        <rect x="660" y="60" width="220" height="80" rx="12" fill="#ffffff" stroke="#e5e6e2"/>
-        <text x="770" y="96" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="14" font-weight="650" fill="#15171b">{ events, complete }</text>
-        <text x="770" y="120" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">+ per‑id provenance</text>
-        <text x="660" y="176" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#9c5209">envelope: never a bare array</text>
-        <defs><marker id="h2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b9bdb4"/></marker></defs>
-      </svg>
-      <figcaption>The union is id-unique (M2): when both tiers produce the same event, one copy enters the answer. Provenance records which tier produced it, and the envelope is never a bare array — it carries the completeness fact, which is a claim about the wire's boundary.</figcaption>
-    </figure>
-
-    <div class="note ok">
-      <h3>What provenance means, and what it does not</h3>
-      <p>Provenance is per answer and per id — a declared companion read <code>originOf(answer, id)</code> returns
-      <code>'local'</code> or <code>'network'</code>. It is not a flag mutated on a shared event instance
-      (the vendor's sticky-bit defect, which this module exists to avoid). And the envelope is deliberately not
-      widened to <code>{events, complete, origins}</code> — that is mentioned as an open question, not taken.</p>
-    </div>
-  </div>
-</section>
-
-<section class="chapter" id="c3" aria-labelledby="c3-h">
-  <header class="reveal">
-    <span class="num">CHAPTER 03</span>
-    <h2 id="c3-h">Six operations, seven named paths</h2>
-    <p class="dek">Five NIP-01 verbs plus the <code>{events, complete}</code> envelope, and each operation has exactly
-    one named path — P1 through P7 — that says how things happen and in what order.</p>
-  </header>
-
-  <figure class="figure reveal">
-    <svg viewBox="0 0 900 240" role="img" aria-labelledby="c3-t c3-d">
-      <title id="c3-t">Seven named paths: P1 through P7, each naming one operation and its ordering rule.</title>
-      <desc id="c3-d">P1: query with localFirst:true. P2: query with localFirst:false. P3: subscribe. P4: publish. P5: the pointer read, a query with a single id. P6: count. P7: delete.</desc>
-      <rect x="16" y="40" width="260" height="36" rx="9" fill="#e9f6ef" stroke="#c3e2d0"/>
-      <text x="146" y="63" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#1b7a4d">P1 · query{localFirst:true}</text>
-      <rect x="16" y="90" width="260" height="36" rx="9" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="146" y="113" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#3c4149">P2 · query{localFirst:false}</text>
-      <rect x="16" y="140" width="260" height="36" rx="9" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="146" y="163" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#3c4149">P3 · subscribe</text>
-      <rect x="340" y="40" width="260" height="36" rx="9" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="470" y="63" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#3c4149">P4 · publish</text>
-      <rect x="340" y="90" width="260" height="36" rx="9" fill="#f1effc" stroke="#d7d2f6"/>
-      <text x="470" y="113" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#3b2fa8">P5 · pointer read</text>
-      <rect x="340" y="140" width="260" height="36" rx="9" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="470" y="163" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#3c4149">P6 · count</text>
-      <rect x="616" y="40" width="260" height="36" rx="9" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="746" y="63" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#3c4149">P7 · delete</text>
-      <text x="146" y="210" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">P4 and P6 carry no ordering claim — publish writes locally first; count never fetches</text>
-    </svg>
-    <figcaption>P5 is a query whose filter carries a single id; it is not a seventh operation. Every path is named in the spec, and each has its own evidence obligation.</figcaption>
-  </figure>
-
-  <div class="reveal">
-    <p>The path explorer below shows the call order for the two query paths — and how the repair changed P2.</p>
-
-    <div class="path-buttons" id="path-buttons" role="group" aria-label="Choose a named path">
-      <button type="button" data-path="p1" aria-pressed="true">P1</button>
-      <button type="button" data-path="p2" aria-pressed="false">P2</button>
-      <button type="button" data-path="p3" aria-pressed="false">P3</button>
-      <button type="button" data-path="p5" aria-pressed="false">P5</button>
-    </div>
-    <div class="path-readout" id="path-readout" aria-live="polite">
-      <h3>P1 · query{localFirst:true}</h3>
-      <p>Call order: <code>read → query → write</code>, then merge (local first in the answer). The endpoint's read answers first (LF-1); the fill follows; the fill's events are written back (LF-2); the id-unique union and provenance are recorded. <code>complete</code> is a fact about the wire's boundary.</p>
-    </div>
-
-    <h3>Three more operations</h3>
-    <div class="grid-3">
-      <div class="card"><h3>publish</h3><p class="small">Writes locally before any relay attempt. The local write's outcome is reported as <code>stored</code>; the relays' own answers fill <code>accepted</code> and <code>refused</code>.</p></div>
-      <div class="card"><h3>count</h3><p class="small">Never fetches. Counts through the store's own index and reports <code>approximate: false</code>. The wire's NIP-45 count belongs to the seam.</p></div>
-      <div class="card"><h3>delete</h3><p class="small">Routes through the endpoint's removal, and the resulting change reaches every open subscription on the change fan-out. The three kinds of deletion are the store's rule, not re-decided here.</p></div>
-    </div>
-  </div>
-</section>
-
-<section class="chapter" id="c4" aria-labelledby="c4-h">
-  <header class="reveal">
-    <span class="num">CHAPTER 04</span>
-    <h2 id="c4-h">The one accept gate, applied at three destinations</h2>
-    <p class="dek">One declared, inspectable hook — the <code>accept?</code> member of the write-back policy — applied
-    at the three destinations and nowhere else. Absent means accept everything, which is validation's pass-through default.</p>
-  </header>
-
-  <div class="reveal">
-    <p>The gate is given each candidate event, the flow it is applied for (<code>'read'</code> or
-    <code>'publish'</code>), the endpoint's declared tier, and a resolver so a link rule can reach a referenced
-    event. It answers <code>'accept'</code> or <code>'reject'</code>. It is bounded by the flow's own wall-clock
-    budget: a hook that has not answered within the budget drops its candidate, and a dropped event is <strong>not</strong>
-    an incomplete answer — <code>complete</code> stays a fact about the wire's boundary.</p>
-
-    <p>Click a destination below to see what the gate is given and what it decides there.</p>
-
-    <div class="gate-buttons" id="gate-buttons" role="group" aria-label="Choose a gate destination">
-      <button type="button" data-site="a" aria-pressed="true">A · The store write</button>
-      <button type="button" data-site="b" aria-pressed="false">B · The consumer delivery</button>
-      <button type="button" data-site="c" aria-pressed="false">C · The wire publish</button>
-    </div>
-
-    <figure class="figure">
-      <svg viewBox="0 0 900 260" role="img" aria-labelledby="c4-t c4-d">
-        <title id="c4-t">The three destinations where the one rule applies — A the store write, B the consumer delivery, C the wire publish.</title>
-        <desc id="c4-d">A box labelled event-access with three nodes inside: A is the store-write boundary before the endpoint write, B is the consumer-delivery boundary before the answer or the emission, C is the wire-publish boundary before any relay attempt.</desc>
-        <defs>
-          <marker id="hda" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b9bdb4"/></marker>
-        </defs>
-        <text x="16" y="26" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" font-weight="650" letter-spacing="1.4" fill="#6d7380">THE ONE RULE — THREE DESTINATIONS, ONE DECISION</text>
-        <rect x="16" y="40" width="868" height="200" rx="14" fill="#f1effc" stroke="#5a49d1" stroke-width="1.6"/>
-        <text x="450" y="68" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16" font-weight="650" fill="#3b2fa8">event-access</text>
-        <g class="gate-node" data-site="a">
-          <rect x="60" y="90" width="180" height="50" rx="10" class="is-sel"/>
-          <text x="150" y="114" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#3b2fa8">DESTINATION A · store write</text>
-          <text x="150" y="130" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#4a4f58">gate → endpoint.write</text>
-        </g>
-        <g class="gate-node" data-site="b">
-          <rect x="340" y="90" width="200" height="50" rx="10"/>
-          <text x="440" y="114" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#3c4149">DESTINATION B · consumer</text>
-          <text x="440" y="130" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#4a4f58">gate → deliver</text>
-        </g>
-        <g class="gate-node" data-site="c">
-          <rect x="660" y="90" width="200" height="50" rx="10"/>
-          <text x="760" y="114" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#3c4149">DESTINATION C · wire</text>
-          <text x="760" y="130" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="10.5" fill="#4a4f58">gate → relay publish</text>
-        </g>
-        <text x="16" y="220" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">hook absent → pass-through. Bounded by the flow's wall-clock budget: over-budget or throwing → dropped, never accepted.</text>
-      </svg>
-      <figcaption>One decision, not two. The rule is not applied at a different place for reads and publishes — it is the same <code>accept?</code> on the policy, at the three destinations the architecture names.</figcaption>
-    </figure>
-
-    <div class="gate-readout" id="gate-readout" aria-live="polite">
-      <h3>A · The store write</h3>
-      <p>Content arriving off the seam port and headed for the store — a query's fill and a subscription's fill — passes through the one rule at the store-write boundary (<code>acceptForStore</code>) once, before the union, and the accepted set is then routed on to the consumer as well. The gate sees <code>operation: 'read'</code> and the endpoint's declared tier.</p>
-    </div>
-
-    <p>The gate is also how <strong>validation</strong> would compose: validation presets supply the <code>accept</code>
-    hook, absent means pass-through, and no second accept rule is ever grown inside this module. Today, the hook is
-    absent by default and <strong>nothing supplies it</strong> — the validation module exists and has its own suite,
-    but nothing here imports it.</p>
-  </div>
-</section>
-
-<section class="chapter" id="c5" aria-labelledby="c5-h">
-  <header class="reveal">
-    <span class="num">CHAPTER 05</span>
-    <h2 id="c5-h">The bounds it refuses to cross</h2>
-    <p class="dek">Four boundaries that the module must never cross, and the completeness rule it must never violate.
-    Each was checked by a command, not asserted in a sentence.</p>
-  </header>
-
-  <figure class="figure reveal">
-    <svg viewBox="0 0 900 280" role="img" aria-labelledby="c5-t c5-d">
-      <title id="c5-t">Four boundaries and one rule: the filter predicate is the store's; no socket, no store, no app import; completeness is a wire fact.</title>
-      <desc id="c5-d">Four boxes on the left: the filter predicate is the store's, 0 sockets found, 0 store imports, 0 app aliases. On the right: the completeness rule — a relay failure reduces completeness, never the answer.</desc>
-      <rect x="16" y="40" width="420" height="180" rx="12" fill="#f1effc" stroke="#d7d2f6"/>
-      <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" fill="#3b2fa8">
-        <text x="34" y="66" font-weight="650">The filter predicate is the store's</text>
-        <text x="34" y="86" font-size="11.5" fill="#4a4f58">reached through the endpoint's read, never copied</text>
-        <text x="34" y="118" font-weight="650">No socket</text>
-        <text x="34" y="138" font-size="11.5" fill="#4a4f58">0 constructors, 0 fetches, 0 servers — 2 reserved-TLD constants</text>
-        <text x="34" y="170" font-weight="650">No store and no app import</text>
-        <text x="34" y="196" font-size="11.5" fill="#4a4f58">0 @/ aliases, 0 ../ escapes, 0 sibling specifiers</text>
-      </g>
-      <rect x="460" y="40" width="420" height="180" rx="12" fill="#e9f6ef" stroke="#c3e2d0"/>
-      <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" fill="#175c3c">
-        <text x="478" y="70" font-weight="650">Completeness is a wire fact</text>
-        <text x="478" y="96" font-size="12.5">A local answer is never withheld (LF-4).</text>
-        <text x="478" y="118" font-size="12.5">A deadline or relay failure degrades</text>
-        <text x="478" y="138" font-size="12.5"><code>complete</code>, never the answer (LF-5, LF-6).</text>
-        <text x="478" y="168" font-size="11.5" fill="#4a4f58">A dropped event by the gate is not an</text>
-        <text x="478" y="186" font-size="11.5" fill="#4a4f58">incomplete answer — the wire decides.</text>
-      </g>
-      <text x="16" y="250" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">All four boundaries were measured by the evidence script and returned 0 lines. The commands and their scope are in captures.</text>
-    </svg>
-    <figcaption>Each boundary is the kind of thing that leaks in a real codebase — a relay URL, a <code>fetch</code>, a host import — and each is verified by a <code>grep</code> whose scope is written beside the result.</figcaption>
-  </figure>
-
-  <div class="reveal">
-    <p><strong>The filter predicate.</strong> A malformed identity filter — <code>{ ids: ['not-a-hex-identity'] }</code>
-    — is rejected before it reaches either tier. The predicate is the store's single implementation, reached by
-    calling the endpoint's <code>read</code>, and no second predicate is grown here. On P2 this was not always true:
-    a blind wave found the malformed filter reaching the wire and a write behind the refusal. The repair moved the
-    ordering — the endpoint's read now runs before both tiers on every read path.</p>
-  </div>
-</section>
-
-<section class="chapter" id="c6" aria-labelledby="c6-h">
-  <header class="reveal">
-    <span class="num">CHAPTER 06</span>
-    <h2 id="c6-h">How the rules were attacked — the story of the block</h2>
-    <p class="dek">40 deliberate mutations, each breaking one rule in a real file, each making its named test fail,
-    each restored byte-for-byte. And the one path that was not measured — and what happened when a blind reviewer
-    found it.</p>
-  </header>
-
-  <figure class="figure reveal">
-    <svg viewBox="0 0 900 200" role="img" aria-labelledby="c6-t c6-d">
-      <title id="c6-t">The falsification routine: fingerprint, break, watch the test fail, restore and prove it green again.</title>
-      <desc id="c6-d">Four steps in a row: step 1, record the sha256 fingerprint; step 2, apply one deliberate break to a real file; step 3, run the named test and watch it fail; step 4, restore the file, verify the fingerprint, and confirm the test passes again.</desc>
-      <rect x="16" y="40" width="192" height="90" rx="10" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="32" y="66" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="650" fill="#5a49d1">1 · fingerprint</text>
-      <text x="32" y="88" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">sha256, anchor</text>
-      <text x="32" y="106" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">occurs exactly once</text>
-      <text x="208" y="86" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" fill="#6d7380">→</text>
-      <rect x="232" y="40" width="192" height="90" rx="10" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="248" y="66" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="650" fill="#5a49d1">2 · break it</text>
-      <text x="248" y="88" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">one small edit that</text>
-      <text x="248" y="106" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">breaks the rule</text>
-      <text x="424" y="86" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" fill="#6d7380">→</text>
-      <rect x="448" y="40" width="192" height="90" rx="10" fill="#fdf4e9" stroke="#f0dcc4"/>
-      <text x="464" y="66" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="650" fill="#9c5209">3 · must fail</text>
-      <text x="464" y="88" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">the named test</text>
-      <text x="464" y="106" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">goes red</text>
-      <text x="640" y="86" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" fill="#6d7380">→</text>
-      <rect x="656" y="40" width="228" height="90" rx="10" fill="#e9f6ef" stroke="#c3e2d0"/>
-      <text x="672" y="66" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="650" fill="#1b7a4d">4 · restore, verify</text>
-      <text x="672" y="88" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">sha256 match, test</text>
-      <text x="672" y="106" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">green again</text>
-      <text x="16" y="164" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">40 mutations · 0 falsification failures · every restore sha256-verified</text>
-    </svg>
-    <figcaption>One mutation per evidence obligation. A mutation that stays green is a test that cannot fail — which is not evidence at all.</figcaption>
-  </figure>
-
-  <div class="reveal">
-    <h3>The blind wave that blocked this module</h3>
-    <p>On 2026-09-30, two blind reviewers, Red Team A and Red Team B, independently attacked the repaired I2 candidate
-    (<code>db5a3a3</code>). Both found the same defect: on the normative path <strong>P2</strong>
-    (<code>query{localFirst:false}</code>), a malformed identity filter reached the wire before the endpoint's read
-    could reject it — and the seam's answer was <strong>written into the local store</strong> behind the refusal.
-    RT-A returned <strong>MICRO_HARDEN</strong>. RT-B returned <strong>BLOCK</strong>.</p>
-
-    <p><strong>The repair.</strong> The ordering moved, not the sentence. The endpoint's read was hoisted above both
-    tiers and every write-back, on every read path — so a refusal now reaches the caller with no side effect behind
-    it. P2 kept its network-first merge order, its both-tier provenance rule, and its LF-5 behaviour. The frozen
-    statement <code>#f775fb</code> was not amended: the code changed instead.</p>
-
-    <p><strong>A third blind reviewer returned CLEAR.</strong> Red Team C (RT-C) re-verified the repair and
-    independently reproduced the suite (37 pass at that tree), the checkers, and the falsification harness. One
-    MINOR finding — two docstrings the repair had made untrue — was fixed in a follow-up commit
-    (<code>6cb50bb</code>).</p>
-
-    <p><strong>Then a regression the store shrink caused was found by measurement.</strong> After the store shrink
-    landed (I3), a subscription the caller had opened with <code>{kinds:[1]}</code> was receiving a local write of
-    kind 7 — because the endpoint's <code>changes</code> is unfiltered, and the store's own live path had previously
-    applied the filter. This module applies the subscription's own filters to every change-stream event before
-    delivery, and that is measured (mutation 33 in the falsification table).</p>
-  </div>
-</section>
-
-<section class="chapter" id="c7" aria-labelledby="c7-h">
-  <header class="reveal">
-    <span class="num">CHAPTER 07</span>
-    <h2 id="c7-h">The measured evidence</h2>
-    <p class="dek">Every number below came out of a command whose full output is on disk, beside the module, in the
-    two evidence captures.</p>
-  </header>
-
-  <figure class="figure reveal">
-    <svg viewBox="0 0 900 260" role="img" aria-labelledby="c7-t c7-d">
-      <title id="c7-t">Four commands and what each returned, plus the isolation and contract checks.</title>
-      <desc id="c7-d">bun test returned 43 pass, 0 fail, 180 expectations. tsc returned exit 0. The isolation checks returned 0 lines. The falsification run returned 40 mutations, 0 failures. The check routine returned 318 statements and 0 findings (the capture's own count, 2026-09-30).</desc>
-      <rect x="16" y="40" width="320" height="34" rx="8" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="30" y="63">cd ts &amp;&amp; bun test</text>
-      <rect x="16" y="84" width="320" height="34" rx="8" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="30" y="107">cd ts &amp;&amp; bun run typecheck</text>
-      <rect x="16" y="128" width="320" height="34" rx="8" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="30" y="151">bash evidence/run.sh</text>
-      <rect x="16" y="172" width="320" height="34" rx="8" fill="#ffffff" stroke="#e5e6e2"/>
-      <text x="30" y="195">python3 evidence/falsify.py</text>
-      <g stroke="#c9cdc4" stroke-width="1.5" fill="none">
-        <path d="M336,57 H400"/><path d="M336,101 H400"/><path d="M336,145 H400"/><path d="M336,189 H400"/>
-      </g>
-      <rect x="404" y="40" width="480" height="34" rx="8" fill="#e9f6ef" stroke="#c3e2d0"/>
-      <text x="420" y="63" font-size="13" fill="#175c3c"><tspan font-weight="650">43 pass · 0 fail</tspan> — 180 expectations, 2 files</text>
-      <rect x="404" y="84" width="480" height="34" rx="8" fill="#e9f6ef" stroke="#c3e2d0"/>
-      <text x="420" y="107" font-size="13" fill="#175c3c"><tspan font-weight="650">exit 0</tspan> — no diagnostics</text>
-      <rect x="404" y="128" width="480" height="34" rx="8" fill="#e9f6ef" stroke="#c3e2d0"/>
-      <text x="420" y="151" font-size="13" fill="#175c3c"><tspan font-weight="650">0 lines</tspan> — for every host-global and socket pattern</text>
-      <rect x="404" y="172" width="480" height="34" rx="8" fill="#e9f6ef" stroke="#c3e2d0"/>
-      <text x="420" y="195" font-size="13" fill="#175c3c"><tspan font-weight="650">40 · 0</tspan> — mutations applied, 0 falsification failures</text>
-      <text x="16" y="236" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">all commands ran against the module alone, on a copy of the assembly that was never written to</text>
-    </svg>
-    <figcaption>Full output of each command lives in <code>evidence/01-build-and-tests.txt</code> and <code>02-invariant-falsification.txt</code>.</figcaption>
-  </figure>
-
-  <div class="reveal">
-    <div class="grid-2">
-      <div class="card stat ok"><b>43</b><span>tests, all green</span></div>
-      <div class="card stat ok"><b>180</b><span>individual expectations</span></div>
-      <div class="card stat ok"><b>2</b><span>test files</span></div>
-      <div class="card stat ok"><b>0</b><span>failures, 0 compiler diagnostics</span></div>
-      <div class="card stat"><b>24</b><span>packages installed (inside event-access/ts)</span></div>
-      <div class="card stat ok"><b>4</b><span>exports · 24 types — contract lists equal</span></div>
-      <div class="card stat ok"><b>10</b><span>.ts files · 13 import specifiers</span></div>
-      <div class="card stat ok"><b>318</b><span>statements over 10 modules, 0 hard findings (as of the capture, 2026-09-30)</span></div>
-    </div>
-
-    <div class="tablewrap">
-      <table>
-        <caption class="small" style="text-align:left;padding:10px 12px 0">The rest of what was measured, item by item.</caption>
-        <thead><tr><th>What was measured</th><th>What came back</th><th>Source</th></tr></thead>
-        <tbody>
-          <tr><td>Suite</td><td class="n">43 pass, 0 fail, 180 expect() — 2 files</td><td>capture `01`, §2, §7</td></tr>
-          <tr><td>Typecheck</td><td class="n">exit 0 (strict, noEmit)</td><td>capture `01`, §3</td></tr>
-          <tr><td>Imports — host escapes / siblings</td><td class="n">0 lines (10 files, 13 specifiers, all allowed)</td><td>capture `01`, §4</td></tr>
-          <tr><td>Contract — exports / types</td><td class="n">4/4 exports, 24/24 types, runtime 4 values</td><td>capture `01`, §5</td></tr>
-          <tr><td>File inventory</td><td class="n">14 listed = 14 found, diff 0</td><td>capture `01`, §6</td></tr>
-          <tr><td>Statement census</td><td class="n">44 declaring lines, 44/44/44, 11 amendments</td><td>capture `01`, §8</td></tr>
-          <tr><td>Socket / fetch / server</td><td class="n">0 constructors; 2 wss:// VALUE constants on .invalid</td><td>capture `01`, §9</td></tr>
-          <tr><td>Wrong-tier dependency</td><td class="n">0 sibling; 1 nostr-tools copy; applesauce-core transitive only</td><td>capture `01`, §10</td></tr>
-          <tr><td>Evidence ratchet</td><td class="n">13 scripts, 7 hard, 1 note (module's own is ok)</td><td>capture `01`, §12</td></tr>
-          <tr><td>Falsification</td><td class="n">40 mutations, 0 failures, restores sha256-verified</td><td>capture `02`</td></tr>
-          <tr><td>Bun version</td><td class="n">1.4.2</td><td>both captures</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="note ok">
-      <h3>Each number is traceable to a line in the captures</h3>
-      <p>Open <code>evidence/01-build-and-tests.txt</code> — every section starts with a command and ends with its
-      expected annotation. <code>02-invariant-falsification.txt</code> runs 40 mutations, 0 failures. Both files were
-      regenerated from the documented commands after the repair sequence completed.</p>
-    </div>
-  </div>
-</section>
-
-<section class="chapter" id="c8" aria-labelledby="c8-h">
-  <header class="reveal">
-    <span class="num">CHAPTER 08</span>
-    <h2 id="c8-h">What is not yet true</h2>
-    <p class="dek">This chapter is deliberately uncomfortable. Everything below is a limit of the module as it stands —
-    not a caveat, and not softened.</p>
-  </header>
-
-  <figure class="figure reveal">
-    <svg viewBox="0 0 900 300" role="img" aria-labelledby="c8-t c8-d">
-      <title id="c8-t">Five things missing, and two open readings.</title>
-      <desc id="c8-d">Five dashed boxes: nothing imports the module; both ports are hand-written fakes; validation's accept hook is not wired in; no module adopts its contract; no relay was ever contacted. Below them, two amber flags: the change pump is never torn down; the deadline strands the pending upstream promise.</desc>
-      <g>
-        <rect x="16" y="46" width="160" height="80" rx="10" fill="#ffffff" stroke="#d9dbd5" stroke-dasharray="6 5"/>
-        <text x="30" y="72" font-size="12" fill="#4a4f58">nothing imports</text>
-        <text x="30" y="90" font-size="12" fill="#4a4f58">this module</text>
-        <text x="30" y="116" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#9c5209">NOT YET</text>
-        <rect x="192" y="46" width="160" height="80" rx="10" fill="#ffffff" stroke="#d9dbd5" stroke-dasharray="6 5"/>
-        <text x="206" y="72" font-size="12" fill="#4a4f58">ports are</text>
-        <text x="206" y="90" font-size="12" fill="#4a4f58">hand-written fakes</text>
-        <text x="206" y="116" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#9c5209">NOT YET</text>
-        <rect x="368" y="46" width="160" height="80" rx="10" fill="#ffffff" stroke="#d9dbd5" stroke-dasharray="6 5"/>
-        <text x="382" y="72" font-size="12" fill="#4a4f58">validation's hook</text>
-        <text x="382" y="90" font-size="12" fill="#4a4f58">not wired in</text>
-        <text x="382" y="116" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#9c5209">NOT YET</text>
-        <rect x="544" y="46" width="160" height="80" rx="10" fill="#ffffff" stroke="#d9dbd5" stroke-dasharray="6 5"/>
-        <text x="558" y="72" font-size="12" fill="#4a4f58">no real endpoint</text>
-        <text x="558" y="90" font-size="12" fill="#4a4f58">is wired in here</text>
-        <text x="558" y="116" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#9c5209">NOT YET</text>
-        <rect x="720" y="46" width="164" height="80" rx="10" fill="#ffffff" stroke="#d9dbd5" stroke-dasharray="6 5"/>
-        <text x="734" y="72" font-size="12" fill="#4a4f58">no relay ever</text>
-        <text x="734" y="90" font-size="12" fill="#4a4f58">contacted</text>
-        <text x="734" y="116" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#9c5209">NOT YET</text>
-      </g>
-      <text x="16" y="166" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" fill="#15171b"><tspan font-weight="650">None of these five has happened.</tspan> Each is named in the build's own list of what it does not verify.</text>
-      <rect x="16" y="180" width="868" height="56" rx="10" fill="#fdf4e9" stroke="#f0dcc4"/>
-      <text x="34" y="204" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="650" fill="#9c5209">OPEN READING 1</text>
-      <text x="34" y="224" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" fill="#8a4a08">The change pump is never torn down: by design it outlives its last subscriber because the port's changes is endless. Not observable in this increment.</text>
-      <rect x="16" y="244" width="868" height="48" rx="10" fill="#fdf4e9" stroke="#f0dcc4"/>
-      <text x="34" y="266" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="650" fill="#9c5209">OPEN READING 2</text>
-      <text x="34" y="284" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" fill="#8a4a08">The deadline wins: the pending upstream promise is stranded. Bounded and unobservable in this increment.</text>
-    </svg>
-    <figcaption>Same discipline as the evidence chapter: a gap is stated as a gap, not hidden. Five things that should exist, and two readings left open.</figcaption>
-  </figure>
-
-  <div class="reveal">
-    <h3>1 · Nothing imports this module</h3>
-    <p>No module in the assembly lists <code>event-access</code> in its <code>needs:</code> declaration, and no import
-    specifier in any file reaches it. The module's own contract is declared; nothing yet exercises it for real.</p>
-
-    <h3>2 · Both ports are hand-written fakes</h3>
-    <p>The store endpoint and the relay seam are implemented inside <code>ts/harness.ts</code> — in-memory fakes that
-    record calls and return scripted answers. The store's own endpoint now exists in <code>event-store/</code>
-    (increment I3 landed 2026-09-30), but nothing here is wired to it — the module still runs only over these
-    hand-written fakes — and no real relay connection was ever opened.</p>
-
-    <h3>3 · Validation's accept hook is not wired in</h3>
-    <p>The gate accepts an optional <code>AcceptHook</code>. When absent — which is the default — everything passes
-    through. The <code>validation</code> module's job is to supply such a hook with its presets, but nothing in this
-    assembly wires them together. The validation module exists and has its own 32-case suite; it is just not plugged
-    in here.</p>
-
-    <h3>4 · Two readings remain open</h3>
-    <p>The change pump is never torn down (by design; the port's <code>changes</code> is endless), and the
-    <code>withDeadline</code> helper strands the pending upstream promise when the deadline wins (bounded and
-    unobservable at this increment). Both are disclosed in the freeze note; neither is a code defect.</p>
-  </div>
-</section>
-
-<section class="chapter" id="c9" aria-labelledby="c9-h">
-  <header class="reveal">
-    <span class="num">CHAPTER 09</span>
-    <h2 id="c9-h">Open questions, and the assumptions I had to invent</h2>
-    <p class="dek">Four questions the spec deliberately leaves open for you, the decisions this page makes on your
-    behalf — separated out, so nothing is hidden in the prose.</p>
-  </header>
-
-  <div class="reveal">
-    <div class="grid-2">
-      <div class="card"><h3>1 · Should provenance move into the envelope?</h3><p class="small">The spec keeps a companion read <code>originOf(answer, id)</code>. A third envelope member <code>{events, complete, origins}</code> would save one call per event and widen a shape another spec already states. Not taken; open for you.</p></div>
-      <div class="card"><h3>2 · Should count ever consult the wire?</h3><p class="small">It does not today — M14, D-O4. The wire's NIP-45 count is available on the seam for a caller that composes nostr-io alone. That alternative is not lost; it is one call away.</p></div>
-      <div class="card"><h3>3 · Where does the excluded list come from?</h3><p class="small">The wallet rule arrives as an input to the <code>excluded</code> list. If a host ever supplies two exclusions, a nicer shape may be needed. Today one declared value suffices.</p></div>
-      <div class="card"><h3>4 · What is persist:false's scope?</h3><p class="small">It suppresses the write-back for that call only. The answer is unchanged and <code>originOf</code> still reports network. The alternative — per-call exclusions — is named and not taken.</p></div>
-    </div>
-
-    <h3>What I invented, and want you to correct if it is wrong</h3>
-    <ol>
-      <li><strong>“The module” means the spec and this implementation together.</strong> The spec is the authority; the code is its first TypeScript implementation.</li>
-      <li><strong>Every plain-language gloss is mine.</strong> <em>Fill</em> for the seam's answer; <em>gate</em> for the accept hook; <em>path</em> for a named route through the composition; <em>seam</em> for the boundary between tiers; <em>fork</em> for the <code>localFirst</code> branch.</li>
-      <li><strong>The grouping of the operations</strong> into five bands — reads (query/subscribe), write (publish), local (count/delete), pointer (P5) — and the envelope separate.</li>
-      <li><strong>The gate's three destinations as an explorable panel</strong> is my reading of the spec; the spec prints the three destinations in prose.</li>
-      <li><strong>Every number on this page is quoted from the module's evidence captures</strong> (<code>01-build-and-tests.txt</code>, <code>02-invariant-falsification.txt</code>). None was recomputed by me.</li>
-      <li><strong>I chose the balance of this page:</strong> the measured wins are given the numbers they earned; the gaps are given a whole chapter and the last word. If that balance is wrong for you, the facts are the artifacts'.</li>
-    </ol>
-
-    <div class="note">
-      <h3>How to check any of this in a minute</h3>
-      <p>Open <code>event-access/event-access.md</code> — it is the spec this page follows and the only place the
-      rules are declared. <code>event-access/ts/</code> is the code. <code>event-access/evidence/</code> holds the
-      raw output of every command. If a claim on this page cannot be found in one of those three, it is my wording,
-      not the module's behaviour.</p>
-    </div>
-  </div>
-</section>
-
-<footer class="foot" role="contentinfo">
-  <p><strong>What this page is.</strong> A reading aid for one module. The spec is
-  <code>event-access/event-access.md</code>, the first implementation is <code>event-access/ts/</code>, and the
-  executed evidence is <code>event-access/evidence/</code>. Where this page and those three disagree, they are right.</p>
-  <p>Self-contained and offline: no web font, no analytics, no network request of any kind. With JavaScript off, or
-  “reduce motion” set in your operating system, the whole page is simply visible and still — every chapter, every
-  number, every warning.</p>
-</footer>
-
-</main>
-</div>
-
-<script>
-(function () {
-  "use strict";
-
-  /* ---- chapter-level reveal via IntersectionObserver (no external library) ---- */
-  var reveals = Array.prototype.slice.call(document.querySelectorAll(".reveal"));
-
-  function showAll() {
-    reveals.forEach(function (el) {
-      el.style.opacity = "1";
-      el.style.transform = "none";
-      el.style.willChange = "auto";
-    });
-  }
-
-  var wantsMotion = !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  if (!wantsMotion || !window.IntersectionObserver) {
-    showAll();
-  } else {
-    reveals.forEach(function (el) {
-      el.style.opacity = "0";
-      el.style.transform = "translateY(12px)";
-    });
-
-    var observer = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (!entry.isIntersecting) return;
-        var el = entry.target;
-        el.style.transition = "opacity .55s ease, transform .55s ease";
-        el.style.opacity = "1";
-        el.style.transform = "translateY(0)";
-        el.style.willChange = "auto";
-        observer.unobserve(el);
-      });
-    }, { threshold: 0.12 });
-
-    reveals.forEach(function (el) { observer.observe(el); });
-
-    /* watchdog: after 3s, any reveal still at 0 inside the viewport gets turned on */
-    window.addEventListener("load", function () {
-      window.setTimeout(function () {
-        reveals.forEach(function (el) {
-          if (window.getComputedStyle(el).opacity !== "0") return;
-          var r = el.getBoundingClientRect();
-          if (r.top < window.innerHeight && r.bottom > 0) {
-            el.style.transition = "opacity .3s ease";
-            el.style.opacity = "1";
-            el.style.transform = "translateY(0)";
-          }
-        });
-      }, 3000);
-    });
-  }
-
-  /* ---- path explorer for P1/P2/P3/P5 (chapter 3) --------------------------- */
-  var PATH_DATA = {
-    p1: {
-      title: "P1 · query{localFirst:true}",
-      body: "Call order: read → query → write. The endpoint's read answers first (LF-1). The fill follows. The fill's events are written back through the endpoint (LF-2). The id-unique union and per-id provenance are recorded. <code>complete</code> is a fact about the wire's boundary — the fill reached the seam and answered."
-    },
-    p2: {
-      title: "P2 · query{localFirst:false}",
-      body: "Call order: <strong>read → query → write</strong> (after the ordering repair). The endpoint's read runs first because no filter may reach the wire before the predicate has answered. The <strong>merge order</strong> is inverted: the fill's events enter the union <em>ahead of</em> the local ones, so the network's freshness leads the answer. Provenance does not move: a both-tier id still reports <code>'local'</code>. This is the path the blind wave blocked and the repair fixed."
-    },
-    p3: {
-      title: "P3 · subscribe",
-      body: "Call order: read → subscribe. The replay is local-first (LF-1). The endpoint's <code>changes</code> is fanned out from one pump to every open subscription. A later write — from a publish, another read's fill, a deletion or an expiry — reaches each of them exactly once (LF-3). Cancellation is idempotent; a signal already aborted opens nothing."
-    },
-    p5: {
-      title: "P5 · pointer read (query{ids: [single]})",
-      body: "A query whose filter carries a single id, not a seventh operation. The sequence is the same as P1: local read first, then the seam's fill. The id-unique union produces at most one event. Provenance records where it came from."
-    }
-  };
-
-  var pathButtons = Array.prototype.slice.call(document.querySelectorAll("#path-buttons button"));
-  var pathReadout = document.getElementById("path-readout");
-
-  function selectPath(path) {
-    var data = PATH_DATA[path];
-    if (!data) return;
-    pathButtons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-path") === path)); });
-    if (!pathReadout) return;
-    pathReadout.innerHTML = "<h3>" + data.title + "</h3><p>" + data.body + "</p>";
-  }
-
-  pathButtons.forEach(function (b) {
-    b.addEventListener("click", function () { selectPath(b.getAttribute("data-path")); });
-  });
-
-  /* ---- gate destination explorer (chapter 4) --------------------------- */
-  var GATE_SITES = {
-    a: {
-      title: "A · The store write (acceptForStore)",
-      body: "Content arriving off the seam port and headed for the store — a query's fill and a subscription's fill — passes through the one rule here once, before the union; the accepted set is then routed on to the consumer as well. The gate sees <code>operation: 'read'</code>, the endpoint's declared tier, and <code>resolve()</code> for the link half."
-    },
-    b: {
-      title: "B · The consumer delivery (acceptForConsumer)",
-      body: "A query's local answer, a subscription's replay and the change fan-out all pass through the one rule here before anything reaches the consumer; a rejected event is never delivered. The gate sees <code>operation: 'read'</code>."
-    },
-    c: {
-      title: "C · The wire publish (acceptForWire)",
-      body: "The outgoing set (after the declared exclusion rule is applied) passes through the one rule here before the local write and before any relay attempt. The gate sees <code>operation: 'publish'</code>. An event the rule rejects is not stored and not dispatched; the relay attempt sees exactly the same permitted set the local write saw."
-    }
-  };
-
-  var gateButtons = Array.prototype.slice.call(document.querySelectorAll("#gate-buttons button"));
-  var gateReadout = document.getElementById("gate-readout");
-  var gateNodes = Array.prototype.slice.call(document.querySelectorAll(".gate-node"));
-
-  function selectGate(site) {
-    var data = GATE_SITES[site];
-    if (!data) return;
-    gateButtons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-site") === site)); });
-    gateNodes.forEach(function (n) { n.classList.toggle("is-sel", n.getAttribute("data-site") === site); });
-    if (!gateReadout) return;
-    gateReadout.innerHTML = "<h3>" + data.title + "</h3><p>" + data.body + "</p>";
-  }
-
-  gateButtons.forEach(function (b) {
-    b.addEventListener("click", function () { selectGate(b.getAttribute("data-site")); });
-  });
-  gateNodes.forEach(function (n) {
-    n.addEventListener("click", function () { selectGate(n.getAttribute("data-site")); });
-  });
-
-  /* ---- initial selections ---- */
-  selectPath("p1");
-  selectGate("a");
-  /* gate nodes: initial select */
-  gateNodes.forEach(function (n) { n.classList.toggle("is-sel", n.getAttribute("data-site") === "a"); });
-
-})();
-</script>
-</body>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>event-access — what it is, what it does, what it does not do yet</title>
+		<meta
+			name="description"
+			content="A plain-language guide to the event-access module: merging a local store and the relay seam into one answer, the accept gate, what was measured, and what is not yet true."
+		/>
+		<style>
+			:root {
+				--paper: #fbfbf8;
+				--card: #ffffff;
+				--ink: #15171b;
+				--ink2: #3c4149;
+				--muted: #6d7380;
+				--line: #e5e6e2;
+				--line2: #f1f2ee;
+				--accent: #5a49d1;
+				--accent-2: #8b7cf0;
+				--accent-soft: #f1effc;
+				--ok: #1b7a4d;
+				--ok-soft: #e9f6ef;
+				--warn: #9c5209;
+				--warn-soft: #fdf4e9;
+				--radius: 14px;
+				--radius-sm: 9px;
+				--sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+				--mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+				--shadow: 0 1px 2px rgba(21, 23, 27, 0.05), 0 10px 30px -18px rgba(21, 23, 27, 0.28);
+			}
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
+			}
+			html {
+				scroll-behavior: smooth;
+				scroll-padding-top: 14px;
+				-webkit-text-size-adjust: 100%;
+			}
+			@media (prefers-reduced-motion: reduce) {
+				html {
+					scroll-behavior: auto;
+				}
+			}
+			body {
+				margin: 0;
+				background: var(--paper);
+				color: var(--ink);
+				font: 16px/1.62 var(--sans);
+				-webkit-font-smoothing: antialiased;
+			}
+			h1,
+			h2,
+			h3,
+			h4 {
+				margin: 0;
+				line-height: 1.24;
+				font-weight: 650;
+				letter-spacing: -0.011em;
+			}
+			h1 {
+				font-size: clamp(26px, 3.3vw, 38px);
+			}
+			h2 {
+				font-size: clamp(20px, 2.1vw, 26px);
+			}
+			h3 {
+				font-size: 16.5px;
+			}
+			p {
+				margin: 0.68em 0;
+			}
+			a {
+				color: var(--accent);
+				text-decoration: none;
+				border-bottom: 1px solid rgba(90, 73, 209, 0.3);
+			}
+			a:hover {
+				border-bottom-color: var(--accent);
+			}
+			a:focus-visible,
+			button:focus-visible,
+			summary:focus-visible {
+				outline: 2px solid var(--accent);
+				outline-offset: 2px;
+				border-radius: 4px;
+			}
+			code,
+			.mono {
+				font-family: var(--mono);
+				font-size: 0.86em;
+			}
+			code {
+				background: var(--line2);
+				padding: 1px 5px;
+				border-radius: 5px;
+				color: #2b2e35;
+			}
+			ul,
+			ol {
+				margin: 0.6em 0;
+				padding-left: 1.15em;
+			}
+			li {
+				margin: 0.28em 0;
+			}
+			strong {
+				font-weight: 650;
+			}
+			.small {
+				font-size: 13.5px;
+				color: var(--muted);
+			}
+			.skip {
+				position: absolute;
+				left: -9999px;
+				top: 0;
+			}
+			.skip:focus {
+				left: 12px;
+				top: 12px;
+				background: var(--card);
+				padding: 8px 12px;
+				border-radius: 8px;
+				z-index: 20;
+				border: 1px solid var(--line);
+			}
+			.shell {
+				display: grid;
+				grid-template-columns: 306px minmax(0, 1fr);
+				gap: 46px;
+				max-width: 1240px;
+				margin: 0 auto;
+				padding: 0 28px 90px;
+			}
+			.spine {
+				position: sticky;
+				top: 0;
+				align-self: start;
+				max-height: 100vh;
+				overflow-y: auto;
+				padding: 26px 22px 30px 0;
+				border-right: 1px solid var(--line);
+				font-size: 14px;
+			}
+			.spine details > summary {
+				cursor: pointer;
+				list-style: none;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				font: 650 12.5px/1 var(--sans);
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				color: var(--muted);
+				margin-bottom: 12px;
+			}
+			.spine details > summary::-webkit-details-marker {
+				display: none;
+			}
+			.spine details > summary::before {
+				content: '';
+				width: 7px;
+				height: 7px;
+				border-right: 1.6px solid var(--muted);
+				border-bottom: 1.6px solid var(--muted);
+				transform: rotate(45deg) translateY(-1px);
+				transition: transform 0.2s ease;
+			}
+			.spine details:not([open]) > summary::before {
+				transform: rotate(-45deg);
+			}
+			.spine-lede {
+				font-size: 13.5px;
+				color: var(--ink2);
+				margin: 0 0 14px;
+			}
+			.spine ol {
+				list-style: none;
+				margin: 0;
+				padding: 0;
+			}
+			.spine ol > li {
+				margin: 0 0 12px;
+			}
+			.spine .sp-h {
+				display: block;
+				font: 650 13.5px/1.35 var(--sans);
+				color: var(--ink);
+			}
+			.spine .sp-t {
+				display: block;
+				font-size: 12.8px;
+				color: var(--muted);
+				line-height: 1.5;
+			}
+			.spine-foot {
+				margin-top: 16px;
+				padding-top: 12px;
+				border-top: 1px solid var(--line);
+				font-size: 12.5px;
+				color: var(--muted);
+			}
+			.hero {
+				padding: 34px 0 6px;
+			}
+			.hero .lede {
+				font-size: 18.5px;
+				color: var(--ink2);
+				max-width: 66ch;
+			}
+			.eyebrow {
+				display: inline-block;
+				font: 650 11.5px/1 var(--sans);
+				letter-spacing: 0.11em;
+				text-transform: uppercase;
+				color: var(--accent);
+			}
+			.meta-row {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+				margin: 18px 0 0;
+			}
+			.pill {
+				display: inline-block;
+				font: 650 11.5px/1 var(--sans);
+				letter-spacing: 0.05em;
+				text-transform: uppercase;
+				padding: 6px 10px;
+				border-radius: 999px;
+				background: var(--accent-soft);
+				color: var(--accent);
+				border: 1px solid rgba(90, 73, 209, 0.16);
+			}
+			.pill.ok {
+				background: var(--ok-soft);
+				color: var(--ok);
+				border-color: rgba(27, 122, 77, 0.18);
+			}
+			.pill.warn {
+				background: var(--warn-soft);
+				color: var(--warn);
+				border-color: rgba(156, 82, 9, 0.2);
+			}
+			.pill.plain {
+				background: var(--line2);
+				color: var(--ink2);
+				border-color: var(--line);
+			}
+			.toc {
+				margin: 26px 0 8px;
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: var(--radius);
+				padding: 18px 20px;
+				box-shadow: var(--shadow);
+			}
+			.toc h2 {
+				font-size: 13px;
+				letter-spacing: 0.09em;
+				text-transform: uppercase;
+				color: var(--muted);
+				font-weight: 650;
+			}
+			.toc ol {
+				margin: 12px 0 0;
+				padding: 0;
+				list-style: none;
+				columns: 2;
+				column-gap: 28px;
+			}
+			.toc li {
+				margin: 0 0 7px;
+				font-size: 14.6px;
+				break-inside: avoid;
+			}
+			.toc li .n {
+				font-family: var(--mono);
+				font-size: 12.5px;
+				color: var(--muted);
+				margin-right: 8px;
+			}
+			@media (max-width: 640px) {
+				.toc ol {
+					columns: 1;
+				}
+			}
+			main {
+				min-width: 0;
+			}
+			.chapter {
+				padding: 48px 0 6px;
+				border-top: 1px solid var(--line);
+				scroll-margin-top: 12px;
+			}
+			.chapter:first-of-type {
+				border-top: 0;
+			}
+			.chapter > header {
+				margin-bottom: 16px;
+			}
+			.chapter .num {
+				display: block;
+				font: 650 12px/1 var(--mono);
+				letter-spacing: 0.12em;
+				color: var(--accent);
+				margin-bottom: 9px;
+			}
+			.chapter .dek {
+				font-size: 17.5px;
+				color: var(--ink2);
+				max-width: 66ch;
+				margin-top: 10px;
+			}
+			main p,
+			main li {
+				max-width: 70ch;
+			}
+			.card {
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: var(--radius);
+				padding: 16px 18px;
+				box-shadow: var(--shadow);
+			}
+			.grid-2 {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 14px;
+				margin: 18px 0;
+			}
+			.grid-3 {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 14px;
+				margin: 18px 0;
+			}
+			@media (max-width: 760px) {
+				.grid-2,
+				.grid-3 {
+					grid-template-columns: 1fr;
+				}
+			}
+			.note {
+				border-left: 3px solid var(--accent);
+				background: var(--accent-soft);
+				border-radius: 0 var(--radius) var(--radius) 0;
+				padding: 13px 17px;
+				margin: 18px 0;
+			}
+			.note.warn {
+				border-left-color: var(--warn);
+				background: var(--warn-soft);
+			}
+			.note.ok {
+				border-left-color: var(--ok);
+				background: var(--ok-soft);
+			}
+			.note p {
+				margin: 0.3em 0;
+				font-size: 14.6px;
+				max-width: none;
+			}
+			.figure {
+				margin: 20px 0 8px;
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: var(--radius);
+				padding: 16px;
+				overflow: hidden;
+				box-shadow: var(--shadow);
+			}
+			.figure svg {
+				display: block;
+				width: 100%;
+				height: auto;
+			}
+			.figure figcaption {
+				font-size: 13.4px;
+				color: var(--muted);
+				margin-top: 12px;
+				line-height: 1.5;
+			}
+			.tablewrap {
+				overflow-x: auto;
+				margin: 16px 0;
+				border: 1px solid var(--line);
+				border-radius: var(--radius);
+				background: var(--card);
+			}
+			table {
+				border-collapse: collapse;
+				width: 100%;
+				font-size: 14.4px;
+			}
+			th,
+			td {
+				text-align: left;
+				padding: 10px 12px;
+				border-bottom: 1px solid var(--line);
+				vertical-align: top;
+			}
+			tr:last-child td {
+				border-bottom: 0;
+			}
+			th {
+				font: 650 11.5px/1.3 var(--sans);
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				color: var(--muted);
+				background: var(--line2);
+			}
+			td.n {
+				font-family: var(--mono);
+				font-size: 13.6px;
+				white-space: nowrap;
+			}
+			.stat {
+				display: flex;
+				flex-direction: column;
+				gap: 3px;
+			}
+			.stat b {
+				font: 650 25px/1.1 var(--sans);
+				letter-spacing: -0.02em;
+			}
+			.stat span {
+				font-size: 13.2px;
+				color: var(--muted);
+			}
+			.stat.ok b {
+				color: var(--ok);
+			}
+			.gate-buttons {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+				margin: 6px 0 14px;
+			}
+			.gate-buttons button {
+				font: 650 13px var(--sans);
+				padding: 7px 14px;
+				border-radius: 999px;
+				border: 1px solid var(--line);
+				background: var(--card);
+				color: var(--ink2);
+				cursor: pointer;
+			}
+			.gate-buttons button[aria-pressed='true'] {
+				background: var(--accent);
+				border-color: var(--accent);
+				color: #fff;
+			}
+			.path-buttons {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+				margin: 6px 0 10px;
+			}
+			.path-buttons button {
+				font: 650 13px var(--mono);
+				padding: 7px 14px;
+				border-radius: 999px;
+				border: 1px solid var(--line);
+				background: var(--card);
+				color: var(--ink2);
+				cursor: pointer;
+			}
+			.path-buttons button[aria-pressed='true'] {
+				background: var(--ok);
+				border-color: var(--ok);
+				color: #fff;
+			}
+			.gate-readout,
+			.path-readout {
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: var(--radius);
+				padding: 15px 17px;
+				box-shadow: var(--shadow);
+				margin: 16px 0;
+			}
+			.gate-readout h3,
+			.path-readout h3 {
+				font-size: 15.5px;
+				margin-bottom: 2px;
+			}
+			.gate-readout p,
+			.path-readout p {
+				margin: 0.35em 0;
+				font-size: 14.5px;
+				color: var(--ink2);
+			}
+			.gate-node {
+				cursor: pointer;
+			}
+			.gate-node rect {
+				fill: var(--card);
+				stroke: #d9dbd5;
+				stroke-width: 1.4;
+			}
+			.gate-node:hover rect {
+				stroke: var(--accent-2);
+			}
+			.gate-node.is-sel rect {
+				fill: var(--accent-soft);
+				stroke: var(--accent);
+				stroke-width: 2.2;
+			}
+			.gate-node text {
+				font: 600 12.5px var(--sans);
+				fill: var(--ink);
+				pointer-events: none;
+			}
+			.gate-node.is-sel text {
+				fill: var(--accent);
+			}
+			.gate-edge {
+				fill: none;
+				stroke: #d2d5ce;
+				stroke-width: 1.6;
+			}
+			.gate-edge.is-on {
+				stroke: var(--accent);
+				stroke-width: 2.6;
+			}
+			.gate-edge-label {
+				font: 11.5px var(--sans);
+				fill: var(--muted);
+			}
+			.gate-edge-label.is-on {
+				fill: var(--accent);
+				font-weight: 650;
+			}
+			.foot {
+				margin-top: 64px;
+				padding-top: 22px;
+				border-top: 1px solid var(--line);
+				font-size: 13.6px;
+				color: var(--muted);
+			}
+			.reveal {
+				will-change: opacity, transform;
+			}
+			@media (prefers-reduced-motion: reduce) {
+				.anim,
+				.pulse {
+					animation: none !important;
+				}
+			}
+			@media (max-width: 920px) {
+				.shell {
+					grid-template-columns: 1fr;
+					gap: 22px;
+					padding: 0 18px 64px;
+				}
+				.spine {
+					position: static;
+					max-height: none;
+					overflow: visible;
+					border-right: 0;
+					border-bottom: 1px solid var(--line);
+					padding: 16px 0 18px;
+				}
+				.chapter {
+					padding: 36px 0 6px;
+				}
+				.hero {
+					padding: 22px 0 4px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<a class="skip" href="#main">Skip to the content</a>
+		<div class="shell">
+			<aside class="spine" id="spine" aria-label="The page in words, chapter by chapter">
+				<details open>
+					<summary>Read it without the motion</summary>
+					<p class="spine-lede">The same nine chapters, condensed to a paragraph each. Nothing is moving here.</p>
+					<ol>
+						<li>
+							<span class="sp-h">1 · What the module is, and why it exists</span
+							><span class="sp-t"
+								>The composition over two tiers — the store's local endpoint and the relay seam. Neither knows about the other; this module
+								is the one place that speaks to both. It was written at its final state and does not exist in the market's code today: what
+								it replaces is a decision nobody owned.</span
+							>
+						</li>
+						<li>
+							<span class="sp-h">2 · Two tiers, one answer</span
+							><span class="sp-t"
+								>The local-first sequence (P1, P2), the id-unique merged union, and the per-id provenance that tells which tier produced
+								which event. The envelope is never a bare array: <code>{events, complete}</code> carries the completeness fact
+								honestly.</span
+							>
+						</li>
+						<li>
+							<span class="sp-h">3 · Six operations / seven named paths</span
+							><span class="sp-t"
+								>Five verbs plus the envelope — query, subscribe, publish, count, delete and the <code>{events, complete}</code> envelope —
+								over the seven named paths P1…P7. One named path per operation, each with its own ordering claim.</span
+							>
+						</li>
+						<li>
+							<span class="sp-h">4 · The one accept gate</span
+							><span class="sp-t"
+								>One declared, inspectable hook, applied at the three destinations and nowhere else — the store write, the consumer delivery
+								and the wire publish. It is bounded by the flow's wall-clock budget and may not rewrite, delay or withhold the answer.</span
+							>
+						</li>
+						<li>
+							<span class="sp-h">5 · The bounds it refuses to cross</span
+							><span class="sp-t"
+								>Four boundaries: the filter predicate is the store's; no socket, no store, no app import; the completeness fact is a wire
+								fact, never about what the gate kept; and the module grows no second predicate of its own. Each was measured at zero across
+								the source.</span
+							>
+						</li>
+						<li>
+							<span class="sp-h">6 · How the rules were attacked, and the story of the block</span
+							><span class="sp-t"
+								>40 mutations, each breaking one rule, each restoring the file byte-for-byte. A blind wave blocked this module on P2; the
+								repair moved the ordering, not the sentence; a third blind reviewer returned CLEAR; then a regression was found by
+								measurement and fixed.</span
+							>
+						</li>
+						<li>
+							<span class="sp-h">7 · The measured evidence</span
+							><span class="sp-t"
+								>43 tests, 180 expectations, all green. 40 mutations, 0 falsification failures. 24 resolved packages, 10 files, 13 import
+								specifiers. 318 statements across 10 modules (the capture's count, 2026-09-30). Every isolation check reads zero.</span
+							>
+						</li>
+						<li>
+							<span class="sp-h">8 · What is not yet true</span
+							><span class="sp-t"
+								>Nothing imports this module. Its ports are hand-written fakes. The gate's validation implementation is not wired in. No
+								real endpoint is wired in here; no real relay was ever contacted. Two open readings — the never-torn-down change pump and
+								the deadline that strands the pending upstream promise — remain unaddressed.</span
+							>
+						</li>
+						<li>
+							<span class="sp-h">9 · Open questions and my assumptions</span
+							><span class="sp-t"
+								>Four questions the spec leaves open, plus what this page invented: the grouping of the operations, the plain-language names
+								for the paths, the order of the chapters, and the balance between wins and gaps.</span
+							>
+						</li>
+					</ol>
+					<p class="spine-foot">
+						Source of truth: <code>event-access/event-access.md</code> (the spec), <code>event-access/ts/</code> (the first implementation),
+						<code>event-access/evidence/</code> (what was run). This page is art, not evidence.
+					</p>
+				</details>
+			</aside>
+
+			<main id="main">
+				<section class="hero" aria-labelledby="hero-h">
+					<span class="eyebrow">A reading guide to one module</span>
+					<h1 id="hero-h">event-access, in plain language</h1>
+					<p class="lede">
+						One module that answers event operations over <strong>both tiers</strong> — the store's own local endpoint and the injected
+						relay seam — merging them local-first with <strong>one declared, inspectable write-back policy</strong> and reporting, honestly,
+						whether the answer is complete.
+					</p>
+
+					<div class="meta-row">
+						<span class="pill plain">spec · event-access/event-access.md</span>
+						<span class="pill plain">implementation · event-access/ts (TypeScript)</span>
+						<span class="pill ok">43 tests green</span>
+						<span class="pill warn">nothing consumes it yet</span>
+					</div>
+
+					<figure class="figure">
+						<svg viewBox="0 0 900 330" role="img" aria-labelledby="hero-t hero-d">
+							<title id="hero-t">
+								event-access sits between a caller and two lower modules, merging their answers with one inspectable policy and an honest
+								completeness fact.
+							</title>
+							<desc id="hero-d">
+								A central box labelled event-access, the composition. Above it, a box labelled a caller. Lines cross downward into the seam
+								below, leading to two boxes: the store's local endpoint and the relay seam. A third line goes into a box labelled one
+								write-back policy and accept gate. Out of the central box, arrows go to two results: {events, complete} and per-id
+								provenance. At the bottom a note says writes back through the endpoint only.
+							</desc>
+							<text
+								x="16"
+								y="30"
+								font-family="ui-sans-serif, system-ui, sans-serif"
+								font-size="11.5"
+								font-weight="650"
+								letter-spacing="1.4"
+								fill="#6d7380"
+							>
+								THE COMPOSITION
+							</text>
+							<rect x="360" y="40" width="180" height="36" rx="9" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="450" y="63" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" fill="#3c4149">
+								a caller
+							</text>
+							<path d="M450,76 H360" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#ha)" />
+							<rect x="300" y="104" width="300" height="96" rx="16" fill="#f1effc" stroke="#5a49d1" stroke-width="2" />
+							<text
+								x="450"
+								y="134"
+								text-anchor="middle"
+								font-family="ui-sans-serif, system-ui, sans-serif"
+								font-size="18"
+								font-weight="650"
+								fill="#3b2fa8"
+							>
+								event-access
+							</text>
+							<text x="450" y="160" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" fill="#5a49d1">
+								the composition — one contract, six operations
+							</text>
+							<text x="450" y="182" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#4a4f58">
+								owns no store, no socket, no cache
+							</text>
+							<path d="M300,208 H180" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#ha)" />
+							<path d="M300,208 H180" transform="translate(300,0)" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#ha)" />
+							<rect x="132" y="226" width="156" height="40" rx="9" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="210" y="252" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11.5" fill="#3c4149">
+								store endpoint
+							</text>
+							<rect x="300" y="226" width="156" height="40" rx="9" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="378" y="252" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11.5" fill="#3c4149">
+								relay seam
+							</text>
+							<path d="M468,252 H558" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#ha)" />
+							<rect x="558" y="226" width="160" height="40" rx="9" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="638" y="252" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#3c4149">
+								policy + gate
+							</text>
+							<line x1="300" y1="278" x2="600" y2="278" stroke="#d7d2f6" stroke-width="1" stroke-dasharray="4 5" />
+							<text x="450" y="300" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11.5" fill="#6d7380">
+								{events, complete} + per‑id provenance
+							</text>
+							<defs>
+								<marker id="ha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+									<path d="M0,1 L9,5 L0,9 z" fill="#b9bdb4" />
+								</marker>
+							</defs>
+						</svg>
+						<figcaption>
+							The whole design in one picture: a caller composes event-access, which composes two lower modules — the store's local endpoint
+							and the relay seam — through one declared policy and an optional accept gate. The two lower modules never learn about each
+							other.
+						</figcaption>
+					</figure>
+
+					<nav class="toc" aria-labelledby="toc-h">
+						<h2 id="toc-h">The nine chapters</h2>
+						<ol>
+							<li>
+								<a href="#c1"><span class="n">01</span>What the module is, and why it exists</a>
+							</li>
+							<li>
+								<a href="#c2"><span class="n">02</span>Two tiers, one answer</a>
+							</li>
+							<li>
+								<a href="#c3"><span class="n">03</span>Six operations, seven named paths</a>
+							</li>
+							<li>
+								<a href="#c4"><span class="n">04</span>The one accept gate, applied at three destinations</a>
+							</li>
+							<li>
+								<a href="#c5"><span class="n">05</span>The bounds it refuses to cross</a>
+							</li>
+							<li>
+								<a href="#c6"><span class="n">06</span>How the rules were attacked — the story of the block</a>
+							</li>
+							<li>
+								<a href="#c7"><span class="n">07</span>The measured evidence</a>
+							</li>
+							<li>
+								<a href="#c8"><span class="n">08</span>What is not yet true</a>
+							</li>
+							<li>
+								<a href="#c9"><span class="n">09</span>Open questions, and my assumptions</a>
+							</li>
+						</ol>
+					</nav>
+				</section>
+
+				<section class="chapter" id="c1" aria-labelledby="c1-h">
+					<header class="reveal">
+						<span class="num">CHAPTER 01</span>
+						<h2 id="c1-h">What the module is, and why it exists</h2>
+						<p class="dek">
+							A composition that knows both tiers — the store's local endpoint and the relay seam — and is the only module that does.
+							Neither of them knows the other exists.
+						</p>
+					</header>
+
+					<div class="reveal">
+						<p>
+							<strong>The job, in one sentence.</strong> Answer a caller's event operations — query, subscribe, publish, count, delete and
+							the <code>{events, complete}</code> envelope — over the store's local endpoint and the injected relay seam, merging them
+							local-first with one declared write-back policy, and reporting, honestly, whether the answer is complete.
+						</p>
+
+						<figure class="figure">
+							<svg viewBox="0 0 900 280" role="img" aria-labelledby="c1-t c1-d">
+								<title id="c1-t">
+									The module sits between the caller above and the two ports below, and it is the only place that knows both.
+								</title>
+								<desc id="c1-d">
+									Caller above, two ports below; the module in the middle. Labels to its sides say it holds no socket, no store, no cache,
+									no app import.
+								</desc>
+								<rect x="300" y="40" width="300" height="100" rx="14" fill="#f1effc" stroke="#5a49d1" stroke-width="2" />
+								<text
+									x="450"
+									y="80"
+									text-anchor="middle"
+									font-family="ui-sans-serif, system-ui, sans-serif"
+									font-size="18"
+									font-weight="650"
+									fill="#3b2fa8"
+								>
+									event-access
+								</text>
+								<text
+									x="450"
+									y="110"
+									text-anchor="middle"
+									font-family="ui-sans-serif, system-ui, sans-serif"
+									font-size="12.5"
+									fill="#5a49d1"
+								>
+									the only module that knows both tiers
+								</text>
+								<rect x="100" y="180" width="200" height="44" rx="9" fill="#ffffff" stroke="#e5e6e2" />
+								<text x="200" y="206" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#3c4149">
+									store endpoint (local)
+								</text>
+								<rect x="600" y="180" width="200" height="44" rx="9" fill="#ffffff" stroke="#e5e6e2" />
+								<text x="700" y="206" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#3c4149">
+									relay seam (upstream)
+								</text>
+								<path d="M450,140 H200" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#h1)" />
+								<path d="M450,140 H700" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#h1)" />
+								<text x="20" y="220" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#9c5209">
+									no store · no cache · no socket · no app import
+								</text>
+								<line x1="0" y1="238" x2="900" y2="238" stroke="#d7d2f6" stroke-width="1" stroke-dasharray="4 5" />
+								<text x="450" y="262" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">
+									the two lower modules never learn about each other — the composition is the seam
+								</text>
+								<defs>
+									<marker id="h1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+										<path d="M0,1 L9,5 L0,9 z" fill="#b9bdb4" />
+									</marker>
+								</defs>
+							</svg>
+							<figcaption>
+								The composition rule: the store never learns about a relay, the relay seam never learns about a store, and the caller never
+								assembles the union itself.
+							</figcaption>
+						</figure>
+
+						<p>
+							<strong>Where it came from.</strong> The spec was written at its final state — the module as it should be, not as it is today.
+							The TypeScript implementation in <code>ts/</code> is the first one, written in the same run the spec was frozen. What it
+							replaces is a <strong>decision nobody owned</strong>: the write-back was scattered — 4 of 11 loader modules in the vendor's
+							own ecosystem applied it, and each market read site decided the local-first sequence for itself. One declared owner is better
+							than a convention every call site remembers.
+						</p>
+
+						<div class="note">
+							<h3>What this module is not</h3>
+							<p>
+								It is not the store — it never opens a database, never keeps a cache, and never decides what to evict. It is not the relay
+								seam — it holds no socket, owns no relay handle, and never decides which relay a read reaches. It is not a filter validator
+								— the fail-closed predicate is the store's and is reached by calling the endpoint's <code>read</code>, not by growing a
+								second predicate here.
+							</p>
+						</div>
+					</div>
+				</section>
+
+				<section class="chapter" id="c2" aria-labelledby="c2-h">
+					<header class="reveal">
+						<span class="num">CHAPTER 02</span>
+						<h2 id="c2-h">Two tiers, one answer</h2>
+						<p class="dek">
+							The local store answers first; the seam's fill follows. The events are merged into an id-unique union with per-id provenance,
+							and the answer reports whether it is complete.
+						</p>
+					</header>
+
+					<div class="reveal">
+						<p>
+							<strong>The local-first sequence.</strong> On the default path <strong>P1</strong> (<code>query{localFirst:true}</code>), the
+							endpoint's local read answers first. The upstream seam is then asked for the fill — events the local store does not yet have.
+							The fill's events are written back into the store (the write-back policy, chapter 4) and both sets are merged into one
+							id-unique answer. On <strong>P2</strong> (<code>query{localFirst:false}</code>) the fill is attempted first, then merged; the
+							<strong>merge order</strong> inverts but the provenance rule does not move with it — an id the local read carried is
+							<code>'local'</code> on both paths.
+						</p>
+
+						<figure class="figure">
+							<svg viewBox="0 0 900 300" role="img" aria-labelledby="c2-t c2-d">
+								<title id="c2-t">
+									The merge: local set and network fill enter a union, the union produces an id-unique answer with per-id provenance, and
+									the envelope carries {events, complete}.
+								</title>
+								<desc id="c2-d">
+									Two boxes on the left: local set, network fill. Arrows into a union box. The union has a checked mark for id-unique, and a
+									grid showing local origin and network origin. Out of the union, an answer box with {events, complete} on top and
+									provenance underneath.
+								</desc>
+								<rect x="60" y="60" width="160" height="44" rx="9" fill="#e9f6ef" stroke="#c3e2d0" />
+								<text x="140" y="86" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#1b7a4d">
+									local set
+								</text>
+								<rect x="60" y="130" width="160" height="44" rx="9" fill="#ffffff" stroke="#e5e6e2" />
+								<text x="140" y="156" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#3c4149">
+									network fill
+								</text>
+								<path d="M220,82 H320" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#h2)" />
+								<path d="M220,152 H320" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#h2)" />
+								<rect x="320" y="60" width="200" height="156" rx="14" fill="#f1effc" stroke="#5a49d1" stroke-width="2" />
+								<text
+									x="420"
+									y="100"
+									text-anchor="middle"
+									font-family="ui-sans-serif, system-ui, sans-serif"
+									font-size="16"
+									font-weight="650"
+									fill="#3b2fa8"
+								>
+									union
+								</text>
+								<text x="420" y="124" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#5a49d1">
+									id-unique
+								</text>
+								<text
+									x="420"
+									y="164"
+									text-anchor="middle"
+									font-family="ui-sans-serif, system-ui, sans-serif"
+									font-size="12.5"
+									fill="#4a4f58"
+								>
+									shared event → 'local'
+								</text>
+								<text
+									x="420"
+									y="186"
+									text-anchor="middle"
+									font-family="ui-sans-serif, system-ui, sans-serif"
+									font-size="12.5"
+									fill="#4a4f58"
+								>
+									fill‑only event → 'network'
+								</text>
+								<path d="M520,138 H660" stroke="#c9cdc4" stroke-width="1.6" fill="none" marker-end="url(#h2)" />
+								<rect x="660" y="60" width="220" height="80" rx="12" fill="#ffffff" stroke="#e5e6e2" />
+								<text
+									x="770"
+									y="96"
+									text-anchor="middle"
+									font-family="ui-monospace, Menlo, monospace"
+									font-size="14"
+									font-weight="650"
+									fill="#15171b"
+								>
+									{ events, complete }
+								</text>
+								<text x="770" y="120" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">
+									+ per‑id provenance
+								</text>
+								<text x="660" y="176" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#9c5209">
+									envelope: never a bare array
+								</text>
+								<defs>
+									<marker id="h2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+										<path d="M0,1 L9,5 L0,9 z" fill="#b9bdb4" />
+									</marker>
+								</defs>
+							</svg>
+							<figcaption>
+								The union is id-unique (M2): when both tiers produce the same event, one copy enters the answer. Provenance records which
+								tier produced it, and the envelope is never a bare array — it carries the completeness fact, which is a claim about the
+								wire's boundary.
+							</figcaption>
+						</figure>
+
+						<div class="note ok">
+							<h3>What provenance means, and what it does not</h3>
+							<p>
+								Provenance is per answer and per id — a declared companion read <code>originOf(answer, id)</code> returns
+								<code>'local'</code> or <code>'network'</code>. It is not a flag mutated on a shared event instance (the vendor's sticky-bit
+								defect, which this module exists to avoid). And the envelope is deliberately not widened to
+								<code>{events, complete, origins}</code> — that is mentioned as an open question, not taken.
+							</p>
+						</div>
+					</div>
+				</section>
+
+				<section class="chapter" id="c3" aria-labelledby="c3-h">
+					<header class="reveal">
+						<span class="num">CHAPTER 03</span>
+						<h2 id="c3-h">Six operations, seven named paths</h2>
+						<p class="dek">
+							Five NIP-01 verbs plus the <code>{events, complete}</code> envelope, and each operation has exactly one named path — P1
+							through P7 — that says how things happen and in what order.
+						</p>
+					</header>
+
+					<figure class="figure reveal">
+						<svg viewBox="0 0 900 240" role="img" aria-labelledby="c3-t c3-d">
+							<title id="c3-t">Seven named paths: P1 through P7, each naming one operation and its ordering rule.</title>
+							<desc id="c3-d">
+								P1: query with localFirst:true. P2: query with localFirst:false. P3: subscribe. P4: publish. P5: the pointer read, a query
+								with a single id. P6: count. P7: delete.
+							</desc>
+							<rect x="16" y="40" width="260" height="36" rx="9" fill="#e9f6ef" stroke="#c3e2d0" />
+							<text x="146" y="63" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#1b7a4d">
+								P1 · query{localFirst:true}
+							</text>
+							<rect x="16" y="90" width="260" height="36" rx="9" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="146" y="113" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#3c4149">
+								P2 · query{localFirst:false}
+							</text>
+							<rect x="16" y="140" width="260" height="36" rx="9" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="146" y="163" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#3c4149">
+								P3 · subscribe
+							</text>
+							<rect x="340" y="40" width="260" height="36" rx="9" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="470" y="63" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#3c4149">
+								P4 · publish
+							</text>
+							<rect x="340" y="90" width="260" height="36" rx="9" fill="#f1effc" stroke="#d7d2f6" />
+							<text x="470" y="113" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#3b2fa8">
+								P5 · pointer read
+							</text>
+							<rect x="340" y="140" width="260" height="36" rx="9" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="470" y="163" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#3c4149">
+								P6 · count
+							</text>
+							<rect x="616" y="40" width="260" height="36" rx="9" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="746" y="63" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#3c4149">
+								P7 · delete
+							</text>
+							<text x="146" y="210" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">
+								P4 and P6 carry no ordering claim — publish writes locally first; count never fetches
+							</text>
+						</svg>
+						<figcaption>
+							P5 is a query whose filter carries a single id; it is not a seventh operation. Every path is named in the spec, and each has
+							its own evidence obligation.
+						</figcaption>
+					</figure>
+
+					<div class="reveal">
+						<p>The path explorer below shows the call order for the two query paths — and how the repair changed P2.</p>
+
+						<div class="path-buttons" id="path-buttons" role="group" aria-label="Choose a named path">
+							<button type="button" data-path="p1" aria-pressed="true">P1</button>
+							<button type="button" data-path="p2" aria-pressed="false">P2</button>
+							<button type="button" data-path="p3" aria-pressed="false">P3</button>
+							<button type="button" data-path="p5" aria-pressed="false">P5</button>
+						</div>
+						<div class="path-readout" id="path-readout" aria-live="polite">
+							<h3>P1 · query{localFirst:true}</h3>
+							<p>
+								Call order: <code>read → query → write</code>, then merge (local first in the answer). The endpoint's read answers first
+								(LF-1); the fill follows; the fill's events are written back (LF-2); the id-unique union and provenance are recorded.
+								<code>complete</code> is a fact about the wire's boundary.
+							</p>
+						</div>
+
+						<h3>Three more operations</h3>
+						<div class="grid-3">
+							<div class="card">
+								<h3>publish</h3>
+								<p class="small">
+									Writes locally before any relay attempt. The local write's outcome is reported as <code>stored</code>; the relays' own
+									answers fill <code>accepted</code> and <code>refused</code>.
+								</p>
+							</div>
+							<div class="card">
+								<h3>count</h3>
+								<p class="small">
+									Never fetches. Counts through the store's own index and reports <code>approximate: false</code>. The wire's NIP-45 count
+									belongs to the seam.
+								</p>
+							</div>
+							<div class="card">
+								<h3>delete</h3>
+								<p class="small">
+									Routes through the endpoint's removal, and the resulting change reaches every open subscription on the change fan-out. The
+									three kinds of deletion are the store's rule, not re-decided here.
+								</p>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				<section class="chapter" id="c4" aria-labelledby="c4-h">
+					<header class="reveal">
+						<span class="num">CHAPTER 04</span>
+						<h2 id="c4-h">The one accept gate, applied at three destinations</h2>
+						<p class="dek">
+							One declared, inspectable hook — the <code>accept?</code> member of the write-back policy — applied at the three destinations
+							and nowhere else. Absent means accept everything, which is validation's pass-through default.
+						</p>
+					</header>
+
+					<div class="reveal">
+						<p>
+							The gate is given each candidate event, the flow it is applied for (<code>'read'</code> or <code>'publish'</code>), the
+							endpoint's declared tier, and a resolver so a link rule can reach a referenced event. It answers <code>'accept'</code> or
+							<code>'reject'</code>. It is bounded by the flow's own wall-clock budget: a hook that has not answered within the budget drops
+							its candidate, and a dropped event is <strong>not</strong> an incomplete answer — <code>complete</code> stays a fact about the
+							wire's boundary.
+						</p>
+
+						<p>Click a destination below to see what the gate is given and what it decides there.</p>
+
+						<div class="gate-buttons" id="gate-buttons" role="group" aria-label="Choose a gate destination">
+							<button type="button" data-site="a" aria-pressed="true">A · The store write</button>
+							<button type="button" data-site="b" aria-pressed="false">B · The consumer delivery</button>
+							<button type="button" data-site="c" aria-pressed="false">C · The wire publish</button>
+						</div>
+
+						<figure class="figure">
+							<svg viewBox="0 0 900 260" role="img" aria-labelledby="c4-t c4-d">
+								<title id="c4-t">
+									The three destinations where the one rule applies — A the store write, B the consumer delivery, C the wire publish.
+								</title>
+								<desc id="c4-d">
+									A box labelled event-access with three nodes inside: A is the store-write boundary before the endpoint write, B is the
+									consumer-delivery boundary before the answer or the emission, C is the wire-publish boundary before any relay attempt.
+								</desc>
+								<defs>
+									<marker id="hda" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+										<path d="M0,1 L9,5 L0,9 z" fill="#b9bdb4" />
+									</marker>
+								</defs>
+								<text
+									x="16"
+									y="26"
+									font-family="ui-sans-serif, system-ui, sans-serif"
+									font-size="11.5"
+									font-weight="650"
+									letter-spacing="1.4"
+									fill="#6d7380"
+								>
+									THE ONE RULE — THREE DESTINATIONS, ONE DECISION
+								</text>
+								<rect x="16" y="40" width="868" height="200" rx="14" fill="#f1effc" stroke="#5a49d1" stroke-width="1.6" />
+								<text
+									x="450"
+									y="68"
+									text-anchor="middle"
+									font-family="ui-sans-serif, system-ui, sans-serif"
+									font-size="16"
+									font-weight="650"
+									fill="#3b2fa8"
+								>
+									event-access
+								</text>
+								<g class="gate-node" data-site="a">
+									<rect x="60" y="90" width="180" height="50" rx="10" class="is-sel" />
+									<text x="150" y="114" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#3b2fa8">
+										DESTINATION A · store write
+									</text>
+									<text
+										x="150"
+										y="130"
+										text-anchor="middle"
+										font-family="ui-sans-serif, system-ui, sans-serif"
+										font-size="10.5"
+										fill="#4a4f58"
+									>
+										gate → endpoint.write
+									</text>
+								</g>
+								<g class="gate-node" data-site="b">
+									<rect x="340" y="90" width="200" height="50" rx="10" />
+									<text x="440" y="114" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#3c4149">
+										DESTINATION B · consumer
+									</text>
+									<text
+										x="440"
+										y="130"
+										text-anchor="middle"
+										font-family="ui-sans-serif, system-ui, sans-serif"
+										font-size="10.5"
+										fill="#4a4f58"
+									>
+										gate → deliver
+									</text>
+								</g>
+								<g class="gate-node" data-site="c">
+									<rect x="660" y="90" width="200" height="50" rx="10" />
+									<text x="760" y="114" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#3c4149">
+										DESTINATION C · wire
+									</text>
+									<text
+										x="760"
+										y="130"
+										text-anchor="middle"
+										font-family="ui-sans-serif, system-ui, sans-serif"
+										font-size="10.5"
+										fill="#4a4f58"
+									>
+										gate → relay publish
+									</text>
+								</g>
+								<text x="16" y="220" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">
+									hook absent → pass-through. Bounded by the flow's wall-clock budget: over-budget or throwing → dropped, never accepted.
+								</text>
+							</svg>
+							<figcaption>
+								One decision, not two. The rule is not applied at a different place for reads and publishes — it is the same
+								<code>accept?</code> on the policy, at the three destinations the architecture names.
+							</figcaption>
+						</figure>
+
+						<div class="gate-readout" id="gate-readout" aria-live="polite">
+							<h3>A · The store write</h3>
+							<p>
+								Content arriving off the seam port and headed for the store — a query's fill and a subscription's fill — passes through the
+								one rule at the store-write boundary (<code>acceptForStore</code>) once, before the union, and the accepted set is then
+								routed on to the consumer as well. The gate sees <code>operation: 'read'</code> and the endpoint's declared tier.
+							</p>
+						</div>
+
+						<p>
+							The gate is also how <strong>validation</strong> would compose: validation presets supply the <code>accept</code> hook, absent
+							means pass-through, and no second accept rule is ever grown inside this module. Today, the hook is absent by default and
+							<strong>nothing supplies it</strong> — the validation module exists and has its own suite, but nothing here imports it.
+						</p>
+					</div>
+				</section>
+
+				<section class="chapter" id="c5" aria-labelledby="c5-h">
+					<header class="reveal">
+						<span class="num">CHAPTER 05</span>
+						<h2 id="c5-h">The bounds it refuses to cross</h2>
+						<p class="dek">
+							Four boundaries that the module must never cross, and the completeness rule it must never violate. Each was checked by a
+							command, not asserted in a sentence.
+						</p>
+					</header>
+
+					<figure class="figure reveal">
+						<svg viewBox="0 0 900 280" role="img" aria-labelledby="c5-t c5-d">
+							<title id="c5-t">
+								Four boundaries and one rule: the filter predicate is the store's; no socket, no store, no app import; completeness is a
+								wire fact.
+							</title>
+							<desc id="c5-d">
+								Four boxes on the left: the filter predicate is the store's, 0 sockets found, 0 store imports, 0 app aliases. On the right:
+								the completeness rule — a relay failure reduces completeness, never the answer.
+							</desc>
+							<rect x="16" y="40" width="420" height="180" rx="12" fill="#f1effc" stroke="#d7d2f6" />
+							<g font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" fill="#3b2fa8">
+								<text x="34" y="66" font-weight="650">The filter predicate is the store's</text>
+								<text x="34" y="86" font-size="11.5" fill="#4a4f58">reached through the endpoint's read, never copied</text>
+								<text x="34" y="118" font-weight="650">No socket</text>
+								<text x="34" y="138" font-size="11.5" fill="#4a4f58">0 constructors, 0 fetches, 0 servers — 2 reserved-TLD constants</text>
+								<text x="34" y="170" font-weight="650">No store and no app import</text>
+								<text x="34" y="196" font-size="11.5" fill="#4a4f58">0 @/ aliases, 0 ../ escapes, 0 sibling specifiers</text>
+							</g>
+							<rect x="460" y="40" width="420" height="180" rx="12" fill="#e9f6ef" stroke="#c3e2d0" />
+							<g font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" fill="#175c3c">
+								<text x="478" y="70" font-weight="650">Completeness is a wire fact</text>
+								<text x="478" y="96" font-size="12.5">A local answer is never withheld (LF-4).</text>
+								<text x="478" y="118" font-size="12.5">A deadline or relay failure degrades</text>
+								<text x="478" y="138" font-size="12.5">
+									<code>complete</code>
+									, never the answer (LF-5, LF-6).
+								</text>
+								<text x="478" y="168" font-size="11.5" fill="#4a4f58">A dropped event by the gate is not an</text>
+								<text x="478" y="186" font-size="11.5" fill="#4a4f58">incomplete answer — the wire decides.</text>
+							</g>
+							<text x="16" y="250" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">
+								All four boundaries were measured by the evidence script and returned 0 lines. The commands and their scope are in captures.
+							</text>
+						</svg>
+						<figcaption>
+							Each boundary is the kind of thing that leaks in a real codebase — a relay URL, a <code>fetch</code>, a host import — and each
+							is verified by a <code>grep</code> whose scope is written beside the result.
+						</figcaption>
+					</figure>
+
+					<div class="reveal">
+						<p>
+							<strong>The filter predicate.</strong> A malformed identity filter — <code>{ ids: ['not-a-hex-identity'] }</code> — is
+							rejected before it reaches either tier. The predicate is the store's single implementation, reached by calling the endpoint's
+							<code>read</code>, and no second predicate is grown here. On P2 this was not always true: a blind wave found the malformed
+							filter reaching the wire and a write behind the refusal. The repair moved the ordering — the endpoint's read now runs before
+							both tiers on every read path.
+						</p>
+					</div>
+				</section>
+
+				<section class="chapter" id="c6" aria-labelledby="c6-h">
+					<header class="reveal">
+						<span class="num">CHAPTER 06</span>
+						<h2 id="c6-h">How the rules were attacked — the story of the block</h2>
+						<p class="dek">
+							40 deliberate mutations, each breaking one rule in a real file, each making its named test fail, each restored byte-for-byte.
+							And the one path that was not measured — and what happened when a blind reviewer found it.
+						</p>
+					</header>
+
+					<figure class="figure reveal">
+						<svg viewBox="0 0 900 200" role="img" aria-labelledby="c6-t c6-d">
+							<title id="c6-t">The falsification routine: fingerprint, break, watch the test fail, restore and prove it green again.</title>
+							<desc id="c6-d">
+								Four steps in a row: step 1, record the sha256 fingerprint; step 2, apply one deliberate break to a real file; step 3, run
+								the named test and watch it fail; step 4, restore the file, verify the fingerprint, and confirm the test passes again.
+							</desc>
+							<rect x="16" y="40" width="192" height="90" rx="10" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="32" y="66" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="650" fill="#5a49d1">
+								1 · fingerprint
+							</text>
+							<text x="32" y="88" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">sha256, anchor</text>
+							<text x="32" y="106" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">
+								occurs exactly once
+							</text>
+							<text x="208" y="86" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" fill="#6d7380">→</text>
+							<rect x="232" y="40" width="192" height="90" rx="10" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="248" y="66" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="650" fill="#5a49d1">
+								2 · break it
+							</text>
+							<text x="248" y="88" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">
+								one small edit that
+							</text>
+							<text x="248" y="106" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">
+								breaks the rule
+							</text>
+							<text x="424" y="86" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" fill="#6d7380">→</text>
+							<rect x="448" y="40" width="192" height="90" rx="10" fill="#fdf4e9" stroke="#f0dcc4" />
+							<text x="464" y="66" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="650" fill="#9c5209">
+								3 · must fail
+							</text>
+							<text x="464" y="88" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">the named test</text>
+							<text x="464" y="106" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">goes red</text>
+							<text x="640" y="86" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" fill="#6d7380">→</text>
+							<rect x="656" y="40" width="228" height="90" rx="10" fill="#e9f6ef" stroke="#c3e2d0" />
+							<text x="672" y="66" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="650" fill="#1b7a4d">
+								4 · restore, verify
+							</text>
+							<text x="672" y="88" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">
+								sha256 match, test
+							</text>
+							<text x="672" y="106" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11.5" fill="#4a4f58">green again</text>
+							<text x="16" y="164" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">
+								40 mutations · 0 falsification failures · every restore sha256-verified
+							</text>
+						</svg>
+						<figcaption>
+							One mutation per evidence obligation. A mutation that stays green is a test that cannot fail — which is not evidence at all.
+						</figcaption>
+					</figure>
+
+					<div class="reveal">
+						<h3>The blind wave that blocked this module</h3>
+						<p>
+							On 2026-09-30, two blind reviewers, Red Team A and Red Team B, independently attacked the repaired I2 candidate
+							(<code>db5a3a3</code>). Both found the same defect: on the normative path
+							<strong>P2</strong> (<code>query{localFirst:false}</code>), a malformed identity filter reached the wire before the endpoint's
+							read could reject it — and the seam's answer was <strong>written into the local store</strong> behind the refusal. RT-A
+							returned <strong>MICRO_HARDEN</strong>. RT-B returned <strong>BLOCK</strong>.
+						</p>
+
+						<p>
+							<strong>The repair.</strong> The ordering moved, not the sentence. The endpoint's read was hoisted above both tiers and every
+							write-back, on every read path — so a refusal now reaches the caller with no side effect behind it. P2 kept its network-first
+							merge order, its both-tier provenance rule, and its LF-5 behaviour. The frozen statement <code>#f775fb</code> was not amended:
+							the code changed instead.
+						</p>
+
+						<p>
+							<strong>A third blind reviewer returned CLEAR.</strong> Red Team C (RT-C) re-verified the repair and independently reproduced
+							the suite (37 pass at that tree), the checkers, and the falsification harness. One MINOR finding — two docstrings the repair
+							had made untrue — was fixed in a follow-up commit (<code>6cb50bb</code>).
+						</p>
+
+						<p>
+							<strong>Then a regression the store shrink caused was found by measurement.</strong> After the store shrink landed (I3), a
+							subscription the caller had opened with <code>{kinds:[1]}</code> was receiving a local write of kind 7 — because the
+							endpoint's <code>changes</code> is unfiltered, and the store's own live path had previously applied the filter. This module
+							applies the subscription's own filters to every change-stream event before delivery, and that is measured (mutation 33 in the
+							falsification table).
+						</p>
+					</div>
+				</section>
+
+				<section class="chapter" id="c7" aria-labelledby="c7-h">
+					<header class="reveal">
+						<span class="num">CHAPTER 07</span>
+						<h2 id="c7-h">The measured evidence</h2>
+						<p class="dek">
+							Every number below came out of a command whose full output is on disk, beside the module, in the two evidence captures.
+						</p>
+					</header>
+
+					<figure class="figure reveal">
+						<svg viewBox="0 0 900 260" role="img" aria-labelledby="c7-t c7-d">
+							<title id="c7-t">Four commands and what each returned, plus the isolation and contract checks.</title>
+							<desc id="c7-d">
+								bun test returned 43 pass, 0 fail, 180 expectations. tsc returned exit 0. The isolation checks returned 0 lines. The
+								falsification run returned 40 mutations, 0 failures. The check routine returned 318 statements and 0 findings (the capture's
+								own count, 2026-09-30).
+							</desc>
+							<rect x="16" y="40" width="320" height="34" rx="8" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="30" y="63">cd ts &amp;&amp; bun test</text>
+							<rect x="16" y="84" width="320" height="34" rx="8" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="30" y="107">cd ts &amp;&amp; bun run typecheck</text>
+							<rect x="16" y="128" width="320" height="34" rx="8" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="30" y="151">bash evidence/run.sh</text>
+							<rect x="16" y="172" width="320" height="34" rx="8" fill="#ffffff" stroke="#e5e6e2" />
+							<text x="30" y="195">python3 evidence/falsify.py</text>
+							<g stroke="#c9cdc4" stroke-width="1.5" fill="none">
+								<path d="M336,57 H400" />
+								<path d="M336,101 H400" />
+								<path d="M336,145 H400" />
+								<path d="M336,189 H400" />
+							</g>
+							<rect x="404" y="40" width="480" height="34" rx="8" fill="#e9f6ef" stroke="#c3e2d0" />
+							<text x="420" y="63" font-size="13" fill="#175c3c">
+								<tspan font-weight="650">43 pass · 0 fail</tspan>
+								— 180 expectations, 2 files
+							</text>
+							<rect x="404" y="84" width="480" height="34" rx="8" fill="#e9f6ef" stroke="#c3e2d0" />
+							<text x="420" y="107" font-size="13" fill="#175c3c">
+								<tspan font-weight="650">exit 0</tspan>
+								— no diagnostics
+							</text>
+							<rect x="404" y="128" width="480" height="34" rx="8" fill="#e9f6ef" stroke="#c3e2d0" />
+							<text x="420" y="151" font-size="13" fill="#175c3c">
+								<tspan font-weight="650">0 lines</tspan>
+								— for every host-global and socket pattern
+							</text>
+							<rect x="404" y="172" width="480" height="34" rx="8" fill="#e9f6ef" stroke="#c3e2d0" />
+							<text x="420" y="195" font-size="13" fill="#175c3c">
+								<tspan font-weight="650">40 · 0</tspan>
+								— mutations applied, 0 falsification failures
+							</text>
+							<text x="16" y="236" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#6d7380">
+								all commands ran against the module alone, on a copy of the assembly that was never written to
+							</text>
+						</svg>
+						<figcaption>
+							Full output of each command lives in <code>evidence/01-build-and-tests.txt</code> and
+							<code>02-invariant-falsification.txt</code>.
+						</figcaption>
+					</figure>
+
+					<div class="reveal">
+						<div class="grid-2">
+							<div class="card stat ok"><b>43</b><span>tests, all green</span></div>
+							<div class="card stat ok"><b>180</b><span>individual expectations</span></div>
+							<div class="card stat ok"><b>2</b><span>test files</span></div>
+							<div class="card stat ok"><b>0</b><span>failures, 0 compiler diagnostics</span></div>
+							<div class="card stat"><b>24</b><span>packages installed (inside event-access/ts)</span></div>
+							<div class="card stat ok"><b>4</b><span>exports · 24 types — contract lists equal</span></div>
+							<div class="card stat ok"><b>10</b><span>.ts files · 13 import specifiers</span></div>
+							<div class="card stat ok">
+								<b>318</b><span>statements over 10 modules, 0 hard findings (as of the capture, 2026-09-30)</span>
+							</div>
+						</div>
+
+						<div class="tablewrap">
+							<table>
+								<caption class="small" style="text-align: left; padding: 10px 12px 0">
+									The rest of what was measured, item by item.
+								</caption>
+								<thead>
+									<tr>
+										<th>What was measured</th>
+										<th>What came back</th>
+										<th>Source</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<td>Suite</td>
+										<td class="n">43 pass, 0 fail, 180 expect() — 2 files</td>
+										<td>capture `01`, §2, §7</td>
+									</tr>
+									<tr>
+										<td>Typecheck</td>
+										<td class="n">exit 0 (strict, noEmit)</td>
+										<td>capture `01`, §3</td>
+									</tr>
+									<tr>
+										<td>Imports — host escapes / siblings</td>
+										<td class="n">0 lines (10 files, 13 specifiers, all allowed)</td>
+										<td>capture `01`, §4</td>
+									</tr>
+									<tr>
+										<td>Contract — exports / types</td>
+										<td class="n">4/4 exports, 24/24 types, runtime 4 values</td>
+										<td>capture `01`, §5</td>
+									</tr>
+									<tr>
+										<td>File inventory</td>
+										<td class="n">14 listed = 14 found, diff 0</td>
+										<td>capture `01`, §6</td>
+									</tr>
+									<tr>
+										<td>Statement census</td>
+										<td class="n">44 declaring lines, 44/44/44, 11 amendments</td>
+										<td>capture `01`, §8</td>
+									</tr>
+									<tr>
+										<td>Socket / fetch / server</td>
+										<td class="n">0 constructors; 2 wss:// VALUE constants on .invalid</td>
+										<td>capture `01`, §9</td>
+									</tr>
+									<tr>
+										<td>Wrong-tier dependency</td>
+										<td class="n">0 sibling; 1 nostr-tools copy; applesauce-core transitive only</td>
+										<td>capture `01`, §10</td>
+									</tr>
+									<tr>
+										<td>Evidence ratchet</td>
+										<td class="n">13 scripts, 7 hard, 1 note (module's own is ok)</td>
+										<td>capture `01`, §12</td>
+									</tr>
+									<tr>
+										<td>Falsification</td>
+										<td class="n">40 mutations, 0 failures, restores sha256-verified</td>
+										<td>capture `02`</td>
+									</tr>
+									<tr>
+										<td>Bun version</td>
+										<td class="n">1.4.2</td>
+										<td>both captures</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+
+						<div class="note ok">
+							<h3>Each number is traceable to a line in the captures</h3>
+							<p>
+								Open <code>evidence/01-build-and-tests.txt</code> — every section starts with a command and ends with its expected
+								annotation. <code>02-invariant-falsification.txt</code> runs 40 mutations, 0 failures. Both files were regenerated from the
+								documented commands after the repair sequence completed.
+							</p>
+						</div>
+					</div>
+				</section>
+
+				<section class="chapter" id="c8" aria-labelledby="c8-h">
+					<header class="reveal">
+						<span class="num">CHAPTER 08</span>
+						<h2 id="c8-h">What is not yet true</h2>
+						<p class="dek">
+							This chapter is deliberately uncomfortable. Everything below is a limit of the module as it stands — not a caveat, and not
+							softened.
+						</p>
+					</header>
+
+					<figure class="figure reveal">
+						<svg viewBox="0 0 900 300" role="img" aria-labelledby="c8-t c8-d">
+							<title id="c8-t">Five things missing, and two open readings.</title>
+							<desc id="c8-d">
+								Five dashed boxes: nothing imports the module; both ports are hand-written fakes; validation's accept hook is not wired in;
+								no module adopts its contract; no relay was ever contacted. Below them, two amber flags: the change pump is never torn down;
+								the deadline strands the pending upstream promise.
+							</desc>
+							<g>
+								<rect x="16" y="46" width="160" height="80" rx="10" fill="#ffffff" stroke="#d9dbd5" stroke-dasharray="6 5" />
+								<text x="30" y="72" font-size="12" fill="#4a4f58">nothing imports</text>
+								<text x="30" y="90" font-size="12" fill="#4a4f58">this module</text>
+								<text x="30" y="116" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#9c5209">NOT YET</text>
+								<rect x="192" y="46" width="160" height="80" rx="10" fill="#ffffff" stroke="#d9dbd5" stroke-dasharray="6 5" />
+								<text x="206" y="72" font-size="12" fill="#4a4f58">ports are</text>
+								<text x="206" y="90" font-size="12" fill="#4a4f58">hand-written fakes</text>
+								<text x="206" y="116" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#9c5209">NOT YET</text>
+								<rect x="368" y="46" width="160" height="80" rx="10" fill="#ffffff" stroke="#d9dbd5" stroke-dasharray="6 5" />
+								<text x="382" y="72" font-size="12" fill="#4a4f58">validation's hook</text>
+								<text x="382" y="90" font-size="12" fill="#4a4f58">not wired in</text>
+								<text x="382" y="116" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#9c5209">NOT YET</text>
+								<rect x="544" y="46" width="160" height="80" rx="10" fill="#ffffff" stroke="#d9dbd5" stroke-dasharray="6 5" />
+								<text x="558" y="72" font-size="12" fill="#4a4f58">no real endpoint</text>
+								<text x="558" y="90" font-size="12" fill="#4a4f58">is wired in here</text>
+								<text x="558" y="116" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#9c5209">NOT YET</text>
+								<rect x="720" y="46" width="164" height="80" rx="10" fill="#ffffff" stroke="#d9dbd5" stroke-dasharray="6 5" />
+								<text x="734" y="72" font-size="12" fill="#4a4f58">no relay ever</text>
+								<text x="734" y="90" font-size="12" fill="#4a4f58">contacted</text>
+								<text x="734" y="116" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#9c5209">NOT YET</text>
+							</g>
+							<text x="16" y="166" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" fill="#15171b">
+								<tspan font-weight="650">None of these five has happened.</tspan>
+								Each is named in the build's own list of what it does not verify.
+							</text>
+							<rect x="16" y="180" width="868" height="56" rx="10" fill="#fdf4e9" stroke="#f0dcc4" />
+							<text x="34" y="204" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="650" fill="#9c5209">
+								OPEN READING 1
+							</text>
+							<text x="34" y="224" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" fill="#8a4a08">
+								The change pump is never torn down: by design it outlives its last subscriber because the port's changes is endless. Not
+								observable in this increment.
+							</text>
+							<rect x="16" y="244" width="868" height="48" rx="10" fill="#fdf4e9" stroke="#f0dcc4" />
+							<text x="34" y="266" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="650" fill="#9c5209">
+								OPEN READING 2
+							</text>
+							<text x="34" y="284" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" fill="#8a4a08">
+								The deadline wins: the pending upstream promise is stranded. Bounded and unobservable in this increment.
+							</text>
+						</svg>
+						<figcaption>
+							Same discipline as the evidence chapter: a gap is stated as a gap, not hidden. Five things that should exist, and two readings
+							left open.
+						</figcaption>
+					</figure>
+
+					<div class="reveal">
+						<h3>1 · Nothing imports this module</h3>
+						<p>
+							No module in the assembly lists <code>event-access</code> in its <code>needs:</code> declaration, and no import specifier in
+							any file reaches it. The module's own contract is declared; nothing yet exercises it for real.
+						</p>
+
+						<h3>2 · Both ports are hand-written fakes</h3>
+						<p>
+							The store endpoint and the relay seam are implemented inside <code>ts/harness.ts</code> — in-memory fakes that record calls
+							and return scripted answers. The store's own endpoint now exists in <code>event-store/</code> (increment I3 landed
+							2026-09-30), but nothing here is wired to it — the module still runs only over these hand-written fakes — and no real relay
+							connection was ever opened.
+						</p>
+
+						<h3>3 · Validation's accept hook is not wired in</h3>
+						<p>
+							The gate accepts an optional <code>AcceptHook</code>. When absent — which is the default — everything passes through. The
+							<code>validation</code> module's job is to supply such a hook with its presets, but nothing in this assembly wires them
+							together. The validation module exists and has its own 32-case suite; it is just not plugged in here.
+						</p>
+
+						<h3>4 · Two readings remain open</h3>
+						<p>
+							The change pump is never torn down (by design; the port's <code>changes</code> is endless), and the
+							<code>withDeadline</code> helper strands the pending upstream promise when the deadline wins (bounded and unobservable at this
+							increment). Both are disclosed in the freeze note; neither is a code defect.
+						</p>
+					</div>
+				</section>
+
+				<section class="chapter" id="c9" aria-labelledby="c9-h">
+					<header class="reveal">
+						<span class="num">CHAPTER 09</span>
+						<h2 id="c9-h">Open questions, and the assumptions I had to invent</h2>
+						<p class="dek">
+							Four questions the spec deliberately leaves open for you, the decisions this page makes on your behalf — separated out, so
+							nothing is hidden in the prose.
+						</p>
+					</header>
+
+					<div class="reveal">
+						<div class="grid-2">
+							<div class="card">
+								<h3>1 · Should provenance move into the envelope?</h3>
+								<p class="small">
+									The spec keeps a companion read <code>originOf(answer, id)</code>. A third envelope member
+									<code>{events, complete, origins}</code> would save one call per event and widen a shape another spec already states. Not
+									taken; open for you.
+								</p>
+							</div>
+							<div class="card">
+								<h3>2 · Should count ever consult the wire?</h3>
+								<p class="small">
+									It does not today — M14, D-O4. The wire's NIP-45 count is available on the seam for a caller that composes nostr-io alone.
+									That alternative is not lost; it is one call away.
+								</p>
+							</div>
+							<div class="card">
+								<h3>3 · Where does the excluded list come from?</h3>
+								<p class="small">
+									The wallet rule arrives as an input to the <code>excluded</code> list. If a host ever supplies two exclusions, a nicer
+									shape may be needed. Today one declared value suffices.
+								</p>
+							</div>
+							<div class="card">
+								<h3>4 · What is persist:false's scope?</h3>
+								<p class="small">
+									It suppresses the write-back for that call only. The answer is unchanged and <code>originOf</code> still reports network.
+									The alternative — per-call exclusions — is named and not taken.
+								</p>
+							</div>
+						</div>
+
+						<h3>What I invented, and want you to correct if it is wrong</h3>
+						<ol>
+							<li>
+								<strong>“The module” means the spec and this implementation together.</strong> The spec is the authority; the code is its
+								first TypeScript implementation.
+							</li>
+							<li>
+								<strong>Every plain-language gloss is mine.</strong> <em>Fill</em> for the seam's answer; <em>gate</em> for the accept hook;
+								<em>path</em> for a named route through the composition; <em>seam</em> for the boundary between tiers; <em>fork</em> for the
+								<code>localFirst</code> branch.
+							</li>
+							<li>
+								<strong>The grouping of the operations</strong> into five bands — reads (query/subscribe), write (publish), local
+								(count/delete), pointer (P5) — and the envelope separate.
+							</li>
+							<li>
+								<strong>The gate's three destinations as an explorable panel</strong> is my reading of the spec; the spec prints the three
+								destinations in prose.
+							</li>
+							<li>
+								<strong>Every number on this page is quoted from the module's evidence captures</strong>
+								(<code>01-build-and-tests.txt</code>, <code>02-invariant-falsification.txt</code>). None was recomputed by me.
+							</li>
+							<li>
+								<strong>I chose the balance of this page:</strong> the measured wins are given the numbers they earned; the gaps are given a
+								whole chapter and the last word. If that balance is wrong for you, the facts are the artifacts'.
+							</li>
+						</ol>
+
+						<div class="note">
+							<h3>How to check any of this in a minute</h3>
+							<p>
+								Open <code>event-access/event-access.md</code> — it is the spec this page follows and the only place the rules are declared.
+								<code>event-access/ts/</code> is the code. <code>event-access/evidence/</code> holds the raw output of every command. If a
+								claim on this page cannot be found in one of those three, it is my wording, not the module's behaviour.
+							</p>
+						</div>
+					</div>
+				</section>
+
+				<footer class="foot" role="contentinfo">
+					<p>
+						<strong>What this page is.</strong> A reading aid for one module. The spec is <code>event-access/event-access.md</code>, the
+						first implementation is <code>event-access/ts/</code>, and the executed evidence is <code>event-access/evidence/</code>. Where
+						this page and those three disagree, they are right.
+					</p>
+					<p>
+						Self-contained and offline: no web font, no analytics, no network request of any kind. With JavaScript off, or “reduce motion”
+						set in your operating system, the whole page is simply visible and still — every chapter, every number, every warning.
+					</p>
+				</footer>
+			</main>
+		</div>
+
+		<script>
+			;(function () {
+				'use strict'
+
+				/* ---- chapter-level reveal via IntersectionObserver (no external library) ---- */
+				var reveals = Array.prototype.slice.call(document.querySelectorAll('.reveal'))
+
+				function showAll() {
+					reveals.forEach(function (el) {
+						el.style.opacity = '1'
+						el.style.transform = 'none'
+						el.style.willChange = 'auto'
+					})
+				}
+
+				var wantsMotion = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+				if (!wantsMotion || !window.IntersectionObserver) {
+					showAll()
+				} else {
+					reveals.forEach(function (el) {
+						el.style.opacity = '0'
+						el.style.transform = 'translateY(12px)'
+					})
+
+					var observer = new IntersectionObserver(
+						function (entries) {
+							entries.forEach(function (entry) {
+								if (!entry.isIntersecting) return
+								var el = entry.target
+								el.style.transition = 'opacity .55s ease, transform .55s ease'
+								el.style.opacity = '1'
+								el.style.transform = 'translateY(0)'
+								el.style.willChange = 'auto'
+								observer.unobserve(el)
+							})
+						},
+						{ threshold: 0.12 },
+					)
+
+					reveals.forEach(function (el) {
+						observer.observe(el)
+					})
+
+					/* watchdog: after 3s, any reveal still at 0 inside the viewport gets turned on */
+					window.addEventListener('load', function () {
+						window.setTimeout(function () {
+							reveals.forEach(function (el) {
+								if (window.getComputedStyle(el).opacity !== '0') return
+								var r = el.getBoundingClientRect()
+								if (r.top < window.innerHeight && r.bottom > 0) {
+									el.style.transition = 'opacity .3s ease'
+									el.style.opacity = '1'
+									el.style.transform = 'translateY(0)'
+								}
+							})
+						}, 3000)
+					})
+				}
+
+				/* ---- path explorer for P1/P2/P3/P5 (chapter 3) --------------------------- */
+				var PATH_DATA = {
+					p1: {
+						title: 'P1 · query{localFirst:true}',
+						body: "Call order: read → query → write. The endpoint's read answers first (LF-1). The fill follows. The fill's events are written back through the endpoint (LF-2). The id-unique union and per-id provenance are recorded. <code>complete</code> is a fact about the wire's boundary — the fill reached the seam and answered.",
+					},
+					p2: {
+						title: 'P2 · query{localFirst:false}',
+						body: "Call order: <strong>read → query → write</strong> (after the ordering repair). The endpoint's read runs first because no filter may reach the wire before the predicate has answered. The <strong>merge order</strong> is inverted: the fill's events enter the union <em>ahead of</em> the local ones, so the network's freshness leads the answer. Provenance does not move: a both-tier id still reports <code>'local'</code>. This is the path the blind wave blocked and the repair fixed.",
+					},
+					p3: {
+						title: 'P3 · subscribe',
+						body: "Call order: read → subscribe. The replay is local-first (LF-1). The endpoint's <code>changes</code> is fanned out from one pump to every open subscription. A later write — from a publish, another read's fill, a deletion or an expiry — reaches each of them exactly once (LF-3). Cancellation is idempotent; a signal already aborted opens nothing.",
+					},
+					p5: {
+						title: 'P5 · pointer read (query{ids: [single]})',
+						body: "A query whose filter carries a single id, not a seventh operation. The sequence is the same as P1: local read first, then the seam's fill. The id-unique union produces at most one event. Provenance records where it came from.",
+					},
+				}
+
+				var pathButtons = Array.prototype.slice.call(document.querySelectorAll('#path-buttons button'))
+				var pathReadout = document.getElementById('path-readout')
+
+				function selectPath(path) {
+					var data = PATH_DATA[path]
+					if (!data) return
+					pathButtons.forEach(function (b) {
+						b.setAttribute('aria-pressed', String(b.getAttribute('data-path') === path))
+					})
+					if (!pathReadout) return
+					pathReadout.innerHTML = '<h3>' + data.title + '</h3><p>' + data.body + '</p>'
+				}
+
+				pathButtons.forEach(function (b) {
+					b.addEventListener('click', function () {
+						selectPath(b.getAttribute('data-path'))
+					})
+				})
+
+				/* ---- gate destination explorer (chapter 4) --------------------------- */
+				var GATE_SITES = {
+					a: {
+						title: 'A · The store write (acceptForStore)',
+						body: "Content arriving off the seam port and headed for the store — a query's fill and a subscription's fill — passes through the one rule here once, before the union; the accepted set is then routed on to the consumer as well. The gate sees <code>operation: 'read'</code>, the endpoint's declared tier, and <code>resolve()</code> for the link half.",
+					},
+					b: {
+						title: 'B · The consumer delivery (acceptForConsumer)',
+						body: "A query's local answer, a subscription's replay and the change fan-out all pass through the one rule here before anything reaches the consumer; a rejected event is never delivered. The gate sees <code>operation: 'read'</code>.",
+					},
+					c: {
+						title: 'C · The wire publish (acceptForWire)',
+						body: "The outgoing set (after the declared exclusion rule is applied) passes through the one rule here before the local write and before any relay attempt. The gate sees <code>operation: 'publish'</code>. An event the rule rejects is not stored and not dispatched; the relay attempt sees exactly the same permitted set the local write saw.",
+					},
+				}
+
+				var gateButtons = Array.prototype.slice.call(document.querySelectorAll('#gate-buttons button'))
+				var gateReadout = document.getElementById('gate-readout')
+				var gateNodes = Array.prototype.slice.call(document.querySelectorAll('.gate-node'))
+
+				function selectGate(site) {
+					var data = GATE_SITES[site]
+					if (!data) return
+					gateButtons.forEach(function (b) {
+						b.setAttribute('aria-pressed', String(b.getAttribute('data-site') === site))
+					})
+					gateNodes.forEach(function (n) {
+						n.classList.toggle('is-sel', n.getAttribute('data-site') === site)
+					})
+					if (!gateReadout) return
+					gateReadout.innerHTML = '<h3>' + data.title + '</h3><p>' + data.body + '</p>'
+				}
+
+				gateButtons.forEach(function (b) {
+					b.addEventListener('click', function () {
+						selectGate(b.getAttribute('data-site'))
+					})
+				})
+				gateNodes.forEach(function (n) {
+					n.addEventListener('click', function () {
+						selectGate(n.getAttribute('data-site'))
+					})
+				})
+
+				/* ---- initial selections ---- */
+				selectPath('p1')
+				selectGate('a')
+				/* gate nodes: initial select */
+				gateNodes.forEach(function (n) {
+					n.classList.toggle('is-sel', n.getAttribute('data-site') === 'a')
+				})
+			})()
+		</script>
+	</body>
 </html>

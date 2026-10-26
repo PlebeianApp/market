@@ -40,7 +40,10 @@ describe('read', () => {
 		const b2 = signedEvent({ kind: 7, content: 'b2', created_at: 1500 })
 		for (const event of [a1, a2, a3, b1, b2]) await store.write([event])
 
-		const result: Event[] = await store.read([{ kinds: [1], limit: 2 }, { kinds: [7], limit: 1 }])
+		const result: Event[] = await store.read([
+			{ kinds: [1], limit: 2 },
+			{ kinds: [7], limit: 1 },
+		])
 		// kind 1's newest two (a3, a2) ∪ kind 7's newest one (b2), in the read's own order
 		expect(result.map((candidate) => candidate.id)).toEqual([a3.id, a2.id, b2.id])
 	})
@@ -194,7 +197,10 @@ describe('modelStore', () => {
 
 		// `timeout` turns "the accessor is a different store" into a failing case rather than a hanging one.
 		const timeline = await firstValueFrom(
-			store.modelStore().timeline({ kinds: [1059], '#p': [PUBKEY] }).pipe(timeout(500)),
+			store
+				.modelStore()
+				.timeline({ kinds: [1059], '#p': [PUBKEY] })
+				.pipe(timeout(500)),
 		)
 		expect(timeline.map((candidate) => candidate.id)).toEqual([gift.id])
 	})

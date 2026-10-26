@@ -23,45 +23,45 @@ import type { AnswerOrigin, Event } from './types'
 
 /** #b40aaa — Union: the union of the two tiers' answers, id-unique, with the tier that produced each id. */
 export class Union {
-  private readonly events: Event[] = []
-  private readonly seen = new Set<string>()
-  private readonly origins = new Map<string, AnswerOrigin>()
+	private readonly events: Event[] = []
+	private readonly seen = new Set<string>()
+	private readonly origins = new Map<string, AnswerOrigin>()
 
-  /**
-   * Add one event under one tier. Returns **true** iff the id is new — so a caller can
-   * assert exactly-once delivery and an expected write count from one return value.
-   *
-   * A known id is never a second event, but a tier that *outranks* the recorded one replaces
-   * the record: the documented tier for an id both tiers produced is the local read's,
-   * whatever order the two tiers were asked in (`#34dcaa`).
-   */
-  add(event: Event, origin: AnswerOrigin): boolean {
-    if (this.seen.has(event.id)) {
-      if (origin === 'local') this.origins.set(event.id, 'local')
-      return false
-    }
-    this.seen.add(event.id)
-    this.events.push(event)
-    this.origins.set(event.id, origin)
-    return true
-  }
+	/**
+	 * Add one event under one tier. Returns **true** iff the id is new — so a caller can
+	 * assert exactly-once delivery and an expected write count from one return value.
+	 *
+	 * A known id is never a second event, but a tier that *outranks* the recorded one replaces
+	 * the record: the documented tier for an id both tiers produced is the local read's,
+	 * whatever order the two tiers were asked in (`#34dcaa`).
+	 */
+	add(event: Event, origin: AnswerOrigin): boolean {
+		if (this.seen.has(event.id)) {
+			if (origin === 'local') this.origins.set(event.id, 'local')
+			return false
+		}
+		this.seen.add(event.id)
+		this.events.push(event)
+		this.origins.set(event.id, origin)
+		return true
+	}
 
-  /** Add a whole answer; returns only the events that were **fresh** under this tier. */
-  take(events: readonly Event[], origin: AnswerOrigin): Event[] {
-    const fresh: Event[] = []
-    for (const event of events) {
-      if (this.add(event, origin)) fresh.push(event)
-    }
-    return fresh
-  }
+	/** Add a whole answer; returns only the events that were **fresh** under this tier. */
+	take(events: readonly Event[], origin: AnswerOrigin): Event[] {
+		const fresh: Event[] = []
+		for (const event of events) {
+			if (this.add(event, origin)) fresh.push(event)
+		}
+		return fresh
+	}
 
-  /** The merged answer, in arrival order: the local answer's events first, then the fill's. */
-  answer(): Event[] {
-    return [...this.events]
-  }
+	/** The merged answer, in arrival order: the local answer's events first, then the fill's. */
+	answer(): Event[] {
+		return [...this.events]
+	}
 
-  /** A copy of the per-id provenance record, keyed by event id. */
-  originsOf(): Map<string, AnswerOrigin> {
-    return new Map(this.origins)
-  }
+	/** A copy of the per-id provenance record, keyed by event id. */
+	originsOf(): Map<string, AnswerOrigin> {
+		return new Map(this.origins)
+	}
 }

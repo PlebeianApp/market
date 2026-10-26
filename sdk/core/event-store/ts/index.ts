@@ -19,5 +19,33 @@ export { createEventStore } from './store'
 export { FILTER_SUPPORT, assertIdentityFilters, matchesNothing } from './filters'
 export { StoreError } from './errors'
 export { compareVersions, collapseToHeads } from './heads'
-export { createReplaceableAddress, getEventUID, getMatchingTags, getReplaceableIdentifier, isAddressable, isFromCache, isReplaceable, tagValue } from './view'
-export type { Event, FilterIn, Reason, ClockPort, FilterSupport, EndpointTier, EndpointReadOptions, EndpointWriteOutcome, StoreEndpoint, CountResult, DeleteRef, DeleteOutcome, EvictionPolicy, EventDatabase, AsyncEventDatabase, EventStoreOptions, EventStore, EventPersistence } from './types'
+export {
+	createReplaceableAddress,
+	getEventUID,
+	getMatchingTags,
+	getReplaceableIdentifier,
+	isAddressable,
+	isFromCache,
+	isReplaceable,
+	tagValue,
+} from './view'
+export type {
+	Event,
+	FilterIn,
+	Reason,
+	ClockPort,
+	FilterSupport,
+	EndpointTier,
+	EndpointReadOptions,
+	EndpointWriteOutcome,
+	StoreEndpoint,
+	CountResult,
+	DeleteRef,
+	DeleteOutcome,
+	EvictionPolicy,
+	EventDatabase,
+	AsyncEventDatabase,
+	EventStoreOptions,
+	EventStore,
+	EventPersistence,
+} from './types'

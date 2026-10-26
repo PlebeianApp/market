@@ -80,11 +80,11 @@ another module's statement, because a statement's identity is the hash of its ow
 ### `#83d0a1` — This module is new and independent; the market's signer code is the surface it replaces
 
 `platform-core` (`#815e0d`, quoted in its own words at `platform-core.md:192-195`) records the maintainer's
-direction of 2026-09-28: *"a core module is **new and independent**, specified at its final state — it is not
+direction of 2026-09-28: _"a core module is **new and independent**, specified at its final state — it is not
 extracted from the market's current code. What is listed above is the code being **replaced** and the surface
-its first consumer has to re-point onto the module's contract."* `project.md` (`:34-36`, same date) says it
-again: *"five core modules at their final state, not at their today-state, each platform-agnostic and each a
-new, independent module rather than an extraction of the market's current code."*
+its first consumer has to re-point onto the module's contract."_ `project.md` (`:34-36`, same date) says it
+again: _"five core modules at their final state, not at their today-state, each platform-agnostic and each a
+new, independent module rather than an extraction of the market's current code."_
 
 So this module is specified at its final state. Its first implementation is a **credited harvest** of an
 existing, tested implementation of these invariants — not an extraction from the market's app, and not a
@@ -103,7 +103,7 @@ Taken on 2026-09-28, and they override the run's earlier assumptions:
   first implementation in `signer/ts/` and its evidence in `signer/evidence/`.
 - **The interfaces come first, for any consumer.** The public contract is the primary artifact; a consumer is
   hypothetical by design and that is accepted. The named consumers in the front-matter are honest: one is being
-  *replaced*, one is another kind of composer the code already supports, and the rest do not exist yet.
+  _replaced_, one is another kind of composer the code already supports, and the rest do not exist yet.
 - **The naming and the layout are decided and written down here** — `signer` for the module (above), `ts/` for
   the first implementation, because a spec has many implementations and `ts/` is one of them (`#465561`).
 
@@ -154,7 +154,7 @@ typed refusal.
 - `getPublicKey()` — the authenticated identity's hex pubkey, resolved **through the signer**. This is the only
   identity read (I2).
 - `signEvent(template)` — sign a prepared unsigned event, **bound to the resolved identity**: the result must
-  verify cryptographically *and* `event.pubkey` must equal `getPublicKey()`, else fail closed (I3).
+  verify cryptographically _and_ `event.pubkey` must equal `getPublicKey()`, else fail closed (I3).
 - `capabilities()` — the encryption the signer actually provides, after the composer's allow-list. Present if
   and only if the signer provides it and the composer permits it (I4) — and the same intersection is what
   `currentSigner()` hands out, so the capability a consumer reaches for cannot offer a scheme the operations
@@ -208,12 +208,12 @@ free function:
   object, no framework handle. That vocabulary is part of the contract, not an implementation detail: a
   fail-closed path raises a typed error, a **port** that failed raises `PortError`, and the persisted record's
   rules carry a `code` from `SessionVaultCode` naming which rule fired — never a bare string a caller has to
-  match on text. Which error *types* exist is the first implementation's choice; the obligation that a caller
+  match on text. Which error _types_ exist is the first implementation's choice; the obligation that a caller
   can tell the rules apart is the spec's.
 
 ### `#fa0578` — Nothing is implicitly signable: an operation that needs a session refuses in a typed way without one
 
-A caller that wants to sign must be able to *read* what is attached. The specification therefore names the read
+A caller that wants to sign must be able to _read_ what is attached. The specification therefore names the read
 (`currentSigner()`) and the state (`idle`, `active`, …) rather than hiding a default: one implementation
 substitutes an implicit signer for its callers, the underlying library does not, and a module that reproduced
 the first would make the second's absence invisible. Every operation that needs an identity, a capability or a
@@ -224,7 +224,7 @@ fallback.
 A **port** is the one thing this module does not own, so its failure is typed as well: a host store that
 throws, a passphrase source that rejects, a relay transport that refuses to open a subscription and a clock
 that misbehaves all arrive as `PortError`, carrying the host's own message as its cause. A port error is
-therefore *observed* — it reaches a snapshot's `reason` field, which every listener sees — so a host adapter
+therefore _observed_ — it reaches a snapshot's `reason` field, which every listener sees — so a host adapter
 must not interpolate secret material into its own error text. The module never puts a passphrase, a session
 token or an envelope's bytes into a snapshot by itself.
 
@@ -338,7 +338,7 @@ the defect this pass fixed.
 
 ### `#6f4c1c` — The identity binding is the module's single implementation of I3 `[1:1]`, applied to every lane at the one place a capability becomes the session's
 
-`bindIdentity` is the only place a returned signed event is checked to be **cryptographically valid** *and* bound
+`bindIdentity` is the only place a returned signed event is checked to be **cryptographically valid** _and_ bound
 to the resolved identity (`event.pubkey === getPublicKey()`), and every lane — extension, nsec, ncryptsec, bunker
 and nostrconnect — passes through it in the session's attach path rather than binding in a lane builder. One
 implementation, all lanes, so no lane can carry an assertion the others do not. The marker `[1:1]` states the
@@ -413,7 +413,7 @@ storage, so an envelope below the accepted floor is rejected before any key deri
   the module's own — a template, a signed event and the fields they carry are declared structurally rather than
   borrowed from a library — and **one named exception** stands, because it describes a property of the port
   rather than a naming choice: the injected transport's push source is typed as the first implementation's
-  observable input, which is exactly what a host must satisfy for a NIP-46 lane to consume it. The *operation*
+  observable input, which is exactly what a host must satisfy for a NIP-46 lane to consume it. The _operation_
   and its semantics are the contract: a push source shaped in the host's idiom for one, plus a publish function.
   A second implementation types it as its own equivalent and adapts at its boundary. Naming the exception is the
   honest form of this rule; the earlier version of it was contradicted by this document's own type list, and by
@@ -452,7 +452,7 @@ implementation may make a different one:
 - the **base64 codec** in the envelope (pure code, no host codec, format-compatible with the market's records);
 - the **session object** the composer holds, instead of the market's module-level attached-capability
   singleton — process-global state is a host's convenience, and the spec says one `active` session at a time;
-- the **error type names** (`SessionVaultError`, `PasswordSignerLockedError`, …): the *behaviour* is spec — every
+- the **error type names** (`SessionVaultError`, `PasswordSignerLockedError`, …): the _behaviour_ is spec — every
   fail-closed path is typed and a locked signer rejects fast rather than hanging — the names are not;
 - the **helper split** between `capability.ts`, `lanes.ts`, `nip46.ts` and `uri.ts`, and the `uri.ts` helper for
   the connect secret: naming, where the behaviour (the `secret` param, the refusal of a legacy `token`-only URI)
@@ -460,12 +460,12 @@ implementation may make a different one:
 - the **transport port's shape** (a subscription source plus a publish function): the spec requires an injected
   transport and a refusal without one; how a host maps its relay layer onto it is the host's;
 - the **test harness** (`ts/harness.ts`): an in-memory store, a manual clock, a WebCrypto-backed crypto port and
-  an in-process remote-signer emulator. It is the *host* side of every port, it is not exported by the contract,
+  an in-process remote-signer emulator. It is the _host_ side of every port, it is not exported by the contract,
   and it exists to prove the ports are real rather than to be shipped.
 
 ### `#597459` — The one deliberate difference from the harvest, stated where the spec is: the NIP-07 lane's extension is an argument, not a global
 
-A browser extension *is* a host object, so the spec types that lane's transport as injected and this module
+A browser extension _is_ a host object, so the spec types that lane's transport as injected and this module
 reads no browser global at all: the lane is offered only where a host supplies one. The harvested
 implementation reached for the browser's global extension object itself, which is why the harvest cannot be
 transplanted verbatim here. The observable behaviour is otherwise unchanged: the lane still derives
@@ -558,7 +558,7 @@ cited elsewhere in this tree (R1).
   test harness's.
 - **not delivered**: a second implementation (Rust, Flutter, Angular) — the spec exists so that it can be
   written, and nothing here proves it can be;
-- **not delivered**: a *product* consumer. Nothing imports this module into an application; the market's signer
+- **not delivered**: a _product_ consumer. Nothing imports this module into an application; the market's signer
   code is still in place and this build did not touch it. The probe above is a consumer in the sense that
   matters for the contract — a foreign caller working from the entry alone — and not in the sense that matters
   for shipping.
@@ -569,7 +569,7 @@ cited elsewhere in this tree (R1).
   reference implementation's own vault code was executed against this module's, in both directions, at 100 000
   iterations: market writes / module reads and module writes / market reads both come back identical, the key
   sets match and the codec agrees. The scope, stated: this measures the envelope, the KDF and the codec
-  between the two implementations under a JavaScript runtime. It is not a record written by the market's *app*
+  between the two implementations under a JavaScript runtime. It is not a record written by the market's _app_
   in a browser, and not a record written by an older revision of the market. The first pass called this
   unmeasurable here; it was one script away.
 - **what this pass repaired**: the red team blocked the first implementation on two findings and raised nine
@@ -588,14 +588,14 @@ cited elsewhere in this tree (R1).
 
 `#8ed5d5` **Whether the record's envelope format is frozen as contract.** The module writes and reads it, and I5
 makes its floor spec, so a second implementation either matches the format or cannot read an existing record.
-The lean: freeze the format (keys, KDF, AEAD, base64) as contract and leave the *key names* to the host, since
+The lean: freeze the format (keys, KDF, AEAD, base64) as contract and leave the _key names_ to the host, since
 a host that already stores something else should not be forced to adopt this one's.
 
 `#55482f` **Whether the client-initiated lane should also persist its session.** The bunker lane persists a session
 token; the client-initiated lane currently persists one only after binding, and whether an unbound
 client-initiated session should ever be persisted is a product question about what "remember this signer" means.
 
-Amended by this pass, in the body rather than in the statement's line because an identity *is* the hash of its
+Amended by this pass, in the body rather than in the statement's line because an identity _is_ the hash of its
 declaring line and the run's other artifacts cite these identities: **both** NIP-46 lanes now persist a token only
 after the identity is resolved and the session is `active` (M1). The ordering half of this question is therefore
 settled in the implementation; what remains is the product question — whether an approved signer should be

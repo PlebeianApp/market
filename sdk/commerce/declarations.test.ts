@@ -24,7 +24,10 @@ const HERE = import.meta.dir
 
 async function moduleDirectories(): Promise<string[]> {
 	const entries = await readdir(HERE, { withFileTypes: true })
-	return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort()
+	return entries
+		.filter((entry) => entry.isDirectory())
+		.map((entry) => entry.name)
+		.sort()
 }
 
 describe('the sdk/commerce declarations', () => {

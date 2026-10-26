@@ -15,11 +15,11 @@ import type { Reason } from './types'
 
 /** #97386c — EventAccessError: the module's only error type [1:1], a contract `Reason` plus a human-readable message. */
 export class EventAccessError extends Error {
-  readonly reason: Reason
+	readonly reason: Reason
 
-  constructor(reason: Reason, message: string) {
-    super(message)
-    this.name = 'EventAccessError'
-    this.reason = reason
-  }
+	constructor(reason: Reason, message: string) {
+		super(message)
+		this.name = 'EventAccessError'
+		this.reason = reason
+	}
 }

@@ -120,7 +120,12 @@ describe('the declaration registry and its guard', () => {
 			owner: 'commerce.orders',
 			kinds: [],
 			contributions: [
-				{ kind: 16, via: 'commerce.messaging', source: 'orders spec', checks: [{ kind: 'format', id: 'orders-needs-subject', requires: [{ tag: 'subject', atLeast: 1 }] }] },
+				{
+					kind: 16,
+					via: 'commerce.messaging',
+					source: 'orders spec',
+					checks: [{ kind: 'format', id: 'orders-needs-subject', requires: [{ tag: 'subject', atLeast: 1 }] }],
+				},
 			],
 			accepts: [],
 		}

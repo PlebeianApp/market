@@ -5,13 +5,7 @@
  * and the refund guard name no rail, and each wrapper arrives as an injected port. This file adds the set
  * record's shape and the injected port interfaces; it re-declares no contract type.
  */
-import type {
-	FundsAuthorityKind,
-	FundsHandle,
-	FundsWitness,
-	FundsWitnessKind,
-	WrapperRegistration,
-} from '../../funds-contract/ts/index'
+import type { FundsAuthorityKind, FundsHandle, FundsWitness, FundsWitnessKind, WrapperRegistration } from '../../funds-contract/ts/index'
 
 /**
  * `#d91675` AggregatorWrapper — the port the aggregator takes one per rail, injected by the composing app: the

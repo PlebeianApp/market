@@ -41,14 +41,7 @@
 import { createValidator } from '../../validation/ts/index'
 import type { Validator, ValidatorOptions } from '../../validation/ts/index'
 import { createEventAccess, DEFAULT_WRITE_BACK } from '../../event-access/ts/index'
-import type {
-  AcceptContext,
-  AcceptDecision,
-  Event,
-  EventAccess,
-  EventAccessOptions,
-  WriteBackPolicy,
-} from '../../event-access/ts/index'
+import type { AcceptContext, AcceptDecision, Event, EventAccess, EventAccessOptions, WriteBackPolicy } from '../../event-access/ts/index'
 
 /**
  * The composition root's options: the two ports and the optional injected resolver and fill that
@@ -57,24 +50,24 @@ import type {
  * (`#8e6079`).
  */
 export interface ComposedEventAccessOptions {
-  readonly endpoint: EventAccessOptions['endpoint']
-  readonly upstream: EventAccessOptions['upstream']
-  readonly fill?: EventAccessOptions['fill']
-  readonly resolver?: EventAccessOptions['resolver']
-  readonly policy?: WriteBackPolicy
-  /**
-   * The host's validation options — `presets`, and optionally the port, the bounds and the clock
-   * (`ValidatorOptions`, `validation/ts/types.ts:302`). **Absent means the socket stays absent and
-   * every candidate is admitted** (the pass-through default). Supplied — even `{}` — means the
-   * validator is composed and its `accept` occupies the one hook.
-   */
-  readonly validation?: ValidatorOptions
+	readonly endpoint: EventAccessOptions['endpoint']
+	readonly upstream: EventAccessOptions['upstream']
+	readonly fill?: EventAccessOptions['fill']
+	readonly resolver?: EventAccessOptions['resolver']
+	readonly policy?: WriteBackPolicy
+	/**
+	 * The host's validation options — `presets`, and optionally the port, the bounds and the clock
+	 * (`ValidatorOptions`, `validation/ts/types.ts:302`). **Absent means the socket stays absent and
+	 * every candidate is admitted** (the pass-through default). Supplied — even `{}` — means the
+	 * validator is composed and its `accept` occupies the one hook.
+	 */
+	readonly validation?: ValidatorOptions
 }
 
 /** What the root hands back: the composed handle, and the validator the hook is drawn from. */
 export interface ComposedEventAccess {
-  readonly access: EventAccess
-  readonly validator: Validator
+	readonly access: EventAccess
+	readonly validator: Validator
 }
 
 /**
@@ -84,30 +77,29 @@ export interface ComposedEventAccess {
  * unchanged: no hook, accept everything.
  */
 export function composeEventAccess(options: ComposedEventAccessOptions): ComposedEventAccess {
-  // The validator is always built (an empty option set is the spec's pass-through), so the caller
-  // holds the handle and can drive `validate` for a direct read that must name the failing
-  // constraint — the refresh command's own caller shape (FINAL-composed §1.8), never a second rule.
-  const validator = createValidator(options.validation ?? {})
+	// The validator is always built (an empty option set is the spec's pass-through), so the caller
+	// holds the handle and can drive `validate` for a direct read that must name the failing
+	// constraint — the refresh command's own caller shape (FINAL-composed §1.8), never a second rule.
+	const validator = createValidator(options.validation ?? {})
 
-  const base = options.policy ?? DEFAULT_WRITE_BACK
-  // Decision 1 vs 2, in one expression: no declared validation ⇒ the socket stays as the host left
-  // it (absent, by default); a declared one ⇒ the validator's `accept` IS the hook.
-  const policy: WriteBackPolicy =
-    options.validation === undefined
-      ? base
-      : {
-          ...base,
-          accept: (event: Event, context: AcceptContext): AcceptDecision | Promise<AcceptDecision> =>
-            validator.accept(event, context),
-        }
+	const base = options.policy ?? DEFAULT_WRITE_BACK
+	// Decision 1 vs 2, in one expression: no declared validation ⇒ the socket stays as the host left
+	// it (absent, by default); a declared one ⇒ the validator's `accept` IS the hook.
+	const policy: WriteBackPolicy =
+		options.validation === undefined
+			? base
+			: {
+					...base,
+					accept: (event: Event, context: AcceptContext): AcceptDecision | Promise<AcceptDecision> => validator.accept(event, context),
+				}
 
-  const access = createEventAccess({
-    endpoint: options.endpoint,
-    upstream: options.upstream,
-    fill: options.fill,
-    resolver: options.resolver,
-    policy,
-  })
+	const access = createEventAccess({
+		endpoint: options.endpoint,
+		upstream: options.upstream,
+		fill: options.fill,
+		resolver: options.resolver,
+		policy,
+	})
 
-  return { access, validator }
+	return { access, validator }
 }

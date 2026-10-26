@@ -17,23 +17,23 @@ doctrines) and `#722d26` (what each tool answers).
    is the implementation. If what you are about to write contradicts the MD, the MD wins until an increment
    changes it — and that change is a statement, not an edit in passing (`#85f5da`).
 3. **Know what you are allowed to touch.** The task packet's `IN_SCOPE` is a boundary, not a suggestion. A
-   finding outside it is **reported**, not fixed: *a run that finds the bound wrong reports that; it does not
-   fix it by scope creep.*
+   finding outside it is **reported**, not fixed: _a run that finds the bound wrong reports that; it does not
+   fix it by scope creep._
 
 ## The order of work
 
 Both doctrines share the same stages. The doctrine adds **how many times the work is attacked**, never fewer
 rules.
 
-| stage | light | hardened |
-|---|---|---|
-| 1. Research — measure, do not judge | yes | yes |
-| 2. Propose — the smallest change that satisfies the goal | yes | yes |
-| 3. Freeze the candidate at a commit | yes | yes |
-| 4. Adversarial review | one Red Team (A2) | A2, then A3 falsifying the central invariant with an **executed** counterexample |
-| 5. Repair — only what the review bounded | if needed | if needed, then **re-reviewed** |
-| 6. Blind final review (A4) | — | yes, and it must not read stages 4–5 |
-| 7. Human decides | yes | yes |
+| stage                                                    | light             | hardened                                                                         |
+| -------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------- |
+| 1. Research — measure, do not judge                      | yes               | yes                                                                              |
+| 2. Propose — the smallest change that satisfies the goal | yes               | yes                                                                              |
+| 3. Freeze the candidate at a commit                      | yes               | yes                                                                              |
+| 4. Adversarial review                                    | one Red Team (A2) | A2, then A3 falsifying the central invariant with an **executed** counterexample |
+| 5. Repair — only what the review bounded                 | if needed         | if needed, then **re-reviewed**                                                  |
+| 6. Blind final review (A4)                               | —                 | yes, and it must not read stages 4–5                                             |
+| 7. Human decides                                         | yes               | yes                                                                              |
 
 **You stop at every gate.** A builder never carries a stage into the next one on its own authority, and never
 approves its own work.
@@ -58,7 +58,7 @@ output is not the same as acting on it:
 ## What you owe at the handover
 
 1. **The diff**, at a commit — never a working tree.
-2. **The evidence**, as artifacts: command output, test counts, the failing case *and* the passing case. A
+2. **The evidence**, as artifacts: command output, test counts, the failing case _and_ the passing case. A
    number you did not run is not evidence.
 3. **The check's own output** on your change.
 4. **A findings list**: what you found and did not fix, with the reason. "Out of scope" is a legitimate

@@ -60,10 +60,10 @@ builder, adversarial reviewer and production operator at once.
   — and hashes to `fd8e957a…`. So the artifact was **edited after it was received and recorded**, and under
   this library's own rule that makes it a new prompt.
   - **What that means:** any citation of `constitution@9eaaf1a4…` refers to text this repository **does not
-    hold**. The old row is preserved here so that reference stays resolvable as a *reference*, and the
+    hold**. The old row is preserved here so that reference stays resolvable as a _reference_, and the
     honest state is: **the original is not in this repository; whoever holds it should supply it** if the
     digest form is going to be used for anything that matters.
-  - **What was *not* done:** the arriving copy was not reverted, and no attempt was made to reconstruct the
+  - **What was _not_ done:** the arriving copy was not reverted, and no attempt was made to reconstruct the
     original from the recorded digest. Both would be guesses dressed as corrections.
 
 ### `how-to-use.md` — the human operator's guide
