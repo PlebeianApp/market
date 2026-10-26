@@ -1,0 +1,38 @@
+bun test v1.4.2 (744846f84)
+
+src/lib/__tests__/eventLike.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+error: Cannot find module '@sdk/core/nostr/eventLike' from '/home/c03rad0r/worktrees/pr1412-ci/src/lib/__tests__/eventLike.test.ts'
+-------------------------------
+
+
+src/lib/__tests__/nip17OrderPublish.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+error: Cannot find module '@sdk/core/nostr/nip17Relays' from '/home/c03rad0r/worktrees/pr1412-ci/src/lib/nostr/nip17Relays.ts'
+-------------------------------
+
+
+sdk/core/relay-config/ts/relay-config.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+error: Cannot find module 'applesauce-common/helpers/relay-list' from '/home/c03rad0r/worktrees/pr1412-ci/sdk/core/relay-config/ts/adapter.ts'
+-------------------------------
+
+
+sdk/core/event-access/ts/composition.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+error: Cannot find module 'applesauce-loaders/loaders' from '/home/c03rad0r/worktrees/pr1412-ci/sdk/core/event-access/ts/composition.test.ts'
+-------------------------------
+
+
+ 0 pass
+ 4 fail
+ 4 errors
+Ran 4 tests across 4 files. [24.20s]
