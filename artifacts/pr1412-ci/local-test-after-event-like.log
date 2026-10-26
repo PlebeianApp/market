@@ -1,0 +1,13 @@
+bun test v1.4.2 (744846f84)
+
+src/lib/__tests__/eventLike.test.ts:
+(pass) toRawEvent > returns a plain (applesauce) event unchanged — same reference [754.91ms]
+(pass) toRawEvent > unwraps an NDK-like event carrying rawEvent() [198.84ms]
+(pass) auction parse boundary accepts raw events from the applesauce path > plain canonical auction event parses (detail page h1 data path) [663.08ms]
+(pass) auction parse boundary accepts raw events from the applesauce path > NDK-wrapped and plain events parse to the identical ParsedAuctionEvent [193.31ms]
+(pass) auction parse boundary accepts raw events from the applesauce path > plain bid event parses through the same boundary (bids memos) [37.87ms]
+
+ 5 pass
+ 0 fail
+ 9 expect() calls
+Ran 5 tests across 1 file. [8.20s]

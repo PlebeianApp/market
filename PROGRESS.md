@@ -45,4 +45,6 @@ Post-delivery verification
 - `bun run format`: PASS; `bun run format:check`: PASS; NDK footprint: PASS at 147/147.
 - `bun run build`: FAIL. The first unresolved module is `@sdk/core/nostr/eventLike`, imported by `src/lib/nostr/eventLike.ts`.
 - Root cause confirmed in `f1c38332`: Core's hand-built Nostr layer was deleted while `src/` was deliberately left unmigrated. The app still consumes these pure helpers through its compatibility modules.
-- Repair in progress: preserve the tested pure helpers in the existing app compatibility modules without restoring the deleted SDK layer. Build and focused tests have not yet been rerun after this diagnosis.
+- Repair in progress: preserve the tested pure helpers in the existing app compatibility modules without restoring the deleted SDK layer.
+- `src/lib/nostr/eventLike.ts` now owns the pure event helpers; its regression test imports the app seam. Focused result: 5 pass, 0 fail.
+- Rebuilt after that change: build remains RED, now on missing NIP-59 exports from `@sdk/core` (`createNip59GiftWrapWithSigner`, `unwrapNip59GiftWrapWithSigner`, `signerSupportsNip44`). No build success is claimed yet.

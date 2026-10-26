@@ -1,0 +1,24 @@
+$ bun run generate-routes && bun run build.ts
+$ tsr generate
+
+🚀 Starting build process...
+
+📄 Found 1 HTML file to process
+
+5 | 	createNip59GiftWrapWithSigner as sdkCreateNip59GiftWrapWithSigner,
+     ^
+error: No matching export in "sdk/core/index.ts" for import "createNip59GiftWrapWithSigner"
+    at /home/c03rad0r/worktrees/pr1412-ci/src/lib/nostr/nip59.ts:5:2
+
+6 | 	unwrapNip59GiftWrapWithSigner as sdkUnwrapNip59GiftWrapWithSigner,
+     ^
+error: No matching export in "sdk/core/index.ts" for import "unwrapNip59GiftWrapWithSigner"
+    at /home/c03rad0r/worktrees/pr1412-ci/src/lib/nostr/nip59.ts:6:2
+
+7 | 	signerSupportsNip44 as sdkSignerSupportsNip44,
+     ^
+error: No matching export in "sdk/core/index.ts" for import "signerSupportsNip44"
+    at /home/c03rad0r/worktrees/pr1412-ci/src/lib/nostr/nip59.ts:7:2
+
+Bun v1.4.2 (Linux x64)
+error: script "build" exited with code 1

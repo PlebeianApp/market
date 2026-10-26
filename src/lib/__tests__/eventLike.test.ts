@@ -12,7 +12,7 @@
  */
 import { describe, expect, test } from 'bun:test'
 
-import { toRawEvent, type NostrEventLike } from '@sdk/core/nostr/eventLike'
+import { toRawEvent, type NostrEventLike } from '../nostr/eventLike'
 import { parseAuctionEvent } from '../schemas/auction/auctionEvent'
 import { parseBidEvent } from '../schemas/auction/bidEvent'
 
