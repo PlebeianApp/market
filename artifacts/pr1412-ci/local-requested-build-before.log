@@ -1,0 +1,14 @@
+$ bun run generate-routes && bun run build.ts
+$ tsr generate
+
+🚀 Starting build process...
+
+📄 Found 1 HTML file to process
+
+2 | export { getEventAddress, toRawEvent } from '@sdk/core/nostr/eventLike'
+                                                ^
+error: Could not resolve: "@sdk/core/nostr/eventLike". Maybe you need to "bun install"?
+    at /home/c03rad0r/worktrees/pr1412-ci/src/lib/nostr/eventLike.ts:2:45
+
+Bun v1.4.2 (Linux x64)
+error: script "build" exited with code 1

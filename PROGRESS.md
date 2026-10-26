@@ -39,3 +39,10 @@ Files touched
 Last verified milestone
 
 - Diagnostic and patch PR are delivered on the bot-owned branch. `bun run format:check` and NDK footprint (147/147) pass; 44 focused SDK tests and 15 NDK/adapter/guard tests pass; Playwright discovery succeeds without running browser scenarios. Full `bun run test:unit` remains red (1771 pass, 34 fail, 27 errors) because of unresolved Core Nostr/NIP-17 compatibility work. `bunx tsc --noEmit` aborted with exit 134 (heap exhaustion). No full browser e2e or patch-PR CI result is claimed.
+
+Post-delivery verification
+
+- `bun run format`: PASS; `bun run format:check`: PASS; NDK footprint: PASS at 147/147.
+- `bun run build`: FAIL. The first unresolved module is `@sdk/core/nostr/eventLike`, imported by `src/lib/nostr/eventLike.ts`.
+- Root cause confirmed in `f1c38332`: Core's hand-built Nostr layer was deleted while `src/` was deliberately left unmigrated. The app still consumes these pure helpers through its compatibility modules.
+- Repair in progress: preserve the tested pure helpers in the existing app compatibility modules without restoring the deleted SDK layer. Build and focused tests have not yet been rerun after this diagnosis.
