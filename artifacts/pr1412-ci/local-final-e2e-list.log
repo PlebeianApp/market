@@ -1,0 +1,244 @@
+Listing tests:
+  [chromium] › app-settings.spec.ts:83:2 › App Settings › admin can navigate to app settings page
+  [chromium] › app-settings.spec.ts:92:2 › App Settings › non-admin is redirected away from app settings
+  [chromium] › app-settings.spec.ts:106:2 › Featured Items › admin can view featured items page with tabs
+  [chromium] › app-settings.spec.ts:116:2 › Featured Items › can add a product to featured list by coordinate
+  [chromium] › app-settings.spec.ts:145:2 › Featured Items › can remove a product from featured list
+  [chromium] › app-settings.spec.ts:157:2 › Featured Items › collections tab shows empty state
+  [chromium] › app-settings.spec.ts:167:2 › Featured Items › can add a user to featured list by hex pubkey
+  [chromium] › app-settings.spec.ts:184:2 › Featured Items › permissions section shows admin role
+  [chromium] › app-settings.spec.ts:195:2 › Featured Items › non-admin user is redirected away from featured items
+  [chromium] › app-settings.spec.ts:209:2 › Blacklists › admin can view blacklists page with tabs
+  [chromium] › app-settings.spec.ts:219:2 › Blacklists › can add a user to blacklist by hex pubkey
+  [chromium] › app-settings.spec.ts:229:2 › Blacklists › can remove a user from blacklist
+  [chromium] › app-settings.spec.ts:239:2 › Blacklists › can add a product to blacklist by coordinate
+  [chromium] › app-settings.spec.ts:255:2 › Blacklists › collections tab shows empty state
+  [chromium] › app-settings.spec.ts:265:2 › Blacklists › permissions section shows admin role
+  [chromium] › app-settings.spec.ts:276:2 › Blacklists › non-admin user is redirected away from blacklists
+  [chromium] › auction-bidding-mints.spec.ts:285:2 › Auction Bidding with Multiple Mints — Rendering › auction detail page renders bid button for multi-mint auction
+  [chromium] › auction-bidding-mints.spec.ts:301:2 › Auction Bidding with Multiple Mints — Rendering › auction detail page renders for single-mint auction
+  [chromium] › auction-bidding-mints.spec.ts:317:2 › Auction Bidding with Multiple Mints — Rendering › auction detail page renders minimum bid info
+  [chromium] › auction-bidding-mints.spec.ts:333:2 › Auction Bidding with Multiple Mints — Rendering › second mint renders in mint selector when present in trusted mints
+  [chromium] › auction-bidding-mints.spec.ts:358:2 › Auction Bidding — Wallet-Funded Mint Selection › mint selector shows funded mint with balance
+  [chromium] › auction-bidding-mints.spec.ts:389:2 › Auction Bidding — Wallet-Funded Mint Selection › funded mint shows balance and enables bid after wallet reload
+  [chromium] › auction-bidding-mints.spec.ts:413:2 › Auction Bidding — Wallet-Funded Mint Selection › auction funding only lists accepted mints and completes the bid
+  [chromium] › auction-bidding-mints.spec.ts:617:2 › Direct Lightning Bid Funding (video recorded) › happy path: bid → insufficient funds → QR invoice → pay → e-cash minted → bid published
+  [chromium] › auction-bidding-mints.spec.ts:770:2 › Direct Lightning Bid Funding (video recorded) › timeout: invoice generated → 15s timeout → retry confirmation
+  [chromium] › auction-bidding-mints.spec.ts:920:2 › Direct Lightning Bid Funding (video recorded) › signing failure: deposit succeeds → bid publish fails → retry available
+  [chromium] › auction-bidding-mints.spec.ts:1087:2 › Direct Lightning Bid Funding (video recorded) › stray dleq_required=0 is ignored: the bid still publishes dleq_proof tags
+  [chromium] › auction-home-grids.spec.ts:97:2 › Auctions home page — Your Auctions & Previously Bid grids › shows "Your Auctions" for auctions the signed-in user created
+  [chromium] › auction-home-grids.spec.ts:111:2 › Auctions home page — Your Auctions & Previously Bid grids › shows "You Previously Bid" for auctions the signed-in user bid on
+  [chromium] › auction-home-grids.spec.ts:126:2 › Auctions home page — Your Auctions & Previously Bid grids › does NOT show "Your Auctions" for a user with no auctions
+  [chromium] › auction-invalid-event-gate.spec.ts:155:2 › Spec validity — malformed auction events (AUCTIONS.md §4.1) › a malformed event is absent from the feed, does not win "Ending Soon", and is reachable by direct link with a notice
+  [chromium] › auction-invalid-event-gate.spec.ts:255:2 › Spec validity — malformed auction events (AUCTIONS.md §4.1) › the owner dashboard keeps a malformed auction visible, so the seller can republish it
+  [chromium] › auction-live-chat-ui.spec.ts:110:2 › Auction Live Chat UI Components › chat panel shows "not available" when no 30311 live activity exists
+  [chromium] › auction-live-chat-ui.spec.ts:122:2 › Auction Live Chat UI Components › chat panel is hidden on mobile viewport width
+  [chromium] › auction-live-chat-ui.spec.ts:142:2 › Auction Live Chat UI Components › chat panel container is visible on desktop viewport width with live activity
+  [chromium] › auction-live-chat-ui.spec.ts:153:2 › Auction Live Chat UI Components › unauthenticated user sees login prompt when live activity exists
+  [chromium] › auction-live-chat-ui.spec.ts:168:2 › Auction Live Chat UI Components › live chat panel shows empty state and message input
+  [chromium] › auction-live-chat-ui.spec.ts:192:2 › Auction Live Chat UI Components › message count shows correct count
+  [chromium] › auction-live-chat.spec.ts:110:2 › Auction Live Chat › live chat panel shows fallback when no 30311 exists
+  [chromium] › auction-live-chat.spec.ts:122:2 › Auction Live Chat › live chat panel shows login prompt for unauthenticated users
+  [chromium] › auction-live-chat.spec.ts:137:2 › Auction Live Chat › merchant can type a message in the live chat input
+  [chromium] › auction-live-chat.spec.ts:154:2 › Auction Live Chat › 30311 live activity event has correct tags
+  [chromium] › auction-mint-state.spec.ts:15:2 › Auction Mint State › trusted mints initialize with available mints
+  [chromium] › auction-mint-state.spec.ts:30:2 › Auction Mint State › user can remove a mint and the form stays valid
+  [chromium] › auction-mint-state.spec.ts:53:2 › Auction Mint State › user can re-add a previously removed mint via unselected list
+  [chromium] › auction-settlement.spec.ts:396:3 › Auction Settlement Descriptor › seller view › seller sees awaiting-path-release when auction ended, reserve met, no path release
+  [chromium] › auction-settlement.spec.ts:419:3 › Auction Settlement Descriptor › seller view › seller sees settlement-ready when path release published
+  [chromium] › auction-settlement.spec.ts:440:3 › Auction Settlement Descriptor › seller view › seller sees reserve-not-met when no bid meets reserve
+  [chromium] › auction-settlement.spec.ts:460:3 › Auction Settlement Descriptor › seller view › seller sees order-received after settlement with claim order
+  [chromium] › auction-settlement.spec.ts:491:3 › Auction Settlement Descriptor › winning-bidder view › winner sees release-path card when auction ended, reserve met, window open
+  [chromium] › auction-settlement.spec.ts:518:3 › Auction Settlement Descriptor › winning-bidder view › winner sees path-released after publishing path release
+  [chromium] › auction-settlement.spec.ts:538:3 › Auction Settlement Descriptor › winning-bidder view › winner sees you-won after settlement
+  [chromium] › auction-settlement.spec.ts:568:3 › Auction Settlement Descriptor › outbid-bidder view › outbid bidder sees no settlement card (null descriptor)
+  [chromium] › auction-settlement.spec.ts:590:3 › Auction Settlement Descriptor › settlement window expired › seller sees settlement-window-expired when no path release after grace
+  [chromium] › auction-settlement.spec.ts:713:3 › UI interaction — publish events to relay › winning-bidder clicks Release Path › clicking Release Path publishes a kind-1025 event to the relay
+  [chromium] › auction-settlement.spec.ts:767:3 › UI interaction — publish events to relay › winning-bidder clicks Release Path › after clicking Release Path, UI transitions to path-released state
+  [chromium] › auction-settlement.spec.ts:821:3 › UI interaction — publish events to relay › seller clicks Publish Settlement › clicking Publish Settlement publishes a kind-1024 event to the relay
+  [chromium] › auction-settlement.spec.ts:884:3 › UI interaction — publish events to relay › seller clicks Close Auction (reserve not met) › clicking Close Auction publishes a kind-1024 event with status=reserve_not_met
+  [chromium] › auction-settlement.spec.ts:931:2 › Cross-client — bidder publishes path release, seller detects › seller sees Settlement Ready after bidder clicks Release Path on another client
+  [chromium] › auction-settlement.spec.ts:979:2 › settlement validation failure — unresolvable v2 keyset ID › seller stays on Awaiting Path Release when path release token has unresolvable v2 keyset ID
+  [chromium] › auction-shipping.spec.ts:14:2 › Auction Shipping Display › shows resolved shipping option details
+  [chromium] › auction-shipping.spec.ts:33:2 › Auction Shipping Display › deduplicates shipping refs by shippingRef, first occurrence wins
+  [chromium] › auction-shipping.spec.ts:56:2 › Auction Shipping Display › shows unavailable for unresolvable shipping ref
+  [chromium] › auth.spec.ts:122:3 › Authentication › Extension Login › login via extension tab in dialog
+  [chromium] › auth.spec.ts:153:3 › Authentication › Private Key Login › generate new key, encrypt, and login
+  [chromium] › auth.spec.ts:203:3 › Authentication › Private Key Login › login with existing seeded user private key (hex format)
+  [chromium] › auth.spec.ts:240:3 › Authentication › Private Key Login › stored key login with correct password succeeds
+  [chromium] › auth.spec.ts:278:3 › Authentication › Private Key Login › stored key login with wrong password fails
+  [chromium] › auth.spec.ts:317:3 › Authentication › Private Key Login › remove stored key shows fresh key input
+  [chromium] › auth.spec.ts:360:3 › Authentication › Bunker URL Validation › validates bunker URL format
+  [chromium] › auth.spec.ts:401:3 › Authentication › NIP-46 Nostr Connect › QR code login with NIP-46 mock
+  [chromium] › auth.spec.ts:451:3 › Authentication › NIP-46 Nostr Connect › bunker URL connect with NIP-46 mock
+  [chromium] › auth.spec.ts:491:3 › Authentication › NIP-46 Nostr Connect › secretless bunker URL shows auth challenge and completes with NIP-46 mock
+  [chromium] › auth.spec.ts:527:3 › Authentication › NIP-46 Nostr Connect › allows IPv6 loopback HTTP signer auth challenge URL in dev/test
+  [chromium] › auth.spec.ts:561:3 › Authentication › NIP-46 Nostr Connect › does not render unsafe signer auth challenge URL as clickable
+  [chromium] › auth.spec.ts:597:3 › Authentication › Persistence and Reload › auto-login with extension after reload
+  [chromium] › auth.spec.ts:626:3 › Authentication › Persistence and Reload › decrypt fails for wrong password with stored private key after reload
+  [chromium] › auth.spec.ts:660:3 › Authentication › Persistence and Reload › decrypt dialog appears for stored private key after reload
+  [chromium] › auth.spec.ts:695:3 › Authentication › Logout › logout clears auth state and localStorage
+  [chromium] › buyer-purchase.spec.ts:6:2 › Buyer Purchase Flow › buyer adds two products to cart and totals are correct
+  [chromium] › cart.spec.ts:100:2 › Cart - Remove Items › can remove a single item from cart
+  [chromium] › cart.spec.ts:119:2 › Cart - Remove Items › removing one item from multi-item cart keeps others
+  [chromium] › cart.spec.ts:154:2 › Cart - Change Quantity › can increment product quantity using the plus button
+  [chromium] › cart.spec.ts:175:2 › Cart - Change Quantity › can decrement product quantity using the minus button
+  [chromium] › cart.spec.ts:201:2 › Cart - Change Quantity › decrement button is disabled at quantity 1
+  [chromium] › cart.spec.ts:215:2 › Cart - Change Quantity › can add same product multiple times from product listing
+  [chromium] › cart.spec.ts:252:2 › Cart - Multiple Merchants › products from different sellers are grouped separately
+  [chromium] › cart.spec.ts:275:2 › Cart - Multiple Merchants › can add multiple products from same seller
+  [chromium] › cart.spec.ts:299:2 › Cart - Multiple Merchants › removing all items from one seller keeps other seller items
+  [chromium] › cart.spec.ts:330:2 › Cart - Persistence › cart items persist after page reload
+  [chromium] › cart.spec.ts:353:2 › Cart - Persistence › cart quantity persists after page reload
+  [chromium] › cart.spec.ts:384:2 › Cart - Persistence › cart persists after navigating to another page and back
+  [chromium] › cart.spec.ts:403:2 › Cart - Persistence › clearing cart removes all items after reload
+  [chromium] › checkout.spec.ts:10:7 › Checkout › buyer can complete a full purchase with shipping
+  [chromium] › collections.spec.ts:117:2 › Collection Management › collections list page is accessible
+  [chromium] › collections.spec.ts:121:2 › Collection Management › can create a collection
+  [chromium] › collections.spec.ts:134:2 › Collection Management › can edit a collection
+  [chromium] › collections.spec.ts:171:2 › Collection Management › can delete a collection
+  [chromium] › community.progressive-loading.spec.ts:84:2 › Community Tab Progressive Loading › renders hero and page shell while collection and merchant queries are pending
+  [chromium] › community.progressive-loading.spec.ts:98:2 › Community Tab Progressive Loading › displays deterministic skeletons while collection and merchant queries are pending
+  [chromium] › community.progressive-loading.spec.ts:112:2 › Community Tab Progressive Loading › renders collection cards after a successful collection query
+  [chromium] › community.progressive-loading.spec.ts:139:2 › Community Tab Progressive Loading › renders collection empty state after a successful empty collection query
+  [chromium] › community.progressive-loading.spec.ts:152:2 › Community Tab Progressive Loading › renders collection error state and recovers after retry
+  [chromium] › community.progressive-loading.spec.ts:181:2 › Community Tab Progressive Loading › renders merchant success and empty states distinctly
+  [chromium] › community.progressive-loading.spec.ts:200:2 › Community Tab Progressive Loading › renders merchant error state and recovers after retry
+  [chromium] › community.progressive-loading.spec.ts:222:2 › Community Tab Progressive Loading › page remains interactive while community queries are pending
+  [chromium] › cvm-config.spec.ts:44:2 › CVM oracle configuration › /api/config returns cvmServerPubkey that is not the app own key
+  [chromium] › cvm-config.spec.ts:71:2 › CVM oracle configuration › /api/config cvmServerPubkey matches the known ContextVM oracle identity
+  [chromium] › cvm-config.spec.ts:81:2 › CVM oracle configuration › /api/config appPublicKey is different from cvmServerPubkey
+  [chromium] › image-upload-compression.spec.ts:145:2 › Image Upload with Compression › compresses and uploads a real selected image file
+  [chromium] › image-upload-compression.spec.ts:171:2 › Image Upload with Compression › image URL input accepts manually provided URLs
+  [chromium] › image-upload-compression.spec.ts:180:2 › Image Upload with Compression › invalid URLs show error messages
+  [chromium] › image-upload-compression.spec.ts:188:2 › Image Upload with Compression › multiple images can be managed in sequence
+  [chromium] › image-upload-compression.spec.ts:198:2 › Image Upload with Compression › image edit button works when image is set
+  [chromium] › image-upload-compression.spec.ts:210:2 › Image Server Selection › server selector dropdown is visible
+  [chromium] › lightning-mock.spec.ts:28:2 › Lightning Mock › serves LNURL-pay discovery metadata for .well-known/lnurlp requests
+  [chromium] › lightning-mock.spec.ts:47:2 › Lightning Mock › serves invoice JSON for callback requests and captures zap request state
+  [chromium] › lightning-mock.spec.ts:71:2 › Lightning Mock › callback handler does not shadow LNURL discovery (reverse route order)
+  [chromium] › marketplace.spec.ts:184:2 › Marketplace Display › shows products from multiple sellers
+  [chromium] › marketplace.spec.ts:218:2 › Multi-Merchant Cart › can add products from two different sellers to cart
+  [chromium] › marketplace.spec.ts:237:2 › Multi-Merchant Cart › cart requires shipping per seller before checkout
+  [chromium] › marketplace.spec.ts:274:2 › Multi-Seller Checkout with V4V › cart shows V4V payment breakdown per seller
+  [chromium] › marketplace.spec.ts:302:7 › Multi-Seller Checkout with V4V › multi-seller checkout generates correct invoice count
+  [chromium] › marketplace.spec.ts:330:2 › Multi-Seller Checkout with V4V › can complete multi-seller checkout with all invoices
+  [chromium] › marketplace.spec.ts:374:2 › V4V Dashboard Management › circular economy page shows V4V configuration
+  [chromium] › marketplace.spec.ts:389:2 › V4V Dashboard Management › can add a V4V recipient and save
+  [chromium] › media-rendering.spec.ts:59:2 › media rendering › auction renders a <video> player for a video image URL
+  [chromium] › media-rendering.spec.ts:81:2 › media rendering › auction renders an <img> for an image URL in the gallery
+  [chromium] › navigation.spec.ts:6:2 › Navigation › homepage loads and shows header
+  [chromium] › navigation.spec.ts:11:2 › Navigation › products page loads
+  [chromium] › navigation.spec.ts:16:2 › Navigation › community page loads
+  [chromium] › navigation.spec.ts:21:2 › Navigation › authenticated user can access dashboard
+  [chromium] › navigation.spec.ts:26:2 › Navigation › dashboard shows navigation sections
+  [chromium] › navigation.spec.ts:35:2 › Navigation › dashboard products link navigates correctly
+  [chromium] › og-meta-tags.spec.ts:212:2 › OG Meta Tags - Server-Rendered Social Previews › NSFW product page does NOT leak OG meta tags in initial HTML
+  [chromium] › og-meta-tags.spec.ts:227:2 › OG Meta Tags - Server-Rendered Social Previews › unknown product ID serves shell without OG tags
+  [chromium] › og-meta-tags.spec.ts:239:2 › OG Meta Tags - Server-Rendered Social Previews › client-side document.title updates after SPA load
+  [chromium] › og-meta-tags.spec.ts:254:2 › OG Meta Tags - Server-Rendered Social Previews › meta tags persist after SPA hydration
+  [chromium] › og-meta-tags.spec.ts:275:2 › OG Meta Tags - Server-Rendered Social Previews › product price/currency meta tags present in initial HTML
+  [chromium] › og-meta-tags.spec.ts:312:2 › OG Meta Tags - Happy Path (Video) › full OG meta tags happy path
+  [chromium] › og-meta-tags.spec.ts:357:2 › OG Meta Tags - Hostile Host Regression › forged Host header never redirects shell fetch or poisons og:url
+  [chromium] › og-meta-tags.spec.ts:372:2 › OG Meta Tags - Hostile Host Regression › forged failing port Host still serves 200 with og tags
+  [chromium] › og-meta-tags.spec.ts:448:2 › OG Meta Tags - SPA Nav Ownership Matrix › cleanup matrix matches the product route owned-selector list
+  [chromium] › og-meta-tags.spec.ts:475:2 › OG Meta Tags - SPA Nav Ownership Matrix › SPA nav A→B: B tags replace A tags, no stale og:title
+  [chromium] › og-meta-tags.spec.ts:498:2 › OG Meta Tags - SPA Nav Ownership Matrix › SPA nav A-with-image→B-without-image: no stale og:image
+  [chromium] › og-meta-tags.spec.ts:517:2 › OG Meta Tags - SPA Nav Ownership Matrix › product→non-product route removes all owned tags
+  [chromium] › og-meta-tags.spec.ts:537:2 › OG Meta Tags - SPA Nav Ownership Matrix › A→B→A produces no duplicate tags
+  [chromium] › og-meta-tags.spec.ts:554:2 › OG Meta Tags - SPA Nav Ownership Matrix › SPA nav A(SATS)→C(USD): currency tag follows the product, no stale value
+  [chromium] › order-detail.spec.ts:13:2 › Order Details - Seller View - Products › manages product order from pending to shipped
+  [chromium] › order-detail.spec.ts:44:2 › Order Details - Seller View - Products › views confirmed product order and marks as processed
+  [chromium] › order-detail.spec.ts:58:2 › Order Details - Seller View - Products › views confirm processing and marks as shipping in progress
+  [chromium] › order-detail.spec.ts:130:2 › Order Details - Buyer View - Products › views pending product order and waits for payment request
+  [chromium] › order-detail.spec.ts:147:2 › Order Details - Buyer View - Products › sees invoice and confirms payment for product order
+  [chromium] › order-detail.spec.ts:166:2 › Order Details - Buyer View - Products › tracks shipped product order and confirms receipt
+  [chromium] › order-detail.spec.ts:193:2 › Order Details - Buyer View - Products › confirms delivery immediately after shipping (no intermediate steps)
+  [chromium] › order-lifecycle.spec.ts:59:7 › Order Lifecycle › partial payment: pay merchant, skip V4V, then complete from order detail
+  [chromium] › order-lifecycle.spec.ts:149:7 › Order Lifecycle › full order lifecycle: pending → confirmed → shipped → completed
+  [chromium] › order-messaging.spec.ts:58:7 › Order Messaging › after checkout, buyer and merchant can exchange messages
+  [chromium] › payments.spec.ts:83:2 › Receiving Payments Configuration › displays existing seeded payment details
+  [chromium] › payments.spec.ts:97:2 › Receiving Payments Configuration › can add a new Lightning payment method
+  [chromium] › payments.spec.ts:119:2 › Receiving Payments Configuration › can delete a payment method
+  [chromium] › payments.spec.ts:144:2 › NWC Wallet Management › empty state shows add wallet prompt
+  [chromium] › payments.spec.ts:157:2 › NWC Wallet Management › can add NWC wallet via manual fields
+  [chromium] › payments.spec.ts:188:2 › NWC Wallet Management › can delete an NWC wallet after explicit confirmation
+  [chromium] › payments.spec.ts:340:2 › Checkout Flow › empty cart shows redirect message
+  [chromium] › payments.spec.ts:352:7 › Checkout Flow › full checkout flow with mocked Lightning invoices
+  [chromium] › payments.spec.ts:375:7 › Checkout Flow › checkout publishes order events to relay
+  [chromium] › payments.spec.ts:410:7 › Checkout Flow › allows buyer to defer an invoice and continue checkout
+  [chromium] › pii-exposure-remediation.spec.ts:181:2 › PII Exposure Remediation Workflow › scanner flags affected kind 16 order events with sensitive delivery/contact fields
+  [chromium] › pii-exposure-remediation.spec.ts:218:2 › PII Exposure Remediation Workflow › scanner ignores unrelated/non-PII events
+  [chromium] › pii-exposure-remediation.spec.ts:259:2 › PII Exposure Remediation Workflow › successfully deletes PII events through UI and confirms deletion via relay query
+  [chromium] › pii-exposure-remediation.spec.ts:301:2 › PII Exposure Remediation Workflow › prevents deletion of events not authored by the current user
+  [chromium] › pii-exposure-remediation.spec.ts:325:2 › PII Exposure Remediation Workflow › modal copy says "request deleted," not "deleted"
+  [chromium] › pii-exposure-remediation.spec.ts:344:2 › PII Exposure Remediation Workflow › hides raw PII values in UI showing only field types
+  [chromium] › pii-exposure-remediation.spec.ts:382:2 › PII Exposure Remediation Workflow › completely executes deletion workflow and verifies event removal
+  [chromium] › product-page.spec.ts:209:2 › Product Page - View Only (Unauthenticated) › should display correct product details
+  [chromium] › product-page.spec.ts:225:2 › Product Page - View Only (Unauthenticated) › serves og: meta tags in the initial HTML
+  [chromium] › product-page.spec.ts:239:2 › Product Page - View Only (Unauthenticated) › should show product image
+  [chromium] › product-page.spec.ts:255:2 › Product Page - View Only (Unauthenticated) › should navigate through tabs and show content
+  [chromium] › product-page.spec.ts:292:2 › Product Page - View Only (Unauthenticated) › should display SocialInteractions component at product level
+  [chromium] › product-page.spec.ts:312:2 › Product Page - View Only (Unauthenticated) › should display ReactionsList for product reactions
+  [chromium] › product-page.spec.ts:321:2 › Product Page - View Only (Unauthenticated) › should show login prompt when clicking reaction button (unauthenticated)
+  [chromium] › product-page.spec.ts:332:2 › Product Page - View Only (Unauthenticated) › can view existing reactions from other users
+  [chromium] › product-page.spec.ts:344:2 › Product Page - View Only (Unauthenticated) › should navigate to comments tab when clicking product-level comment button
+  [chromium] › product-page.spec.ts:356:2 › Product Page - View Only (Unauthenticated) › should display SocialInteractions for each comment
+  [chromium] › product-page.spec.ts:382:2 › Product Page - View Only (Unauthenticated) › should show existing reactions on a comment
+  [chromium] › product-page.spec.ts:423:2 › Product Page - Interactions & Social (Authenticated) › should allow posting a new comment
+  [chromium] › product-page.spec.ts:441:2 › Product Page - Interactions & Social (Authenticated) › should allow replying to an existing comment
+  [chromium] › product-page.spec.ts:474:2 › Product Page - Interactions & Social (Authenticated) › should cancel comment draft
+  [chromium] › product-page.spec.ts:513:2 › Product Page - Interactions & Social (Authenticated) › reaction button opens popover with emoji options
+  [chromium] › product-page.spec.ts:534:2 › Product Page - Interactions & Social (Authenticated) › can add a reaction by selecting an emoji
+  [chromium] › product-page.spec.ts:548:2 › Product Page - Interactions & Social (Authenticated) › can remove an own-user reaction by clicking it
+  [chromium] › product-page.spec.ts:565:2 › Product Page - Interactions & Social (Authenticated) › can click an existing reaction to add it
+  [chromium] › product-page.spec.ts:586:2 › Product Page - Interactions & Social (Authenticated) › can remove a reaction by clicking the existing one in the list
+  [chromium] › product-page.spec.ts:605:2 › Product Page - Interactions & Social (Authenticated) › should allow adding reaction to a comment
+  [chromium] › products.spec.ts:67:2 › Product Management › products list page shows seeded products
+  [chromium] › products.spec.ts:75:2 › Product Management › can navigate to create product page
+  [chromium] › products.spec.ts:85:2 › Product Management › cannot advance from name tab when title is missing
+  [chromium] › products.spec.ts:96:2 › Product Management › new account starts on the correct first step
+  [chromium] › products.spec.ts:111:2 › Product Management › required indicators match the workflow validation model
+  [chromium] › products.spec.ts:123:2 › Product Management › cannot select later tabs when earlier required tabs are incomplete
+  [chromium] › products.spec.ts:134:2 › Product Management › missing required fields block progression on detail and category steps
+  [chromium] › products.spec.ts:160:2 › Product Management › backward navigation still works
+  [chromium] › products.spec.ts:176:2 › Product Management › publish remains disabled until the full required set is valid
+  [chromium] › products.spec.ts:192:2 › Product Management › last step uses final action semantics instead of wrapping to the first tab
+  [chromium] › products.spec.ts:203:2 › Product Management › images tab uses a single effective scroll container
+  [chromium] › products.spec.ts:235:2 › Product Management › can create a new product
+  [chromium] › products.spec.ts:323:2 › Product Management › can edit an existing product
+  [chromium] › products.spec.ts:363:2 › Product Management › can delete a product
+  [chromium] › products.spec.ts:381:2 › Product Management › seeded products appear in public marketplace
+  [chromium] › shipping-options.spec.ts:6:2 › Shipping Option Creation › creates shipping option using a template
+  [chromium] › shipping-options.spec.ts:43:2 › Shipping Option Creation › creates shipping option with manual country selection
+  [chromium] › shipping-options.spec.ts:90:2 › Shipping Option Creation › creates worldwide shipping option using checkbox
+  [chromium] › shipping-special.spec.ts:44:7 › Shipping Special Cases › digital delivery checkout completes without shipping cost
+  [chromium] › shipping-special.spec.ts:125:7 › Shipping Special Cases › local pickup checkout shows pickup address and hides shipping form
+  [chromium] › test-labels-admin-confirmation.spec.ts:172:2 › ADR-0009 confirmation — admin marks a product as test, then it is hidden from the products home page › mark via the admin dashboard hides the product from /products; unmark restores it
+  [chromium] › test-labels-admin-confirmation.spec.ts:266:2 › ADR-0009 confirmation — admin marks a product as test, then it is hidden from the products home page › admin marks ANOTHER seller’s product as test from the public product page, and it is hidden
+  [chromium] › test-labels-admin-confirmation.spec.ts:354:2 › ADR-0009 confirmation — admin marks a product as test, then it is hidden from the products home page › editor (not an admin) marks another seller’s product from the public product page
+  [chromium] › test-labels-auctions.spec.ts:190:2 › Test listing labels — auctions (ADR-0009) › a labeled auction is excluded from the feed, reachable by direct link, and revealed by the toggle
+  [chromium] › test-labels-auctions.spec.ts:256:2 › Test listing labels — auctions (ADR-0009) › an auction reappears in the feed after the test label is deleted via NIP-09
+  [chromium] › test-labels-auctions.spec.ts:284:2 › Test listing labels — auctions (ADR-0009) › a label from an unauthorized key does not hide the auction
+  [chromium] › test-labels-auctions.spec.ts:308:2 › Test listing labels — auctions (ADR-0009) › an authorized labeler marks a seller’s auction from its public page; the feed hides it, unmark restores it
+  [chromium] › test-labels-auctions.spec.ts:388:2 › Test listing labels — auctions (ADR-0009) › a labeled auction stays visible in the owner dashboard while hidden from the public feed
+  [chromium] › test-labels-auctions.spec.ts:422:2 › Test listing labels — auctions (ADR-0009) › a non-authorized user sees no test-label auction actions
+  [chromium] › test-labels-auctions.spec.ts:451:2 › Test listing labels — auctions (ADR-0009) › a NIP-09 deletion from a key other than the labeler cannot un-hide the auction
+  [chromium] › test-labels-user-visibility.spec.ts:129:2 › Test-label visibility for a regular user (ADR-0009) › labeled item: hidden in browse, visible via direct link and on the seller profile, explainer shown
+  [chromium] › test-labels-user-visibility.spec.ts:172:2 › Test-label visibility for a regular user (ADR-0009) › labeled item stays listed in the owner dashboard while hidden from the public feed
+  [chromium] › test-labels-user-visibility.spec.ts:197:2 › Test-label visibility for a regular user (ADR-0009) › an unlabeled item shows no test-listing notice
+  [chromium] › test-labels-user-visibility.spec.ts:206:2 › Test-label visibility for a regular user (ADR-0009) › mark confirmation states the real effect (browse-only) and the appeal path
+  [chromium] › test-labels.spec.ts:139:2 › Test listing labels (ADR-0009) › product with an active test label is hidden from the feed but reachable via direct link
+  [chromium] › test-labels.spec.ts:168:2 › Test listing labels (ADR-0009) › product reappears in the feed after the test label is deleted via NIP-09
+  [chromium] › test-labels.spec.ts:192:2 › Test listing labels (ADR-0009) › label from an unauthorized key does not hide the product
+  [chromium] › test-labels.spec.ts:208:2 › Test listing labels (ADR-0009) › admin sees the mark/unmark dashboard actions and publishing lands on the relay
+  [chromium] › test-labels.spec.ts:263:2 › Test listing labels (ADR-0009) › non-admin does not see the test-label dashboard actions
+  [chromium] › user-profile.spec.ts:6:2 › User Profile › user can save a profile
+  [chromium] › user-profile.spec.ts:33:2 › User Profile › existing user sees pre-filled profile data
+  [chromium] › user-profile.spec.ts:51:2 › User Profile › existing user can update their profile
+  [chromium] › user-profile.spec.ts:78:2 › User Profile › profile creation publishes Kind 0 event to relay
+  [chromium] › user-profile.spec.ts:125:2 › User Profile › mandatory fields are required to save
+  [chromium] › v4v-product-creation.spec.ts:8:2 › V4V Product Creation Flow › configured-zero user can publish first product without V4V setup blocker
+  [chromium] › zaps.spec.ts:7:2 › Lightning Zaps › buyer can zap a merchant product via WebLN
+Total: 241 tests in 38 files
+::notice title=🎭 Playwright Run Summary::  241 did not run

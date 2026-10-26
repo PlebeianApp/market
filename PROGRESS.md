@@ -15,21 +15,27 @@ Status
 - [x] Reproduced the remaining NIP-17 app compatibility failures after module loading; do not disguise these as a mechanical fix.
 - [x] Consolidated the new signer adapter into the existing `src/lib/nostr/ndk-events.ts` NDK boundary; footprint passes 147/147.
 - [x] Formatted PR-owned source files with Prettier; `bun run format:check` passes.
-- [ ] Commit/push the verified mechanical patch, then create a patch PR to `PlebeianApp:feat/architecutre`.
+- [x] Committed and pushed the verified mechanical patch; created https://github.com/PlebeianApp/market/pull/1425 targeting `PlebeianApp:feat/architecutre`.
 - [x] Posted diagnostic: https://github.com/PlebeianApp/market/pull/1412#issuecomment-6424780444
-- [ ] Write final `REPORT.md`.
+- [x] Posted patch PR link: https://github.com/PlebeianApp/market/pull/1412#issuecomment-6425137512
+- [x] Wrote final `REPORT.md` with verified actions, evidence, and remaining steps.
 
 Files touched
 
 - `PROGRESS.md` — durable work log.
-- `artifacts/pr1412-ci/unit.log` — failing `unit-integration` log.
-- `artifacts/pr1412-ci/e2e.log` — failing `e2e-grep` log.
-- `artifacts/pr1412-ci/footprint.log` — failing `footprint` log.
-- `artifacts/pr1412-ci/prettier.log` — failing `prettier` log.
+- `artifacts/pr1412-ci/pr1412-unit.log` — failing `unit-integration` log.
+- `artifacts/pr1412-ci/pr1412-e2e.log` — failing `e2e-grep` log.
+- `artifacts/pr1412-ci/pr1412-footprint.log` — failing `footprint` log.
+- `artifacts/pr1412-ci/pr1412-prettier.log` — failing `prettier` log.
 - `artifacts/pr1412-ci/local-before-focused.log` — four locally reproduced module-load failures.
 - `artifacts/pr1412-ci/local-before-footprint.log` — locally reproduced footprint failure.
 - `artifacts/pr1412-ci/local-before-format.log` — locally reproduced formatting failure.
+- `artifacts/pr1412-ci/local-after-*.log` and `local-final-*.log` — exact local verification output, including known unit failures and the aborted typecheck.
+- `package.json`, `bun.lock` — explicit SDK dependency declarations.
+- `src/lib/nostr/ndk-events.ts`, `src/lib/nostr/ndkEncryptingSigner.ts` — NDK footprint-preserving signer adapter consolidation.
+- `method/` and `sdk/` — Prettier-only changes to PR-owned files.
+- `REPORT.md` — full diagnosis, delivery, verification, limitations, and remaining steps.
 
 Last verified milestone
 
-- Full `bun run format:check` passes; footprint passes 147/147; 44 dependency-blocked SDK tests and 15 NDK/adapter/guard tests pass. The full unit suite remains blocked by the PR's NIP-17 compatibility failures, documented in the PR comment. Mechanical patch is not yet committed or pushed.
+- Diagnostic and patch PR are delivered on the bot-owned branch. `bun run format:check` and NDK footprint (147/147) pass; 44 focused SDK tests and 15 NDK/adapter/guard tests pass; Playwright discovery succeeds without running browser scenarios. Full `bun run test:unit` remains red (1771 pass, 34 fail, 27 errors) because of unresolved Core Nostr/NIP-17 compatibility work. `bunx tsc --noEmit` aborted with exit 134 (heap exhaustion). No full browser e2e or patch-PR CI result is claimed.
