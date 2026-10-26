@@ -6,7 +6,7 @@ applies: core@0.1
 inherits: [platform-core]
 implements: []
 opt-out: []
-test-support: ["ts/harness.ts", "ts/*.test.ts"]
+test-support: ['ts/harness.ts', 'ts/*.test.ts']
 levels:
   objective: present
   technical-spec: present — the one port, the role split, the injected default layer, the two switches and the per-role cap
@@ -18,16 +18,16 @@ contract:
   exports: [createRelayConfig, MAX_READ_POOL, DM_RELAYS_KIND, LOOKUP_RELAYS_KIND]
   types: [RelayConfigPort, RelayRole, InstanceRole, DmFallback, RelayDefaults, RelayStoreHandle, Mailboxes]
 implementations:
-  - id: ts                       # the selector a composition names
+  - id: ts # the selector a composition names
     lang: typescript
-    dir: ts                      # relative to the module directory
+    dir: ts # relative to the module directory
     entry: ts/index.ts
-    package: null                # consumed as a directory, not shipped as a package
-    install: [bun, install]      # every action is a token array, never a shell string
+    package: null # consumed as a directory, not shipped as a package
+    install: [bun, install] # every action is a token array, never a shell string
     build: []
     test: [bun, test]
     typecheck: [bun, run, typecheck]
-    needs: []                    # CODE dependencies (module names), not `inherits`
+    needs: [] # CODE dependencies (module names), not `inherits`
 access:
   group: m_relay-config
   read: [self]
@@ -49,7 +49,7 @@ webui:
 
 # relay-config — the one relay configuration port, answered by role
 
-**The job, in one sentence** — own the answer to *"which relays"*: one port, its members split three ways
+**The job, in one sentence** — own the answer to _"which relays"_: one port, its members split three ways
 (the library's, ours, and the injected default layer), reading the library's relay-list **events** through the
 store and holding **no pool and no socket**.
 
@@ -61,7 +61,7 @@ and `evidence/` holds the commands that regenerate what this document claims.
 assigned `#hash` identity (`python3 core/checks/check.py --assign`). That assignment tool is not part of this
 increment's scope, and the layout this run works in has no `core/checks/check.py`; **no identity is invented
 here**. The statements below are therefore un-addressed prose, and the criteria the gate actually measures are
-named in *Evidence* and *Acceptance*.
+named in _Evidence_ and _Acceptance_.
 
 ## The statements
 
@@ -74,7 +74,7 @@ named in *Evidence* and *Acceptance*.
   - **Library-derivable** — `userRead`, `userWrite`, `dmRelays`, `role(...)`. Each is a thin adapter: a
     subscription on the injected store piped through the library's own model, validator or parser.
   - **Ours** — `instance(app|bug|cvm|zap)`, `outboxEnabled()`, `dmFallback()`, `setWriteRelay(url)`. The
-    library models **another party's** relay lists and has no vocabulary for *this app's* relays or for the
+    library models **another party's** relay lists and has no vocabulary for _this app's_ relays or for the
     NDK-outbox switch.
   - **The default layer** — `RelayDefaults`, the app's instance configuration carried across the SDK boundary
     **as data** (the boundary forbids importing `src/`).
@@ -96,8 +96,8 @@ named in *Evidence* and *Acceptance*.
   (`market-app/ts/relays.ts:44` @ `7ad658d4`), carried as our rule.
 - **`instance('zap')` is additive, never a replacement.** It is the union of the injected dedicated zap
   relays, any instance-configured zap relays, and the app's read set —
-  `resolveZapRelays` (`src/lib/relay-policy.ts:131-147` @ `7ad658d4`) reproduced as the SDK rule. *"ZAP_RELAYS
-  is never dropped"* is the rule, and an instance set treated as a replacement is the bug it closes.
+  `resolveZapRelays` (`src/lib/relay-policy.ts:131-147` @ `7ad658d4`) reproduced as the SDK rule. _"ZAP_RELAYS
+  is never dropped"_ is the rule, and an instance set treated as a replacement is the bug it closes.
 - **`setWriteRelay(url)` is a configuration write, not a directed call.** It records the one relay this app
   writes to and dials nothing; a subsequent `instance('app')` leads with it (the app's own rule), otherwise
   the injected instance slots answer unchanged.
@@ -144,11 +144,11 @@ write relay does not lead `instance('app')`.
 - `git grep -ln "applesauce-common" HEAD -- 'sdk/**' ':!*node_modules*'` → **`sdk/core/relay-config` only**.
 - `grep -n "applesauce" sdk/core/nostr-io/ts/types.ts` → **0** (unchanged).
 - tests 1–7 pass.
-- `git diff --stat 7ad658d4..HEAD` → **`sdk/core/relay-config/**` and nothing else**.
+- `git diff --stat 7ad658d4..HEAD` → **`sdk/core/relay-config/**` and nothing else\*\*.
 
 **One measured caveat, named rather than smoothed over.** `bun test sdk/boundary.test.ts` (the SDK wall)
 walks **every** `.ts` file under `sdk/` and does not exclude `node_modules`, so it flags
-`node_modules/bun-types/*.d.ts` — whose *doc comments* contain `import … from "react-dom/server"` — for **any**
+`node_modules/bun-types/*.d.ts` — whose _doc comments_ contain `import … from "react-dom/server"` — for **any**
 module with an installed dependency store. Measured three ways on this increment: with
 `sdk/core/relay-config/ts/node_modules` present it reports the four `bun-types` lines for this module; with a
 **sibling's** store alone (`sdk/core/nostr-io/ts/node_modules`) it reports the same four lines for `nostr-io`;
@@ -176,6 +176,6 @@ smoothed over:
   self-contained.
 - **No app migration.** `src/lib/relay-policy.ts` and `src/lib/nostr/io-applesauce.ts` are untouched — the
   app's own pool and stage-aware policy live on until the app migrates. The SDK's `relay-config` is the
-  *SDK's* answer; the two implementations coexist, and that cost is named in `apply-to-pr1412-sdk.md` §5.
+  _SDK's_ answer; the two implementations coexist, and that cost is named in `apply-to-pr1412-sdk.md` §5.
 - **No gift-wrap.** `applesauce-common`'s wrap primitives (`operations/gift-wrap.js` — `wrapSeal`) are for the
   DM path, not for this port; nothing here wraps anything.

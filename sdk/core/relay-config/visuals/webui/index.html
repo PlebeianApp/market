@@ -16,20 +16,52 @@
 				--default: #f2c14e;
 				--mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 			}
-			* { box-sizing: border-box; }
+			* {
+				box-sizing: border-box;
+			}
 			body {
 				margin: 0;
 				background: var(--bg);
 				color: var(--text);
-				font: 16px/1.6 system-ui, -apple-system, Segoe UI, sans-serif;
+				font:
+					16px/1.6 system-ui,
+					-apple-system,
+					Segoe UI,
+					sans-serif;
 			}
-			main { max-width: 960px; margin: 0 auto; padding: 3rem 1.25rem 5rem; }
-			h1 { font-size: 1.8rem; margin: 0 0 0.25rem; }
-			.lede { color: var(--muted); margin: 0 0 2rem; }
-			h2 { font-size: 1.15rem; margin: 2.25rem 0 0.75rem; }
-			code { font-family: var(--mono); font-size: 0.9em; background: #10151d; padding: 0.1rem 0.35rem; border-radius: 4px; }
-			.grid { display: grid; gap: 1rem; }
-			@media (min-width: 720px) { .grid.three { grid-template-columns: repeat(3, 1fr); } }
+			main {
+				max-width: 960px;
+				margin: 0 auto;
+				padding: 3rem 1.25rem 5rem;
+			}
+			h1 {
+				font-size: 1.8rem;
+				margin: 0 0 0.25rem;
+			}
+			.lede {
+				color: var(--muted);
+				margin: 0 0 2rem;
+			}
+			h2 {
+				font-size: 1.15rem;
+				margin: 2.25rem 0 0.75rem;
+			}
+			code {
+				font-family: var(--mono);
+				font-size: 0.9em;
+				background: #10151d;
+				padding: 0.1rem 0.35rem;
+				border-radius: 4px;
+			}
+			.grid {
+				display: grid;
+				gap: 1rem;
+			}
+			@media (min-width: 720px) {
+				.grid.three {
+					grid-template-columns: repeat(3, 1fr);
+				}
+			}
 			.card {
 				display: block;
 				background: var(--surface);
@@ -37,35 +69,100 @@
 				border-radius: 12px;
 				padding: 1rem 1.1rem;
 			}
-			.card h3 { margin: 0 0 0.5rem; font-size: 1rem; }
-			.tag { display: inline-block; font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; border-radius: 999px; padding: 0.12rem 0.55rem; margin-bottom: 0.6rem; }
-			.tag.ours { background: rgba(110, 231, 168, 0.14); color: var(--ours); }
-			.tag.library { background: rgba(122, 162, 255, 0.14); color: var(--library); }
-			.tag.default { background: rgba(242, 193, 78, 0.14); color: var(--default); }
-			ul.members { list-style: none; margin: 0; padding: 0; }
-			ul.members li { padding: 0.28rem 0; border-bottom: 1px dashed var(--border); }
-			ul.members li:last-child { border-bottom: 0; }
-			.flow { display: grid; gap: 0.6rem; align-items: center; }
-			.flow .arrow { color: var(--muted); text-align: center; font-family: var(--mono); }
-			.rule { font-size: 0.95rem; }
-			.rule b { color: var(--ours); }
-			footer { color: var(--muted); font-size: 0.85rem; margin-top: 3rem; border-top: 1px solid var(--border); padding-top: 1rem; }
-			button {
-				background: #1c2431; color: var(--text); border: 1px solid var(--border);
-				border-radius: 8px; padding: 0.45rem 0.8rem; font-family: var(--mono); cursor: pointer;
+			.card h3 {
+				margin: 0 0 0.5rem;
+				font-size: 1rem;
 			}
-			button:hover { border-color: var(--library); }
-			pre { background: #10151d; border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem 1rem; overflow-x: auto; }
-			.answer { color: var(--ours); font-family: var(--mono); font-size: 0.9rem; min-height: 1.4rem; }
+			.tag {
+				display: inline-block;
+				font-size: 0.72rem;
+				letter-spacing: 0.04em;
+				text-transform: uppercase;
+				border-radius: 999px;
+				padding: 0.12rem 0.55rem;
+				margin-bottom: 0.6rem;
+			}
+			.tag.ours {
+				background: rgba(110, 231, 168, 0.14);
+				color: var(--ours);
+			}
+			.tag.library {
+				background: rgba(122, 162, 255, 0.14);
+				color: var(--library);
+			}
+			.tag.default {
+				background: rgba(242, 193, 78, 0.14);
+				color: var(--default);
+			}
+			ul.members {
+				list-style: none;
+				margin: 0;
+				padding: 0;
+			}
+			ul.members li {
+				padding: 0.28rem 0;
+				border-bottom: 1px dashed var(--border);
+			}
+			ul.members li:last-child {
+				border-bottom: 0;
+			}
+			.flow {
+				display: grid;
+				gap: 0.6rem;
+				align-items: center;
+			}
+			.flow .arrow {
+				color: var(--muted);
+				text-align: center;
+				font-family: var(--mono);
+			}
+			.rule {
+				font-size: 0.95rem;
+			}
+			.rule b {
+				color: var(--ours);
+			}
+			footer {
+				color: var(--muted);
+				font-size: 0.85rem;
+				margin-top: 3rem;
+				border-top: 1px solid var(--border);
+				padding-top: 1rem;
+			}
+			button {
+				background: #1c2431;
+				color: var(--text);
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				padding: 0.45rem 0.8rem;
+				font-family: var(--mono);
+				cursor: pointer;
+			}
+			button:hover {
+				border-color: var(--library);
+			}
+			pre {
+				background: #10151d;
+				border: 1px solid var(--border);
+				border-radius: 10px;
+				padding: 0.8rem 1rem;
+				overflow-x: auto;
+			}
+			.answer {
+				color: var(--ours);
+				font-family: var(--mono);
+				font-size: 0.9rem;
+				min-height: 1.4rem;
+			}
 		</style>
 	</head>
 	<body>
 		<main>
 			<h1>relay-config — the one relay configuration port</h1>
 			<p class="lede">
-				One question: <em>which relays?</em> One port answers it, by role. The library parses the relay lists;
-				the app's own relays, its two switches and its one configuration write stay ours; and the app's
-				instance config is injected as <b>data</b>, never imported from <code>src/</code>.
+				One question: <em>which relays?</em> One port answers it, by role. The library parses the relay lists; the app's own relays, its two
+				switches and its one configuration write stay ours; and the app's instance config is injected as <b>data</b>, never imported from
+				<code>src/</code>.
 			</p>
 
 			<h2>Three groups of members, and saying which is which IS the port</h2>
@@ -90,7 +187,9 @@
 						<li><code>dmFallback()</code> — <code>'refuse'</code> by default</li>
 						<li><code>setWriteRelay(url)</code> — a config write</li>
 					</ul>
-					<p><small>The library models <em>another party's</em> relay lists; it has no word for <em>this app's</em> relays.</small></p>
+					<p>
+						<small>The library models <em>another party's</em> relay lists; it has no word for <em>this app's</em> relays.</small>
+					</p>
 				</div>
 				<div class="card">
 					<span class="tag default">injected</span>
@@ -114,9 +213,7 @@
 			</div>
 
 			<h2>Try the rules</h2>
-			<p class="rule">
-				<b>ZAP_RELAYS is never dropped.</b> The dedicated zap relays stand; an instance zap set extends them.
-			</p>
+			<p class="rule"><b>ZAP_RELAYS is never dropped.</b> The dedicated zap relays stand; an instance zap set extends them.</p>
 			<p>
 				<button id="addZap">configure an instance zap set</button>
 				<span class="answer" id="zapAnswer"></span>
@@ -132,9 +229,9 @@
 			<pre id="code"></pre>
 
 			<footer>
-				The import allow-list is <code>./&lt;module file&gt;</code>, <code>applesauce-core[/…]</code>,
-				<code>applesauce-common[/…]</code>, <code>nostr-tools[/…]</code>, <code>rxjs</code>,
-				<code>bun:test</code>. This is the only SDK module that names <code>applesauce-common</code>.
+				The import allow-list is <code>./&lt;module file&gt;</code>, <code>applesauce-core[/…]</code>, <code>applesauce-common[/…]</code>,
+				<code>nostr-tools[/…]</code>, <code>rxjs</code>, <code>bun:test</code>. This is the only SDK module that names
+				<code>applesauce-common</code>.
 			</footer>
 		</main>
 		<script>
@@ -149,18 +246,18 @@
 				document.getElementById('dmAnswer').textContent = "dmRelays(pubkey) → undefined  // the library's own answer"
 			})
 			document.getElementById('code').textContent =
-				"// the port, declared once\n" +
-				"export interface RelayConfigPort {\n" +
-				"  userRead(pubkey: string): Observable<string[]>\n" +
-				"  userWrite(pubkey: string): Observable<string[]>\n" +
-				"  dmRelays(pubkey: string): Observable<string[] | undefined>\n" +
+				'// the port, declared once\n' +
+				'export interface RelayConfigPort {\n' +
+				'  userRead(pubkey: string): Observable<string[]>\n' +
+				'  userWrite(pubkey: string): Observable<string[]>\n' +
+				'  dmRelays(pubkey: string): Observable<string[] | undefined>\n' +
 				"  role(role: 'search' | 'blocked' | 'favorite' | 'lookup', pubkey: string): Observable<string[] | undefined>\n" +
 				"  instance(role: 'app' | 'bug' | 'cvm' | 'zap'): readonly string[]\n" +
-				"  outboxEnabled(): boolean\n" +
+				'  outboxEnabled(): boolean\n' +
 				"  dmFallback(): 'refuse' | 'nip65-read'\n" +
-				"  setWriteRelay(url: string): void\n" +
-				"}\n" +
-				"// createRelayConfig(store: { modelStore(): IEventStore }, defaults: RelayDefaults): RelayConfigPort"
+				'  setWriteRelay(url: string): void\n' +
+				'}\n' +
+				'// createRelayConfig(store: { modelStore(): IEventStore }, defaults: RelayDefaults): RelayConfigPort'
 		</script>
 	</body>
 </html>

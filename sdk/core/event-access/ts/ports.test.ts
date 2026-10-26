@@ -13,15 +13,7 @@
 import { expect, test } from 'bun:test'
 
 import { EventAccessError, createEventAccess } from './index'
-import {
-	collect,
-	foreignEndpoint,
-	modelEndpoint,
-	recordingUpstream,
-	signedEvent,
-	throwingEndpoint,
-	throwingUpstream,
-} from './harness'
+import { collect, foreignEndpoint, modelEndpoint, recordingUpstream, signedEvent, throwingEndpoint, throwingUpstream } from './harness'
 
 /** What a promise did: its refusal, or the fact that it resolved. */
 async function caughtOf(work: Promise<unknown>): Promise<unknown> {
@@ -105,7 +97,14 @@ test('filter boundary · EVERY present-and-empty #-key matches nothing, not only
 	// nothing but fall through to the matcher and are broadened to the whole local set — while
 	// the rule it models (`event-store/ts/filters.ts:98`) has been GENERAL over every `#`-key
 	// since I3a (D-O6 / `#7f4e0a`). The model must agree with the rule it names, exactly.
-	const event = signedEvent({ kind: 1, created_at: 2_500, tags: [['d', 'x'], ['t', 'y']] })
+	const event = signedEvent({
+		kind: 1,
+		created_at: 2_500,
+		tags: [
+			['d', 'x'],
+			['t', 'y'],
+		],
+	})
 	const endpoint = modelEndpoint({ events: [event] })
 	const upstream = recordingUpstream()
 	const access = createEventAccess({ endpoint: endpoint.endpoint, upstream: upstream.upstream })

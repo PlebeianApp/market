@@ -250,9 +250,9 @@ describe('the reads a surface decides with', () => {
 			ports: { transport: transport.pool, clock: manualClock() },
 		})
 
-		await expect(
-			session.startSession({ lane: 'bunker', bunkerUrl: bunkerUrl(), clientKeyHex: CLIENT_SK }),
-		).rejects.toThrow(/pins sessions to the nsec lane/)
+		await expect(session.startSession({ lane: 'bunker', bunkerUrl: bunkerUrl(), clientKeyHex: CLIENT_SK })).rejects.toThrow(
+			/pins sessions to the nsec lane/,
+		)
 		expect(transport.active()).toBe(0)
 
 		const snapshot = await session.startSession({ lane: 'nsec', key: USER_SK })
@@ -264,9 +264,7 @@ describe('the reads a surface decides with', () => {
 		const session = createSignerSession({
 			ports: { transport: fakeTransport().pool, clock: manualClock() },
 		})
-		await expect(session.startSession({ lane: 'nostrconnect', relays: [RELAY] })).rejects.toThrow(
-			/needs a sink for the connect URI/,
-		)
+		await expect(session.startSession({ lane: 'nostrconnect', relays: [RELAY] })).rejects.toThrow(/needs a sink for the connect URI/)
 	})
 
 	test('currentSigner is the attached capability, and refuses when there is none', async () => {
@@ -330,9 +328,7 @@ describe('the reads a surface decides with', () => {
 				clock: manualClock(),
 			},
 		})
-		await expect(
-			persisting.startSession({ lane: 'bunker', bunkerUrl: bunkerUrl(), clientKeyHex: CLIENT_SK }),
-		).rejects.toThrow(PortError)
+		await expect(persisting.startSession({ lane: 'bunker', bunkerUrl: bunkerUrl(), clientKeyHex: CLIENT_SK })).rejects.toThrow(PortError)
 	})
 
 	test('the composer allow-list gates the capability set — absent means refuse, never synthesise', async () => {
@@ -478,10 +474,15 @@ describe('the persisted record (I5, through the session)', () => {
 	test('a vaulted record parks in locked without a passphrase, and the machine refuses a new lane there', async () => {
 		const storage = memoryStorage()
 		const { session } = persistedSession(storage)
-		await vault.saveVaultedSession(makeNbunksec(), 'correct horse', { iterations: ITERATIONS }, {
-			storage,
-			crypto: webCryptoPort,
-		})
+		await vault.saveVaultedSession(
+			makeNbunksec(),
+			'correct horse',
+			{ iterations: ITERATIONS },
+			{
+				storage,
+				crypto: webCryptoPort,
+			},
+		)
 
 		const observed = observe(session)
 		const locked = await session.restoreSession()
@@ -496,10 +497,15 @@ describe('the persisted record (I5, through the session)', () => {
 	test('a locked session unlocks with the passphrase and is active against the real remote', async () => {
 		const storage = memoryStorage()
 		const { session } = persistedSession(storage)
-		await vault.saveVaultedSession(makeNbunksec(), 'correct horse', { iterations: ITERATIONS }, {
-			storage,
-			crypto: webCryptoPort,
-		})
+		await vault.saveVaultedSession(
+			makeNbunksec(),
+			'correct horse',
+			{ iterations: ITERATIONS },
+			{
+				storage,
+				crypto: webCryptoPort,
+			},
+		)
 
 		await session.restoreSession()
 		const restored = await session.restoreSession({ passphrase: 'correct horse' })
@@ -548,9 +554,9 @@ describe('the persisted record (I5, through the session)', () => {
 			},
 		})
 
-		await expect(
-			session.startSession({ lane: 'bunker', bunkerUrl: bunkerUrl(), clientKeyHex: CLIENT_SK }),
-		).rejects.toThrow(IdentityUnresolvedError)
+		await expect(session.startSession({ lane: 'bunker', bunkerUrl: bunkerUrl(), clientKeyHex: CLIENT_SK })).rejects.toThrow(
+			IdentityUnresolvedError,
+		)
 
 		expect(storage.map.size).toBe(0)
 		expect(storage.map.has(vault.VAULT_STORAGE_KEY)).toBe(false)
@@ -563,10 +569,15 @@ describe('the persisted record (I5, through the session)', () => {
 		// could not be cleared by any operation in the contract.
 		const storage = memoryStorage()
 		const { session } = persistedSession(storage)
-		await vault.saveVaultedSession(makeNbunksec(), 'correct horse', { iterations: ITERATIONS }, {
-			storage,
-			crypto: webCryptoPort,
-		})
+		await vault.saveVaultedSession(
+			makeNbunksec(),
+			'correct horse',
+			{ iterations: ITERATIONS },
+			{
+				storage,
+				crypto: webCryptoPort,
+			},
+		)
 
 		const locked = await session.restoreSession()
 		expect(locked.state).toBe('locked')
@@ -577,14 +588,17 @@ describe('the persisted record (I5, through the session)', () => {
 		expect(storage.map.size).toBe(0)
 
 		const second = memoryStorage()
-		await vault.saveVaultedSession(makeNbunksec(), 'correct horse', { iterations: ITERATIONS }, {
-			storage: second,
-			crypto: webCryptoPort,
-		})
-		const failing = persistedSession(second).session
-		await expect(failing.restoreSession({ passphrase: 'the wrong passphrase' })).rejects.toThrow(
-			SessionVaultError,
+		await vault.saveVaultedSession(
+			makeNbunksec(),
+			'correct horse',
+			{ iterations: ITERATIONS },
+			{
+				storage: second,
+				crypto: webCryptoPort,
+			},
 		)
+		const failing = persistedSession(second).session
+		await expect(failing.restoreSession({ passphrase: 'the wrong passphrase' })).rejects.toThrow(SessionVaultError)
 		expect(second.map.has(vault.VAULT_STORAGE_KEY)).toBe(true)
 
 		await failing.endSession()
@@ -599,10 +613,15 @@ describe('the persisted record (I5, through the session)', () => {
 		// record instead of abandoning it.
 		const storage = memoryStorage()
 		const { session } = persistedSession(storage)
-		await vault.saveVaultedSession(makeNbunksec(), 'correct horse', { iterations: ITERATIONS }, {
-			storage,
-			crypto: webCryptoPort,
-		})
+		await vault.saveVaultedSession(
+			makeNbunksec(),
+			'correct horse',
+			{ iterations: ITERATIONS },
+			{
+				storage,
+				crypto: webCryptoPort,
+			},
+		)
 		const observed = observe(session)
 		await session.restoreSession()
 
@@ -621,10 +640,15 @@ describe('the persisted record (I5, through the session)', () => {
 		// discarded, send them to login" used to arrive as one type with one code.
 		const storage = memoryStorage()
 		const { session } = persistedSession(storage)
-		await vault.saveVaultedSession(makeNbunksec(), 'correct horse', { iterations: ITERATIONS }, {
-			storage,
-			crypto: webCryptoPort,
-		})
+		await vault.saveVaultedSession(
+			makeNbunksec(),
+			'correct horse',
+			{ iterations: ITERATIONS },
+			{
+				storage,
+				crypto: webCryptoPort,
+			},
+		)
 		await session.restoreSession()
 
 		const wrongPassphrase = await session

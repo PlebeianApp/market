@@ -44,7 +44,7 @@ import {
 	wireScript,
 	within,
 	workingPool,
-	} from './harness'
+} from './harness'
 import type { WireBackend, WireScript } from './harness'
 
 const FIRST: Event = signedEvent({ kind: 1, content: 'first', created_at: 1000 })
@@ -228,7 +228,8 @@ describe('query', () => {
 
 			const outcome = await within(seam.query({ kinds: [1] }), 500)
 			expect(outcome.settled).toBe(true)
-			if (!outcome.settled) throw new Error("the read never settled: the boundary is counted against the host's spellings instead of the pool's own identity")
+			if (!outcome.settled)
+				throw new Error("the read never settled: the boundary is counted against the host's spellings instead of the pool's own identity")
 			// the fix site, on the record: the host's set reached the pool as the host spelled it
 			expect(backend.targets()).toEqual([[raw, normalised]])
 			observed[suffix] = readShape(outcome.value)
@@ -458,7 +459,7 @@ describe('connect', () => {
 		}
 	})
 
-	test("connect · a relay the pool already holds is reported by its own state, and a URL that is not a relay is refused", async () => {
+	test('connect · a relay the pool already holds is reported by its own state, and a URL that is not a relay is refused', async () => {
 		// `pool.relay(url)` is the vendor's own registration: it normalises the URL,
 		// files the relay under that key and dials nothing. The seam must look the
 		// relay up by **that** key, and must not invent "not connected" for a URL the

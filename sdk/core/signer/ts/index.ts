@@ -59,13 +59,7 @@ export type { SessionVaultCode } from './errors'
 
 // The record the module owns: the envelope's storage keys and the KDF floor a
 // second implementation of this spec must not lower (I5).
-export {
-	LEGACY_CONNECT_URL_KEY,
-	LEGACY_LOCAL_SIGNER_KEY,
-	MIN_PBKDF2_ITERATIONS,
-	PBKDF2_ITERATIONS,
-	VAULT_STORAGE_KEY,
-} from './vault'
+export { LEGACY_CONNECT_URL_KEY, LEGACY_LOCAL_SIGNER_KEY, MIN_PBKDF2_ITERATIONS, PBKDF2_ITERATIONS, VAULT_STORAGE_KEY } from './vault'
 
 // The vocabulary the spec defines.
 export type {

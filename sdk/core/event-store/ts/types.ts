@@ -28,9 +28,14 @@ export type Event = NostrEvent // E2 — raw nostr-tools events
 export type FilterIn = NostrFilter & { [key: `&${string}`]: string[] | undefined; search?: string } // E3
 /** #a6d035 — Reason: the error conditions a rejection carries (E5). */
 export type Reason = 'rejected' | 'auth-required' | 'not-found' | 'quota-exhausted' | 'evicted-during-read'
-export interface ClockPort { now(): number } // SECONDS since the epoch, never milliseconds
+export interface ClockPort {
+	now(): number
+} // SECONDS since the epoch, never milliseconds
 /** #e8d56c — FilterSupport: which of the two extended-filter halves an implementation honours. */
-export interface FilterSupport { nip91: boolean; nip50: boolean }
+export interface FilterSupport {
+	nip91: boolean
+	nip50: boolean
+}
 
 /**
  * #5dcce6 — EndpointTier: the tier the endpoint declares, `'local'` or `'remote'`.
@@ -45,9 +50,9 @@ export type EndpointTier = 'local' | 'remote'
  * declared on `EventStoreOptions`; a `read` call may not change another read's totals.
  */
 export interface EndpointReadOptions {
-  keepDeleted?: boolean
-  keepExpired?: boolean
-  keepOldVersions?: boolean
+	keepDeleted?: boolean
+	keepExpired?: boolean
+	keepOldVersions?: boolean
 }
 
 /**
@@ -58,8 +63,8 @@ export interface EndpointReadOptions {
  * counted in `refused` (`#b6c13c` as amended).
  */
 export interface EndpointWriteOutcome {
-  stored: number
-  refused: number
+	stored: number
+	refused: number
 }
 
 /**
@@ -74,21 +79,26 @@ export interface EndpointWriteOutcome {
  * compile-time fact rather than a review.
  */
 export interface StoreEndpoint {
-  readonly tier: EndpointTier
-  read(filters: FilterIn | FilterIn[], options?: EndpointReadOptions): Promise<Event[]>
-  write(events: Event[]): Promise<EndpointWriteOutcome>
-  count(filters: FilterIn | FilterIn[]): Promise<CountResult>
-  remove(refs: DeleteRef[]): Promise<DeleteOutcome>
-  readonly changes: AsyncIterable<Event>
+	readonly tier: EndpointTier
+	read(filters: FilterIn | FilterIn[], options?: EndpointReadOptions): Promise<Event[]>
+	write(events: Event[]): Promise<EndpointWriteOutcome>
+	count(filters: FilterIn | FilterIn[]): Promise<CountResult>
+	remove(refs: DeleteRef[]): Promise<DeleteOutcome>
+	readonly changes: AsyncIterable<Event>
 }
 
 /** #d62f7c — CountResult: the count from the local index and its `approximate` flag (E6). */
-export interface CountResult { count: number; approximate: boolean }
+export interface CountResult {
+	count: number
+	approximate: boolean
+}
 
 /** #a6d035 — DeleteRef: a deletion reference, an id, a filter, or a list of either (E4). */
 export type DeleteRef = string | FilterIn | FilterIn[]
 /** #337e0c — DeleteOutcome: how many events a local removal took. */
-export interface DeleteOutcome { removed: number }
+export interface DeleteOutcome {
+	removed: number
+}
 
 /**
  * #e8d56c — EvictionPolicy: the declared eviction policy a host reads (M10).
@@ -98,7 +108,12 @@ export interface DeleteOutcome { removed: number }
  * single-tab declaration. None of them has a mechanism in N1 — the policy is a
  * value a test can read, not prose.
  */
-export interface EvictionPolicy { survivesReload: boolean; prune: 'host' | 'never'; quota: 'host'; tabs: 'single-tab' | 'shared' }
+export interface EvictionPolicy {
+	survivesReload: boolean
+	prune: 'host' | 'never'
+	quota: 'host'
+	tabs: 'single-tab' | 'shared'
+}
 
 /**
  * **E7** — the persistence seam's types are the library's own, adopted verbatim
@@ -131,15 +146,24 @@ export type AsyncEventDatabase = IAsyncEventDatabase // E7 — declared, not wir
  * itself applies, which is why the seam lives here and not in the library.
  */
 export interface EventPersistence {
-  /** Every cached event, read once at open to warm the in-memory store. */
-  load(): Promise<Event[]>
-  /** Persist the events a write stored. */
-  save(events: readonly Event[]): Promise<void>
-  /** Forget the events a removal took out of the store. */
-  forget(ids: readonly string[]): Promise<void>
+	/** Every cached event, read once at open to warm the in-memory store. */
+	load(): Promise<Event[]>
+	/** Persist the events a write stored. */
+	save(events: readonly Event[]): Promise<void>
+	/** Forget the events a removal took out of the store. */
+	forget(ids: readonly string[]): Promise<void>
 }
 
-export interface EventStoreOptions { database?: EventDatabase; persistence?: EventPersistence; clock?: ClockPort; keepDeleted?: boolean; keepExpired?: boolean; keepOldVersions?: boolean; verifyEvent?: (event: Event) => boolean; eviction?: EvictionPolicy }
+export interface EventStoreOptions {
+	database?: EventDatabase
+	persistence?: EventPersistence
+	clock?: ClockPort
+	keepDeleted?: boolean
+	keepExpired?: boolean
+	keepOldVersions?: boolean
+	verifyEvent?: (event: Event) => boolean
+	eviction?: EvictionPolicy
+}
 
 /**
  * #e472d3 — EventStore: the contract's handle, the endpoint plus the declared eviction policy.
@@ -150,13 +174,13 @@ export interface EventStoreOptions { database?: EventDatabase; persistence?: Eve
  * **structurally**, a relay host satisfies it without the extra member, and neither needs an adapter.
  */
 export interface EventStore extends StoreEndpoint {
-  readonly eviction: EvictionPolicy
-  /**
-   * The **live library store** the module already builds, handed out so a vendor `Model` can subscribe to it and
-   * a loader can write into it. It is the store of record itself, not a snapshot and not a second store: a model
-   * that subscribes here sees the same events `read` answers, and a loader that writes here is what `read` then
-   * answers. No relay member is added anywhere — the relay set and the network phase are not this module's
-   * (`#9f5778`), and this accessor changes only the *visibility* of a store the module already holds.
-   */
-  modelStore(): LibraryEventStore
+	readonly eviction: EvictionPolicy
+	/**
+	 * The **live library store** the module already builds, handed out so a vendor `Model` can subscribe to it and
+	 * a loader can write into it. It is the store of record itself, not a snapshot and not a second store: a model
+	 * that subscribes here sees the same events `read` answers, and a loader that writes here is what `read` then
+	 * answers. No relay member is added anywhere — the relay set and the network phase are not this module's
+	 * (`#9f5778`), and this accessor changes only the *visibility* of a store the module already holds.
+	 */
+	modelStore(): LibraryEventStore
 }

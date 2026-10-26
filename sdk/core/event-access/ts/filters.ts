@@ -19,10 +19,10 @@ import type { DeleteRef, FilterIn } from './types'
 
 /** #88163e — toFilterArray: one filter or many, always as an array. Never a key dropped, an empty one included. */
 export function toFilterArray(filters: FilterIn | FilterIn[]): FilterIn[] {
-  if (filters === null || typeof filters !== 'object') {
-    throw new EventAccessError('rejected', `a filter must be an object or an array of objects, not ${typeof filters}`)
-  }
-  return Array.isArray(filters) ? [...filters] : [filters]
+	if (filters === null || typeof filters !== 'object') {
+		throw new EventAccessError('rejected', `a filter must be an object or an array of objects, not ${typeof filters}`)
+	}
+	return Array.isArray(filters) ? [...filters] : [filters]
 }
 
 /**
@@ -31,7 +31,7 @@ export function toFilterArray(filters: FilterIn | FilterIn[]): FilterIn[] {
  * (`DeleteRef`). No target is ever dropped.
  */
 export function toRefArray(refs: DeleteRef | DeleteRef[]): DeleteRef[] {
-  if (typeof refs === 'string') return [refs]
-  if (Array.isArray(refs)) return [...refs]
-  return [refs]
+	if (typeof refs === 'string') return [refs]
+	if (Array.isArray(refs)) return [...refs]
+	return [refs]
 }

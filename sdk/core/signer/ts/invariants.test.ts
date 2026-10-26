@@ -416,13 +416,6 @@ describe('I5 — the persisted record is encrypted, migrated, or intentionally r
 		// cannot fail if the vault is bypassed — measured: a plaintext persist stays
 		// green under them. These can fail, so they are the case's real content.
 		expect(stored.startsWith('nbunksec')).toBe(false)
-		expect(Object.keys(JSON.parse(stored) as Record<string, unknown>).sort()).toEqual([
-			'ct',
-			'iterations',
-			'iv',
-			'kdf',
-			'salt',
-			'v',
-		])
+		expect(Object.keys(JSON.parse(stored) as Record<string, unknown>).sort()).toEqual(['ct', 'iterations', 'iv', 'kdf', 'salt', 'v'])
 	})
 })

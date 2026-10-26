@@ -506,7 +506,7 @@ test('publish writes nothing the gate dropped, and the relay attempt sees exactl
 	expect(outcome.stored).toBe(true)
 })
 
-test("the gate is wired at two boundaries, each pure — the composition (not the rule) distinguishes the destinations", async () => {
+test('the gate is wired at two boundaries, each pure — the composition (not the rule) distinguishes the destinations', async () => {
 	// The maintainer's 2026-10-02 ruling: a rule installed at two boundaries knows nothing
 	// of which flow it is policing. If a destination needs to decide differently, that is
 	// **two rules wired at two boundaries**, not one rule told which flow it is in.
@@ -528,7 +528,7 @@ test("the gate is wired at two boundaries, each pure — the composition (not th
 		},
 	})
 
-	await access.query({ kinds: [1] })                    // through acceptForConsumer
+	await access.query({ kinds: [1] }) // through acceptForConsumer
 	await access.publish([signedEvent({ kind: 1, created_at: 22_500 })]) // through acceptForWire
 
 	// The rule receives the tier and resolve but never the flow — it cannot tell whether
@@ -909,9 +909,7 @@ test('Increment 3 · the loader takes our pool by construction — no adapter, n
 	expect(typeof loader.stop).toBe('function')
 
 	// and it drives that pool: the pointer's own answer arrives through the loader's last step.
-	expect((await firstValueFrom(loader({ id: remote.id }).pipe(toArray()))).map((event) => event.id)).toEqual([
-		remote.id,
-	])
+	expect((await firstValueFrom(loader({ id: remote.id }).pipe(toArray()))).map((event) => event.id)).toEqual([remote.id])
 
 	// the same pool, handed to this module's own builder, with no cast either — and the fill answers
 	// with the seam's read shape, `eose` true because the march ran and nothing refused.

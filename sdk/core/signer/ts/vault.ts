@@ -174,10 +174,9 @@ function validateEnvelope(parsed: SessionVaultEnvelope, options: UnlockOptions):
 	// reject anything below the floor BEFORE deriving.
 	const minIterations = options.minIterations ?? MIN_PBKDF2_ITERATIONS
 	if (!Number.isInteger(parsed.iterations) || parsed.iterations < minIterations) {
-		throw new SessionVaultError(
-			'Vault envelope iteration count is below the accepted minimum (possible tampering)',
-			{ code: 'iteration_floor' },
-		)
+		throw new SessionVaultError('Vault envelope iteration count is below the accepted minimum (possible tampering)', {
+			code: 'iteration_floor',
+		})
 	}
 }
 
@@ -223,10 +222,10 @@ export async function unlockVault(
 	} catch (cause) {
 		// Wrong passphrase and tampered ciphertext both surface here (the GCM auth
 		// tag) — fail closed without leaking which check failed.
-		throw new SessionVaultError(
-			'Failed to unlock the session vault (wrong passphrase or corrupted vault)',
-			{ cause, code: 'wrong_passphrase' },
-		)
+		throw new SessionVaultError('Failed to unlock the session vault (wrong passphrase or corrupted vault)', {
+			cause,
+			code: 'wrong_passphrase',
+		})
 	}
 }
 

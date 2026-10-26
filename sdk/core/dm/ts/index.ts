@@ -30,4 +30,14 @@ async function unwrapDm(params: { giftWrap: Event; signer: DmSigner }): Promise<
 
 export { wrapDm, unwrapDm, dmRelaySourceFromEvents, resolveDmRelayTargets, giftWrapSeal }
 export { DM_GIFT_WRAP_KIND, DM_RELAYS_KIND, DM_SEAL_KIND } from './types'
-export type { DmPublishPort, DmReadResult, DmRelayListEvent, DmRelaySource, DmRelayTargets, DmRumor, DmSignableEvent, DmSigner, DmWriteResult } from './types'
+export type {
+	DmPublishPort,
+	DmReadResult,
+	DmRelayListEvent,
+	DmRelaySource,
+	DmRelayTargets,
+	DmRumor,
+	DmSignableEvent,
+	DmSigner,
+	DmWriteResult,
+} from './types'

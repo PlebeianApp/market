@@ -244,7 +244,7 @@ export type Resolution = ResolutionHeld | ResolutionDeleted | ResolutionExpired
  * is policing. */
 /** #8e6079 — ResolutionAt: the tier the resolver is told, never which boundary. */
 export interface ResolutionAt {
-  readonly tier: 'local' | 'remote'
+	readonly tier: 'local' | 'remote'
 }
 
 /**
@@ -324,15 +324,15 @@ export interface ValidatorOptions {
 
 /**
  * **The composition's `AcceptContext`** (D-O24, `#8393ac`), declared structurally because no
-  * specifier may leave this module. `tier` is the endpoint's declared tier, and `resolve` is the
-  * one capability a link needs — the composition's own resolver, so a host that injects no port
-  * still resolves its links. The flow was previously included (`operation`) and was removed per
-  * the maintainer's 2026-10-02 ruling.
-  */
- export interface AcceptContext {
-   readonly tier: 'local' | 'remote'
-   resolve(reference: string): Promise<Event | undefined>
- }
+ * specifier may leave this module. `tier` is the endpoint's declared tier, and `resolve` is the
+ * one capability a link needs — the composition's own resolver, so a host that injects no port
+ * still resolves its links. The flow was previously included (`operation`) and was removed per
+ * the maintainer's 2026-10-02 ruling.
+ */
+export interface AcceptContext {
+	readonly tier: 'local' | 'remote'
+	resolve(reference: string): Promise<Event | undefined>
+}
 
 /** What the gate answers (`#8393ac`): a value, never a silent drop. */
 /** #8393ac — AcceptDecision: what the gate answers, a value never a silent drop. */

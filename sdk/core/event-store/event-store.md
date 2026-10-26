@@ -4,25 +4,62 @@ kind: module
 schema: architecture
 applies: core@0.1
 inherits: [platform-core]
-implements: ["#75322f"]
+implements: ['#75322f']
 opt-out: []
 levels: { objective: present, technical-spec: present, implementation: present — TypeScript in ts/ (the local half only), tests: present }
 contract:
   entry: ts/index.ts
   operations: [read, write, count, remove, the local change notification, the model store accessor, the event view, the persistence seam]
-  exports: [createEventStore, FILTER_SUPPORT, StoreError, assertIdentityFilters, matchesNothing, compareVersions, collapseToHeads, createReplaceableAddress, getEventUID, getMatchingTags, getReplaceableIdentifier, isAddressable, isFromCache, isReplaceable, tagValue]
-  types: [Event, FilterIn, Reason, ClockPort, FilterSupport, EndpointTier, EndpointReadOptions, EndpointWriteOutcome, StoreEndpoint, CountResult, DeleteRef, DeleteOutcome, EvictionPolicy, EventDatabase, AsyncEventDatabase, EventStoreOptions, EventStore, EventPersistence]
+  exports:
+    [
+      createEventStore,
+      FILTER_SUPPORT,
+      StoreError,
+      assertIdentityFilters,
+      matchesNothing,
+      compareVersions,
+      collapseToHeads,
+      createReplaceableAddress,
+      getEventUID,
+      getMatchingTags,
+      getReplaceableIdentifier,
+      isAddressable,
+      isFromCache,
+      isReplaceable,
+      tagValue,
+    ]
+  types:
+    [
+      Event,
+      FilterIn,
+      Reason,
+      ClockPort,
+      FilterSupport,
+      EndpointTier,
+      EndpointReadOptions,
+      EndpointWriteOutcome,
+      StoreEndpoint,
+      CountResult,
+      DeleteRef,
+      DeleteOutcome,
+      EvictionPolicy,
+      EventDatabase,
+      AsyncEventDatabase,
+      EventStoreOptions,
+      EventStore,
+      EventPersistence,
+    ]
 implementations:
-  - id: ts                       # the selector a composition names
+  - id: ts # the selector a composition names
     lang: typescript
-    dir: ts                      # relative to the module directory
+    dir: ts # relative to the module directory
     entry: ts/index.ts
-    package: null                # consumed as a directory, not shipped as a package
-    install: [bun, install]      # every action is a token array, never a shell string
+    package: null # consumed as a directory, not shipped as a package
+    install: [bun, install] # every action is a token array, never a shell string
     build: []
     test: [bun, test]
     typecheck: [bun, run, typecheck]
-    needs: []                    # CODE dependencies (module names), not `inherits`
+    needs: [] # CODE dependencies (module names), not `inherits`
 access:
   group: m_event-store
   read: [self]
@@ -210,7 +247,7 @@ flowchart LR
 ```
 
 The relay port is drawn dashed and un-implemented on purpose: it is **declared and never called** (M5, M14).
-A `database?` is optional and its *types* ship here; the medium is N3's, and a store with no database is fully
+A `database?` is optional and its _types_ ship here; the medium is N3's, and a store with no database is fully
 functional (M11).
 
 **Amended 2026-09-29 — read the five operation boxes above as `event-access`'s.** The diagram is left as it was
@@ -235,7 +272,7 @@ endpoint adopts the shape `event-access` declares**, so I3 is a conformance job 
 else**: `modelStore(): IEventStore` (`applesauce-core/event-store`) returns the **live library store the module
 already constructs** — the store of record itself, not a snapshot and not a second store — so a vendor `Model`
 can subscribe to it and a loader can write into it, and `read` answers exactly what that store holds. It is a
-*visibility* change only: the store was already inside the module and its construction, its options and its
+_visibility_ change only: the store was already inside the module and its construction, its options and its
 `eviction` are untouched. **No relay member is added** — the relay set and the network phase are not this
 module's (`#9f5778`), and the handle's own enumerable members remain the endpoint's plus the declared eviction
 policy plus this one accessor, with `NOT_A_RELAY_EDGE` still absent from `Object.keys(store)`. `read` is a
@@ -275,17 +312,17 @@ now a property of the endpoint rather than a step in a sequence. The corrected t
 
 ## The target → increment map
 
-| spec / invariant | increment | what this module does instead |
-| --- | --- | --- |
-| §4.10 LF-1…LF-7, `deadlineMs`, `complete:false`, the `Reason` set | **not this module** — `event-access`'s, with the wire half `nostr-io`'s (`#120968`) | **N2 as it was ordered is void**: this module has no network phase, so it has no deadline and no completeness fact |
-| the relay port, the resolved relay set, relay policy | **not this module** — `nostr-io`'s (`#9f5778`) | the port and the set leave the contract; the endpoint is handed nothing that speaks the wire |
-| §4.3's removal notification (a kind-5 arriving as a notification) | **not this module** — `event-access`'s (its type is still the maintainer's, E7's sibling) | the endpoint keeps a **local change notification**; the subscription that spans two tiers is the composition's |
-| the caller-facing five verbs and the envelope, removed from this module | **S1 — the shrink's spec half, written in this run; its code half landed 2026-09-30 as increment I3** | **the operations are gone from the code too**: `ts/` returns the endpoint and exports no verb, so the spec and the implementation agree |
-| the local read/write endpoint the operations are composed from | **S1's second half** | it exists in N1's code today; the spec names it as the module's contract surface |
-| the persistence medium, `prune`, `AsyncEventDatabase`, M13's *drop* half | **N3** (unchanged) | the seam's types only; a store with no database is fully functional |
-| the market's read path, and `persist:false`'s honouring | **N4** (unchanged in kind, re-pointed) | nothing of the market is touched; the market is re-pointed onto `event-access`, not onto this module |
-| the scheduler's nostrify boundary | **N5** (unchanged) | named as a consumer, built elsewhere |
-| the khatru relay binding | **N6** (unchanged) | named as a consumer, built elsewhere |
+| spec / invariant                                                         | increment                                                                                             | what this module does instead                                                                                                           |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| §4.10 LF-1…LF-7, `deadlineMs`, `complete:false`, the `Reason` set        | **not this module** — `event-access`'s, with the wire half `nostr-io`'s (`#120968`)                   | **N2 as it was ordered is void**: this module has no network phase, so it has no deadline and no completeness fact                      |
+| the relay port, the resolved relay set, relay policy                     | **not this module** — `nostr-io`'s (`#9f5778`)                                                        | the port and the set leave the contract; the endpoint is handed nothing that speaks the wire                                            |
+| §4.3's removal notification (a kind-5 arriving as a notification)        | **not this module** — `event-access`'s (its type is still the maintainer's, E7's sibling)             | the endpoint keeps a **local change notification**; the subscription that spans two tiers is the composition's                          |
+| the caller-facing five verbs and the envelope, removed from this module  | **S1 — the shrink's spec half, written in this run; its code half landed 2026-09-30 as increment I3** | **the operations are gone from the code too**: `ts/` returns the endpoint and exports no verb, so the spec and the implementation agree |
+| the local read/write endpoint the operations are composed from           | **S1's second half**                                                                                  | it exists in N1's code today; the spec names it as the module's contract surface                                                        |
+| the persistence medium, `prune`, `AsyncEventDatabase`, M13's _drop_ half | **N3** (unchanged)                                                                                    | the seam's types only; a store with no database is fully functional                                                                     |
+| the market's read path, and `persist:false`'s honouring                  | **N4** (unchanged in kind, re-pointed)                                                                | nothing of the market is touched; the market is re-pointed onto `event-access`, not onto this module                                    |
+| the scheduler's nostrify boundary                                        | **N5** (unchanged)                                                                                    | named as a consumer, built elsewhere                                                                                                    |
+| the khatru relay binding                                                 | **N6** (unchanged)                                                                                    | named as a consumer, built elsewhere                                                                                                    |
 
 `prune`/`quota` are the host's as well: the policy is a declared value (`EvictionPolicy`), and nothing in N1
 evicts — the read excludes, and never mutates the store. **The correction this table carries** is the one the
@@ -303,7 +340,7 @@ Four things the first implementation cannot settle on its own, each recorded whe
 2. **The removal notification has no type.** §4.3 requires a kind-5 deletion to arrive as a removal
    notification, and `Subscription.events` is `AsyncIterable<Event>` — a removal is not an event. This module
    **does not invent one** (statement 7). The obvious repair is a `SubscriptionEvent = Event |
-   RemovalNotification` union, which is a spec change and the maintainer's.
+RemovalNotification` union, which is a spec change and the maintainer's.
 3. **`createReplaceableAddress(kind, pubkey, d?)` is not `kind:pubkey[:d]`.** The library's spelling ends in a
    **trailing colon** for a replaceable kind with no `d` (`kind + ":" + pubkey + ":" + (identifier ?? "")`), and
    the market's own `deduplicationKey()` does not. This module adopts the library's form so `getEventUID`'s keys
@@ -312,12 +349,12 @@ Four things the first implementation cannot settle on its own, each recorded whe
 4. **NIP-50 is accepted and ignored, and that is a fail-open shape.** E3 requires the declaration and not the
    support, so `FILTER_SUPPORT` is `{ nip91: true, nip50: false }` and a `search` filter does not filter — the
    answer is the one the same filter without `search` gets. **Implementation note, measured:** the underlying
-   index treats a `search` filter as matching *nothing* (`applesauce-core` 6.2.0
+   index treats a `search` filter as matching _nothing_ (`applesauce-core` 6.2.0
    `dist/event-store/event-memory.js:383-386`, READ), while the predicate it is filtered by ignores the field —
    so passing the field through would make "declared, not supported" mean "matches nothing". The lookup is
    therefore given a copy of each filter without the key this implementation declares it does not honour, which
-   is the order's own ruling (§0.4.4: *the unfiltered local superset*) and the case's own title
-   (*accepted unhonoured*). Reported for a decision: declare-and-accept as the spec says, or reject fail-closed
+   is the order's own ruling (§0.4.4: _the unfiltered local superset_) and the case's own title
+   (_accepted unhonoured_). Reported for a decision: declare-and-accept as the spec says, or reject fail-closed
    as M7 does for identity inputs.
 5. **The shrink could not be completed in the front-matter from the spec half, and it has been completed at the
    code half — 2026-09-30, increment I3.** This document's front-matter named the pre-shrink surface while the
@@ -365,6 +402,6 @@ The last two are run from the assembly root. Two measured notes a reader should 
   and 1 note (`runs/2026-09-28-signer/research/evidence/05-a0-remeasure.sh` and `signer/evidence/probe.sh`, both
   pre-existing), and today the lint reports 7 hard findings and 1 note — the two the module's own
   `event-store/evidence/run.sh` adds are **documentation false positives** at its lines 84 and 281, `echo` lines
-  that name the redirect path the *caller* performs, so the script still prints rather than redirecting: it sets
+  that name the redirect path the _caller_ performs, so the script still prints rather than redirecting: it sets
   `set -euo pipefail` in its first lines, spells `bun` absolutely and exports `PATH`, and asserts its subject
   before reading it.

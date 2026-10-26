@@ -13,7 +13,7 @@ statement of the `event-store` module, which already has a document.
 **What this implementation is, and is not.** It is the module's **local half**, and its contract surface is the
 **endpoint** (`#e472d3`, `#5dcce6`): a declared tier, a local read, a local write, a count from its own index, a
 local removal, the local change notification, the event view, the dedupe and head rules, the deletion and expiry
-predicates, and the persistence seam's *types*. The five caller-facing verbs and the `{events, complete}` envelope
+predicates, and the persistence seam's _types_. The five caller-facing verbs and the `{events, complete}` envelope
 **left on 2026-09-29** (`#f54c68`) and moved to `event-access`; with them went the relay port, the deadline, the
 completeness fact and the write-back policy, and none of them is a name of this module any more (`#9f5778`). It
 opens no socket, holds no timer and reads no host global: the clock is injected and defaults to seconds and the

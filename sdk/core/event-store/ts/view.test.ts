@@ -63,11 +63,7 @@ describe('tag accessors', () => {
 		kind: 1,
 		content: 'tags',
 		created_at: 1000,
-		tags: [
-			['t', 'first'],
-			['t', 'second'],
-			['d'],
-		],
+		tags: [['t', 'first'], ['t', 'second'], ['d']],
 	})
 
 	test("tagValue · the first matching tag's value, and undefined when no tag matches", () => {

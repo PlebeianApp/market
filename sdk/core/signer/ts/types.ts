@@ -89,15 +89,7 @@ export interface SignerCapabilities {
 // ---------------------------------------------------------------------------
 
 /** #61f309 — SessionState: a session is a state machine, never a boolean. */
-export type SessionState =
-	| 'idle'
-	| 'connecting'
-	| 'awaiting_user'
-	| 'active'
-	| 'locked'
-	| 'restoring'
-	| 'closing'
-	| 'failed'
+export type SessionState = 'idle' | 'connecting' | 'awaiting_user' | 'active' | 'locked' | 'restoring' | 'closing' | 'failed'
 
 /** What is persisted for this session, read separately from the state (I5). */
 /** #61f309 — SessionRecordKind: what is persisted, read separately from the state (I5). */

@@ -14,8 +14,8 @@ needed.
 - The port, split three ways: the library's members, ours, and the injected default layer.
 - The flow: a seeded event, the library's model / validator / `getRelaysFromList`, the port's answer — and the
   step that does not exist, a pool.
-- Two pressable rules: *ZAP_RELAYS is never dropped* (the additive union) and *the DM target is the recipient's
-  `10050`, or nothing* (`dmRelays → undefined`, no `10002` substitution).
+- Two pressable rules: _ZAP_RELAYS is never dropped_ (the additive union) and _the DM target is the recipient's
+  `10050`, or nothing_ (`dmRelays → undefined`, no `10002` substitution).
 - The port's TypeScript surface, verbatim from `ts/types.ts`.
 
 ## Status (read this before quoting the page)

@@ -13,14 +13,7 @@ import type { WrapperRegistration } from '../../funds-contract/ts/index'
 const CANONICAL = ['obtain', 'submit', 'reconcile'] as const
 
 /** The contract's witness kinds, split by whether they are cryptographic or declared. */
-const WITNESS_KINDS = [
-	'preimage',
-	'zap_receipt',
-	'mint_quote_state',
-	'lnurl_verify',
-	'seller_attestation',
-	'ack',
-] as const
+const WITNESS_KINDS = ['preimage', 'zap_receipt', 'mint_quote_state', 'lnurl_verify', 'seller_attestation', 'ack'] as const
 
 const AUTHORITY_KINDS = ['local', 'remote-and-observable'] as const
 

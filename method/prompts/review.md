@@ -39,7 +39,7 @@ the artifact destroys the independence that made the review worth having.
 4. **An absence claim is the weakest evidence there is** — an unfetched reference or a partial checkout
    produces one by default. Test existence against a specifically named ref, and say how you did it.
 5. **Judge a finding before you repeat it.** Severity labels are not verdicts. Say what the artifact got
-   wrong *and* where you disagree with the finding, in that order.
+   wrong _and_ where you disagree with the finding, in that order.
 6. **Adjudicate the notes, not only the scored findings.** An observation recorded in passing and left
    ungraded gets inherited as silence. Give every note an explicit accept or reject.
 7. **End with what you could not verify.** Silence in a review reads as a pass.

@@ -6,7 +6,7 @@ applies: core@0.1
 inherits: [platform-core]
 implements: []
 opt-out: []
-test-support: ["ts/harness.ts", "ts/*.test.ts"]
+test-support: ['ts/harness.ts', 'ts/*.test.ts']
 levels:
   objective: present
   technical-spec: present — the two paths (write, read) over the library's gift-wrap primitives, and the relay targets read from the relay-config port
@@ -78,8 +78,8 @@ that regenerate what this document claims.
 - **`ready` requires BOTH sides.** The recipient wrap needs the **recipient's** `10050` (where the recipient
   reads) and the self-wrap needs the **sender's** own `10050`. An empty list on either side is not ready.
 - **Relay assumption, stated because AGENTS.md requires it (no new relay assumption without code, tests and
-  documentation).** The only relay behaviour this component introduces is: *a DM targets kind `10050` and nothing
-  else, and `10002` is never a fallback for it*. It is implemented in `relay-source.ts` (a `dmRelays` read) and
+  documentation).** The only relay behaviour this component introduces is: _a DM targets kind `10050` and nothing
+  else, and `10002` is never a fallback for it_. It is implemented in `relay-source.ts` (a `dmRelays` read) and
   proven by test 4 (a recipient with a `10002` and no `10050` answers `undefined` and is not ready).
 - **Pooling assumption, stated likewise.** The component opens **no pool and no socket**. It seeds the events it
   was handed into a plain `applesauce-core` `EventStore` and lets relay-config read that store; the store is a
@@ -137,6 +137,6 @@ NIP-17's MUST is violated.
 
 ## Not delivered
 
-- **No deletion of `sdk/core/nostr/**`.** `nip17.ts`, `nip59.ts` and `nip17Relays.ts` survive; their remaining
+- **No deletion of `sdk/core/nostr/**`.** `nip17.ts`, `nip59.ts`and`nip17Relays.ts` survive; their remaining
   consumers are measured in the repoint step and decide whether they can be deleted.
 - **No relay-config change.** The port is read, never edited.

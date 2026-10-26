@@ -27,7 +27,11 @@ export function sign(kind: number, who: Identity, tags: string[][] = [], content
 
 /** A relay-list event: `n` `relay` tags on one event. */
 export function relayList(kind: number, who: Identity, relays: string[]): ReturnType<typeof finalizeEvent> {
-	return sign(kind, who, relays.map((url) => ['relay', url]))
+	return sign(
+		kind,
+		who,
+		relays.map((url) => ['relay', url]),
+	)
 }
 
 /** A fresh vendor store — the live store the models subscribe to, and a loader could write into. */

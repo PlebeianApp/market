@@ -2,7 +2,7 @@
 
 This folder draws the signer module's session lifecycle as a **BPMN 2.0 collaboration**: five
 participants (consumer, module, ports, relay, remote signer), eleven lanes, the eight session states,
-and the amber legs that are *not* exercised end to end. The subject is `signer/` — the spec is
+and the amber legs that are _not_ exercised end to end. The subject is `signer/` — the spec is
 `signer/signer.md`, the first implementation is `signer/ts/`, and the numbers it shows are read from
 `signer/evidence/`.
 
@@ -12,21 +12,21 @@ The five build artifacts are **not in git**: one command rebuilds them, and a tr
 its own generator—or the evidence it is built from—is worse than no copy (this folder shipped one, and by the
 time it was removed it no longer matched what a build produced; see below).
 
-| tracked | what it is |
-| --- | --- |
-| `build.py` | the generator. Everything in the generated set comes from it. |
-| `verify.cjs` | the render + headless-import harness `build.py` calls: it opens the viewer from a `file://` URL in headless chromium, imports the BPMN, and screenshots it at full resolution. |
-| `vendor/` | the **bpmn-js 18.30.1** dist files the offline viewer needs — the navigated-viewer UMD build, `diagram-js.css`, `bpmn-js.css`, the icon class sheet and the icon font as a base64 `woff2`. Vendored because they are **not** regenerable from this repository: `ensure_vendor()` copies them from a local bpmn-js install when they are missing. |
-| `.gitignore` | the five generated names below. |
-| `README.md` | this file. |
+| tracked      | what it is                                                                                                                                                                                                                                                                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `build.py`   | the generator. Everything in the generated set comes from it.                                                                                                                                                                                                                                                                                    |
+| `verify.cjs` | the render + headless-import harness `build.py` calls: it opens the viewer from a `file://` URL in headless chromium, imports the BPMN, and screenshots it at full resolution.                                                                                                                                                                   |
+| `vendor/`    | the **bpmn-js 18.30.1** dist files the offline viewer needs — the navigated-viewer UMD build, `diagram-js.css`, `bpmn-js.css`, the icon class sheet and the icon font as a base64 `woff2`. Vendored because they are **not** regenerable from this repository: `ensure_vendor()` copies them from a local bpmn-js install when they are missing. |
+| `.gitignore` | the five generated names below.                                                                                                                                                                                                                                                                                                                  |
+| `README.md`  | this file.                                                                                                                                                                                                                                                                                                                                       |
 
-| generated — not tracked | what it is |
-| --- | --- |
-| `signer-session.bpmn` | the BPMN 2.0 collaboration: semantic model + diagram interchange. |
-| `viewer.html` | the self-contained offline viewer — the vendored bpmn-js inlined into one file, no CDN and no network. |
-| `_render-canvas.html` | the second page the PNG is rendered from. |
-| `signer-session.png` | the full-resolution render (4050 × 6210). |
-| `checks.txt` | the build's own report: three self-checks, the element histogram, and the headless import result. |
+| generated — not tracked | what it is                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------ |
+| `signer-session.bpmn`   | the BPMN 2.0 collaboration: semantic model + diagram interchange.                                      |
+| `viewer.html`           | the self-contained offline viewer — the vendored bpmn-js inlined into one file, no CDN and no network. |
+| `_render-canvas.html`   | the second page the PNG is rendered from.                                                              |
+| `signer-session.png`    | the full-resolution render (4050 × 6210).                                                              |
+| `checks.txt`            | the build's own report: three self-checks, the element histogram, and the headless import result.      |
 
 ## Regenerate
 
@@ -49,7 +49,7 @@ had been shipped (`signer-session.bpmn` `e68c03b9…`, `_render-canvas.html` `ea
 thing this folder's card is about: the viewer is built from `signer/evidence/` at build time, and the
 evidence changed after that copy was made. Rebuilding against the **pre-repair** evidence
 (`git show 29fce3d:signer/evidence/02-invariant-falsification.txt`, whose row 4 had a command that
-matched no test) reproduced the shipped viewer *exactly*, `26688bee47791bee` — byte for byte. Two runs
+matched no test) reproduced the shipped viewer _exactly_, `26688bee47791bee` — byte for byte. Two runs
 in the same directory gave the same five hashes, and a build in a different directory gave the same
 hashes too, so the output depends on the generator and the evidence and on nothing else.
 

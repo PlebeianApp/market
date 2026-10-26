@@ -214,9 +214,7 @@ describe('M9', () => {
 
 		// NIP-40's boundary is `>=`: at exactly `now` the event is expired
 		expect(await store.read({ kinds: [1] })).toEqual([])
-		expect((await store.read({ kinds: [1] }, { keepExpired: true })).map((candidate) => candidate.id)).toEqual([
-			expiring.id,
-		])
+		expect((await store.read({ kinds: [1] }, { keepExpired: true })).map((candidate) => candidate.id)).toEqual([expiring.id])
 
 		// one second earlier it is still live
 		clock.set(4999)

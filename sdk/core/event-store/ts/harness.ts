@@ -41,10 +41,7 @@ export interface EventFields {
 
 /** A signed event. */
 export function signedEvent(fields: EventFields, sk: Uint8Array = KEY): Event {
-	return finalizeEvent(
-		{ kind: fields.kind, created_at: fields.created_at, tags: fields.tags ?? [], content: fields.content ?? '' },
-		sk,
-	)
+	return finalizeEvent({ kind: fields.kind, created_at: fields.created_at, tags: fields.tags ?? [], content: fields.content ?? '' }, sk)
 }
 
 /** A replaceable or addressable version: for an addressable kind the `d` tag is the address. */

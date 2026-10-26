@@ -35,14 +35,7 @@ export type {
 	PresetRegistryOptions,
 } from './registry'
 export { emptyDeclaration } from './declaration'
-export type {
-	CommerceValidationDeclaration,
-	Contribution,
-	ContributionGrant,
-	KindOwnership,
-	OwnerKey,
-	ParserRef,
-} from './declaration'
+export type { CommerceValidationDeclaration, Contribution, ContributionGrant, KindOwnership, OwnerKey, ParserRef } from './declaration'
 export { composeCommerce } from './compose'
 export type { ComposedCommerce, ComposeCommerceOptions } from './compose'
 export { admissionNotice, inspectAdmission, judgeAdmission, QUARANTINE_MESSAGE } from './notice'
