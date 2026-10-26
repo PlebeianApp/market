@@ -1,0 +1,355 @@
+prettier	UNKNOWN STEP	﻿2026-10-15T12:45:48.6722625Z Current runner version: '2.337.0'
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6742822Z ##[group]Runner Image Provisioner
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6743578Z Hosted Compute Agent
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6744064Z Version: 20261002.596
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6744660Z Commit: c3d12f3313a95f25162a1503be624f3b0617f8c0
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6745245Z Build Date: 2026-10-02T22:28:27Z
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6745808Z Worker ID: {b7941852-42b4-42c2-bf3e-58cb7db775ed}
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6746434Z Region: westus
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6746888Z Cloud: Azure
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6747421Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6748745Z ##[group]Operating System
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6749291Z Ubuntu
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6749785Z 24.04.5
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6750205Z LTS
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6750691Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6751155Z ##[group]Runner Image
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6751800Z Image: ubuntu-24.04
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6752304Z Version: 20261004.327.1
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6753314Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261004.327/images/ubuntu/Ubuntu2404-Readme.md
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6754583Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261004.327
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6755384Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6757827Z ##[group]GITHUB_TOKEN Permissions
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6759719Z Actions: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6760313Z ArtifactMetadata: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6760839Z Attestations: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6761329Z Checks: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6761948Z CodeQuality: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6762406Z Contents: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6762902Z CopilotRequests: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6763407Z Deployments: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6763856Z Discussions: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6764364Z Drives: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6764802Z Issues: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6765365Z Metadata: read
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6765829Z Models: read
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6766252Z Packages: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6766751Z Pages: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6767194Z PullRequests: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6767700Z RepositoryProjects: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6768239Z SecurityEvents: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6768708Z Statuses: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6769202Z VulnerabilityAlerts: read
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6769721Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6771380Z Secret source: Actions
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6772464Z Cache mode: write
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.6773003Z Prepare workflow directory
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.7024805Z Prepare all required actions
+prettier	UNKNOWN STEP	2026-10-15T12:45:48.7062722Z Getting action download info
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.0725685Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.1607366Z Download action repository 'oven-sh/setup-bun@v1' (SHA:f4d14e03ff726c06358e5557344e1da148b56cf7)
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.5866231Z Complete job name: prettier
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6453210Z ##[group]Run actions/checkout@v4
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6454156Z with:
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6454523Z   repository: PlebeianApp/market
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6457681Z   token: ***
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6458151Z   ssh-strict: true
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6458545Z   ssh-user: git
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6459071Z   persist-credentials: true
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6459617Z   clean: true
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6460165Z   sparse-checkout-cone-mode: true
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6460791Z   fetch-depth: 1
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6461346Z   fetch-tags: false
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6462050Z   show-progress: true
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6462582Z   lfs: false
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6463072Z   submodules: false
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6463630Z   set-safe-directory: true
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6464249Z   allow-unsafe-pr-checkout: false
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.6465114Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7265594Z Syncing repository: PlebeianApp/market
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7267616Z ##[group]Getting Git version info
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7268529Z Working directory is '/home/runner/work/market/market'
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7269773Z [command]/usr/bin/git version
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7344036Z git version 2.55.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7362197Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7393785Z Temporarily overriding HOME='/home/runner/work/_temp/4fa07f90-062b-4a15-8662-6ae11487e310' before making global git config changes
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7395777Z Adding repository directory to the temporary git global config as a safe directory
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7397208Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/market/market
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7423228Z Deleting the contents of '/home/runner/work/market/market'
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7430425Z ##[group]Initializing the repository
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7431326Z [command]/usr/bin/git init /home/runner/work/market/market
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7541782Z hint: Using 'master' as the name for the initial branch. This default branch name
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7543326Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7545620Z hint: to use in all of your new repositories, which will suppress this warning,
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7546787Z hint: call:
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7547501Z hint:
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7548382Z hint: 	git config --global init.defaultBranch <name>
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7549407Z hint:
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7550317Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7551910Z hint: 'development'. The just-created branch can be renamed via this command:
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7553082Z hint:
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7553797Z hint: 	git branch -m <name>
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7554549Z hint:
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7555511Z hint: Disable this message with "git config set advice.defaultBranchName false"
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7557264Z Initialized empty Git repository in /home/runner/work/market/market/.git/
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7559885Z [command]/usr/bin/git remote add origin https://github.com/PlebeianApp/market
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7758736Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7759902Z ##[group]Disabling automatic garbage collection
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7763079Z [command]/usr/bin/git config --local gc.auto 0
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7828519Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7829692Z ##[group]Setting up auth
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7839399Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.7885806Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.8213933Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.8244492Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.8436936Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.8465780Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.8653713Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.8687649Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.8688344Z ##[group]Fetching the repository
+prettier	UNKNOWN STEP	2026-10-15T12:45:49.8695501Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +5226677bcfe69b892152822e8ca3eb72f97b1bc4:refs/remotes/pull/1412/merge
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.8727878Z From https://github.com/PlebeianApp/market
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.8729517Z  * [new ref]         5226677bcfe69b892152822e8ca3eb72f97b1bc4 -> pull/1412/merge
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.8737451Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.8738553Z ##[group]Determining the checkout info
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.8739679Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.8740343Z [command]/usr/bin/git sparse-checkout disable
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.8784255Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.8817784Z ##[group]Checking out the ref
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.8820031Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/1412/merge
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9733979Z Note: switching to 'refs/remotes/pull/1412/merge'.
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9735008Z 
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9735787Z You are in 'detached HEAD' state. You can look around, make experimental
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9737704Z changes and commit them, and you can discard any commits you make in this
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9739605Z state without impacting any branches by switching back to a branch.
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9740682Z 
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9741431Z If you want to create a new branch to retain commits you create, you may
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9742925Z do so (now or later) by using -c with the switch command. Example:
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9743877Z 
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9744278Z   git switch -c <new-branch-name>
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9744771Z 
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9745186Z Or undo this operation with:
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9745775Z 
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9746254Z   git switch -
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9746782Z 
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9747720Z Turn off this advice by setting config variable advice.detachedHead to false
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9748877Z 
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9750092Z HEAD is now at 5226677 Merge 9172219ef2c59e21a79fb5fc9a81706ef36b3f52 into 6be7496cc2089db2e2da04bb083312ae6d43a79d
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9754371Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9784650Z [command]/usr/bin/git log -1 --format=%H
+prettier	UNKNOWN STEP	2026-10-15T12:45:50.9807510Z 5226677bcfe69b892152822e8ca3eb72f97b1bc4
+prettier	UNKNOWN STEP	2026-10-15T12:45:51.0069770Z ##[group]Run oven-sh/setup-bun@v1
+prettier	UNKNOWN STEP	2026-10-15T12:45:51.0070705Z with:
+prettier	UNKNOWN STEP	2026-10-15T12:45:51.0071415Z   bun-version: latest
+prettier	UNKNOWN STEP	2026-10-15T12:45:51.0072446Z   no-cache: false
+prettier	UNKNOWN STEP	2026-10-15T12:45:51.0073186Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:51.1020259Z Downloading a new version of Bun: https://bun.sh/download/latest/linux/x64?avx2=true&profile=false
+prettier	UNKNOWN STEP	2026-10-15T12:45:51.1028112Z (node:2091) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+prettier	UNKNOWN STEP	2026-10-15T12:45:51.1030729Z (Use `node --trace-deprecation ...` to show where the warning was created)
+prettier	UNKNOWN STEP	2026-10-15T12:45:51.9948217Z [command]/usr/bin/unzip -o -q /home/runner/work/_temp/40aefb91-83ca-430c-9c49-2afc7336731d
+prettier	UNKNOWN STEP	2026-10-15T12:45:52.5912138Z [command]/home/runner/.bun/bin/bun --revision
+prettier	UNKNOWN STEP	2026-10-15T12:45:52.5945880Z 1.4.3+c6da4a4d3
+prettier	UNKNOWN STEP	2026-10-15T12:45:52.6082903Z ##[group]Run bun install
+prettier	UNKNOWN STEP	2026-10-15T12:45:52.6083257Z ^[[36;1mbun install^[[0m
+prettier	UNKNOWN STEP	2026-10-15T12:45:52.6310955Z shell: /usr/bin/bash -e {0}
+prettier	UNKNOWN STEP	2026-10-15T12:45:52.6311252Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:52.6420262Z bun install v1.4.3 (c6da4a4d3)
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3771875Z 
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3805420Z $ ln -sf ../../scripts/git-hooks/pre-commit .git/hooks/pre-commit 2>/dev/null; chmod +x scripts/git-hooks/pre-commit 2>/dev/null; true
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3806136Z 
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3806472Z + @faker-js/faker@10.4.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3832756Z + @playwright/test@1.60.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3862424Z + @tanstack/react-router-devtools@1.166.13
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3882092Z + @tanstack/router-cli@1.166.43
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3903907Z + @tanstack/router-plugin@1.167.35
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3904257Z + @types/bun@1.3.14
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3904566Z + @types/react@19.2.14
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3905787Z + @types/react-dom@19.2.3
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3906109Z + @types/ws@8.18.1
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3906427Z + bun@1.4.2
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3906723Z + mini-svg-data-uri@1.4.4
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3907544Z + playwright@1.60.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3907809Z + prettier@3.8.3
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3908059Z + svgo@4.0.1
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3908487Z + tailwindcss@4.3.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3908763Z + tailwindcss-animate@1.0.7
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3909044Z + ws@8.20.1
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3909305Z + @cashu/cashu-ts@2.9.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3909985Z + @contextvm/sdk@0.11.14
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3910196Z + @formkit/auto-animate@0.9.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3910413Z + @getalby/lightning-tools@8.1.1
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3910697Z + @icons-pack/react-simple-icons@13.13.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3911033Z + @modelcontextprotocol/sdk@1.29.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3911297Z + @noble/hashes@2.2.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3912374Z + @nostr-dev-kit/blossom@8.0.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3912591Z + @nostr-dev-kit/ndk@3.0.3
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3912790Z + @nostr-dev-kit/wallet@1.0.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3912994Z + @nostr-dev-kit/wot@1.0.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3913214Z + @radix-ui/react-alert-dialog@1.1.15
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3913513Z + @radix-ui/react-avatar@1.1.11
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3913781Z + @radix-ui/react-dialog@1.1.15
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3913986Z + @scure/base@2.2.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3914161Z + @scure/bip32@2.2.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3914347Z + @tanstack/react-form@1.32.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3914555Z + @tanstack/react-query@5.100.10
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3914760Z + @tanstack/react-router@1.169.2
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3914983Z + @tanstack/react-store@0.11.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3915193Z + @tanstack/react-table@8.21.3
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3915397Z + @tanstack/store@0.11.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3915599Z + @yudiel/react-qr-scanner@2.6.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3915805Z + applesauce-core@6.2.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3916101Z + applesauce-relay@6.2.1
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3916320Z + applesauce-signers@6.2.3
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3916528Z + bitcoinjs-lib@7.0.1
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3916709Z + bs58check@4.0.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3916890Z + bun-plugin-tailwind@0.1.2
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3917116Z + class-variance-authority@0.7.1
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3917315Z + clsx@2.1.1
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3917484Z + coco-cashu-core@1.0.0-rc11
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3917692Z + coco-cashu-indexeddb@1.0.0-rc11
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3917895Z + date-fns@4.1.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3918073Z + embla-carousel-react@8.6.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3918273Z + light-bolt11-decoder@3.2.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3918476Z + lucide-react@1.14.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3918830Z + maplibre-gl@5.24.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3919003Z + next-themes@0.4.6
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3919177Z + nostr-tools@2.23.3
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3919370Z + qrcode.react@4.2.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3919553Z + radix-ui@1.4.3
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3919725Z + react@19.2.6
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3919898Z + react-day-picker@9.14.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3920096Z + react-dom@19.2.6
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3920262Z + react-use@17.6.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3920427Z + recharts@3.8.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3920740Z + rxjs@7.8.2
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3921014Z + sonner@2.0.7
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3921750Z + tailwind-merge@3.6.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3921959Z + uuid@14.0.0
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3922121Z + vaul@1.1.2
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3922278Z + zod@4.4.3
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3922380Z 
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3922468Z 601 packages installed [3.74s]
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3953186Z ##[group]Run bun run format:check
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.3953445Z ^[[36;1mbun run format:check^[[0m
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.4010509Z shell: /usr/bin/bash -e {0}
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.4010728Z ##[endgroup]
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.4096848Z $ prettier --check .
+prettier	UNKNOWN STEP	2026-10-15T12:45:56.5202910Z Checking formatting...
+prettier	UNKNOWN STEP	2026-10-15T12:46:01.7247507Z [^[[33mwarn^[[39m] method/checks/checks.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:01.7673605Z [^[[33mwarn^[[39m] method/method.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:01.7782095Z [^[[33mwarn^[[39m] method/prompts/build.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:01.8714905Z [^[[33mwarn^[[39m] method/prompts/how-to-use.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:01.9002915Z [^[[33mwarn^[[39m] method/prompts/index.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:01.9105423Z [^[[33mwarn^[[39m] method/prompts/review.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:02.7220643Z [^[[33mwarn^[[39m] sdk/commerce/declarations.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.0743166Z [^[[33mwarn^[[39m] sdk/core/capability/capability.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.1013914Z [^[[33mwarn^[[39m] sdk/core/composition/composition.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.1083841Z [^[[33mwarn^[[39m] sdk/core/composition/ts/compose.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.1182075Z [^[[33mwarn^[[39m] sdk/core/composition/ts/composition-root.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.1223712Z [^[[33mwarn^[[39m] sdk/core/composition/ts/composition-root.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.1539515Z [^[[33mwarn^[[39m] sdk/core/composition/ts/index.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.1852267Z [^[[33mwarn^[[39m] sdk/core/composition/ts/registry.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.2097552Z [^[[33mwarn^[[39m] sdk/core/composition/ts/registry.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.2786184Z [^[[33mwarn^[[39m] sdk/core/dm/dm.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.3040573Z [^[[33mwarn^[[39m] sdk/core/dm/ts/index.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.4248767Z [^[[33mwarn^[[39m] sdk/core/event-access/event-access.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.4925405Z [^[[33mwarn^[[39m] sdk/core/event-access/ts/composition.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.5210805Z [^[[33mwarn^[[39m] sdk/core/event-access/ts/composition.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.5233485Z [^[[33mwarn^[[39m] sdk/core/event-access/ts/errors.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.5257022Z [^[[33mwarn^[[39m] sdk/core/event-access/ts/filters.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.5552239Z [^[[33mwarn^[[39m] sdk/core/event-access/ts/harness.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.5606806Z [^[[33mwarn^[[39m] sdk/core/event-access/ts/merge.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.5700730Z [^[[33mwarn^[[39m] sdk/core/event-access/ts/policy.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.5844735Z [^[[33mwarn^[[39m] sdk/core/event-access/ts/ports.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.6102620Z [^[[33mwarn^[[39m] sdk/core/event-access/ts/ts.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.6199861Z [^[[33mwarn^[[39m] sdk/core/event-access/ts/types.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.7712670Z [^[[33mwarn^[[39m] sdk/core/event-access/visuals/webui/index.html
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.8472917Z [^[[33mwarn^[[39m] sdk/core/event-store/event-store.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.8732940Z [^[[33mwarn^[[39m] sdk/core/event-store/ts/filters.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.8772254Z [^[[33mwarn^[[39m] sdk/core/event-store/ts/filters.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.8823750Z [^[[33mwarn^[[39m] sdk/core/event-store/ts/harness.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.8894479Z [^[[33mwarn^[[39m] sdk/core/event-store/ts/index.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.9229433Z [^[[33mwarn^[[39m] sdk/core/event-store/ts/invariants.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.9529238Z [^[[33mwarn^[[39m] sdk/core/event-store/ts/store.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:03.9964454Z [^[[33mwarn^[[39m] sdk/core/event-store/ts/ts.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.0082098Z [^[[33mwarn^[[39m] sdk/core/event-store/ts/types.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.0178696Z [^[[33mwarn^[[39m] sdk/core/event-store/ts/view.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.2035104Z [^[[33mwarn^[[39m] sdk/core/event-store/visuals/webui/index.html
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.2450687Z [^[[33mwarn^[[39m] sdk/core/funds-contract/funds-contract.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.2555570Z [^[[33mwarn^[[39m] sdk/core/funds-contract/ts/port.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.2629120Z [^[[33mwarn^[[39m] sdk/core/funds-contract/ts/types.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.3455333Z [^[[33mwarn^[[39m] sdk/core/nostr-io/nostr-io.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.3804846Z [^[[33mwarn^[[39m] sdk/core/nostr-io/ts/conformance.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.4196837Z [^[[33mwarn^[[39m] sdk/core/nostr-io/ts/harness.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.4327861Z [^[[33mwarn^[[39m] sdk/core/nostr-io/ts/index.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.4803089Z [^[[33mwarn^[[39m] sdk/core/nostr-io/ts/pool.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.4924060Z [^[[33mwarn^[[39m] sdk/core/nostr-io/ts/relay-adapter.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.7037941Z [^[[33mwarn^[[39m] sdk/core/nostr-io/visuals/webui/index.html
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.7157058Z [^[[33mwarn^[[39m] sdk/core/nostr-io/visuals/webui/README.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:04.9588506Z [^[[33mwarn^[[39m] sdk/core/nostr-io/visuals/webui/vendor/gsap.min.js
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.0813058Z [^[[33mwarn^[[39m] sdk/core/nostr-io/visuals/webui/vendor/ScrollTrigger.min.js
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.1208345Z [^[[33mwarn^[[39m] sdk/core/relay-config/relay-config.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.1303228Z [^[[33mwarn^[[39m] sdk/core/relay-config/ts/harness.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.1357318Z [^[[33mwarn^[[39m] sdk/core/relay-config/ts/index.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.1756839Z [^[[33mwarn^[[39m] sdk/core/relay-config/visuals/webui/index.html
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.1860857Z [^[[33mwarn^[[39m] sdk/core/relay-config/visuals/webui/SKILL.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.2469588Z [^[[33mwarn^[[39m] sdk/core/signer/evidence/record.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.3186168Z [^[[33mwarn^[[39m] sdk/core/signer/signer.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.3275276Z [^[[33mwarn^[[39m] sdk/core/signer/ts/capability.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.3328104Z [^[[33mwarn^[[39m] sdk/core/signer/ts/errors.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.3439629Z [^[[33mwarn^[[39m] sdk/core/signer/ts/harness.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.3464810Z [^[[33mwarn^[[39m] sdk/core/signer/ts/index.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.3712702Z [^[[33mwarn^[[39m] sdk/core/signer/ts/invariants.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.3778901Z [^[[33mwarn^[[39m] sdk/core/signer/ts/lanes.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.3869997Z [^[[33mwarn^[[39m] sdk/core/signer/ts/nip46.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.4006965Z [^[[33mwarn^[[39m] sdk/core/signer/ts/nip46.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.4064224Z [^[[33mwarn^[[39m] sdk/core/signer/ts/nostr-connect-uri.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.4459627Z [^[[33mwarn^[[39m] sdk/core/signer/ts/session.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.4782953Z [^[[33mwarn^[[39m] sdk/core/signer/ts/session.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.4994658Z [^[[33mwarn^[[39m] sdk/core/signer/ts/types.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.5214883Z [^[[33mwarn^[[39m] sdk/core/signer/ts/vault.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.5320734Z [^[[33mwarn^[[39m] sdk/core/signer/ts/vault.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.5568882Z [^[[33mwarn^[[39m] sdk/core/signer/visuals/architecture/README.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.5964306Z [^[[33mwarn^[[39m] sdk/core/signer/visuals/architecture/signer-architecture.html
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.6086719Z [^[[33mwarn^[[39m] sdk/core/signer/visuals/bpmn/README.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.6230485Z [^[[33mwarn^[[39m] sdk/core/signer/visuals/bpmn/vendor/bpmn-codes.css
+prettier	UNKNOWN STEP	2026-10-15T12:46:05.6324187Z [^[[33mwarn^[[39m] sdk/core/signer/visuals/bpmn/vendor/bpmn-js.css
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.0502650Z [^[[33mwarn^[[39m] sdk/core/signer/visuals/bpmn/vendor/bpmn-navigated-viewer.production.min.js
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.1098752Z [^[[33mwarn^[[39m] sdk/core/signer/visuals/bpmn/vendor/diagram-js.css
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.1301756Z [^[[33mwarn^[[39m] sdk/core/signer/visuals/bpmn/verify.cjs
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.2829066Z [^[[33mwarn^[[39m] sdk/core/signer/visuals/webui/index.html
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.2992172Z [^[[33mwarn^[[39m] sdk/core/signer/visuals/webui/README.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.4679784Z [^[[33mwarn^[[39m] sdk/core/signer/visuals/webui/vendor/gsap.min.js
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.5505357Z [^[[33mwarn^[[39m] sdk/core/signer/visuals/webui/vendor/ScrollTrigger.min.js
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.5848276Z [^[[33mwarn^[[39m] sdk/core/validation/ts/harness.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.6232555Z [^[[33mwarn^[[39m] sdk/core/validation/ts/ts.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.6329807Z [^[[33mwarn^[[39m] sdk/core/validation/ts/types.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.6998148Z [^[[33mwarn^[[39m] sdk/core/validation/ts/validation.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.7994626Z [^[[33mwarn^[[39m] sdk/core/validation/validation.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.9123270Z [^[[33mwarn^[[39m] sdk/core/validation/visuals/webui/index.html
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.9364755Z [^[[33mwarn^[[39m] sdk/core/wallet/ts/aggregator.test.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.9505381Z [^[[33mwarn^[[39m] sdk/core/wallet/ts/aggregator.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.9603384Z [^[[33mwarn^[[39m] sdk/core/wallet/ts/gate.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:06.9742604Z [^[[33mwarn^[[39m] sdk/core/wallet/ts/types.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:07.0862072Z [^[[33mwarn^[[39m] sdk/core/wallet/visuals/webui/index.html
+prettier	UNKNOWN STEP	2026-10-15T12:46:07.0909436Z [^[[33mwarn^[[39m] sdk/core/wallet/visuals/webui/run.ts
+prettier	UNKNOWN STEP	2026-10-15T12:46:07.1007249Z [^[[33mwarn^[[39m] sdk/core/wallet/visuals/webui/SKILL.md
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.6148043Z [^[[33mwarn^[[39m] Code style issues found in 99 files. Run Prettier with --write to fix.
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.6491102Z error: script "format:check" exited with code 1
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.6507608Z ##[error]Process completed with exit code 1.
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.6626718Z Post job cleanup.
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.7300178Z [command]/usr/bin/git version
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.7333681Z git version 2.55.0
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.7362784Z Temporarily overriding HOME='/home/runner/work/_temp/e9c73f6a-220c-458d-b396-e10e34faa671' before making global git config changes
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.7363791Z Adding repository directory to the temporary git global config as a safe directory
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.7367137Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/market/market
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.7397204Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.7426104Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.7632739Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.7658930Z http.https://github.com/.extraheader
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.7668742Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.7703629Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.7920371Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.7954615Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.8302081Z Cleaning up orphan processes
+prettier	UNKNOWN STEP	2026-10-15T12:46:13.8567024Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, oven-sh/setup-bun@v1. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

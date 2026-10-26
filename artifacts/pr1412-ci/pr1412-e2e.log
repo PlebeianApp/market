@@ -1,0 +1,1126 @@
+e2e-grep	UNKNOWN STEP	﻿2026-10-15T12:45:48.7556714Z Current runner version: '2.337.0'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7583007Z ##[group]Runner Image Provisioner
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7584186Z Hosted Compute Agent
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7584851Z Version: 20261002.596
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7585512Z Commit: c3d12f3313a95f25162a1503be624f3b0617f8c0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7586358Z Build Date: 2026-10-02T22:28:27Z
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7587080Z Worker ID: {5df1901a-e9e0-4cb6-98ea-5ec699e0ae33}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7587863Z Region: westcentralus
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7588535Z Cloud: Azure
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7589118Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7590576Z ##[group]Operating System
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7591227Z Ubuntu
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7591838Z 24.04.5
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7592440Z LTS
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7592997Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7593643Z ##[group]Runner Image
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7594573Z Image: ubuntu-24.04
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7595158Z Version: 20261004.327.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7596582Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261004.327/images/ubuntu/Ubuntu2404-Readme.md
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7598255Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261004.327
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7599297Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7602509Z ##[group]GITHUB_TOKEN Permissions
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7605068Z Actions: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7605812Z ArtifactMetadata: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7606485Z Attestations: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7607095Z Checks: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7607781Z CodeQuality: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7608393Z Contents: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7608978Z CopilotRequests: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7609677Z Deployments: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7610324Z Discussions: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7611020Z Drives: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7611594Z Issues: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7612225Z Metadata: read
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7612877Z Models: read
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7613469Z Packages: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7614256Z Pages: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7614872Z PullRequests: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7615502Z RepositoryProjects: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7616260Z SecurityEvents: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7617002Z Statuses: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7617677Z VulnerabilityAlerts: read
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7618340Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7620452Z Secret source: Actions
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7621538Z Cache mode: write
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7622264Z Prepare workflow directory
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.7997657Z Prepare all required actions
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:48.8045384Z Getting action download info
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:49.2107105Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:49.2937543Z Download action repository 'oven-sh/setup-bun@v2' (SHA:0c5077e51419868618aeaa5fe8019c62421857d6)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:49.8744080Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:49.9707163Z Download action repository 'actions/setup-go@v5' (SHA:40f1582b2485089dde7abd97c1529aa768e1baff)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:50.7920353Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:50.8747640Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1055280Z Complete job name: e2e-grep
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1932307Z ##[group]Run actions/checkout@v4
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1933013Z with:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1933383Z   repository: PlebeianApp/market
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1936430Z   token: ***
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1936781Z   ssh-strict: true
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1937125Z   ssh-user: git
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1937481Z   persist-credentials: true
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1937858Z   clean: true
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1938228Z   sparse-checkout-cone-mode: true
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1938630Z   fetch-depth: 1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1938962Z   fetch-tags: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1939298Z   show-progress: true
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1939635Z   lfs: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1939959Z   submodules: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1940311Z   set-safe-directory: true
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1940988Z   allow-unsafe-pr-checkout: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.1941626Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.2957999Z Syncing repository: PlebeianApp/market
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.2960231Z ##[group]Getting Git version info
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.2960914Z Working directory is '/home/runner/work/market/market'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.2961751Z [command]/usr/bin/git version
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3042081Z git version 2.55.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3063384Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3079592Z Temporarily overriding HOME='/home/runner/work/_temp/8cf3c2b4-9728-4c29-be6c-b639b098ae2c' before making global git config changes
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3081297Z Adding repository directory to the temporary git global config as a safe directory
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3085292Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/market/market
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3148235Z Deleting the contents of '/home/runner/work/market/market'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3157194Z ##[group]Initializing the repository
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3158058Z [command]/usr/bin/git init /home/runner/work/market/market
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3234374Z hint: Using 'master' as the name for the initial branch. This default branch name
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3235245Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3236014Z hint: to use in all of your new repositories, which will suppress this warning,
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3236749Z hint: call:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3237227Z hint:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3237850Z hint: 	git config --global init.defaultBranch <name>
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3238500Z hint:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3239197Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3240260Z hint: 'development'. The just-created branch can be renamed via this command:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3241104Z hint:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3241647Z hint: 	git branch -m <name>
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3242181Z hint:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3242903Z hint: Disable this message with "git config set advice.defaultBranchName false"
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3244298Z Initialized empty Git repository in /home/runner/work/market/market/.git/
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3249396Z [command]/usr/bin/git remote add origin https://github.com/PlebeianApp/market
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3295669Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3296596Z ##[group]Disabling automatic garbage collection
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3300260Z [command]/usr/bin/git config --local gc.auto 0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3334206Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3335122Z ##[group]Setting up auth
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3342344Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3378992Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3728354Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.3768523Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.4029560Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.4066858Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.4313334Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.4358380Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.4359123Z ##[group]Fetching the repository
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:51.4368115Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +5226677bcfe69b892152822e8ca3eb72f97b1bc4:refs/remotes/pull/1412/merge
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.7806116Z From https://github.com/PlebeianApp/market
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.7807074Z  * [new ref]         5226677bcfe69b892152822e8ca3eb72f97b1bc4 -> pull/1412/merge
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.7810306Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.7811178Z ##[group]Determining the checkout info
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.7812936Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.7819734Z [command]/usr/bin/git sparse-checkout disable
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.7873280Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.7908971Z ##[group]Checking out the ref
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.7914254Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/1412/merge
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9087537Z Note: switching to 'refs/remotes/pull/1412/merge'.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9088430Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9089272Z You are in 'detached HEAD' state. You can look around, make experimental
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9090217Z changes and commit them, and you can discard any commits you make in this
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9091081Z state without impacting any branches by switching back to a branch.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9091586Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9092020Z If you want to create a new branch to retain commits you create, you may
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9092785Z do so (now or later) by using -c with the switch command. Example:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9093215Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9093419Z   git switch -c <new-branch-name>
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9093907Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9094084Z Or undo this operation with:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9094365Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9094515Z   git switch -
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9094752Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9095119Z Turn off this advice by setting config variable advice.detachedHead to false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9095648Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9096262Z HEAD is now at 5226677 Merge 9172219ef2c59e21a79fb5fc9a81706ef36b3f52 into 6be7496cc2089db2e2da04bb083312ae6d43a79d
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9102719Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9160745Z [command]/usr/bin/git log -1 --format=%H
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9195652Z 5226677bcfe69b892152822e8ca3eb72f97b1bc4
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9481932Z ##[group]Run oven-sh/setup-bun@v2
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9482273Z with:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9482510Z   bun-version: latest
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9482749Z   no-cache: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9485510Z   token: ***
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:52.9485734Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:53.5858883Z Downloading a new version of Bun: https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-linux-x64.zip
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:54.1420099Z [command]/usr/bin/unzip -o -q /home/runner/work/_temp/532e3d38-364b-4bfe-8205-43ae580c346e.zip
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:54.9113358Z [command]/home/runner/.bun/bin/bun --revision
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:54.9172453Z 1.4.3+c6da4a4d3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:54.9947335Z ##[group]Run actions/cache@v4
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:54.9947613Z with:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:54.9947829Z   path: ~/.bun/install/cache
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:54.9948254Z   key: bun-Linux-51f5309fba85fd55beddc211353ba2be5ed9b7d4e7d062e9381c2da9b0bb3678
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:54.9948703Z   restore-keys: bun-Linux-
+e2e-grep	UNKNOWN STEP	
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:54.9948968Z   enableCrossOsArchive: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:54.9949232Z   fail-on-cache-miss: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:54.9949498Z   lookup-only: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:54.9949720Z   save-always: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:54.9949945Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:55.1007537Z (node:2410) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:55.1008425Z (Use `node --trace-deprecation ...` to show where the warning was created)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:55.3208127Z Cache hit for restore-key: bun-Linux-a63a8cda97c12658e608a0d96671a5cbbc6b8a8c136e730400f9fc6ffb5c289e
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:55.3307592Z (node:2410) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:56.5338606Z Received 37748736 of 335466669 (11.3%), 36.0 MBs/sec
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:57.5344491Z Received 142606336 of 335466669 (42.5%), 67.9 MBs/sec
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:58.5353256Z Received 297795584 of 335466669 (88.8%), 94.6 MBs/sec
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:58.7564559Z Received 335466669 of 335466669 (100.0%), 99.2 MBs/sec
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:58.7566114Z Cache Size: ~320 MB (335466669 B)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:45:58.7607895Z [command]/usr/bin/tar -xf /home/runner/work/_temp/31462d24-ebd2-420c-9b4e-984c10316e7d/cache.tzst -P -C /home/runner/work/market/market --use-compress-program unzstd
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.1038908Z Cache restored successfully
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.1278240Z Cache restored from key: bun-Linux-a63a8cda97c12658e608a0d96671a5cbbc6b8a8c136e730400f9fc6ffb5c289e
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.1443151Z ##[group]Run actions/setup-go@v5
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.1443444Z with:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.1443656Z   go-version: >=1.22
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.1444231Z   check-latest: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.1446704Z   token: ***
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.1446927Z   cache: true
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.1447143Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.2771684Z Setup go version spec >=1.22
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.2819492Z Found in cache @ /opt/hostedtoolcache/go/1.26.8/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.2821675Z (node:2428) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.2822797Z (Use `node --trace-deprecation ...` to show where the warning was created)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.2825997Z Added go to the path
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.2829099Z Successfully set up Go version >=1.22
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.9191958Z [command]/opt/hostedtoolcache/go/1.26.8/x64/bin/go env GOMODCACHE
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.9228367Z [command]/opt/hostedtoolcache/go/1.26.8/x64/bin/go env GOCACHE
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.9291592Z /home/runner/go/pkg/mod
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.9304261Z /home/runner/.cache/go-build
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.9336519Z ##[warning]Restore cache failed: Dependencies file is not found in /home/runner/work/market/market. Supported file pattern: go.sum
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.9364512Z go version go1.26.8 linux/amd64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.9364805Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:03.9365274Z ##[group]go env
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0820287Z AR='ar'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0820649Z CC='gcc'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0821050Z CGO_CFLAGS='-O2 -g'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0821408Z CGO_CPPFLAGS=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0821749Z CGO_CXXFLAGS='-O2 -g'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0822090Z CGO_ENABLED='1'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0822384Z CGO_FFLAGS='-O2 -g'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0822707Z CGO_LDFLAGS='-O2 -g'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0823018Z CXX='g++'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0823305Z GCCGO='gccgo'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0823619Z GO111MODULE=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0824145Z GOAMD64='v1'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0824447Z GOARCH='amd64'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0824756Z GOAUTH='netrc'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0825042Z GOBIN=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0825411Z GOCACHE='/home/runner/.cache/go-build'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0825842Z GOCACHEPROG=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0826181Z GODEBUG=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0826494Z GOENV='/home/runner/.config/go/env'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0826884Z GOEXE=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0827194Z GOEXPERIMENT=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0827573Z GOFIPS140='off'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0827874Z GOFLAGS=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0828825Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build3239017512=/tmp/go-build -gno-record-gcc-switches'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0829943Z GOHOSTARCH='amd64'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0830323Z GOHOSTOS='linux'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0830680Z GOINSECURE=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0830983Z GOMOD='/dev/null'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0831333Z GOMODCACHE='/home/runner/go/pkg/mod'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0831738Z GONOPROXY=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0832028Z GONOSUMDB=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0832319Z GOOS='linux'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0832733Z GOPATH='/home/runner/go'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0833137Z GOPRIVATE=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0833577Z GOPROXY='https://proxy.golang.org,direct'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0834330Z GOROOT='/opt/hostedtoolcache/go/1.26.8/x64'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0834857Z GOSUMDB='sum.golang.org'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0835285Z GOTELEMETRY='local'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0835737Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0836243Z GOTMPDIR=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0836579Z GOTOOLCHAIN='auto'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0837475Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.8/x64/pkg/tool/linux_amd64'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0838099Z GOVCS=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0838415Z GOVERSION='go1.26.8'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0838834Z GOWORK=''
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0839241Z PKG_CONFIG='pkg-config'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0839501Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0840126Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0984143Z ##[group]Run # NOTE: We pin to commit b6568388 because the upstream 'nak' repository 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0984805Z ^[[36;1m# NOTE: We pin to commit b6568388 because the upstream 'nak' repository ^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0985350Z ^[[36;1m# (commit 9c35de2 on Jul 16) introduced a breaking 'replace' directive ^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0985812Z ^[[36;1m# in go.mod: `replace fiatjaf.com/nostr => ../nostrlib`.^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0986280Z ^[[36;1m# This local path reference fails in CI where the sibling 'nostrlib' repo ^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0986723Z ^[[36;1m# does not exist, causing build failures.^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0987159Z ^[[36;1m# Pinning to this pre-regression commit ensures the build uses the ^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0987648Z ^[[36;1m# remote module source until the upstream issue is resolved.^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0988099Z ^[[36;1mgit clone https://github.com/fiatjaf/nak.git /tmp/nak^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0988457Z ^[[36;1mcd /tmp/nak^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0988808Z ^[[36;1mgit checkout b65683886b58382890888fbdda90e5c2129df488^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0989151Z ^[[36;1m^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0989368Z ^[[36;1mGOBIN="$(go env GOPATH)/bin"^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0989646Z ^[[36;1mmkdir -p "$GOBIN"^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0989918Z ^[[36;1mgo build -o "$GOBIN/nak" .^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.0990249Z ^[[36;1mecho "nak installed at: $(which nak)"^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.1214890Z shell: /usr/bin/bash -e {0}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.1215196Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:04.1340917Z Cloning into '/tmp/nak'...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0585009Z Note: switching to 'b65683886b58382890888fbdda90e5c2129df488'.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0585431Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0585746Z You are in 'detached HEAD' state. You can look around, make experimental
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0586521Z changes and commit them, and you can discard any commits you make in this
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0587257Z state without impacting any branches by switching back to a branch.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0587657Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0587964Z If you want to create a new branch to retain commits you create, you may
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0588602Z do so (now or later) by using -c with the switch command. Example:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0588997Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0589407Z   git switch -c <new-branch-name>
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0589703Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0589880Z Or undo this operation with:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0590151Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0590311Z   git switch -
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0590519Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0590905Z Turn off this advice by setting config variable advice.detachedHead to false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0591391Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.0591675Z HEAD is now at b656838 nak key public prints our key if given by --sec.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:05.2168069Z go: downloading fiatjaf.com/nostr v0.0.0-20260625215907-7a78ad0c459f
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.0098793Z go: downloading github.com/AlecAivazis/survey/v2 v2.3.7
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.0099523Z go: downloading github.com/btcsuite/btcd/btcec/v2 v2.3.6
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.0102747Z go: downloading github.com/bep/debounce v1.2.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.0368343Z go: downloading github.com/btcsuite/btcd v0.24.2
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.0502860Z go: downloading github.com/charmbracelet/glamour v0.10.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.0517921Z go: downloading github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.0871190Z go: downloading github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.1003457Z go: downloading github.com/denisbrodbeck/machineid v1.0.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.1282386Z go: downloading github.com/fatih/color v1.16.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.1417848Z go: downloading github.com/hanwen/go-fuse/v2 v2.9.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.2097104Z go: downloading github.com/itchyny/gojq v0.12.19
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.2098088Z go: downloading github.com/json-iterator/go v1.1.12
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.2557379Z go: downloading github.com/lithammer/fuzzysearch v1.1.8
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.3769667Z go: downloading github.com/mailru/easyjson v0.9.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.4194973Z go: downloading github.com/mark3labs/mcp-go v0.8.3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.4595242Z go: downloading github.com/markusmobius/go-dateparser v1.2.3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.4595968Z go: downloading github.com/mattn/go-isatty v0.0.20
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.6018970Z go: downloading github.com/mattn/go-tty/v2 v2.0.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.7406975Z go: downloading github.com/mdp/qrterminal/v3 v3.2.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.8405209Z go: downloading github.com/puzpuzpuz/xsync/v3 v3.5.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.9167398Z go: downloading github.com/urfave/cli/v3 v3.0.0-beta1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.9175402Z go: downloading golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:06.9825177Z go: downloading golang.org/x/sync v0.18.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:07.0175009Z go: downloading golang.org/x/term v0.32.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.1529745Z go: downloading github.com/ImVexed/fasturl v0.0.0-20230304231329-4e41488060f3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.1858024Z go: downloading github.com/coder/websocket v1.8.14
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.2211304Z go: downloading github.com/templexxx/xhex v0.0.0-20200614015412-aed53437177b
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.2467769Z go: downloading github.com/tidwall/gjson v1.18.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.3416464Z go: downloading fiatjaf.com/lib v0.3.7
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.3475643Z go: downloading github.com/liamg/magic v0.0.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.4451855Z go: downloading github.com/fasthttp/websocket v1.5.12
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.4452485Z go: downloading github.com/rs/cors v1.11.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.5237908Z go: downloading github.com/go-git/go-git/v5 v5.16.3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.5475935Z go: downloading github.com/btcsuite/btcd/btcutil v1.1.5
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.5970565Z go: downloading github.com/bluekeyes/go-gitdiff v0.7.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.7104671Z go: downloading github.com/PowerDNS/lmdb-go v1.9.3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.7119309Z go: downloading golang.org/x/crypto v0.39.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.8640263Z go: downloading github.com/elnosh/gonuts v0.4.2
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:08.9082160Z go: downloading golang.org/x/text v0.26.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.0156881Z go: downloading github.com/valyala/fasthttp v1.59.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.0892343Z go: downloading gopkg.in/yaml.v3 v3.0.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.1302124Z go: downloading github.com/FastFilter/xorfilter v0.2.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.1808350Z go: downloading github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.4429305Z go: downloading github.com/muesli/termenv v0.16.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.4430982Z go: downloading github.com/yuin/goldmark v1.7.8
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.4436181Z go: downloading github.com/yuin/goldmark-emoji v1.0.5
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.4961318Z go: downloading github.com/mattn/go-colorable v0.1.14
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.4961960Z go: downloading golang.org/x/sys v0.38.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.5261677Z go: downloading github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.5306264Z go: downloading github.com/modern-go/reflect2 v1.0.2
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.5372645Z go: downloading github.com/itchyny/timefmt-go v0.1.8
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.5521509Z go: downloading github.com/google/uuid v1.6.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.5644286Z go: downloading rsc.io/qr v0.2.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.5965819Z go: downloading github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.9124883Z go: downloading github.com/josharian/intern v1.0.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.9126120Z go: downloading github.com/templexxx/cpu v0.0.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.9298978Z go: downloading github.com/tidwall/match v1.2.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:09.9390265Z go: downloading github.com/tidwall/pretty v1.2.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.0488859Z go: downloading github.com/klauspost/compress v1.18.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.0489948Z go: downloading github.com/savsgio/gotils v0.0.0-20240704082632-aef3928b8a38
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.0511359Z go: downloading golang.org/x/net v0.41.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.1251974Z go: downloading github.com/fxamacker/cbor/v2 v2.7.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.1629590Z go: downloading github.com/andybalholm/brotli v1.1.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.7162909Z go: downloading github.com/valyala/bytebufferpool v1.0.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.7537034Z go: downloading github.com/dgraph-io/ristretto/v2 v2.3.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.7973337Z go: downloading github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.8091993Z go: downloading github.com/alecthomas/chroma/v2 v2.14.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.8241941Z go: downloading github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.9247741Z go: downloading github.com/charmbracelet/x/ansi v0.8.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.9676622Z go: downloading github.com/charmbracelet/x/exp/slice v0.0.0-20250327172914-2fdc97757edf
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.9677945Z go: downloading github.com/microcosm-cc/bluemonday v1.0.27
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.9678994Z go: downloading github.com/muesli/reflow v0.3.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.9990609Z go: downloading github.com/lucasb-eyer/go-colorful v1.2.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:10.9991322Z go: downloading github.com/aymanbagabas/go-osc52/v2 v2.0.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.0014141Z go: downloading github.com/rivo/uniseg v0.4.7
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.0658395Z go: downloading github.com/elliotchance/pie/v2 v2.7.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.0761778Z go: downloading github.com/hablullah/go-hijri v1.0.2
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.0794063Z go: downloading github.com/jalaali/go-jalaali v0.0.0-20210801064154-80525e88d958
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.1730504Z go: downloading github.com/decred/dcrd/crypto/blake256 v1.1.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.2161560Z go: downloading github.com/x448/float16 v0.8.4
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.2272436Z go: downloading github.com/charmbracelet/x/cellbuf v0.0.13
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.2417476Z go: downloading github.com/dlclark/regexp2 v1.11.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.2576084Z go: downloading github.com/mattn/go-runewidth v0.0.19
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.2582423Z go: downloading github.com/aymerick/douceur v0.2.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.2879048Z go: downloading github.com/hablullah/go-juliandays v1.0.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.2962255Z go: downloading github.com/cespare/xxhash/v2 v2.3.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.3144257Z go: downloading github.com/dustin/go-humanize v1.0.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.3200816Z go: downloading github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.3243512Z go: downloading github.com/charmbracelet/x/term v0.2.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.3481463Z go: downloading github.com/clipperhouse/uax29/v2 v2.3.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.3503193Z go: downloading github.com/gorilla/css v1.0.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.3777660Z go: downloading github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:11.3949802Z go: downloading github.com/clipperhouse/stringish v0.1.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:47.1205695Z nak installed at: /home/runner/go/bin/nak
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:47.1248276Z ##[group]Run bun install --frozen-lockfile
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:47.1248647Z ^[[36;1mbun install --frozen-lockfile^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:47.1319116Z shell: /usr/bin/bash -e {0}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:47.1319415Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:47.1428463Z bun install v1.4.3 (c6da4a4d3)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4211219Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4212423Z $ ln -sf ../../scripts/git-hooks/pre-commit .git/hooks/pre-commit 2>/dev/null; chmod +x scripts/git-hooks/pre-commit 2>/dev/null; true
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4280918Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4281232Z + @faker-js/faker@10.4.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4281656Z + @playwright/test@1.60.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4282127Z + @tanstack/react-router-devtools@1.166.13
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4282585Z + @tanstack/router-cli@1.166.43
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4284300Z + @tanstack/router-plugin@1.167.35
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4284823Z + @types/bun@1.3.14
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4285346Z + @types/react@19.2.14
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4285830Z + @types/react-dom@19.2.3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4286275Z + @types/ws@8.18.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4286578Z + bun@1.4.2
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4286909Z + mini-svg-data-uri@1.4.4
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4287254Z + playwright@1.60.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4287938Z + prettier@3.8.3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4288221Z + svgo@4.0.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4288530Z + tailwindcss@4.3.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4288869Z + tailwindcss-animate@1.0.7
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4289257Z + ws@8.20.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4289607Z + @cashu/cashu-ts@2.9.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4289962Z + @contextvm/sdk@0.11.14
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4290351Z + @formkit/auto-animate@0.9.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4290792Z + @getalby/lightning-tools@8.1.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4291248Z + @icons-pack/react-simple-icons@13.13.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4291717Z + @modelcontextprotocol/sdk@1.29.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4292131Z + @noble/hashes@2.2.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4292536Z + @nostr-dev-kit/blossom@8.0.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4292979Z + @nostr-dev-kit/ndk@3.0.3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4293310Z + @nostr-dev-kit/wallet@1.0.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4293587Z + @nostr-dev-kit/wot@1.0.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4294158Z + @radix-ui/react-alert-dialog@1.1.15
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4294629Z + @radix-ui/react-avatar@1.1.11
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4295052Z + @radix-ui/react-dialog@1.1.15
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4295442Z + @scure/base@2.2.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4295765Z + @scure/bip32@2.2.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4296131Z + @tanstack/react-form@1.32.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4296533Z + @tanstack/react-query@5.100.10
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4296937Z + @tanstack/react-router@1.169.2
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4297364Z + @tanstack/react-store@0.11.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4297763Z + @tanstack/react-table@8.21.3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4298135Z + @tanstack/store@0.11.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4298507Z + @yudiel/react-qr-scanner@2.6.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4298896Z + applesauce-core@6.2.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4299287Z + applesauce-relay@6.2.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4299658Z + applesauce-signers@6.2.3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4300047Z + bitcoinjs-lib@7.0.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4300403Z + bs58check@4.0.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4300835Z + bun-plugin-tailwind@0.1.2
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4301255Z + class-variance-authority@0.7.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4301713Z + clsx@2.1.1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4302057Z + coco-cashu-core@1.0.0-rc11
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4302495Z + coco-cashu-indexeddb@1.0.0-rc11
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4302933Z + date-fns@4.1.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4303299Z + embla-carousel-react@8.6.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4303894Z + light-bolt11-decoder@3.2.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4304311Z + lucide-react@1.14.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4304685Z + maplibre-gl@5.24.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4305056Z + next-themes@0.4.6
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4330797Z + nostr-tools@2.23.3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4332461Z + qrcode.react@4.2.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4332987Z + radix-ui@1.4.3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4333562Z + react@19.2.6
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4334172Z + react-day-picker@9.14.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4334606Z + react-dom@19.2.6
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4335021Z + react-use@17.6.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4335595Z + recharts@3.8.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4335989Z + rxjs@7.8.2
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4336451Z + sonner@2.0.7
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4337223Z + tailwind-merge@3.6.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4337764Z + uuid@14.0.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4338383Z + vaul@1.1.2
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4338954Z + zod@4.4.3
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4339159Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4339382Z 601 packages installed [1286.00ms]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4399959Z ##[group]Run bun run generate-routes
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4400669Z ^[[36;1mbun run generate-routes^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4502362Z shell: /usr/bin/bash -e {0}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4502796Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:48.4634986Z $ tsr generate
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.3887413Z ##[group]Run actions/cache@v4
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.3887693Z with:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.3887917Z   path: ~/.cache/ms-playwright
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.3888391Z   key: playwright-Linux-51f5309fba85fd55beddc211353ba2be5ed9b7d4e7d062e9381c2da9b0bb3678
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.3888900Z   enableCrossOsArchive: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.3889167Z   fail-on-cache-miss: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.3889415Z   lookup-only: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.3889643Z   save-always: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.3889874Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.4976464Z (node:6296) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.4977512Z (Use `node --trace-deprecation ...` to show where the warning was created)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.6882199Z Cache not found for input keys: playwright-Linux-51f5309fba85fd55beddc211353ba2be5ed9b7d4e7d062e9381c2da9b0bb3678
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.7000518Z ##[group]Run bunx playwright install --with-deps chromium
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.7000965Z ^[[36;1mbunx playwright install --with-deps chromium^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.7070926Z shell: /usr/bin/bash -e {0}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:49.7071205Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.2306109Z Installing dependencies...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.2378866Z Switching to root user to install dependencies...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.3220326Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.3578584Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.3697150Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.3780159Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.3863202Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.3880948Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.4498888Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main all Packages [640 B]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.4630684Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main armhf Packages [12.4 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.4670321Z Get:9 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [581 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.4759512Z Get:10 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [523 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.5634219Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1397 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.5725411Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [308 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.5736030Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1702 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.5835392Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [342 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.5856041Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1805 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.5944002Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [411 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.5972394Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [50.7 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.5986998Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [14.0 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.6238349Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-backports/multiverse amd64 Packages [748 B]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.6782533Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1144 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.7292652Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [231 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.7313949Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1221 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.7386255Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [246 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.7415285Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1713 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.7510954Z Get:25 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [392 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.7538011Z Get:26 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [45.4 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:50.7549593Z Get:27 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [12.1 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:53.8522596Z Fetched 12.5 MB in 1s (9071 kB/s)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:54.7597461Z Reading package lists...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:54.7853321Z Reading package lists...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.0175026Z Building dependency tree...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.0183973Z Reading state information...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2109078Z libasound2t64 is already the newest version (1.2.11-1ubuntu0.3).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2109813Z libasound2t64 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2111122Z libatk-bridge2.0-0t64 is already the newest version (2.52.0-1build1).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2111855Z libatk-bridge2.0-0t64 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2112508Z libatk1.0-0t64 is already the newest version (2.52.0-1build1).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2113142Z libatk1.0-0t64 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2114245Z libatspi2.0-0t64 is already the newest version (2.52.0-1build1).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2114966Z libatspi2.0-0t64 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2115590Z libcairo2 is already the newest version (1.18.0-3build1).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2116237Z libcairo2 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2116843Z libcups2t64 is already the newest version (2.4.7-1.2ubuntu7.14).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2117467Z libcups2t64 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2118034Z libdbus-1-3 is already the newest version (1.14.10-4ubuntu4.1).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2118553Z libdbus-1-3 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2119074Z libdrm2 is already the newest version (2.4.125-1ubuntu0.1~24.04.2).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2119517Z libdrm2 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2119879Z libgbm1 is already the newest version (25.2.8-0ubuntu0.24.04.4).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2120252Z libgbm1 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2120615Z libglib2.0-0t64 is already the newest version (2.80.0-6ubuntu3.9).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2121371Z libglib2.0-0t64 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2121737Z libnspr4 is already the newest version (2:4.35-1.1build1).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2122097Z libnspr4 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2122436Z libnss3 is already the newest version (2:3.98-1ubuntu0.2).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2122939Z libnss3 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2123343Z libpango-1.0-0 is already the newest version (1.52.1+ds-1build1).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2123900Z libpango-1.0-0 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2124266Z libxcb1 is already the newest version (1.15-1ubuntu2).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2124868Z libxcb1 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2125386Z libxcomposite1 is already the newest version (1:0.4.5-1build3).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2125961Z libxcomposite1 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2126523Z libxdamage1 is already the newest version (1:1.1.6-1build1).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2127051Z libxdamage1 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2127588Z libxext6 is already the newest version (2:1.3.4-1build2).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2128027Z libxext6 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2128367Z libxfixes3 is already the newest version (1:6.0.0-2build1).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2129026Z libxfixes3 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2129592Z libxkbcommon0 is already the newest version (1.6.0-1build1).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2130165Z libxkbcommon0 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2130714Z libxrandr2 is already the newest version (2:1.5.2-2build1).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2131070Z libxrandr2 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2131415Z xvfb is already the newest version (2:21.1.12-1ubuntu1.8).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2132262Z fonts-noto-color-emoji is already the newest version (2.047-0ubuntu0.24.04.1).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2133093Z libfontconfig1 is already the newest version (2.15.0-1.1ubuntu2).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2133879Z libfontconfig1 set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2134459Z fonts-liberation is already the newest version (1:2.1.5-3).
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2135059Z fonts-liberation set to manually installed.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2135626Z The following additional packages will be installed:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2136301Z   libx11-data libx11-xcb1 xfonts-encodings xfonts-utils
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2136819Z Recommended packages:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2137267Z   fonts-ipafont-mincho fonts-tlwg-loma
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2340047Z The following NEW packages will be installed:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2341465Z   fonts-freefont-ttf fonts-ipafont-gothic fonts-tlwg-loma-otf fonts-unifont
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2346671Z   fonts-wqy-zenhei xfonts-cyrillic xfonts-encodings xfonts-scalable
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2347636Z   xfonts-utils
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2351551Z The following packages will be upgraded:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2356468Z   libfreetype6 libx11-6 libx11-data libx11-xcb1
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2533186Z 4 upgraded, 9 newly installed, 0 to remove and 55 not upgraded.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2534010Z Need to get 22.3 MB of archives.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2534622Z After this operation, 79.6 MB of additional disk space will be used.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.2535338Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.3716195Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-ipafont-gothic all 00303-21ubuntu1 [3513 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.8037578Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 libx11-6 amd64 2:1.8.7-1ubuntu0.1 [653 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.8743906Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 libx11-xcb1 amd64 2:1.8.7-1ubuntu0.1 [7796 B]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.9215047Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 libx11-data all 2:1.8.7-1ubuntu0.1 [116 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:55.9709494Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 fonts-freefont-ttf all 20211204+svn4273-2 [5641 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:56.1519349Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-tlwg-loma-otf all 1:0.7.3-1 [107 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:56.1995172Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-unifont all 1:15.1.01-1build1 [2993 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:56.2753275Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-wqy-zenhei all 0.9.45-8 [7472 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:56.4383331Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libfreetype6 amd64 2.13.2+dfsg-1ubuntu0.2 [403 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:56.4878514Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-encodings all 1:1.0.5-0ubuntu2 [578 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:56.5386725Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-utils amd64 1:7.7+6build3 [94.4 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:56.5868674Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 xfonts-cyrillic all 1:1.0.5+nmu1 [384 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:56.6381273Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-scalable all 1:1.0.3-1.3 [304 kB]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:56.9004014Z Fetched 22.3 MB in 1s (15.9 MB/s)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.0538052Z Selecting previously unselected package fonts-ipafont-gothic.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.0749708Z (Reading database ... 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.0750159Z (Reading database ... 5%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.0750569Z (Reading database ... 10%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.0750973Z (Reading database ... 15%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.0751365Z (Reading database ... 20%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.0751742Z (Reading database ... 25%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.0752316Z (Reading database ... 30%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.0752761Z (Reading database ... 35%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.0753137Z (Reading database ... 40%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.0753511Z (Reading database ... 45%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.0754139Z (Reading database ... 50%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.0789916Z (Reading database ... 55%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.1490839Z (Reading database ... 60%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.3518037Z (Reading database ... 65%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.5399829Z (Reading database ... 70%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.7431394Z (Reading database ... 75%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:57.8450709Z (Reading database ... 80%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.0017762Z (Reading database ... 85%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.1084386Z (Reading database ... 90%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.2490105Z (Reading database ... 95%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.2490605Z (Reading database ... 100%
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.2491203Z (Reading database ... 203191 files and directories currently installed.)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.2537969Z Preparing to unpack .../00-fonts-ipafont-gothic_00303-21ubuntu1_all.deb ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.2634350Z Unpacking fonts-ipafont-gothic (00303-21ubuntu1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.5116624Z Preparing to unpack .../01-libx11-6_2%3a1.8.7-1ubuntu0.1_amd64.deb ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.5139049Z Unpacking libx11-6:amd64 (2:1.8.7-1ubuntu0.1) over (2:1.8.7-1build1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.5549391Z Preparing to unpack .../02-libx11-xcb1_2%3a1.8.7-1ubuntu0.1_amd64.deb ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.5570473Z Unpacking libx11-xcb1:amd64 (2:1.8.7-1ubuntu0.1) over (2:1.8.7-1build1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.5913383Z Preparing to unpack .../03-libx11-data_2%3a1.8.7-1ubuntu0.1_all.deb ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.5929137Z Unpacking libx11-data (2:1.8.7-1ubuntu0.1) over (2:1.8.7-1build1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.6818107Z Selecting previously unselected package fonts-freefont-ttf.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.6954017Z Preparing to unpack .../04-fonts-freefont-ttf_20211204+svn4273-2_all.deb ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.6959502Z Unpacking fonts-freefont-ttf (20211204+svn4273-2) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.7785566Z Selecting previously unselected package fonts-tlwg-loma-otf.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.7920762Z Preparing to unpack .../05-fonts-tlwg-loma-otf_1%3a0.7.3-1_all.deb ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.7926061Z Unpacking fonts-tlwg-loma-otf (1:0.7.3-1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.8137365Z Selecting previously unselected package fonts-unifont.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.8269876Z Preparing to unpack .../06-fonts-unifont_1%3a15.1.01-1build1_all.deb ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.8274694Z Unpacking fonts-unifont (1:15.1.01-1build1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.9354493Z Selecting previously unselected package fonts-wqy-zenhei.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.9487865Z Preparing to unpack .../07-fonts-wqy-zenhei_0.9.45-8_all.deb ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:58.9589130Z Unpacking fonts-wqy-zenhei (0.9.45-8) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.4403346Z Preparing to unpack .../08-libfreetype6_2.13.2+dfsg-1ubuntu0.2_amd64.deb ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.4420821Z Unpacking libfreetype6:amd64 (2.13.2+dfsg-1ubuntu0.2) over (2.13.2+dfsg-1ubuntu0.1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.4659005Z Selecting previously unselected package xfonts-encodings.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.4792007Z Preparing to unpack .../09-xfonts-encodings_1%3a1.0.5-0ubuntu2_all.deb ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.4798871Z Unpacking xfonts-encodings (1:1.0.5-0ubuntu2) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.5079472Z Selecting previously unselected package xfonts-utils.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.5211365Z Preparing to unpack .../10-xfonts-utils_1%3a7.7+6build3_amd64.deb ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.5217809Z Unpacking xfonts-utils (1:7.7+6build3) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.5519667Z Selecting previously unselected package xfonts-cyrillic.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.5650578Z Preparing to unpack .../11-xfonts-cyrillic_1%3a1.0.5+nmu1_all.deb ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.5656842Z Unpacking xfonts-cyrillic (1:1.0.5+nmu1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.5985410Z Selecting previously unselected package xfonts-scalable.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6118007Z Preparing to unpack .../12-xfonts-scalable_1%3a1.0.3-1.3_all.deb ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6123996Z Unpacking xfonts-scalable (1:1.0.3-1.3) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6572416Z Setting up fonts-wqy-zenhei (0.9.45-8) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6689463Z Setting up fonts-freefont-ttf (20211204+svn4273-2) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6703993Z Setting up fonts-tlwg-loma-otf (1:0.7.3-1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6716779Z Setting up libfreetype6:amd64 (2.13.2+dfsg-1ubuntu0.2) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6729585Z Setting up libx11-data (2:1.8.7-1ubuntu0.1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6742706Z Setting up xfonts-encodings (1:1.0.5-0ubuntu2) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6755697Z Setting up fonts-ipafont-gothic (00303-21ubuntu1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6820916Z update-alternatives: using /usr/share/fonts/opentype/ipafont-gothic/ipag.ttf to provide /usr/share/fonts/truetype/fonts-japanese-gothic.ttf (fonts-japanese-gothic.ttf) in auto mode
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6833441Z Setting up libx11-6:amd64 (2:1.8.7-1ubuntu0.1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6848940Z Setting up fonts-unifont (1:15.1.01-1build1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6861727Z Setting up libx11-xcb1:amd64 (2:1.8.7-1ubuntu0.1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6876405Z Setting up xfonts-utils (1:7.7+6build3) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.6913536Z Setting up xfonts-cyrillic (1:1.0.5+nmu1) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.7206842Z Setting up xfonts-scalable (1:1.0.3-1.3) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.7491668Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.7753057Z Processing triggers for man-db (2.12.0-4build2) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.7769669Z Not building database; man-db/auto-update is not 'true'.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:46:59.7781191Z Processing triggers for fontconfig (2.15.0-1.1ubuntu2) ...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:00.4446602Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:00.4447227Z Running kernel seems to be up-to-date.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:00.4447607Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:00.4447767Z Restarting services...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:00.4527726Z  systemctl restart php8.3-fpm.service
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:00.5773881Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:00.5775505Z No containers need to be restarted.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:00.5775882Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:00.5776113Z No user sessions are running outdated binaries.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:00.5776465Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:00.5776826Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:01.5400287Z Downloading Chrome for Testing 148.0.7778.96 (playwright chromium v1223) from https://cdn.playwright.dev/builds/cft/148.0.7778.96/linux64/chrome-linux64.zip
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:02.5893979Z |                                                                                |   0% of 175.4 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:02.7936515Z |■■■■■■■■                                                                        |  10% of 175.4 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:02.8833014Z |■■■■■■■■■■■■■■■■                                                                |  20% of 175.4 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:02.9488421Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 175.4 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:03.0227141Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 175.4 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:03.0956564Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 175.4 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:03.1671924Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 175.4 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:03.2375202Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 175.4 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:03.3072401Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 175.4 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:03.3758065Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 175.4 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:03.4434554Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 175.4 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:05.9362468Z Chrome for Testing 148.0.7778.96 (playwright chromium v1223) downloaded to /home/runner/.cache/ms-playwright/chromium-1223
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:05.9365283Z Downloading FFmpeg (playwright ffmpeg v1011) from https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-linux.zip
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:06.9971665Z |                                                                                |   0% of 2.3 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:07.0354315Z |■■■■■■■■                                                                        |  10% of 2.3 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:07.0608823Z |■■■■■■■■■■■■■■■■                                                                |  20% of 2.3 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:07.0781352Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 2.3 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:07.0853385Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 2.3 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:07.0979567Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 2.3 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:07.1021426Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 2.3 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:07.1129625Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 2.3 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:07.1167269Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 2.3 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:07.1211546Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 2.3 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:07.1304998Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 2.3 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:07.1878409Z FFmpeg (playwright ffmpeg v1011) downloaded to /home/runner/.cache/ms-playwright/ffmpeg-1011
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:07.1881596Z Downloading Chrome Headless Shell 148.0.7778.96 (playwright chromium-headless-shell v1223) from https://cdn.playwright.dev/builds/cft/148.0.7778.96/linux64/chrome-headless-shell-linux64.zip
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:08.2290667Z |                                                                                |   0% of 113.2 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:08.4065105Z |■■■■■■■■                                                                        |  10% of 113.2 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:08.4635135Z |■■■■■■■■■■■■■■■■                                                                |  20% of 113.2 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:08.5156049Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 113.2 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:08.5670156Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 113.2 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:08.6178041Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 113.2 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:08.6675664Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 113.2 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:08.7171186Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 113.2 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:08.7660002Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 113.2 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:08.8143527Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 113.2 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:08.8620748Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 113.2 MiB
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.6805599Z Chrome Headless Shell 148.0.7778.96 (playwright chromium-headless-shell v1223) downloaded to /home/runner/.cache/ms-playwright/chromium_headless_shell-1223
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.7089083Z ##[group]Run actions/setup-python@v5
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.7089394Z with:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.7089614Z   python-version: 3.12
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.7089863Z   check-latest: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.7092320Z   token: ***
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.7092556Z   update-environment: true
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.7092822Z   allow-prereleases: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.7093070Z   freethreaded: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.7093314Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8434908Z ##[group]Installed versions
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8517418Z (node:6977) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8518161Z (Use `node --trace-deprecation ...` to show where the warning was created)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8519045Z Successfully set up CPython (3.12.15)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8519742Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8689140Z ##[group]Run pip install 'cashu==0.19.2' 'marshmallow<4.0.0' 'limits<5.0.0'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8689972Z ^[[36;1mpip install 'cashu==0.19.2' 'marshmallow<4.0.0' 'limits<5.0.0'^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8787052Z shell: /usr/bin/bash -e {0}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8787454Z env:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8787881Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8788634Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8789358Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8790006Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8790664Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8791319Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:10.8791873Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:11.7391427Z Collecting cashu==0.19.2
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:11.8332173Z   Downloading cashu-0.19.2-py3-none-any.whl.metadata (2.1 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:11.8978746Z Collecting marshmallow<4.0.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:11.9168500Z   Downloading marshmallow-3.26.2-py3-none-any.whl.metadata (7.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:11.9559172Z Collecting limits<5.0.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:11.9761819Z   Downloading limits-4.8.0-py3-none-any.whl.metadata (11 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.3237723Z Collecting SQLAlchemy<3.0.0,>=2.0.35 (from SQLAlchemy[asyncio]<3.0.0,>=2.0.35->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.3430466Z   Downloading sqlalchemy-2.1.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (9.7 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.3758144Z Collecting aiosqlite<0.21.0,>=0.20.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.3954021Z   Downloading aiosqlite-0.20.0-py3-none-any.whl.metadata (4.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.4487030Z Collecting asyncpg<0.31.0,>=0.30.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.4674605Z   Downloading asyncpg-0.30.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.0 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.4959414Z Collecting bech32<2.0.0,>=1.2.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.5158071Z   Downloading bech32-1.2.0-py3-none-any.whl.metadata (1.1 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.5428571Z Collecting bip32<5.0,>=4.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.5634607Z   Downloading bip32-4.0-py3-none-any.whl.metadata (4.5 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.5929862Z Collecting bitstring<4.0.0,>=3.1.9 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.6139949Z   Downloading bitstring-3.1.9-py3-none-any.whl.metadata (3.5 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.6405811Z Collecting bolt11<3.0.0,>=2.0.5 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.6601904Z   Downloading bolt11-2.2.0-py3-none-any.whl.metadata (4.0 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.7025656Z Collecting brotli<2.0.0,>=1.1.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.7216241Z   Downloading brotli-1.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (6.1 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.7911878Z Collecting cbor2<6.0.0,>=5.6.2 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.8201244Z   Downloading cbor2-5.9.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.5 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.8506943Z Collecting click<9.0.0,>=8.1.7 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:12.8697560Z   Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:13.0448950Z Collecting cryptography<44.0.0,>=43.0.1 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:13.0643367Z   Downloading cryptography-43.0.3-cp39-abi3-manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:13.0935283Z Collecting ecdsa<0.20.0,>=0.19.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:13.1123627Z   Downloading ecdsa-0.19.2-py2.py3-none-any.whl.metadata (29 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:13.1500921Z Collecting environs<10.0.0,>=9.5.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:13.1697310Z   Downloading environs-9.5.0-py2.py3-none-any.whl.metadata (14 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:13.2216949Z Collecting fastapi<0.116.0,>=0.115.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:13.2407984Z   Downloading fastapi-0.115.14-py3-none-any.whl.metadata (27 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:13.2760851Z Collecting googleapis-common-protos<2.0.0,>=1.63.2 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:13.2949594Z   Downloading googleapis_common_protos-1.75.5-py3-none-any.whl.metadata (8.5 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:13.7765207Z Collecting grpcio<2.0.0,>=1.65.1 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:13.7958305Z   Downloading grpcio-1.84.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (3.8 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.3079285Z Collecting grpcio-tools<2.0.0,>=1.65.1 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.3274799Z   Downloading grpcio_tools-1.84.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.3545230Z Collecting h11<0.15.0,>=0.14.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.3742910Z   Downloading h11-0.14.0-py3-none-any.whl.metadata (8.2 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.4072270Z Collecting httpx<0.26.0,>=0.25.1 (from httpx[socks]<0.26.0,>=0.25.1->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.4265223Z   Downloading httpx-0.25.2-py3-none-any.whl.metadata (6.9 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.4636884Z Collecting importlib-metadata<7.0.0,>=6.8.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.4830576Z   Downloading importlib_metadata-6.11.0-py3-none-any.whl.metadata (4.9 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.5139627Z Collecting jinja2<4.0.0,>=3.1.5 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.5334622Z   Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.5609257Z Collecting loguru<0.8.0,>=0.7.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.5805344Z   Downloading loguru-0.7.3-py3-none-any.whl.metadata (22 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.6146723Z Collecting mnemonic<0.21,>=0.20 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.6349193Z   Downloading mnemonic-0.20-py3-none-any.whl.metadata (2.9 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.6650768Z Collecting mypy-protobuf<4.0.0,>=3.6.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.6853110Z   Downloading mypy_protobuf-3.7.0-py3-none-any.whl.metadata (507 bytes)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.7691667Z Collecting pycryptodomex<4.0.0,>=3.16.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.7886744Z   Downloading pycryptodomex-3.24.1-cp37-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (3.4 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.8978488Z Collecting pydantic<3.0.0,>=2.5.3 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.9174450Z   Downloading pydantic-2.14.1-py3-none-any.whl.metadata (133 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.9756661Z Collecting pydantic-settings<3.0.0,>=2.1.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:14.9956700Z   Downloading pydantic_settings-2.16.0-py3-none-any.whl.metadata (4.0 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.0274720Z Collecting pyjwt<3.0.0,>=2.9.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.0469071Z   Downloading pyjwt-2.15.1-py3-none-any.whl.metadata (3.5 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.0845078Z Collecting redis<6.0.0,>=5.1.1 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.1035228Z   Downloading redis-5.3.1-py3-none-any.whl.metadata (9.2 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.1880284Z Collecting setuptools<76.0.0,>=75.1.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.2485935Z   Downloading setuptools-75.9.1-py3-none-any.whl.metadata (6.7 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.2808845Z Collecting slowapi<0.2.0,>=0.1.9 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.3000848Z   Downloading slowapi-0.1.10-py3-none-any.whl.metadata (3.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.3361847Z Collecting types-protobuf<6.0.0.0,>=5.27.0.20240626 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.3559426Z   Downloading types_protobuf-5.29.1.20250403-py3-none-any.whl.metadata (2.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.3923005Z Collecting uvicorn<0.32.0,>=0.31.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.4128614Z   Downloading uvicorn-0.31.1-py3-none-any.whl.metadata (6.6 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.4462485Z Collecting websocket-client<2.0.0,>=1.3.3 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.4654991Z   Downloading websocket_client-1.9.2-py3-none-any.whl.metadata (8.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.5818282Z Collecting websockets<13.0,>=12.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.6012434Z   Downloading websockets-12.0-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.6 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.6327497Z Collecting wheel<0.42.0,>=0.41.1 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.6531044Z   Downloading wheel-0.41.3-py3-none-any.whl.metadata (2.2 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.7331938Z Collecting zstandard<0.24.0,>=0.23.0 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.7524727Z   Downloading zstandard-0.23.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (3.0 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.7832920Z Collecting packaging>=17.0 (from marshmallow<4.0.0)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.8022498Z   Downloading packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.8312229Z Collecting deprecated>=1.2 (from limits<5.0.0)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.8500644Z   Downloading deprecated-3.0.0-py3-none-any.whl.metadata (6.5 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.8547897Z Collecting packaging>=17.0 (from marshmallow<4.0.0)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.8741423Z   Downloading packaging-24.2-py3-none-any.whl.metadata (3.2 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.9047317Z Collecting typing_extensions (from limits<5.0.0)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.9238078Z   Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:15.9821737Z Collecting coincurve<21,>=15.0 (from bip32<5.0,>=4.0->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.0020768Z   Downloading coincurve-20.0.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.0 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.0310810Z Collecting base58 (from bolt11<3.0.0,>=2.0.5->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.0505182Z   Downloading base58-2.1.1-py3-none-any.whl.metadata (3.1 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.0809142Z Collecting asn1crypto (from coincurve<21,>=15.0->bip32<5.0,>=4.0->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.0999321Z   Downloading asn1crypto-1.5.1-py2.py3-none-any.whl.metadata (13 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.2074931Z Collecting cffi>=1.3.0 (from coincurve<21,>=15.0->bip32<5.0,>=4.0->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.2265777Z   Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.2566726Z Collecting six>=1.9.0 (from ecdsa<0.20.0,>=0.19.0->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.2754476Z   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.3099685Z Collecting python-dotenv (from environs<10.0.0,>=9.5.0->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.3289268Z   Downloading python_dotenv-1.2.4-py3-none-any.whl.metadata (29 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.3685857Z Collecting starlette<0.47.0,>=0.40.0 (from fastapi<0.116.0,>=0.115.0->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.3872617Z   Downloading starlette-0.46.2-py3-none-any.whl.metadata (6.2 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.5333388Z Collecting protobuf<8.0.0,>=6.33.5 (from googleapis-common-protos<2.0.0,>=1.63.2->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.5524568Z   Downloading protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl.metadata (595 bytes)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.5671110Z INFO: pip is looking at multiple versions of grpcio-tools to determine which version is compatible with other requirements. This could take a while.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.5677242Z Collecting grpcio-tools<2.0.0,>=1.65.1 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.5884850Z   Downloading grpcio_tools-1.83.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.6140291Z   Downloading grpcio_tools-1.83.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.6384375Z   Downloading grpcio_tools-1.82.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.6630133Z   Downloading grpcio_tools-1.82.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.6873171Z   Downloading grpcio_tools-1.81.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.6940491Z Collecting protobuf<8.0.0,>=6.33.5 (from googleapis-common-protos<2.0.0,>=1.63.2->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.7129312Z   Downloading protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl.metadata (593 bytes)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.7181843Z Collecting grpcio-tools<2.0.0,>=1.65.1 (from cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.7374333Z   Downloading grpcio_tools-1.81.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.7619478Z   Downloading grpcio_tools-1.80.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.7702605Z INFO: pip is still looking at multiple versions of grpcio-tools to determine which version is compatible with other requirements. This could take a while.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.7897659Z   Downloading grpcio_tools-1.78.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.8145955Z   Downloading grpcio_tools-1.76.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.8504509Z Collecting anyio (from httpx<0.26.0,>=0.25.1->httpx[socks]<0.26.0,>=0.25.1->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.8694543Z   Downloading anyio-4.15.1-py3-none-any.whl.metadata (4.7 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.9029912Z Collecting certifi (from httpx<0.26.0,>=0.25.1->httpx[socks]<0.26.0,>=0.25.1->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.9218726Z   Downloading certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.9515424Z Collecting httpcore==1.* (from httpx<0.26.0,>=0.25.1->httpx[socks]<0.26.0,>=0.25.1->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:16.9704777Z   Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.0004467Z Collecting idna (from httpx<0.26.0,>=0.25.1->httpx[socks]<0.26.0,>=0.25.1->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.0192220Z   Downloading idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.0449964Z Collecting sniffio (from httpx<0.26.0,>=0.25.1->httpx[socks]<0.26.0,>=0.25.1->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.0637203Z   Downloading sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.0680556Z INFO: pip is looking at multiple versions of httpcore to determine which version is compatible with other requirements. This could take a while.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.0686425Z Collecting httpcore==1.* (from httpx<0.26.0,>=0.25.1->httpx[socks]<0.26.0,>=0.25.1->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.0931744Z   Downloading httpcore-1.0.8-py3-none-any.whl.metadata (21 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.1218199Z Collecting socksio==1.* (from httpx[socks]<0.26.0,>=0.25.1->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.1408721Z   Downloading socksio-1.0.0-py3-none-any.whl.metadata (6.1 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.1736695Z Collecting zipp>=0.5 (from importlib-metadata<7.0.0,>=6.8.0->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.1934770Z   Downloading zipp-4.1.1-py3-none-any.whl.metadata (3.6 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.3039815Z Collecting MarkupSafe>=2.0 (from jinja2<4.0.0,>=3.1.5->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.3231219Z   Downloading markupsafe-3.0.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.3585544Z Collecting annotated-types>=0.6.0 (from pydantic<3.0.0,>=2.5.3->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:17.3775963Z   Downloading annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.0630301Z Collecting pydantic-core==2.50.1 (from pydantic<3.0.0,>=2.5.3->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.0825118Z   Downloading pydantic_core-2.50.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.5 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.1092587Z Collecting typing-inspection>=0.4.4 (from pydantic<3.0.0,>=2.5.3->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.1279717Z   Downloading typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.2857190Z Collecting greenlet>=1 (from SQLAlchemy[asyncio]<3.0.0,>=2.0.35->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.3050386Z   Downloading greenlet-3.5.6-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (3.8 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.3437740Z Collecting pycparser (from cffi>=1.3.0->coincurve<21,>=15.0->bip32<5.0,>=4.0->cashu==0.19.2)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.3625441Z   Downloading pycparser-3.11-py3-none-any.whl.metadata (8.2 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.6795050Z Collecting wrapt<3,>=1.16 (from deprecated>=1.2->limits<5.0.0)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.6994302Z   Downloading wrapt-2.5.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (7.6 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.7322081Z Downloading cashu-0.19.2-py3-none-any.whl (7.1 MB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.9276939Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.1/7.1 MB 40.1 MB/s  0:00:00
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.9468210Z Downloading marshmallow-3.26.2-py3-none-any.whl (50 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.9688696Z Downloading limits-4.8.0-py3-none-any.whl (62 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:18.9897930Z Downloading aiosqlite-0.20.0-py3-none-any.whl (15 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.0130795Z Downloading asyncpg-0.30.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.6 MB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.0282246Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.6/3.6 MB 264.9 MB/s  0:00:00
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.0487643Z Downloading bech32-1.2.0-py3-none-any.whl (4.6 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.0698777Z Downloading bip32-4.0-py3-none-any.whl (12 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.0914744Z Downloading bitstring-3.1.9-py3-none-any.whl (38 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.1127998Z Downloading bolt11-2.2.0-py3-none-any.whl (17 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.1335278Z Downloading brotli-1.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.4 MB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.1411979Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.4/1.4 MB 216.4 MB/s  0:00:00
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.1602917Z Downloading cbor2-5.9.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (288 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.1818997Z Downloading click-8.5.0-py3-none-any.whl (125 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.2040970Z Downloading coincurve-20.0.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (1.2 MB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.2100325Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 241.3 MB/s  0:00:00
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.2292129Z Downloading cryptography-43.0.3-cp39-abi3-manylinux_2_28_x86_64.whl (4.0 MB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.2441704Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.0/4.0 MB 303.6 MB/s  0:00:00
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.2629701Z Downloading ecdsa-0.19.2-py2.py3-none-any.whl (150 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.2841570Z Downloading environs-9.5.0-py2.py3-none-any.whl (12 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.3049187Z Downloading fastapi-0.115.14-py3-none-any.whl (95 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.3257435Z Downloading googleapis_common_protos-1.75.5-py3-none-any.whl (307 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.3469379Z Downloading grpcio-1.84.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (7.2 MB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.3684028Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.2/7.2 MB 361.9 MB/s  0:00:00
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.3898143Z Downloading grpcio_tools-1.76.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (2.7 MB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.4019693Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.7/2.7 MB 239.5 MB/s  0:00:00
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.4211690Z Downloading h11-0.14.0-py3-none-any.whl (58 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.4415874Z Downloading httpx-0.25.2-py3-none-any.whl (74 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.4622268Z Downloading httpcore-1.0.8-py3-none-any.whl (78 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.4830712Z Downloading importlib_metadata-6.11.0-py3-none-any.whl (23 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.5034457Z Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.5241992Z Downloading loguru-0.7.3-py3-none-any.whl (61 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.5459277Z Downloading mnemonic-0.20-py3-none-any.whl (62 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.5679718Z Downloading mypy_protobuf-3.7.0-py3-none-any.whl (17 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.5884465Z Downloading packaging-24.2-py3-none-any.whl (65 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.6092597Z Downloading protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl (323 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.6303020Z Downloading pycryptodomex-3.24.1-cp37-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (2.3 MB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.6455401Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.3/2.3 MB 156.3 MB/s  0:00:00
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.6646012Z Downloading pydantic-2.14.1-py3-none-any.whl (488 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.6870446Z Downloading pydantic_core-2.50.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.2 MB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.6959147Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 317.1 MB/s  0:00:00
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.7147702Z Downloading pydantic_settings-2.16.0-py3-none-any.whl (80 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.7352134Z Downloading pyjwt-2.15.1-py3-none-any.whl (33 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.7558916Z Downloading redis-5.3.1-py3-none-any.whl (272 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.7812124Z Downloading setuptools-75.9.1-py3-none-any.whl (1.2 MB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.7873701Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 261.6 MB/s  0:00:00
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.8064509Z Downloading slowapi-0.1.10-py3-none-any.whl (14 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.8270697Z Downloading socksio-1.0.0-py3-none-any.whl (12 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.8477478Z Downloading sqlalchemy-2.1.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (4.7 MB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.8644969Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.7/4.7 MB 327.4 MB/s  0:00:00
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.8834680Z Downloading starlette-0.46.2-py3-none-any.whl (72 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.9042091Z Downloading anyio-4.15.1-py3-none-any.whl (132 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.9261876Z Downloading types_protobuf-5.29.1.20250403-py3-none-any.whl (73 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.9466568Z Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.9683383Z Downloading uvicorn-0.31.1-py3-none-any.whl (63 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:19.9889681Z Downloading websocket_client-1.9.2-py3-none-any.whl (95 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.0108713Z Downloading websockets-12.0-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (131 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.0314097Z Downloading wheel-0.41.3-py3-none-any.whl (65 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.0524819Z Downloading zstandard-0.23.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (5.4 MB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.0773476Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.4/5.4 MB 234.4 MB/s  0:00:00
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.0965889Z Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.1177626Z Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.1387494Z Downloading deprecated-3.0.0-py3-none-any.whl (21 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.1596268Z Downloading wrapt-2.5.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (250 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.1815887Z Downloading greenlet-3.5.6-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (621 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.1866159Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 621.4/621.4 kB 141.3 MB/s  0:00:00
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.2055415Z Downloading idna-3.20-py3-none-any.whl (69 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.2263050Z Downloading markupsafe-3.0.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.2468846Z Downloading python_dotenv-1.2.4-py3-none-any.whl (23 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.2674870Z Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.2881561Z Downloading typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.3084773Z Downloading zipp-4.1.1-py3-none-any.whl (10 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.3288065Z Downloading asn1crypto-1.5.1-py2.py3-none-any.whl (105 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.3493994Z Downloading base58-2.1.1-py3-none-any.whl (5.6 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.3697844Z Downloading certifi-2026.7.22-py3-none-any.whl (136 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.3906590Z Downloading pycparser-3.11-py3-none-any.whl (51 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.4114578Z Downloading sniffio-1.3.1-py3-none-any.whl (10 kB)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:20.7058252Z Installing collected packages: brotli, bitstring, asn1crypto, zstandard, zipp, wrapt, wheel, websockets, websocket-client, typing_extensions, types-protobuf, socksio, sniffio, six, setuptools, python-dotenv, pyjwt, pycryptodomex, pycparser, protobuf, packaging, mnemonic, MarkupSafe, loguru, idna, h11, greenlet, click, certifi, cbor2, bech32, base58, asyncpg, annotated-types, uvicorn, typing-inspection, SQLAlchemy, redis, pydantic-core, mypy-protobuf, marshmallow, jinja2, importlib-metadata, httpcore, grpcio, googleapis-common-protos, ecdsa, deprecated, cffi, anyio, aiosqlite, starlette, pydantic, limits, httpx, grpcio-tools, environs, cryptography, coincurve, slowapi, pydantic-settings, fastapi, bolt11, bip32, cashu
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:26.9258155Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:26.9312425Z Successfully installed MarkupSafe-3.0.4 SQLAlchemy-2.1.4 aiosqlite-0.20.0 annotated-types-0.8.0 anyio-4.15.1 asn1crypto-1.5.1 asyncpg-0.30.0 base58-2.1.1 bech32-1.2.0 bip32-4.0 bitstring-3.1.9 bolt11-2.2.0 brotli-1.2.0 cashu-0.19.2 cbor2-5.9.0 certifi-2026.7.22 cffi-2.1.1 click-8.5.0 coincurve-20.0.0 cryptography-43.0.3 deprecated-3.0.0 ecdsa-0.19.2 environs-9.5.0 fastapi-0.115.14 googleapis-common-protos-1.75.5 greenlet-3.5.6 grpcio-1.84.0 grpcio-tools-1.76.0 h11-0.14.0 httpcore-1.0.8 httpx-0.25.2 idna-3.20 importlib-metadata-6.11.0 jinja2-3.1.6 limits-4.8.0 loguru-0.7.3 marshmallow-3.26.2 mnemonic-0.20 mypy-protobuf-3.7.0 packaging-24.2 protobuf-6.33.6 pycparser-3.11 pycryptodomex-3.24.1 pydantic-2.14.1 pydantic-core-2.50.1 pydantic-settings-2.16.0 pyjwt-2.15.1 python-dotenv-1.2.4 redis-5.3.1 setuptools-75.9.1 six-1.17.0 slowapi-0.1.10 sniffio-1.3.1 socksio-1.0.0 starlette-0.46.2 types-protobuf-5.29.1.20250403 typing-inspection-0.4.4 typing_extensions-4.16.0 uvicorn-0.31.1 websocket-client-1.9.2 websockets-12.0 wheel-0.41.3 wrapt-2.5.1 zipp-4.1.1 zstandard-0.23.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2051424Z ##[group]Run nohup nak serve --hostname 0.0.0.0 > /tmp/relay.log 2>&1 &
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2051969Z ^[[36;1mnohup nak serve --hostname 0.0.0.0 > /tmp/relay.log 2>&1 &^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2052373Z ^[[36;1mecho "Waiting for relay on port 10547..."^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2052694Z ^[[36;1mfor i in $(seq 1 10); do^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2053013Z ^[[36;1m  if (echo > /dev/tcp/localhost/10547) 2>/dev/null; then^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2053360Z ^[[36;1m    echo "Relay is ready"^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2053615Z ^[[36;1m    exit 0^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2053980Z ^[[36;1m  fi^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2054391Z ^[[36;1m  sleep 1^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2054607Z ^[[36;1mdone^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2054869Z ^[[36;1mecho "::error::Relay failed to start. Logs:"^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2055191Z ^[[36;1mcat /tmp/relay.log^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2055433Z ^[[36;1mexit 1^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2127401Z shell: /usr/bin/bash -e {0}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2127678Z env:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2128004Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2128459Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2128903Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2129308Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2129697Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2130088Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2130475Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:27.2223153Z Waiting for relay on port 10547...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2281547Z Relay is ready
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2341555Z ##[group]Run nohup bash e2e/start-local-mint.sh > /tmp/mint.log 2>&1 &
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2342431Z ^[[36;1mnohup bash e2e/start-local-mint.sh > /tmp/mint.log 2>&1 &^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2343143Z ^[[36;1mecho "Waiting for local Cashu mint on port 3338..."^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2343932Z ^[[36;1mfor i in $(seq 1 15); do^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2344533Z ^[[36;1m  if curl -sf http://localhost:3338/v1/info > /dev/null 2>&1; then^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2345167Z ^[[36;1m    echo "Cashu mint is ready"^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2345610Z ^[[36;1m    exit 0^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2345962Z ^[[36;1m  fi^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2346303Z ^[[36;1m  sleep 1^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2346644Z ^[[36;1mdone^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2347071Z ^[[36;1mecho "::error::Cashu mint failed to start. Logs:"^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2347597Z ^[[36;1mcat /tmp/mint.log^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2347967Z ^[[36;1mexit 1^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2430300Z shell: /usr/bin/bash -e {0}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2430609Z env:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2430952Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2431429Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2431876Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2432282Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2432675Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2433068Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2433400Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:28.2527321Z Waiting for local Cashu mint on port 3338...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2926525Z Cashu mint is ready
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2964696Z ##[group]Run bun e2e/seed-relay.ts
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2965082Z ^[[36;1mbun e2e/seed-relay.ts^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2965398Z ^[[36;1mnohup bun dev > /tmp/devserver.log 2>&1 &^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2965771Z ^[[36;1mecho "Waiting for dev server on port 34567..."^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2966119Z ^[[36;1mfor i in $(seq 1 30); do^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2966528Z ^[[36;1m  if curl -sf http://localhost:34567/api/config > /dev/null 2>&1; then^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2966932Z ^[[36;1m    echo "Dev server is ready"^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2967207Z ^[[36;1m    exit 0^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2967447Z ^[[36;1m  fi^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2967653Z ^[[36;1m  sleep 1^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2967868Z ^[[36;1mdone^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2968128Z ^[[36;1mecho "::error::Dev server failed to start. Logs:"^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2968476Z ^[[36;1mcat /tmp/devserver.log^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.2968731Z ^[[36;1mexit 1^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3040204Z shell: /usr/bin/bash -e {0}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3040484Z env:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3040810Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3041269Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3041779Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3042391Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3042789Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3043178Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3043516Z   NODE_ENV: test
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3043937Z   PORT: 34567
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3044238Z   APP_RELAY_URL: ws://localhost:10547
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3044645Z   APP_PRIVATE_KEY: e2e0000000000000000000000000000000000000000000000000000000000001
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3045155Z   CVM_SERVER_KEY: e2e2222222222222222222222222222222222222222222222222222222222222
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3045548Z   LOCAL_RELAY_ONLY: true
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3045835Z   APP_DEV_TEST_MINT_URL: http://localhost:3338
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3046135Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3604907Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3605756Z --- Seeding relay for e2e tests ---
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3606736Z   App pubkey: ed29ae1859d35e17...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3838703Z   Published default app settings (Kind 31990)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3884785Z   Published self-hosted app settings (Kind 31990)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3903233Z   Published admin list (Kind 30000)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3927583Z   Published relay list (Kind 10002)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3930019Z --- Relay seeding complete ---
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3930325Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:47:30.3960376Z Waiting for dev server on port 34567...
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6420790Z ##[error]Dev server failed to start. Logs:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6428254Z $ bun --hot src/index.tsx --host 0.0.0.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6429261Z error: Cannot find module 'applesauce-loaders/loaders' from '/home/runner/work/market/market/sdk/core/event-access/ts/composition.ts'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6435054Z ##[error]Process completed with exit code 1.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6479992Z ##[group]Run echo "=== Relay logs ==="
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6480323Z ^[[36;1mecho "=== Relay logs ==="^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6480684Z ^[[36;1mcat /tmp/relay.log 2>/dev/null || echo "(no relay log)"^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6481031Z ^[[36;1mecho ""^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6481285Z ^[[36;1mecho "=== Dev server logs ==="^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6481662Z ^[[36;1mcat /tmp/devserver.log 2>/dev/null || echo "(no dev server log)"^[[0m
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6552414Z shell: /usr/bin/bash -e {0}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6552681Z env:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6552975Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6553436Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6554063Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6554475Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6554864Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6555289Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6555629Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6643031Z === Relay logs ===
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6654387Z > relay running at ws://0.0.0.0:10547
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6660315Z     got event {"kind":31990,"id":"a163b7f61489d6f760d8700518916c0216d5c9c5e98d40a687313da7b275580d","pubkey":"ed29ae1859d35e17c8f9b9a1a21bd135881ddd2f8783466dd03723f439727035","created_at":1792068449,"tags":[["d","plebeian-market-handler"],["k","30402"],["k","30405"],["k","30406"]],"content":"{\"name\":\"Test Market\",\"displayName\":\"Test Market\",\"picture\":\"https://example.invalid/test-market-logo.svg\",\"banner\":\"https://example.invalid/test-market-banner.png\",\"ownerPk\":\"ed29ae1859d35e17c8f9b9a1a21bd135881ddd2f8783466dd03723f439727035\",\"allowRegister\":true,\"defaultCurrency\":\"USD\"}","sig":"84a67299882549a4ec48bc4f3166a05236dfcbbf774bba8ddec34102f85767ce2681c50dc458f885881065bfc3a3baa91c7809ed2806f0f82434cf4b55aed724"}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6669971Z     got event {"kind":31990,"id":"22caf8c24007be1af3a37966276c3cde33ee8e731b5f3446f64174a6ac999ad3","pubkey":"ed29ae1859d35e17c8f9b9a1a21bd135881ddd2f8783466dd03723f439727035","created_at":1792068450,"tags":[["d","self-hosted-test-handler"],["k","30402"],["k","30405"],["k","30406"],["web","http://localhost:34567/product/<bech32>","naddr"],["web","http://localhost:34567/a/<bech32>","naddr"],["web","http://localhost:34567/collection/<bech32>","naddr"],["r","ws://localhost:10547"]],"content":"{\"name\":\"Self Hosted Market\",\"displayName\":\"Self Hosted Market\",\"picture\":\"https://example.invalid/self-hosted-logo.svg\",\"banner\":\"https://example.invalid/self-hosted-banner.png\",\"ownerPk\":\"ed29ae1859d35e17c8f9b9a1a21bd135881ddd2f8783466dd03723f439727035\",\"allowRegister\":true,\"defaultCurrency\":\"USD\",\"handlerId\":\"self-hosted-test-handler\",\"siteUrl\":\"http://localhost:34567\",\"publicRelays\":[\"ws://localhost:10547\"],\"trustedMints\":[\"https://mint.example.invalid\"],\"bugRelay\":\"ws://localhost:10547\",\"termsUrl\":\"http://localhost:34567/terms\",\"socialLinks\":{\"twitter\":\"https://social.example.invalid/self-hosted\",\"github\":\"https://github.com/example/self-hosted-market\",\"nostr\":\"https://njump.me/npub1selfhosted\"},\"supportContact\":\"support@self-hosted.example.invalid\"}","sig":"1d5b4b79cfbd8c74ce7ec19cdc88f874f431567b87c3d8acc65988592103da597884b20d336f798c88d6d63189c0a007f6a8f4868bc76c93bb869c13f1077cc2"}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6678644Z     got event {"kind":30000,"id":"8812b59597b0211813ccc5e1f035fbfa4ff66bf7f8c8b1c9e683ad17c4e863a2","pubkey":"ed29ae1859d35e17c8f9b9a1a21bd135881ddd2f8783466dd03723f439727035","created_at":1792068450,"tags":[["d","admins"],["p","ed29ae1859d35e17c8f9b9a1a21bd135881ddd2f8783466dd03723f439727035"],["p","86a82cab18b293f53cbaaae8cdcbee3f7ec427fdf9f9c933db77800bb5ef38a0"]],"content":"","sig":"5d36b584a14fac36efcae86e7291e9729ab882a08f7f52609dccc5d19f611301fb492c383b8a33e4ccf9a9b5254c89c6d3f5753b1c6d4cc4a8274dd980978fcf"}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6682274Z     got event {"kind":10002,"id":"327a07fecab934f8f548826e663aa5933f617f9feb27db3820ce6ed2e6415a70","pubkey":"ed29ae1859d35e17c8f9b9a1a21bd135881ddd2f8783466dd03723f439727035","created_at":1792068450,"tags":[["r","ws://localhost:10547"]],"content":"","sig":"ec3698790bee9540a59163ffb082d1658c60c82f9984d807adbed322d13c18fd1db57cfc78c32c64ae964a58df74d12ff4104328bac61a6ba11a81ed2b53bd94"}
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6684184Z   • events: 4, connections: 0, subscriptions: 0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6684437Z 
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6684554Z === Dev server logs ===
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6684832Z $ bun --hot src/index.tsx --host 0.0.0.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6685478Z error: Cannot find module 'applesauce-loaders/loaders' from '/home/runner/work/market/market/sdk/core/event-access/ts/composition.ts'
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6734179Z ##[group]Run actions/upload-artifact@v4
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6734486Z with:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6734693Z   name: test-results
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6734925Z   path: test-results/
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6735156Z   retention-days: 7
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6735379Z   if-no-files-found: warn
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6735624Z   compression-level: 6
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6735848Z   overwrite: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6736085Z   include-hidden-files: false
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6736333Z env:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6736608Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6737049Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6737494Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6737892Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6738277Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6738684Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.6739016Z ##[endgroup]
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.8419679Z (node:7150) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.8421397Z (Use `node --trace-deprecation ...` to show where the warning was created)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.8438464Z ##[warning]No files were found with the provided path: test-results/. No artifacts will be uploaded.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.8697725Z Post job cleanup.
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.9644266Z [command]/usr/bin/git version
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.9688814Z git version 2.55.0
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.9725413Z Temporarily overriding HOME='/home/runner/work/_temp/98b85288-ee93-4575-a113-7e19eacba00b' before making global git config changes
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.9726787Z Adding repository directory to the temporary git global config as a safe directory
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.9731773Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/market/market
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.9779194Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:00.9819585Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:01.0092970Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:01.0119398Z http.https://github.com/.extraheader
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:01.0132225Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:01.0171703Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:01.0439921Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:01.0483127Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:01.0950126Z Cleaning up orphan processes
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:01.1279196Z Terminate orphan process: pid (7027) (nak)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:01.1306945Z Terminate orphan process: pid (7039) (python3)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:01.1328924Z Terminate orphan process: pid (7066) (bun)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:01.1354248Z Terminate orphan process: pid (7069) (bun)
+e2e-grep	UNKNOWN STEP	2026-10-15T12:48:01.1363115Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@v4, actions/checkout@v4, actions/setup-go@v5, actions/setup-python@v5, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
