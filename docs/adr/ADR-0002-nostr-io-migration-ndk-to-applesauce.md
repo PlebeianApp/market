@@ -316,13 +316,30 @@ copy. The single-event helper used for app-owned replaceable events is
 
 Production NDK is constructed with `enableOutboxModel: true`
 (`src/lib/stores/ndk.ts:421`, `:437`); outbox discovery is gated off for
-`staging`, `development` and `LOCAL_RELAY_ONLY`. On `master` the author-scoped
-reads this wave touches still call NDK directly — `ndk.fetchEvents` at
+`staging`, `development` and `LOCAL_RELAY_ONLY`. On `master` the reads this wave
+touches still call NDK directly — `ndk.fetchEvents` at
 `src/queries/authors.tsx:37`, `src/hooks/useNotificationMonitor.ts:59/74/95`, and
 `ndk.fetchEvent` at `src/lib/stores/nip60.ts:198`, with live subscriptions at
-`src/hooks/useNotificationMonitor.ts:135/161/185`. In production those reads are
-therefore outbox-routed today; no pinning is described here because none ships on
-`master`.
+`src/hooks/useNotificationMonitor.ts:135/161/185`.
+
+Those eight sites do not share one routing path, because NDK (pinned
+`@nostr-dev-kit/ndk@3.0.3`) derives author outbox routing from `filter.authors`
+alone:
+
+- **Author-filtered reads are outbox-routed today.** Three of the eight name an
+  author — `src/queries/authors.tsx:37` (`authors` at `:31`),
+  `src/hooks/useNotificationMonitor.ts:95` (`authors` at `:91`) and
+  `src/lib/stores/nip60.ts:198` (`authors` inline) — so in production they enter
+  author-outbox discovery and read the author's relays.
+- **`#p`-only reads are recipient-inbox reads and stay on the configured relay
+  set.** The other five carry no `authors` filter: the notification order and
+  message fetches are `src/hooks/useNotificationMonitor.ts:59` and `:74`
+  (`'#p'` at `:55` and `:70`), and all three live subscriptions are
+  `src/hooks/useNotificationMonitor.ts:135`/`:161`/`:185` (`'#p'` at
+  `:138`/`:164`/`:188`). With no author set, NDK's outbox routing does not fire
+  and the read falls back to the configured relay set.
+
+No pinning is introduced or described here; this records current routing only.
 
 `src/lib/appSettings.ts:107` is **not** a client read: `fetchAppSettings`
 (`:42`) is imported only by the server entry (`src/index.tsx:7`, called at boot
