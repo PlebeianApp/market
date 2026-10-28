@@ -5,7 +5,7 @@ import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
 import { LightningMock } from '../utils/lightning-mock'
-import { RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
+import { BASE_URL, RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
 import { STOREFRONT_PAGE_D_TAG, STOREFRONT_PAGE_KIND, STOREFRONT_PAGE_VERSION } from '../../src/lib/schemas/storefront'
 import { setupAuthContext } from '../fixtures/auth'
 import { ensureScenario } from '../scenarios'
@@ -269,6 +269,85 @@ test.describe('storefront page builder', () => {
 				content: '',
 				tags: previousTags.filter((tag) => !(tag[0] === 'name' && tag[1] === name)),
 			})
+		}
+	})
+
+	test('serves registered storefront subdomains and keeps draft previews on the editor origin', async ({ browser }) => {
+		test.skip(process.env.E2E_STOREFRONT_SUBDOMAINS !== 'true', 'Requires INSTANCE_STOREFRONT_BASE_URL pointing to the local app')
+		await ensureScenario('merchant')
+		const context = await browser.newContext({ baseURL: BASE_URL, recordVideo: { dir: test.info().outputPath('videos') } })
+		await context.route('**/*', async (route) => {
+			const host = new URL(route.request().url()).hostname
+			if (host === 'localhost' || host.endsWith('.localhost') || host === '127.0.0.1') await route.continue()
+			else if (route.request().resourceType() === 'image')
+				await route.fulfill({ path: 'e2e/fixtures/test-product-image.png', contentType: 'image/png' })
+			else await route.abort()
+		})
+		await context.routeWebSocket(/.*/, (socket) => {
+			const host = new URL(socket.url()).hostname
+			if (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.localhost')) socket.connectToServer()
+			else socket.close()
+		})
+		await setupAuthContext(context, { sk: MERCHANT_SK, pk: MERCHANT_PK })
+		await context.addInitScript((pubkey) => sessionStorage.setItem('pii-warning-dismissed', JSON.stringify([pubkey])), MERCHANT_PK)
+		const page = await context.newPage()
+		const name = `farm${Date.now()}`
+		const expired = `expired${Date.now()}`
+		const configuration = await (await page.request.get(`${BASE_URL}/api/config`)).json()
+		const registryTag = `${configuration.handlerId}-storefront-names`
+		const previous = await fetchLatestRegistry(TEST_APP_PUBLIC_KEY, registryTag)
+		const tags = previous?.tags ?? [['d', registryTag]]
+		const storefrontUrl = new URL(BASE_URL)
+		storefrontUrl.hostname = `${name}.localhost`
+		try {
+			await publishRaw(TEST_APP_PRIVATE_KEY, {
+				kind: 30000,
+				created_at: Math.floor(Date.now() / 1000),
+				content: '',
+				tags: [
+					...tags,
+					['name', name, MERCHANT_PK, String(Math.floor(Date.now() / 1000) + 3600)],
+					['name', expired, MERCHANT_PK, String(Math.floor(Date.now() / 1000) - 60)],
+				],
+			})
+			await openBuilder(page)
+			const liveLink = page.getByTestId('storefront-header-top-row').getByTestId('storefront-view-live')
+			await expect(liveLink).toHaveAttribute('href', `/profile/${MERCHANT_PK}?preview=draft`)
+			const [draft] = await Promise.all([page.waitForEvent('popup'), liveLink.click()])
+			await expect(draft.getByTestId('storefront-page')).toBeVisible({ timeout: 20_000 })
+			expect(new URL(draft.url()).origin).toBe(BASE_URL)
+			await draft.close()
+
+			await page.getByTestId('storefront-enable-toggle').check()
+			await page.getByTestId('storefront-publish').click()
+			const dialog = page.getByTestId('storefront-publish-identity-dialog')
+			await expect(dialog.getByText(`${name}@localhost`, { exact: true })).toBeVisible()
+			await expect(dialog.getByText(storefrontUrl.href, { exact: true })).toBeVisible()
+			await dialog.getByTestId('storefront-publish-confirm').click()
+			await expect(page.getByText(/published to \d+ relay/i)).toBeVisible({ timeout: 20_000 })
+			await expect(liveLink).toHaveAttribute('href', storefrontUrl.href)
+			const [live] = await Promise.all([page.waitForEvent('popup'), liveLink.click()])
+			await expect(live.getByTestId('storefront-page')).toBeVisible({ timeout: 25_000 })
+			await expect(live).toHaveURL(storefrontUrl.href)
+			await expect(live.getByRole('banner')).toHaveCount(0)
+			await expect(live.getByRole('contentinfo')).toHaveCount(0)
+			await live.goto(`${BASE_URL}/profile/${MERCHANT_PK}?tag=test#details`)
+			await expect(live).toHaveURL(`${storefrontUrl.href}?tag=test#details`, { timeout: 25_000 })
+			await live.goto(`${BASE_URL}/${name}`)
+			await expect(live).toHaveURL(storefrontUrl.href, { timeout: 25_000 })
+			for (const unavailable of [expired, `unknown${Date.now()}`]) {
+				const url = new URL(BASE_URL)
+				url.hostname = `${unavailable}.localhost`
+				await live.goto(url.href)
+				await expect(live.getByRole('heading', { name: 'Storefront unavailable' })).toBeVisible({ timeout: 20_000 })
+				await expect(live.getByTestId('storefront-page')).toHaveCount(0)
+			}
+			await live.goto(BASE_URL)
+			await expect(live.getByRole('banner')).toBeVisible()
+			await live.close()
+		} finally {
+			await context.close()
+			await publishRaw(TEST_APP_PRIVATE_KEY, { kind: 30000, created_at: Math.floor(Date.now() / 1000), content: '', tags })
 		}
 	})
 

@@ -34,6 +34,58 @@ editor open. Unsaved or unpublished pages use an author-only draft preview; afte
 publishing an enabled page, the link opens the public URL without the preview
 parameter. Publishing does not navigate the editor tab away.
 
+## Optional storefront subdomains
+
+Path-based storefronts remain the default. To give registered names their own
+hostname, set the environment-only `INSTANCE_STOREFRONT_BASE_URL` and restart
+the app. This is the marketplace origin, not a wildcard or a seller's hostname.
+
+For local development with the app listening on port 3000:
+
+```dotenv
+INSTANCE_STOREFRONT_BASE_URL=http://localhost:3000
+```
+
+The marketplace and editor stay at `http://localhost:3000`; a registered `farm`
+storefront opens at `http://farm.localhost:3000/`, and its identity remains
+`farm@localhost`. Browsers normally resolve `*.localhost` to loopback; if the
+local resolver does not, add a local DNS wildcard or an explicit hosts entry
+for each test name. Keep the configured port equal to the app's listening port.
+This setting does not change where the server binds.
+
+For a hosted deployment:
+
+```dotenv
+INSTANCE_STOREFRONT_BASE_URL=https://market.example.com
+```
+
+Configure DNS for both `market.example.com` and `*.market.example.com` to reach
+the same deployment. Install a TLS certificate covering the base hostname and
+wildcard. The reverse proxy must accept both, preserve the original Host, forward
+WebSocket upgrades, and serve app routes/assets on seller hosts too. The app
+does not provision DNS, certificates, or proxy configuration.
+
+The existing active-name registry resolves `farm.market.example.com` to the
+seller's published page; no additional identity purchase or event kind is
+introduced. The NIP-05 address uses the configured base hostname
+(`farm@market.example.com`), not the seller subdomain. Public profile and vanity
+path links redirect to the canonical seller URL when an enabled storefront has
+an active name, preserving query parameters and fragments. Unknown, reserved,
+and expired names cannot render another seller's storefront. Only one direct
+subdomain label is interpreted as a name.
+
+Origins must use HTTPS, except HTTP on localhost. Credentials, non-root paths,
+queries, fragments, and IP addresses are rejected at configuration parsing.
+Legacy registrations that are not valid DNS labels retain a path on the
+configured base origin.
+
+Use the base origin for editing. Draft-preview links remain on the editor
+origin and require the signed-in author; drafts are not sent to seller hosts.
+Browser authentication, private keys, local drafts, wallets, and carts are not
+automatically transferred between origins. Existing product, cart, and checkout
+routes run on the origin where they are opened; this feature adds no shared
+login or cross-origin cart handoff. Removing the setting restores path routing.
+
 ## CMS starter templates
 
 The setup wizard offers four business-focused starters alongside Blank page,
@@ -246,7 +298,19 @@ bun test --isolate src/lib/schemas/storefront.test.ts \
   src/queries/__tests__/storefrontPage.test.ts
 
 bun run test:e2e -- e2e/tests/storefront-page-builder.spec.ts
+
+bunx playwright test --config=e2e/playwright.subdomains-local.config.ts \
+  e2e/tests/storefront-page-builder.spec.ts \
+  --grep 'serves registered storefront subdomains'
 ```
+
+The dedicated local subdomain config starts/seeds the local app and relay with
+the base URL enabled and omits the Cashu mint, which this flow does not use.
+The test records video, intercepts external HTTP/WebSocket requests, and covers
+publication, canonical redirects, same-origin author drafts, unknown/expired
+names, and the ordinary base-domain homepage. The standard config skips this
+opt-in case. CI must start the app with the same base-URL setting before using
+the dedicated config, because CI manages its own services.
 
 The e2e spec covers build → optional combined identity purchase step → publish
 → visit → render. The accepted-payment case uses a mocked invoice, a locally

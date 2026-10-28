@@ -22,6 +22,7 @@ import { useConfigQuery } from '@/queries/config'
 import { getNip05ForPubkey, useNip05Settings } from '@/queries/nip05'
 import { useStorefrontPage, usePublishStorefrontPage } from '@/queries/storefront'
 import { getVanityForPubkey, useVanitySettings } from '@/queries/vanity'
+import { storefrontPublicHref } from '@/lib/storefront-url'
 import { Puck, type Data, usePuck } from '@puckeditor/core'
 import {
 	ExternalLink,
@@ -99,13 +100,14 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 	const { data: nip05Settings } = useNip05Settings(config?.appPublicKey, config?.handlerId)
 	const vanityEntry = useMemo(() => getVanityForPubkey(vanitySettings, pubkey), [vanitySettings, pubkey])
 	const nip05Entry = useMemo(() => getNip05ForPubkey(nip05Settings, pubkey), [nip05Settings, pubkey])
-	const publicHref = vanityEntry ? `/${vanityEntry.vanityName}` : `/profile/${pubkey}`
+	const publicHref = vanityEntry ? storefrontPublicHref(vanityEntry.vanityName, config?.storefrontBaseUrl) : `/profile/${pubkey}`
 
 	const [mode, setMode] = useState<BuilderMode>('loading')
 	const [initialData, setInitialData] = useState<Data | null>(null)
 	const [enabled, setEnabled] = useState(false)
 	const [isDirty, setIsDirty] = useState(false)
-	const liveHref = `${publicHref}${isDirty || !published?.page?.enabled ? '?preview=draft' : ''}`
+	const liveHref =
+		isDirty || !published?.page?.enabled ? `${config?.storefrontBaseUrl ? `/profile/${pubkey}` : publicHref}?preview=draft` : publicHref
 	const [errors, setErrors] = useState<string[]>([])
 	const [confirmChangeTemplateOpen, setConfirmChangeTemplateOpen] = useState(false)
 	const [publishDialogOpen, setPublishDialogOpen] = useState(false)

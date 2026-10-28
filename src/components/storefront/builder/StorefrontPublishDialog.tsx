@@ -6,6 +6,7 @@ import { LightningPaymentProcessor } from '@/components/lightning/LightningPayme
 import { nip05Actions } from '@/lib/stores/nip05'
 import { ndkStore } from '@/lib/stores/ndk'
 import { vanityActions } from '@/lib/stores/vanity'
+import { storefrontPublicHref } from '@/lib/storefront-url'
 import { purchaseStorefrontIdentity } from '@/lib/zapPurchase'
 import type { StorefrontPage } from '@/lib/schemas/storefront'
 import { NIP05_PRICING } from '@/server/Nip05Manager'
@@ -86,8 +87,8 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 	const haveIdentityRequest = username.length > 0
 
 	useEffect(() => {
-		setDomain(window.location.hostname.toLowerCase())
-	}, [])
+		setDomain(config?.storefrontBaseUrl ? new URL(config.storefrontBaseUrl).hostname : window.location.hostname.toLowerCase())
+	}, [config?.storefrontBaseUrl])
 
 	useEffect(() => {
 		if (nameInput || namesLoading) return
@@ -233,7 +234,7 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 									data-testid="storefront-identity-name"
 								/>
 								<p className="text-xs text-muted-foreground">
-									Only enter the name. The current site domain is added to the NIP-05 address and vanity URL.
+									Only enter the name. The site domain is added to your NIP-05 address and storefront URL.
 								</p>
 							</div>
 
@@ -248,7 +249,7 @@ export function StorefrontPublishDialog({ open, onOpenChange, pubkey, page, onPu
 									<p>
 										Vanity URL:{' '}
 										<span className="font-mono">
-											{domain}/{username}
+											{config?.storefrontBaseUrl ? storefrontPublicHref(username, config.storefrontBaseUrl) : `${domain}/${username}`}
 										</span>
 									</p>
 								</div>

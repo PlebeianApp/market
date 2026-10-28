@@ -10,6 +10,8 @@ import { useStore } from '@tanstack/react-store'
 import { useStandalonePage } from '@/hooks/useStandalonePage'
 import { vanityStore } from '@/lib/stores/vanity'
 import { Navigate, useLocation } from '@tanstack/react-router'
+import { configStore } from '@/lib/stores/config'
+import { storefrontPublicHref } from '@/lib/storefront-url'
 
 /**
  * Resolution point for any URL that names a person: the custom page if the
@@ -28,6 +30,7 @@ export function StorefrontOrProfilePage({ profileId }: { profileId: string }) {
 	const { user } = useStore(authStore)
 	const location = useLocation()
 	const vanity = useStore(vanityStore)
+	const { config } = useStore(configStore)
 	const isDraftPreview = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('preview') === 'draft'
 	// npub, nprofile and NIP-05 identifiers all have to become a hex pubkey
 	// before a page can be addressed. Hex skips the lookup; everything else
@@ -50,7 +53,16 @@ export function StorefrontOrProfilePage({ profileId }: { profileId: string }) {
 	useStandalonePage(isDeciding || rendersStorefront)
 	const vanityEntry = Array.from(vanity.entries.values()).find((entry) => entry.pubkey === pubkey && entry.validUntil > Date.now() / 1000)
 
-	if (rendersStorefront && vanityEntry && location.pathname.startsWith('/profile/')) {
+	if (rendersStorefront && vanityEntry && config.storefrontBaseUrl && !isDraftPreview) {
+		const target = new URL(storefrontPublicHref(vanityEntry.vanityName, config.storefrontBaseUrl))
+		if (window.location.origin !== target.origin || location.pathname !== target.pathname) {
+			target.search = location.searchStr
+			target.hash = location.hash
+			return <Navigate to="/" href={target.href} reloadDocument replace />
+		}
+	}
+
+	if (rendersStorefront && vanityEntry && !config.storefrontBaseUrl && location.pathname.startsWith('/profile/')) {
 		return <Navigate to="/$vanityName" params={{ vanityName: vanityEntry.vanityName }} search hash={location.hash} replace />
 	}
 

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { BUG_RELAY, DEFAULT_PUBLIC_RELAYS, DEFAULT_TRUSTED_MINTS, type Stage } from './constants'
 import { RelayUrlSchema, SocialLinksSchema, WebUrlSchema, type AppSettings, type SocialLinks } from './schemas/app'
+import { isStorefrontBaseUrl } from './storefront-url'
 
 export interface InstanceConfig {
 	name: string
@@ -16,6 +17,7 @@ export interface InstanceConfig {
 	showNostrLink: boolean
 	handlerId: string
 	siteUrl: string
+	storefrontBaseUrl?: string
 	publicRelays: string[]
 	trustedMints: string[]
 	bugRelay: string
@@ -55,6 +57,10 @@ const InstanceConfigEnvironmentSchema = z.object({
 	showNostrLink: z.boolean().optional(),
 	handlerId: z.string().min(1).optional(),
 	siteUrl: WebUrlSchema.optional(),
+	storefrontBaseUrl: z
+		.string()
+		.refine(isStorefrontBaseUrl, 'Expected an HTTPS origin (HTTP allowed for localhost), without a path')
+		.optional(),
 	publicRelays: z.array(RelayUrlSchema).optional(),
 	trustedMints: z.array(WebUrlSchema).optional(),
 	bugRelay: RelayUrlSchema.optional(),
@@ -129,6 +135,7 @@ export function parseInstanceConfigEnvironment(environment: Record<string, strin
 		showNostrLink: optionalBoolean(environment.INSTANCE_SHOW_NOSTR_LINK),
 		handlerId: environment.INSTANCE_HANDLER_ID,
 		siteUrl: environment.INSTANCE_SITE_URL,
+		storefrontBaseUrl: environment.INSTANCE_STOREFRONT_BASE_URL,
 		publicRelays: optionalList(environment.INSTANCE_PUBLIC_RELAYS),
 		trustedMints: optionalList(environment.INSTANCE_TRUSTED_MINTS),
 		bugRelay: environment.INSTANCE_BUG_RELAY,
