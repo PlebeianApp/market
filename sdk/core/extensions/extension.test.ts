@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { defineExtension, parseExtensionConfig, validateExtensionManifest, type ExtensionManifest } from './extension'
+import {
+	defineExtension,
+	parseExtensionConfig,
+	validateExtensionDefinition,
+	validateExtensionManifest,
+	type ExtensionManifest,
+} from './extension'
 
 const stringRecord = (field: string) => ({
 	parse(input: unknown) {
@@ -32,6 +38,56 @@ describe('extension manifest', () => {
 		expect(validateExtensionManifest({ ...manifest, runtimes: ['mobile' as never] }).ok).toBe(false)
 		expect(validateExtensionManifest({ ...manifest, capabilities: ['a', 'a'] }).ok).toBe(false)
 		expect(() => defineExtension({ manifest: { ...manifest, id: '' } })).toThrow()
+	})
+})
+
+describe('extension host ports and egress', () => {
+	test('accepts http with declared https/localhost egress', () => {
+		const result = validateExtensionManifest({
+			...manifest,
+			hostPorts: ['relays:read', 'http', 'storage'],
+			egress: ['https://api.routstr.com', 'http://localhost:8787'],
+		})
+		expect(result.ok).toBe(true)
+	})
+
+	test('rejects unknown/duplicate ports and inconsistent egress', () => {
+		expect(validateExtensionManifest({ ...manifest, hostPorts: ['signer' as never] }).ok).toBe(false)
+		expect(validateExtensionManifest({ ...manifest, hostPorts: ['http', 'http'], egress: ['https://a.example'] }).ok).toBe(false)
+		expect(validateExtensionManifest({ ...manifest, hostPorts: ['http'] }).ok).toBe(false)
+		expect(validateExtensionManifest({ ...manifest, egress: ['https://a.example'] }).ok).toBe(false)
+		expect(validateExtensionManifest({ ...manifest, hostPorts: ['http'], egress: ['http://a.example'] }).ok).toBe(false)
+		expect(validateExtensionManifest({ ...manifest, hostPorts: ['http'], egress: ['https://a.example/v1'] }).ok).toBe(false)
+		expect(validateExtensionManifest({ ...manifest, hostPorts: ['http'], egress: ['https://a.example', 'https://A.example/'] }).ok).toBe(
+			false,
+		)
+	})
+})
+
+describe('extension actions', () => {
+	const schema = { parse: (input: unknown) => input }
+	const action = {
+		input: schema,
+		output: schema,
+		auth: 'user' as const,
+		rateLimit: { perPubkey: 5, windowSeconds: 60 },
+		handler: async () => ({ ok: true as const, value: {} }),
+	}
+
+	test('accepts well-formed server actions', () => {
+		expect(validateExtensionDefinition({ manifest, actions: { suggest: action, 'bulk-import': action } }).ok).toBe(true)
+	})
+
+	test('rejects actions on non-server extensions and malformed action declarations', () => {
+		const clientOnly = { ...manifest, runtimes: ['client'] as const }
+		expect(validateExtensionDefinition({ manifest: clientOnly, actions: { suggest: action } }).ok).toBe(false)
+		expect(validateExtensionDefinition({ manifest, actions: { Suggest: action } }).ok).toBe(false)
+		expect(validateExtensionDefinition({ manifest, actions: { suggest: { ...action, auth: 'anyone' as never } } }).ok).toBe(false)
+		expect(
+			validateExtensionDefinition({ manifest, actions: { suggest: { ...action, rateLimit: { perPubkey: 0, windowSeconds: 60 } } } }).ok,
+		).toBe(false)
+		expect(validateExtensionDefinition({ manifest, actions: { suggest: { ...action, output: undefined as never } } }).ok).toBe(false)
+		expect(() => defineExtension({ manifest, actions: { 'Bad Name': action } })).toThrow()
 	})
 })
 

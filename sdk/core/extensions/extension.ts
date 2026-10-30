@@ -1,6 +1,8 @@
 import { ValidationError } from '../errors'
 import { failure, success, type Result } from '../result'
 import { validateWithSchema, type RuntimeSchema } from '../validation'
+import { EXTENSION_ACTION_AUTH, isValidExtensionActionName, type ExtensionActionDefinition } from './actions'
+import { EXTENSION_HOST_PORTS, parseEgressOrigin, type ExtensionHostPortName, type ExtensionHostPorts } from './hostPorts'
 
 export const EXTENSION_RUNTIMES = ['client', 'server', 'service'] as const
 export type ExtensionRuntime = (typeof EXTENSION_RUNTIMES)[number]
@@ -19,6 +21,10 @@ export interface ExtensionManifest<PublicConfig = unknown, PrivateConfig = never
 	publicConfig: RuntimeSchema<PublicConfig>
 	/** Credentials and server-only values; never delivered to the client runtime. */
 	privateConfig?: RuntimeSchema<PrivateConfig>
+	/** Host ports requested from Platform; a port is injected only if also enabled by the operator. */
+	hostPorts?: readonly ExtensionHostPortName[]
+	/** Origins the `http` port may reach (https, or http for localhost only). Required when `http` is requested. */
+	egress?: readonly string[]
 }
 
 export interface ExtensionContext<PublicConfig = unknown, PrivateConfig = never> {
@@ -27,6 +33,8 @@ export interface ExtensionContext<PublicConfig = unknown, PrivateConfig = never>
 	publicConfig: PublicConfig
 	privateConfig: PrivateConfig | undefined
 	signal: AbortSignal
+	/** Capability-gated host ports. Absent when the runtime provides none. */
+	host?: ExtensionHostPorts
 }
 
 export interface ExtensionLifecycle<PublicConfig = unknown, PrivateConfig = never, Handle = unknown> {
@@ -37,6 +45,8 @@ export interface ExtensionLifecycle<PublicConfig = unknown, PrivateConfig = neve
 export interface ExtensionDefinition<PublicConfig = unknown, PrivateConfig = never, Handle = unknown> {
 	manifest: ExtensionManifest<PublicConfig, PrivateConfig>
 	lifecycle?: ExtensionLifecycle<PublicConfig, PrivateConfig, Handle>
+	/** Named client → server actions. Only valid for extensions that run in the `server` runtime. */
+	actions?: Readonly<Record<string, ExtensionActionDefinition<any, any, PublicConfig, PrivateConfig>>>
 }
 
 export type AnyExtensionDefinition = ExtensionDefinition<any, any, any>
@@ -61,16 +71,87 @@ export function validateExtensionManifest(manifest: ExtensionManifest<unknown, u
 	if (new Set(manifest.capabilities).size !== manifest.capabilities.length) {
 		return failure(new ValidationError('Extension capabilities must be unique', ['capabilities']))
 	}
+	return validateHostPorts(manifest)
+}
+
+function validateHostPorts(manifest: ExtensionManifest<unknown, unknown>): Result<void, ValidationError> {
+	const hostPorts = manifest.hostPorts ?? []
+	for (let index = 0; index < hostPorts.length; index++) {
+		if (!EXTENSION_HOST_PORTS.includes(hostPorts[index])) {
+			return failure(new ValidationError('Extension host port is not recognised', ['hostPorts', index]))
+		}
+	}
+	if (new Set(hostPorts).size !== hostPorts.length)
+		return failure(new ValidationError('Extension host ports must be unique', ['hostPorts']))
+
+	const egress = manifest.egress ?? []
+	const wantsHttp = hostPorts.includes('http')
+	if (wantsHttp && egress.length === 0)
+		return failure(new ValidationError('The http host port requires at least one egress origin', ['egress']))
+	if (!wantsHttp && egress.length > 0) return failure(new ValidationError('Egress origins require the http host port', ['egress']))
+
+	const origins = new Set<string>()
+	for (let index = 0; index < egress.length; index++) {
+		const parsed = parseEgressOrigin(egress[index])
+		if (!parsed.ok) return failure(new ValidationError(parsed.error.message, ['egress', index]))
+		if (origins.has(parsed.value)) return failure(new ValidationError('Egress origins must be unique', ['egress', index]))
+		origins.add(parsed.value)
+	}
 	return success(undefined)
+}
+
+/** Validates the manifest plus declared actions (names, auth, rate limits, schemas, handlers). */
+export function validateExtensionDefinition(definition: AnyExtensionDefinition): Result<void, ValidationError> {
+	const manifestResult = validateExtensionManifest(definition.manifest)
+	if (!manifestResult.ok) return manifestResult
+
+	const actions = definition.actions ?? {}
+	const names = Object.keys(actions)
+	if (names.length > 0 && !definition.manifest.runtimes.includes('server')) {
+		return failure(new ValidationError('Extension actions require the server runtime', ['actions']))
+	}
+	for (const name of names) {
+		const action = actions[name]
+		const path = ['actions', name]
+		if (!isValidExtensionActionName(name)) return failure(new ValidationError('Extension action name must be lowercase kebab-case', path))
+		if (!EXTENSION_ACTION_AUTH.includes(action.auth))
+			return failure(new ValidationError('Extension action auth must be user or admin', [...path, 'auth']))
+		const { perPubkey, windowSeconds } = action.rateLimit ?? {}
+		if (!isPositiveInteger(perPubkey) || !isPositiveInteger(windowSeconds)) {
+			return failure(
+				new ValidationError('Extension action rateLimit requires positive integer perPubkey and windowSeconds', [...path, 'rateLimit']),
+			)
+		}
+		if (typeof action.input?.parse !== 'function' || typeof action.output?.parse !== 'function') {
+			return failure(new ValidationError('Extension action requires input and output schemas', path))
+		}
+		if (typeof action.handler !== 'function')
+			return failure(new ValidationError('Extension action requires a handler', [...path, 'handler']))
+	}
+	return success(undefined)
+}
+
+function isPositiveInteger(value: unknown): value is number {
+	return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
 }
 
 /** Validates the manifest eagerly so a malformed extension fails at import, not at instance start. */
 export function defineExtension<PublicConfig, PrivateConfig = never, Handle = unknown>(
 	definition: ExtensionDefinition<PublicConfig, PrivateConfig, Handle>,
 ): ExtensionDefinition<PublicConfig, PrivateConfig, Handle> {
-	const result = validateExtensionManifest(definition.manifest as ExtensionManifest<unknown, unknown>)
+	const result = validateExtensionDefinition(definition as AnyExtensionDefinition)
 	if (!result.ok) throw result.error
 	return definition
+}
+
+/**
+ * Returns an identity helper that types action handlers against the manifest's config and infers
+ * input/output from the schemas: `const action = defineActionFor(manifest); action({ input, output, ... })`.
+ */
+export function defineActionFor<PublicConfig, PrivateConfig>(_manifest: ExtensionManifest<PublicConfig, PrivateConfig>) {
+	return <Input, Output>(
+		action: ExtensionActionDefinition<Input, Output, PublicConfig, PrivateConfig>,
+	): ExtensionActionDefinition<Input, Output, PublicConfig, PrivateConfig> => action
 }
 
 /** Parses untrusted instance values against the extension's schemas. Performs no I/O. */
