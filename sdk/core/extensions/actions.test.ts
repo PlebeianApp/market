@@ -208,8 +208,9 @@ describe('action descriptors and error mapping', () => {
 				description: 'Suggest a product description',
 				auth: 'user',
 				rateLimit: { perPubkey: 10, windowSeconds: 3600 },
+				transports: ['http'],
 			},
-			{ name: 'purge', auth: 'admin', rateLimit: { perPubkey: 1, windowSeconds: 60 } },
+			{ name: 'purge', auth: 'admin', rateLimit: { perPubkey: 1, windowSeconds: 60 }, transports: ['http'] },
 		])
 	})
 

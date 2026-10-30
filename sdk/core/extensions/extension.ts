@@ -1,7 +1,14 @@
 import { ValidationError } from '../errors'
 import { failure, success, type Result } from '../result'
 import { validateWithSchema, type RuntimeSchema } from '../validation'
-import { EXTENSION_ACTION_AUTH, isValidExtensionActionName, type ExtensionActionDefinition } from './actions'
+import {
+	actionTransports,
+	EXTENSION_ACTION_AUTH,
+	EXTENSION_ACTION_TRANSPORTS,
+	isValidExtensionActionName,
+	type ExtensionActionDefinition,
+} from './actions'
+import { extensionActionToolName, MAX_TOOL_NAME_LENGTH } from './contextvm'
 import { EXTENSION_HOST_PORTS, parseEgressOrigin, type ExtensionHostPortName, type ExtensionHostPorts } from './hostPorts'
 
 export const EXTENSION_RUNTIMES = ['client', 'server', 'service'] as const
@@ -127,6 +134,27 @@ export function validateExtensionDefinition(definition: AnyExtensionDefinition):
 		}
 		if (typeof action.handler !== 'function')
 			return failure(new ValidationError('Extension action requires a handler', [...path, 'handler']))
+		if (action.transports !== undefined) {
+			const transports = action.transports
+			if (
+				transports.length === 0 ||
+				!transports.every((transport) => EXTENSION_ACTION_TRANSPORTS.includes(transport)) ||
+				new Set(transports).size !== transports.length
+			) {
+				return failure(
+					new ValidationError('Extension action transports must be a non-empty unique subset of http, contextvm', [...path, 'transports']),
+				)
+			}
+		}
+		if (action.inputJsonSchema !== undefined && (typeof action.inputJsonSchema !== 'object' || action.inputJsonSchema === null)) {
+			return failure(new ValidationError('Extension action inputJsonSchema must be an object', [...path, 'inputJsonSchema']))
+		}
+		if (
+			actionTransports(action).includes('contextvm') &&
+			extensionActionToolName(definition.manifest.id, name).length > MAX_TOOL_NAME_LENGTH
+		) {
+			return failure(new ValidationError('Extension id and action name are too long for a ContextVM tool name', path))
+		}
 	}
 	return success(undefined)
 }

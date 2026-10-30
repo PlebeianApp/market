@@ -1,4 +1,4 @@
-import type { ExtensionActionContext, ExtensionCaller } from '../extensions/actions'
+import type { ExtensionActionContext, ExtensionActionTransport, ExtensionCaller } from '../extensions/actions'
 import {
 	ExtensionHttpError,
 	isEgressAllowed,
@@ -109,7 +109,11 @@ export function createTestActionContext<PublicConfig, PrivateConfig = never>(par
 	}
 }
 
-export const testCaller = (pubkey = 'a'.repeat(64), isAdmin = false): ExtensionCaller => ({ pubkey, isAdmin })
+export const testCaller = (pubkey = 'a'.repeat(64), isAdmin = false, transport: ExtensionActionTransport = 'http'): ExtensionCaller => ({
+	pubkey,
+	isAdmin,
+	transport,
+})
 
 function toFilterList(filters: NostrFilter | readonly NostrFilter[]): NostrFilter[] {
 	return Array.isArray(filters) ? [...filters] : [filters as NostrFilter]

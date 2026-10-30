@@ -18,7 +18,8 @@ Proposed — branch `feat/cms-spike`
   the server environment)
 - Current code: `sdk/core/extensions/extension.ts`,
   `platform/extensions/registry.ts`, `sdk/core/ports/nostrRelay.ts`,
-  `platform/server/buildServer.ts`, `platform/server/http/config.ts`
+  `platform/server/buildServer.ts`, `platform/server/http/config.ts`,
+  `contextvm/server.ts` (existing ContextVM MCP server)
 - External: Routstr API reference — `https://docs.routstr.com/api/overview/`
 
 ## Context
@@ -90,8 +91,9 @@ The example covers each integration point:
 
 Extensions interact with the outside world **only through host ports injected
 via `ExtensionContext`**. Clients reach server-side extension logic **only
-through declared, authenticated actions** routed by Platform. Extensions return
-data; users sign.
+through declared, authenticated actions** routed by Platform, over HTTP with
+NIP-98 or, per action opt-in, as ContextVM tools. Extensions return data; users
+sign.
 
 ### 1. Host ports (SDK contract, Platform implementation)
 
@@ -140,9 +142,17 @@ actions?: Record<string, {
 	output: RuntimeSchema<Out>
 	auth: 'user' | 'admin'
 	rateLimit: { perPubkey: number; windowSeconds: number }
-	handler(ctx: ExtensionContext, input: In, caller: { pubkey: string }): Promise<Result<Out, SdkError>>
+	transports?: readonly ('http' | 'contextvm')[] // default ['http']
+	inputJsonSchema?: JsonSchemaObject // published as the MCP tool inputSchema
+	handler(ctx: ExtensionContext, input: In, caller: ExtensionCaller): Promise<Result<Out, SdkError>>
 }>
+
+interface ExtensionCaller { pubkey: string; isAdmin: boolean; transport: 'http' | 'contextvm' }
 ```
+
+Steps 1 and 4–7 below are transport-neutral and live in the SDK as
+`executeExtensionAction`. An action that is not exposed on the caller's
+transport is handled exactly like a missing action.
 
 Platform mounts one route in `buildServer.ts`:
 
@@ -174,6 +184,43 @@ The request is handled in this order:
 Errors returned to the client never include `privateConfig` values, provider
 error bodies, or prompts.
 
+### 2a. ContextVM transport
+
+Actions may also be exposed as ContextVM (MCP over Nostr) tools. This is a
+second transport for the same action contract, not a second contract.
+
+- **Opt-in per action.** An action is exposed over ContextVM only if its
+  `transports` includes `'contextvm'`, and only if the operator enables
+  ContextVM exposure for that extension. The default is HTTP only, because
+  ContextVM servers in production announce to public relays and their tools
+  become globally discoverable.
+- **Tool naming.** The tool name is `ext.<extension-id>.<action>`. The `ext.`
+  prefix separates extension tools from first-party tools such as
+  `get_btc_price`. Action names never contain dots, so the name parses
+  unambiguously. Tool names are capped at 128 characters.
+- **Caller identity.** The request is a signed Nostr event, so it replaces NIP-98
+  on this transport. The server transport runs with `injectClientPubkey: true`,
+  and Platform reads the caller only from `_meta.clientPubkey`, which the
+  transport overwrites with the signed event's pubkey. Without that option, the
+  value is client-controlled and must not be trusted.
+- **Same pipeline.** Lookup, transport gating, admin check, input parsing,
+  handler, and output parsing run through the same `executeExtensionAction` as
+  HTTP. The per-pubkey rate limit is one budget per action across both
+  transports, not one budget per transport.
+- **Same envelope.** `structuredContent` (and a JSON text copy in `content` for
+  older clients) carries the same `{ ok, value }` / `{ ok: false, error: { code,
+message, retryable } }` body as HTTP. Errors set `isError: true` and carry
+  only the public code and message. Provider balance errors are still
+  `extension_unavailable`.
+- **Exposure policy.** Tools with `auth: 'user'` accept any pubkey, like the HTTP
+  route, so they are added to the transport's `excludedCapabilities` for the
+  pubkey allowlist. Tools with `auth: 'admin'` are still checked against the
+  admin list by the pipeline.
+- **Client.** The SDK provides `invokeExtensionActionOverContextVm(callTool, id,
+action, input)`. `callTool` is injected from an MCP client over a ContextVM
+  `NostrClientTransport`, so the SDK does not depend on `@contextvm/sdk`. Tool
+  arguments must be a JSON object.
+
 ### 3. Discovery and UI
 
 - `/api/config` adds `extensions: PublicExtensionDescriptor[]` from
@@ -186,6 +233,9 @@ error bodies, or prompts.
 - The SDK provides a typed client, `invokeExtensionAction(id, action, input,
 signer)`, which builds the NIP-98 header with the user's signer. UI calls it;
   UI does not hand-roll requests.
+- Descriptors list each action's `transports`. ContextVM tool listings come from
+  `describeExtensionActionTools()` and include only actions that opted into
+  `contextvm`.
 
 ### 4. Lifecycle wiring
 
@@ -282,15 +332,15 @@ The `http` port is the seam instead:
   `/api/config`, logs, error responses, and client bundles.
 - Payment-state vocabulary is reserved for marketplace payments. Provider
   billing errors map to availability errors.
+- ContextVM exposure is opt-in per action and per instance. Caller identity on
+  that transport comes only from the transport-injected `_meta.clientPubkey`.
 
 ## Alternatives Considered
 
-- **ContextVM (MCP over Nostr) as the action transport.** This would make
-  extensions callable over relays, with Nostr-native caller identity, and
-  `contextvm/` already exists. Deferred, not rejected. The action contract is
-  transport-neutral, and a `service`-runtime extension could later be exposed as
-  a ContextVM tool. For a first extension, HTTP plus NIP-98 adds no relay
-  round-trips and no new service process.
+- **ContextVM as the _only_ action transport.** Rejected for now. ContextVM is
+  adopted as a second transport (§2a), but browser UI keeps the HTTP route,
+  which adds no relay round-trips and no dependency on relay availability for
+  a simple form action.
 - **Session cookies or API tokens instead of NIP-98.** This adds a login
   backend. NIP-98 reuses the signer every user already has. Rejected.
 - **A generic "proxy any URL" host endpoint.** This becomes an open relay for
@@ -315,8 +365,14 @@ The `http` port is the seam instead:
   must opt in.
 - The manifest shape grows (`hostPorts`, `egress`, `actions`). Existing manifest
   tests need updating.
-- This ADR is proposed design. None of the ports, the action route, the NIP-98
-  verifier, or the reference extension exist yet.
+- Extension actions become callable by Nostr-native agents and other clients
+  over ContextVM. Exposing them on public relays widens who can spend operator
+  money, which is why exposure is opt-in per action and per instance.
+- This ADR is proposed design. The SDK contracts exist in
+  `sdk/core/extensions/` (port interfaces, manifest and action validation,
+  `executeExtensionAction`, the HTTP and ContextVM clients, and test fakes).
+  The Platform port implementations, the action route, the NIP-98 verifier,
+  ContextVM tool registration, and the reference extension do not exist yet.
 
 ## Implementation Sequence
 
@@ -334,7 +390,10 @@ Each step is an independently reviewable PR.
    form.
 6. `ai-product-description` extension with unit tests, the local fake provider,
    the e2e gate spec with video, and `.env.example` entries.
-7. Docs: operator guide for enabling extensions and the data-flow disclosure.
+7. Platform: register opted-in extension actions as ContextVM tools
+   (`injectClientPubkey: true`, `ext.` tool names, shared rate-limit budget)
+   and an operator switch for ContextVM exposure.
+8. Docs: operator guide for enabling extensions and the data-flow disclosure.
 
 ## Open Questions
 
@@ -348,4 +407,8 @@ Each step is an independently reviewable PR.
 - Should a client-runtime, user-funded mode (seller's own Cashu token) share the
   same action contract, and how does it interact with the Cashu wallet's
   monetary authority (ADR-0010)?
-- When to expose actions over ContextVM in addition to HTTP.
+- Which process hosts ContextVM extension tools: the existing
+  `contextvm/server.ts` process or the main server. If they differ, the shared
+  per-pubkey rate-limit budget needs shared storage.
+- Should ContextVM extension tools be announced to public bootstrap relays in
+  production, or kept on the operational relays only?

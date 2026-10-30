@@ -69,7 +69,7 @@ export async function invokeExtensionAction<Output = unknown>(
 	return parseExtensionActionResponse(status, text, options.output)
 }
 
-/** Decodes an action response envelope. Unknown shapes are reported as invalid output, never trusted. */
+/** Decodes an HTTP action response. Unknown shapes are reported as errors, never trusted. */
 export function parseExtensionActionResponse<Output = unknown>(
 	status: number,
 	text: string,
@@ -81,16 +81,28 @@ export function parseExtensionActionResponse<Output = unknown>(
 	} catch {
 		return failure(new ExtensionActionError(fallbackCode(status)))
 	}
-	if (!isRecord(parsed)) return failure(new ExtensionActionError(fallbackCode(status)))
+	return parseExtensionActionEnvelope(parsed, { succeeded: status >= 200 && status < 300, fallback: fallbackCode(status) }, output)
+}
 
-	if (parsed.ok === true && status >= 200 && status < 300) {
-		if (!output) return success(parsed.value as Output)
-		const value = validateWithSchema(parsed.value, output)
+/**
+ * Transport-neutral envelope decoding shared by HTTP and ContextVM. `succeeded` is the transport's own
+ * success signal (2xx, or a tool result without `isError`); both it and `ok: true` are required.
+ */
+export function parseExtensionActionEnvelope<Output = unknown>(
+	body: unknown,
+	transport: { succeeded: boolean; fallback: ExtensionActionWireErrorCode },
+	output?: RuntimeSchema<Output>,
+): Result<Output, ExtensionActionError> {
+	if (!isRecord(body)) return failure(new ExtensionActionError(transport.fallback))
+
+	if (body.ok === true && transport.succeeded) {
+		if (!output) return success(body.value as Output)
+		const value = validateWithSchema(body.value, output)
 		return value.ok ? success(value.value) : failure(new ExtensionActionError('invalid_output', undefined, value.error))
 	}
 
-	const error = isRecord(parsed.error) ? parsed.error : undefined
-	const code = typeof error?.code === 'string' && isWireCode(error.code) ? error.code : fallbackCode(status)
+	const error = isRecord(body.error) ? body.error : undefined
+	const code = typeof error?.code === 'string' && isWireCode(error.code) ? error.code : transport.fallback
 	const message = typeof error?.message === 'string' ? error.message.slice(0, 200) : undefined
 	return failure(new ExtensionActionError(code, message))
 }

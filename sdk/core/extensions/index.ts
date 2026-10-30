@@ -38,10 +38,13 @@ export type {
 	ScopedRelayQueryOptions,
 } from './hostPorts'
 export {
+	actionTransports,
+	DEFAULT_EXTENSION_ACTION_TRANSPORTS,
 	describeExtensionActions,
 	executeExtensionAction,
 	EXTENSION_ACTION_AUTH,
 	EXTENSION_ACTION_ERROR_STATUS,
+	EXTENSION_ACTION_TRANSPORTS,
 	ExtensionActionError,
 	extensionActionPath,
 	isValidExtensionActionName,
@@ -59,9 +62,21 @@ export type {
 	ExtensionActionRateLimit,
 	ExtensionActionResponseBody,
 	ExtensionActionSuccessBody,
+	ExtensionActionTransport,
 	ExtensionActionWireErrorCode,
 	ExtensionCaller,
 	PublicExtensionActionDescriptor,
 } from './actions'
-export { invokeExtensionAction, parseExtensionActionResponse } from './client'
+export { invokeExtensionAction, parseExtensionActionEnvelope, parseExtensionActionResponse } from './client'
 export type { ExtensionActionFetch, InvokeExtensionActionOptions } from './client'
+export {
+	callerFromContextVmMeta,
+	describeExtensionActionTools,
+	EXTENSION_TOOL_PREFIX,
+	extensionActionToolName,
+	invokeExtensionActionOverContextVm,
+	parseContextVmToolResult,
+	parseExtensionActionToolName,
+	toContextVmToolResult,
+} from './contextvm'
+export type { ContextVmCallTool, ContextVmToolResult, ExtensionActionToolDescriptor, InvokeOverContextVmOptions } from './contextvm'

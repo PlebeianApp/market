@@ -7,15 +7,27 @@ import type { ExtensionHostPorts } from './hostPorts'
 export const EXTENSION_ACTION_AUTH = ['user', 'admin'] as const
 export type ExtensionActionAuth = (typeof EXTENSION_ACTION_AUTH)[number]
 
+/**
+ * Transports an action is exposed on. ContextVM tools can be discoverable on public relays, so exposure
+ * there is an explicit per-action opt-in; Platform must also enable it per instance.
+ */
+export const EXTENSION_ACTION_TRANSPORTS = ['http', 'contextvm'] as const
+export type ExtensionActionTransport = (typeof EXTENSION_ACTION_TRANSPORTS)[number]
+export const DEFAULT_EXTENSION_ACTION_TRANSPORTS: readonly ExtensionActionTransport[] = ['http']
+
 export interface ExtensionActionRateLimit {
 	perPubkey: number
 	windowSeconds: number
 }
 
-/** Authenticated caller as established by Platform (NIP-98); extensions never authenticate on their own. */
+/**
+ * Authenticated caller as established by Platform: NIP-98 over HTTP, or the signed request event over
+ * ContextVM. Extensions never authenticate on their own, and the same per-pubkey rate limit spans transports.
+ */
 export interface ExtensionCaller {
 	pubkey: string
 	isAdmin: boolean
+	transport: ExtensionActionTransport
 }
 
 /** Server handlers always receive host ports; `log` is unconditional. */
@@ -30,6 +42,10 @@ export interface ExtensionActionDefinition<Input = unknown, Output = unknown, Pu
 	output: RuntimeSchema<Output>
 	auth: ExtensionActionAuth
 	rateLimit: ExtensionActionRateLimit
+	/** Defaults to `['http']`. */
+	transports?: readonly ExtensionActionTransport[]
+	/** JSON Schema for the input, published as the ContextVM/MCP tool `inputSchema`. Parsing still uses `input`. */
+	inputJsonSchema?: Readonly<Record<string, unknown>>
 	handler(
 		context: ExtensionActionContext<PublicConfig, PrivateConfig>,
 		input: Input,
@@ -44,6 +60,7 @@ export interface PublicExtensionActionDescriptor {
 	description?: string
 	auth: ExtensionActionAuth
 	rateLimit: ExtensionActionRateLimit
+	transports: readonly ExtensionActionTransport[]
 }
 
 /**
@@ -111,6 +128,10 @@ export function isValidExtensionActionName(name: string): boolean {
 	return name.length <= MAX_ACTION_NAME_LENGTH && ACTION_NAME.test(name)
 }
 
+export function actionTransports(action: AnyExtensionActionDefinition): readonly ExtensionActionTransport[] {
+	return action.transports ?? DEFAULT_EXTENSION_ACTION_TRANSPORTS
+}
+
 export function extensionActionPath(extensionId: string, actionName: string): string {
 	return `/api/extensions/${encodeURIComponent(extensionId)}/actions/${encodeURIComponent(actionName)}`
 }
@@ -123,6 +144,7 @@ export function describeExtensionActions(actions: Readonly<Record<string, AnyExt
 			...(action.description ? { description: action.description } : {}),
 			auth: action.auth,
 			rateLimit: { ...action.rateLimit },
+			transports: [...actionTransports(action)],
 		}),
 	)
 }
@@ -161,12 +183,13 @@ export interface ExecuteExtensionActionParams {
 
 /**
  * Transport-neutral action pipeline: lookup, role check, input parse, handler, output parse.
- * Authentication (NIP-98) and rate limiting stay with the transport in Platform.
+ * Authentication (NIP-98 or the ContextVM request event) and rate limiting stay with the transport in Platform.
  */
 export async function executeExtensionAction(params: ExecuteExtensionActionParams): Promise<Result<unknown, ExtensionActionError>> {
 	const { actions, actionName, rawInput, caller, context } = params
 	const action = actions && Object.hasOwn(actions, actionName) ? actions[actionName] : undefined
-	if (!action) return failure(new ExtensionActionError('not_found'))
+	// An action not exposed on the caller's transport is indistinguishable from a missing one.
+	if (!action || !actionTransports(action).includes(caller.transport)) return failure(new ExtensionActionError('not_found'))
 	if (action.auth === 'admin' && !caller.isAdmin) return failure(new ExtensionActionError('forbidden'))
 
 	// The parse cause is withheld: schema errors can echo user input.
