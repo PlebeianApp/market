@@ -177,7 +177,7 @@ class SuccessorReleaseFixture(unittest.TestCase):
                 "paymentConformanceReceiptPath": "/public/payment-receipt.json",
                 "paymentConformanceReceiptSha256": pin,
                 "activeSatKeysetId": "fixture-keyset",
-                "reviewedTestMintTransportUrl": "https://139.162.161.233/test-mint",
+                "testMintAssemblyUrl": "http://127.0.0.1:8180/test-mint",
                 "deploymentAnchorSha256": pin,
                 "networkFactsSha256": pin,
                 "browserPinsSha256": pin,

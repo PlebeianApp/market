@@ -52,15 +52,23 @@ not a claim that the public MVP is live.
 - The public configuration renderer consumes the accepted bootstrap, runtime
   binding, prerequisites, bootstrap acceptance, approved genesis-content
   decision, authoritative payment projection and mint-only reconciliation
-  directly. Chain ID `plebeian-auctions-mvp-20261102` is fixed. The timestamp
-  remains deliberately unset until the final signing-input freeze. With
-  current inputs it emits inert configurations; it can emit ready
-  configuration only after raw-receipt/genesis payment acceptance, reviewed
-  public mint transport, the one frozen time value, derived runtime pins and
-  all scoped authorities are present.
+  directly. Chain ID `plebeian-auctions-mvp-20261102` and timestamp
+  `2026-11-02T18:35:21Z` are frozen once for all lanes. With current inputs it
+  emits inert configurations; it can emit ready configuration only after the
+  later assembly-only legacy URL is selected, derived runtime pins and all
+  scoped authorities are present. Independent freeze review is accepted at
+  SHA-256 `4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d`.
+  The owner-reviewed sanitized payment
+  projection and exact file hash satisfy the existing renderer's receipt-file
+  contract; no private raw receipt or extra genesis-payment approval is added.
 - A separate validator-4 recovery command now requires its own start approval,
   exact inactive-to-active unit transition, and a pinned four-signature Comet
   commit before sealing `active_rejoined`.
+- Source and topology constrain the Go assembly-only legacy note namespace to
+  candidate `http://127.0.0.1:8180/test-mint`. It is not an anchor/preimage
+  field and not the private FIPS Cashu server URL. The threshold application
+  disables the corresponding legacy note authority. The accepted freeze leaves
+  this later assembly input unresolved, so the candidate is not yet promoted.
 
 ## Verification actually run
 
@@ -103,12 +111,13 @@ No SSH, service, mint transaction, firewall, credential, genesis-signing or
 deployment-cutover action was executed in this lane. Public activation still
 depends on the single deployment owner receiving and accepting:
 
-1. the raw payment receipt and independently computed matching hash, a
-   genesis-payment acceptance and reviewed public `/test-mint` URL; the
-   mint-only projection and active zero-fee SAT keyset are now pinned;
+1. a separately scoped owner-signing grant and resulting public authority
+   outputs; the frozen preimage is independently accepted and the mint
+   projection, active keyset and public Cashu identity are pinned; the later
+   genesis assembly must explicitly select its private `/test-mint` namespace;
 2. a fresh verified HTTPS/firewall evidence set and explicit issuance approval;
-3. the single canonical genesis timestamp captured at final input freeze plus
-   the exact signed deployment anchor (the chain ID is already selected);
+3. the exact signed deployment anchor derived from the frozen chain ID,
+   timestamp and preimage; no new timestamp may be sampled;
 4. the scoped APP/V1-V4 activation approval and, for the fault exercise, separate
    validator-4 stop and start approvals.
 
@@ -136,3 +145,6 @@ active keyset `001a10236c313f83`, and owner-verified receipt digest
 `b5bac575046f13e1b030662818fba7ebe89df442cff12a5f8ec3983ac1332add`.
 The raw receipt was not independently rehashed, and this is not genesis,
 threshold custody, browser-auction, HTTPS or deployment acceptance.
+That limitation is preserved as provenance, but the private raw receipt is not
+an input required by the production renderer: it consumes the accepted public
+projection file and that file's exact SHA-256.

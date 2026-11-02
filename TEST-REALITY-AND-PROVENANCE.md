@@ -41,6 +41,9 @@ That review independently checked the public keyset-ID digest, arithmetic,
 operation set, timing and request caps. It did not read the raw receipt or
 private proofs, independently recompute the reported receipt digest, or prove
 threshold custody, browser auction behavior, HTTPS, genesis or deployment.
+The authority renderer's actual receipt contract is only an owner-reviewed
+file plus its exact byte hash; therefore the accepted public projection and
+SHA-256 are sufficient for that contract without transferring private proofs.
 
 ## Mint transport provenance
 

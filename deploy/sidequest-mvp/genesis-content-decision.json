@@ -1,20 +1,38 @@
 {
   "schema": "PLEBEIAN_SIDEQUEST_GENESIS_CONTENT_DECISION_V1",
-  "status": "OWNER_CONTENT_SELECTION_APPROVED_TIMESTAMP_DEFERRED",
+  "status": "OWNER_CONTENT_FROZEN_UNSIGNED_INDEPENDENT_REVIEW_ACCEPTED",
   "ownerApprovalEvidence": {
     "messageId": "Sentinel_0229af7bf3308191ad9e9f23f189e586",
     "reportedAtUtcMinute": "2026-11-02T16:18Z",
     "approvedChoicesOnly": true
   },
   "chainId": "plebeian-auctions-mvp-20261102",
-  "canonicalGenesisTimeUtc": null,
+  "canonicalGenesisTimeUtc": "2026-11-02T18:35:21Z",
+  "canonicalFreeze": {
+    "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-signing-inputs-freeze-r1/INPUTS-FROZEN.json",
+    "bytes": 4790,
+    "sha256": "e8639dae8da64d5d2c35721c43c7097af2a4844eaedd0076ad62ad38d4f9c9c2",
+    "singleClockSample": true,
+    "allLanesMustConsumeUnchanged": true,
+    "independentReview": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-signing-inputs-freeze-r1-independent-review-20261102/INDEPENDENT-REVIEW.md",
+      "bytes": 5917,
+      "sha256": "4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d"
+    }
+  },
+  "unsignedSigningPreimage": {
+    "recordPath": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-signing-inputs-freeze-r1/SIGNING-PREIMAGE.json",
+    "recordBytes": 3298,
+    "recordSha256": "1a002f14248fb052220bb40bd1070ef89fb38eb46c6653b68d01b49cd7915a8a",
+    "messageBytes": 2077,
+    "messageSha256": "757b4855ed30d05d474636f60ecfa4e8388ef841ba27b39fb83c127e4f0c4d6b"
+  },
   "canonicalGenesisTimePolicy": {
     "rule": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE",
     "requiredFormat": "CANONICAL_RFC3339_NANO_UTC_Z",
     "freezeRequires": [
-      "independently accepted payment-conformance receipt and exact SHA-256",
+      "owner-reviewed sanitized payment-conformance projection file and SHA-256 required by the production renderer",
       "accepted active SAT keyset ID",
-      "reviewed https://139.162.161.233/test-mint transport URL",
       "exact accepted DKG and separated runtime bindings",
       "fresh authority output root selected for the scoped signing action"
     ],
@@ -23,6 +41,9 @@
   "authority": {
     "contentSelectionApproved": true,
     "timestampCaptureAuthorizedBeforeFreeze": false,
+    "timestampCapturedAtFinalFreeze": true,
+    "independentFreezeReviewPending": false,
+    "independentFreezeReviewAccepted": true,
     "deploymentAnchorSigningApproved": false,
     "releaseInstallAuthorized": false,
     "unitInstallAuthorized": false,

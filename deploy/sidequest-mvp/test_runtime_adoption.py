@@ -108,12 +108,12 @@ class RuntimeAdoptionFixture(unittest.TestCase):
             self.assertFalse(inert_result["ready"])
             self.assertEqual(inert_result["status"], "INERT_MISSING_INPUTS_NOT_INSTALLABLE")
             self.assertNotIn("selectedOwnerContent.chainId", inert_result["missing"])
-            self.assertIn("deferredFreezeValue.canonicalGenesisTimeUtc", inert_result["missing"])
-            self.assertIn("acceptedPaymentEvidence.acceptedForGenesis", inert_result["missing"])
-            self.assertIn("acceptedPaymentEvidence.rawReceiptIndependentlyHashed", inert_result["missing"])
-            self.assertIn("acceptedPaymentEvidence.genesisAcceptancePath", inert_result["missing"])
-            self.assertNotIn("acceptedPaymentEvidence.paymentConformanceReceiptSha256", inert_result["missing"])
-            self.assertNotIn("acceptedPaymentEvidence.activeSatKeysetId", inert_result["missing"])
+            self.assertNotIn("frozenGenesisValue.canonicalGenesisTimeUtc", inert_result["missing"])
+            self.assertIn("acceptedPaymentEvidence.testMintAssemblyUrl", inert_result["missing"])
+            self.assertFalse(any(
+                value.startswith("acceptedPaymentEvidence.") and value != "acceptedPaymentEvidence.testMintAssemblyUrl"
+                for value in inert_result["missing"]
+            ))
             self.assertNotIn("acceptedExistingInputs.ownerApprovalPublicKey", inert_result["missing"])
             self.assertEqual(parse_env(inert_root / "APP/friday.env")["POC_FRIDAY_BROWSER_READY"], "false")
             with self.assertRaises(ValueError):
@@ -133,19 +133,7 @@ class RuntimeAdoptionFixture(unittest.TestCase):
                 "chainId": "plebeian-auctions-mvp-20261102",
                 "canonicalGenesisTimePolicy": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE",
             }
-            decisions["deferredFreezeValue"] = {"canonicalGenesisTimeUtc": "2026-11-03T00:00:00Z"}
-            decisions["acceptedPaymentEvidence"] = {
-                "paymentConformanceReceiptPath": "/fixture/payment-conformance.json",
-                "paymentConformanceReceiptSha256": "b5bac575046f13e1b030662818fba7ebe89df442cff12a5f8ec3983ac1332add",
-                "activeSatKeysetId": "001a10236c313f83",
-                "reviewedTestMintTransportUrl": "https://139.162.161.233/test-mint",
-                "mintOnlyAcceptancePath": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md",
-                "mintOnlyAcceptanceSha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da",
-                "rawReceiptIndependentlyHashed": True,
-                "genesisAcceptancePath": "/fixture/genesis-payment-acceptance.md",
-                "genesisAcceptanceSha256": pin,
-                "acceptedForGenesis": True,
-            }
+            decisions["acceptedPaymentEvidence"]["testMintAssemblyUrl"] = decisions["acceptedPaymentEvidence"]["sourceCompatibleTestMintAssemblyCandidate"]
             decisions["derivedRuntimeOutputs"] = {
                 "deploymentAnchorSha256": pin,
                 "networkFactsSha256": pin,

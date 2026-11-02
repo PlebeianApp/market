@@ -38,7 +38,7 @@
     "paymentConformanceReceiptPath": null,
     "paymentConformanceReceiptSha256": null,
     "activeSatKeysetId": null,
-    "reviewedTestMintTransportUrl": null,
+    "testMintAssemblyUrl": null,
     "deploymentAnchorSha256": null,
     "networkFactsSha256": null,
     "browserPinsSha256": null,

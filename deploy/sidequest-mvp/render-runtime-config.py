@@ -60,9 +60,9 @@ def valid_genesis_time(value: object) -> bool:
     return parsed.year > 1
 
 
-def readiness(decisions: dict, payment_projection: dict) -> tuple[bool, list[str]]:
+def readiness(decisions: dict, payment_projection: dict, plan: dict) -> tuple[bool, list[str]]:
     selected = decisions["selectedOwnerContent"]
-    deferred = decisions["deferredFreezeValue"]
+    frozen = decisions["frozenGenesisValue"]
     payment = decisions["acceptedPaymentEvidence"]
     derived = decisions["derivedRuntimeOutputs"]
     authority = decisions["authority"]
@@ -72,24 +72,21 @@ def readiness(decisions: dict, payment_projection: dict) -> tuple[bool, list[str
         missing.append("selectedOwnerContent.chainId")
     if selected["canonicalGenesisTimePolicy"] != "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE":
         missing.append("selectedOwnerContent.canonicalGenesisTimePolicy")
-    if not valid_genesis_time(deferred["canonicalGenesisTimeUtc"]):
-        missing.append("deferredFreezeValue.canonicalGenesisTimeUtc")
-    if not payment["acceptedForGenesis"]:
-        missing.append("acceptedPaymentEvidence.acceptedForGenesis")
-    if not payment["rawReceiptIndependentlyHashed"]:
-        missing.append("acceptedPaymentEvidence.rawReceiptIndependentlyHashed")
-    if not isinstance(payment["genesisAcceptancePath"], str) or not payment["genesisAcceptancePath"].startswith("/"):
-        missing.append("acceptedPaymentEvidence.genesisAcceptancePath")
-    if not hex_value(payment["genesisAcceptanceSha256"], 64):
-        missing.append("acceptedPaymentEvidence.genesisAcceptanceSha256")
-    if not isinstance(payment["paymentConformanceReceiptPath"], str) or not payment["paymentConformanceReceiptPath"].startswith("/"):
+    if not valid_genesis_time(frozen["canonicalGenesisTimeUtc"]):
+        missing.append("frozenGenesisValue.canonicalGenesisTimeUtc")
+    projection_source = plan["acceptedPublicSources"]["paymentProjection"]
+    if payment["paymentConformanceReceiptPath"] != projection_source["path"]:
         missing.append("acceptedPaymentEvidence.paymentConformanceReceiptPath")
-    if payment["paymentConformanceReceiptSha256"] != payment_projection["receiptSha256"]:
+    if payment["paymentConformanceReceiptSha256"] != projection_source["sha256"]:
         missing.append("acceptedPaymentEvidence.paymentConformanceReceiptSha256")
     if payment["activeSatKeysetId"] != payment_projection["activeSatKeysetId"]:
         missing.append("acceptedPaymentEvidence.activeSatKeysetId")
-    if payment["reviewedTestMintTransportUrl"] != "https://139.162.161.233/test-mint":
-        missing.append("acceptedPaymentEvidence.reviewedTestMintTransportUrl")
+    if payment["testMintAssemblyUrl"] != plan["acceptedExistingInputs"]["sourceCompatibleTestMintAssemblyCandidate"]:
+        missing.append("acceptedPaymentEvidence.testMintAssemblyUrl")
+    if payment["cashuMintUrl"] != plan["acceptedExistingInputs"]["canonicalCashuMintUrl"]:
+        missing.append("acceptedPaymentEvidence.cashuMintUrl")
+    if payment["conformanceFipsServerUrl"] != payment_projection["testMintUrl"]:
+        missing.append("acceptedPaymentEvidence.conformanceFipsServerUrl")
     for key in ("deploymentAnchorSha256", "networkFactsSha256", "browserPinsSha256", "healthPinsSha256", "observerReceiptSha256"):
         if not hex_value(derived[key], 64):
             missing.append("derivedRuntimeOutputs." + key)
@@ -111,8 +108,8 @@ def validate_payment_projection(payment: dict, plan: dict, bootstrap: dict) -> N
     require(keyset_id == plan["acceptedExistingInputs"]["projectedActiveSatKeysetId"], "PAYMENT_PROJECTION_KEYSET")
     require(digest(keyset_id.encode("ascii")) == payment["activeSatKeysetIdSha256"], "PAYMENT_PROJECTION_KEYSET_DIGEST")
     require(payment["activeSatKeysetIdSha256"] == plan["acceptedExistingInputs"]["bootstrapActiveKeysetDigest"], "PAYMENT_BOOTSTRAP_KEYSET_DIGEST")
-    require(payment["receiptSha256"] == plan["acceptedExistingInputs"]["projectedPaymentReceiptSha256Claim"], "PAYMENT_PROJECTION_RECEIPT_CLAIM")
-    require(plan["acceptedExistingInputs"]["paymentProjectionGenesisAccepted"] is False, "PAYMENT_PROJECTION_PREACCEPTED")
+    require(payment["receiptSha256"] == plan["acceptedExistingInputs"]["underlyingRawReceiptSha256OwnerVerifiedOnly"], "PAYMENT_PROJECTION_RECEIPT_CLAIM")
+    require(plan["acceptedExistingInputs"]["satisfiesProductionReceiptFileHashContract"] is True, "PAYMENT_PRODUCTION_RECEIPT_CONTRACT")
     require(payment["inputFeePpk"] == 0, "PAYMENT_PROJECTION_FEES")
     require(payment["transport"] == {
         "policy": "EXACT_FIPS_ORIGIN_NO_REDIRECT_BOUNDED_ALL_CLIENTS",
@@ -223,6 +220,9 @@ def main() -> int:
     runtime = sources["runtimeBinding"]
     prerequisites = sources["prerequisites"]
     genesis_decision = sources["genesisContentDecision"]
+    genesis_freeze = sources["genesisInputFreeze"]
+    genesis_preimage = sources["genesisSigningPreimage"]
+    genesis_review = sources["genesisFreezeReview"]
     payment_projection = sources["paymentProjection"]
     payment_reconciliation = sources["paymentReconciliation"]
     require(runtime["deploymentId"] == bootstrap["deploymentId"], "DEPLOYMENT_BINDING")
@@ -236,11 +236,14 @@ def main() -> int:
     require(prerequisites["ownerPublicKey"] == plan["acceptedExistingInputs"]["ownerApprovalPublicKey"], "OWNER_PUBLIC_KEY")
     require(genesis_decision["schema"] == "PLEBEIAN_SIDEQUEST_GENESIS_CONTENT_DECISION_V1", "GENESIS_DECISION_SCHEMA")
     require(genesis_decision["chainId"] == plan["acceptedExistingInputs"]["selectedChainId"], "GENESIS_DECISION_CHAIN")
-    require(genesis_decision["canonicalGenesisTimeUtc"] is None, "GENESIS_DECISION_TIMESTAMP_PRESET")
+    require(genesis_decision["canonicalGenesisTimeUtc"] == genesis_freeze["genesisTimeUtc"], "GENESIS_DECISION_TIMESTAMP")
     require(genesis_decision["canonicalGenesisTimePolicy"]["rule"] == plan["acceptedExistingInputs"]["canonicalGenesisTimePolicy"], "GENESIS_DECISION_TIME_POLICY")
     require(genesis_decision["authority"] == {
         "contentSelectionApproved": True,
         "timestampCaptureAuthorizedBeforeFreeze": False,
+        "timestampCapturedAtFinalFreeze": True,
+        "independentFreezeReviewPending": False,
+        "independentFreezeReviewAccepted": True,
         "deploymentAnchorSigningApproved": False,
         "releaseInstallAuthorized": False,
         "unitInstallAuthorized": False,
@@ -252,13 +255,38 @@ def main() -> int:
         "chainId": genesis_decision["chainId"],
         "canonicalGenesisTimePolicy": genesis_decision["canonicalGenesisTimePolicy"]["rule"],
     }, "DECISIONS_GENESIS_CONTENT")
+    require(genesis_freeze["schema"] == "CANONICAL_GENESIS_SIGNING_INPUT_FREEZE_V1", "GENESIS_FREEZE_SCHEMA")
+    require(genesis_freeze["status"] == "UNSIGNED_FROZEN_CONTENT_REQUIRES_REVIEW_NO_EXECUTION_AUTHORITY", "GENESIS_FREEZE_STATUS")
+    require(genesis_freeze["chainId"] == genesis_decision["chainId"], "GENESIS_FREEZE_CHAIN")
+    require(genesis_freeze["genesisTimeUtc"] == plan["acceptedExistingInputs"]["canonicalGenesisTimeUtc"], "GENESIS_FREEZE_TIME")
+    require(genesis_freeze["inputs"]["mintPublicProjection"]["sha256"] == plan["acceptedExistingInputs"]["paymentProjectionFileSha256"], "GENESIS_FREEZE_PAYMENT")
+    require(genesis_freeze["activeSatKeysetId"] == plan["acceptedExistingInputs"]["projectedActiveSatKeysetId"], "GENESIS_FREEZE_KEYSET")
+    require(genesis_freeze["cashuMintIdentity"] == plan["acceptedExistingInputs"]["canonicalCashuMintUrl"], "GENESIS_FREEZE_CASHU_MINT")
+    require(genesis_freeze["legacyGoTestMintUrl"] == "UNRESOLVED_SEPARATE_ASSEMBLY_FIELD_REQUIRES_TEST_MINT_PATH_NOT_AN_ANCHOR_INPUT", "GENESIS_FREEZE_TEST_MINT_SCOPE")
+    require(genesis_preimage["schema"] == "GO_DEPLOYMENT_ANCHOR_UNSIGNED_PREIMAGE_V1", "GENESIS_PREIMAGE_SCHEMA")
+    require(genesis_preimage["bytes"] == plan["acceptedExistingInputs"]["unsignedSigningMessageBytes"], "GENESIS_PREIMAGE_BYTES")
+    require(genesis_preimage["sha256"] == plan["acceptedExistingInputs"]["unsignedSigningMessageSha256"], "GENESIS_PREIMAGE_DIGEST")
+    require(genesis_preimage["genesisTimeUtc"] == genesis_freeze["genesisTimeUtc"], "GENESIS_PREIMAGE_TIME")
+    require(genesis_review["rawSha256"] == plan["acceptedExistingInputs"]["independentFreezeReviewSha256"], "GENESIS_FREEZE_REVIEW")
+    require(plan["acceptedExistingInputs"]["independentFreezeReviewPending"] is False, "GENESIS_FREEZE_REVIEW_PENDING")
+    require(decisions["frozenGenesisValue"] == {
+        "canonicalGenesisTimeUtc": genesis_freeze["genesisTimeUtc"],
+        "canonicalFreezeSha256": plan["acceptedExistingInputs"]["canonicalGenesisInputFreezeSha256"],
+        "unsignedSigningMessageBytes": genesis_preimage["bytes"],
+        "unsignedSigningMessageSha256": genesis_preimage["sha256"],
+        "independentFreezeReviewPending": False,
+        "independentFreezeReviewSha256": genesis_review["rawSha256"],
+        "signatureGenerated": False,
+    }, "DECISIONS_GENESIS_FREEZE")
     validate_payment_projection(payment_projection, plan, bootstrap)
     require(payment_reconciliation["rawSha256"] == plan["acceptedExistingInputs"]["mintOnlyProjectionAcceptanceSha256"], "PAYMENT_RECONCILIATION_DIGEST")
     require(plan["acceptedExistingInputs"]["mintOnlyProjectionAccepted"] is True, "PAYMENT_MINT_ONLY_NOT_ACCEPTED")
     require(plan["acceptedExistingInputs"]["rawReceiptIndependentlyHashed"] is False, "PAYMENT_RAW_RECEIPT_HASH_OVERCLAIM")
     require(decisions["acceptedPaymentEvidence"]["mintOnlyAcceptancePath"] == plan["acceptedPublicSources"]["paymentReconciliation"]["path"], "PAYMENT_MINT_ONLY_ACCEPTANCE_PATH")
     require(decisions["acceptedPaymentEvidence"]["mintOnlyAcceptanceSha256"] == payment_reconciliation["rawSha256"], "PAYMENT_MINT_ONLY_ACCEPTANCE_DIGEST")
-    ready, missing = readiness(decisions, payment_projection)
+    require(decisions["acceptedPaymentEvidence"]["underlyingRawReceiptSha256OwnerVerifiedOnly"] == payment_projection["receiptSha256"], "PAYMENT_RAW_RECEIPT_PROVENANCE")
+    require(decisions["acceptedPaymentEvidence"]["cashuMintUrl"] == bootstrap["application"]["mintOrigin"], "PAYMENT_CASHU_MINT_IDENTITY")
+    ready, missing = readiness(decisions, payment_projection, plan)
 
     args.output_root.mkdir(mode=0o755)
     outputs: dict[str, dict] = {}
@@ -295,11 +323,11 @@ def main() -> int:
     derived = decisions["derivedRuntimeOutputs"]
     template["requiredInputs"] = {
         "chainId": decisions["selectedOwnerContent"]["chainId"],
-        "canonicalGenesisTimeUtc": decisions["deferredFreezeValue"]["canonicalGenesisTimeUtc"],
+        "canonicalGenesisTimeUtc": decisions["frozenGenesisValue"]["canonicalGenesisTimeUtc"],
         "paymentConformanceReceiptPath": payment["paymentConformanceReceiptPath"],
         "paymentConformanceReceiptSha256": payment["paymentConformanceReceiptSha256"],
         "activeSatKeysetId": payment["activeSatKeysetId"],
-        "reviewedTestMintTransportUrl": payment["reviewedTestMintTransportUrl"],
+        "testMintAssemblyUrl": payment["testMintAssemblyUrl"],
         **derived,
         "deploymentAnchorSigningApproved": decisions["authority"]["deploymentAnchorSigningApproved"],
         "serviceActivationApproved": decisions["authority"]["serviceActivationAuthorized"],

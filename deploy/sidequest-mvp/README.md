@@ -78,27 +78,48 @@ The following are already accepted and must be reused, not requested again:
   exact separated runtime binding;
 - canonical mint origin `https://139.162.161.233` and the selected 10,000 sats
   per-request / 50,000 advisory balance limits;
-- accepted GET-only bootstrap evidence, receipt hash and active-keyset digest.
+- accepted GET-only bootstrap evidence, receipt hash and active-keyset digest;
 - owner-selected chain ID `plebeian-auctions-mvp-20261102` and the policy to
   capture current UTC exactly once when the final signing inputs are frozen.
 - the owner-supplied payment projection and mint-only reconciliation, including
   active SAT keyset ID `001a10236c313f83`, its independently recomputed public
   ID digest, and the owner-verified receipt digest claim.
 
-No genesis content choice remains. The canonical UTC genesis timestamp value
-is deliberately unset: it must be captured once, in canonical RFC3339 UTC
-form, at the final signing-input freeze after the payment/keyset/transport and
-fresh authority output-root inputs are accepted. Every lane and host must reuse
-that one frozen value unchanged; it must not be sampled early or invented.
+No genesis content choice remains. The single canonical UTC timestamp was
+captured at the final input freeze as `2026-11-02T18:35:21Z`; every lane and
+host must reuse it unchanged. The frozen input record SHA-256 is
+`e8639dae8da64d5d2c35721c43c7097af2a4844eaedd0076ad62ad38d4f9c9c2`.
+Its unsigned 2,077-byte signing message has SHA-256
+`757b4855ed30d05d474636f60ecfa4e8388ef841ba27b39fb83c127e4f0c4d6b`.
+Independent freeze review is accepted at SHA-256
+`4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d`;
+no signature or execution authority was created.
 
-The payment projection is accepted as actual mint-only evidence, not as a
-genesis input or full auction result. The remaining payment/genesis bindings
-are not owner content choices:
+The production authority renderer requires an owner-reviewed receipt file and
+the SHA-256 of those exact bytes. It checks that the file exists, is 2 bytes to
+1 MiB and matches the supplied digest; it does not require the private raw
+receipt, proofs or a separate genesis-payment approval. The accepted sanitized
+projection satisfies that existing contract at path
+`/home/maximoto/Documents/Codex/2026-10-26/task-3/prototype/wednesday-shell-r20-core/mint-payment-public-receipt-projection-r1/OWNER-SUPPLIED-PUBLIC-PROJECTION-R1.json`
+with SHA-256
+`f671be3673fed9f074cd142640e38bc7c2fb98002881164895477e1f4d9523da`.
+The underlying raw-receipt digest `b5bac575...` remains owner-verified
+provenance and is not substituted for the projection file's digest. No private
+proof transfer is required.
 
-- raw payment-conformance receipt path and an independently computed matching
-  SHA-256 (the current digest is owner-verified only);
-- a separate genesis-payment acceptance record;
-- reviewed `/test-mint` transport URL.
+Three mint URL roles are distinguished without conflation; the Cashu URLs are
+bound and the later legacy assembly value remains a candidate:
+
+- `http://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:3438` is the private FIPS
+  Cashu server transport used by the conformance client;
+- `https://139.162.161.233` is the canonical public Cashu mint identity already
+  fixed by the separated bootstrap;
+- `http://127.0.0.1:8180/test-mint` is the source- and topology-compatible
+  candidate for the separate loopback legacy-note namespace required by
+  `assemble-friday-comet`. The FROST application has no corresponding legacy
+  private key and the namespace is not the Cashu server. The accepted anchor
+  freeze deliberately leaves this later assembly input unresolved, so it is
+  not silently promoted to a selected value here.
 
 The deployment anchor/FundingAbort bootstrap, network facts/genesis bundle,
 browser/health pins and observer receipt/node ID are downstream products after
@@ -134,8 +155,9 @@ The remaining changes must stay separate and exact:
 1. APP inactive successor install: create the immutable site release, retain
    the current unit, reload systemd, and leave the site inactive. No config or
    service action.
-2. Runtime configuration/genesis: render and install the selected chain,
-   one freeze-time genesis timestamp, accepted payment/keyset/mint inputs,
+2. Runtime configuration/genesis: after a separate signing grant, render and
+   install the selected chain, exact frozen
+   genesis timestamp, accepted payment/keyset/mint inputs,
    deployment anchor, observer, network, browser and health pins. No DKG
    repeat.
 3. Runtime artifact adoption: install the exact APP successor release and

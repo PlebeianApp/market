@@ -1,6 +1,6 @@
 {
   "schema": "PLEBEIAN_SIDEQUEST_MVP_DEPLOYMENT_INPUTS_V1",
-  "status": "PUBLIC_INPUTS_BOUND_OWNER_AND_MINT_INPUTS_REQUIRED",
+  "status": "PUBLIC_INPUTS_BOUND_DERIVED_OUTPUTS_AND_ACTION_SCOPE_REQUIRED",
   "valueProfile": "FAKE_MONEY_ONLY",
   "deploymentId": "friday-demo-20261030-separated-v1",
   "application": {
@@ -49,8 +49,23 @@
     },
     "genesisContentDecision": {
       "path": "/home/maximoto/Documents/Codex/2026-11-02/task/plebeian-mvp-r4/deploy/sidequest-mvp/genesis-content-decision.json",
-      "bytes": 1423,
-      "sha256": "ae17243d7432cdce69fe822b1ba3b73e6159406b5aac5b8e89e423ff3239b2c4"
+      "bytes": 2563,
+      "sha256": "afd2d2e0a9eda3c9a7100d82bad37380486acd71731e9ca03eb62f0dfd868371"
+    },
+    "canonicalGenesisInputFreeze": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-signing-inputs-freeze-r1/INPUTS-FROZEN.json",
+      "bytes": 4790,
+      "sha256": "e8639dae8da64d5d2c35721c43c7097af2a4844eaedd0076ad62ad38d4f9c9c2"
+    },
+    "unsignedGenesisSigningPreimage": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-signing-inputs-freeze-r1/SIGNING-PREIMAGE.json",
+      "bytes": 3298,
+      "sha256": "1a002f14248fb052220bb40bd1070ef89fb38eb46c6653b68d01b49cd7915a8a"
+    },
+    "genesisFreezeIndependentReview": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-signing-inputs-freeze-r1-independent-review-20261102/INDEPENDENT-REVIEW.md",
+      "bytes": 5917,
+      "sha256": "4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d"
     },
     "ownerPaymentProjection": {
       "path": "/home/maximoto/Documents/Codex/2026-10-26/task-3/prototype/wednesday-shell-r20-core/mint-payment-public-receipt-projection-r1/OWNER-SUPPLIED-PUBLIC-PROJECTION-R1.json",
@@ -92,6 +107,9 @@
     "mintOnlyAcceptancePath": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md",
     "mintOnlyAcceptanceSha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da",
     "acceptedAsActualMintOnlyEvidence": true,
+    "productionReceiptPath": "/home/maximoto/Documents/Codex/2026-10-26/task-3/prototype/wednesday-shell-r20-core/mint-payment-public-receipt-projection-r1/OWNER-SUPPLIED-PUBLIC-PROJECTION-R1.json",
+    "productionReceiptSha256": "f671be3673fed9f074cd142640e38bc7c2fb98002881164895477e1f4d9523da",
+    "satisfiesProductionReceiptFileHashContract": true,
     "rawReceiptPath": null,
     "rawReceiptIndependentlyHashed": false,
     "independentlyAcceptedForGenesis": false,
@@ -108,20 +126,27 @@
     "chainId": "plebeian-auctions-mvp-20261102",
     "canonicalGenesisTimePolicy": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE"
   },
-  "deferredFreezeValue": {
-    "canonicalGenesisTimeUtc": null
+  "frozenGenesisValue": {
+    "canonicalGenesisTimeUtc": "2026-11-02T18:35:21Z",
+    "canonicalFreezeSha256": "e8639dae8da64d5d2c35721c43c7097af2a4844eaedd0076ad62ad38d4f9c9c2",
+    "unsignedSigningMessageBytes": 2077,
+    "unsignedSigningMessageSha256": "757b4855ed30d05d474636f60ecfa4e8388ef841ba27b39fb83c127e4f0c4d6b",
+    "independentFreezeReviewPending": false,
+    "independentFreezeReviewSha256": "4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d",
+    "signatureGenerated": false
   },
-  "pendingAcceptedPaymentEvidence": {
-    "paymentConformanceReceiptPath": null,
-    "paymentConformanceReceiptSha256": "b5bac575046f13e1b030662818fba7ebe89df442cff12a5f8ec3983ac1332add",
+  "boundPaymentEvidence": {
+    "paymentConformanceReceiptPath": "/home/maximoto/Documents/Codex/2026-10-26/task-3/prototype/wednesday-shell-r20-core/mint-payment-public-receipt-projection-r1/OWNER-SUPPLIED-PUBLIC-PROJECTION-R1.json",
+    "paymentConformanceReceiptSha256": "f671be3673fed9f074cd142640e38bc7c2fb98002881164895477e1f4d9523da",
+    "underlyingRawReceiptSha256OwnerVerifiedOnly": "b5bac575046f13e1b030662818fba7ebe89df442cff12a5f8ec3983ac1332add",
     "activeSatKeysetId": "001a10236c313f83",
-    "reviewedTestMintTransportUrl": null,
+    "sourceCompatibleTestMintAssemblyCandidate": "http://127.0.0.1:8180/test-mint",
+    "selectedTestMintAssemblyUrl": null,
+    "canonicalCashuMintUrl": "https://139.162.161.233",
+    "conformanceFipsServerUrl": "http://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:3438",
     "mintOnlyAcceptancePath": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md",
     "mintOnlyAcceptanceSha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da",
-    "rawReceiptIndependentlyHashed": false,
-    "genesisAcceptancePath": null,
-    "genesisAcceptanceSha256": null,
-    "acceptedForGenesis": false
+    "privateProofTransferRequired": false
   },
   "pendingActionScope": {
     "freshAuthorityOutputRoot": null,
@@ -131,7 +156,7 @@
     "configurationInstallAuthorized": false,
     "serviceActivationAuthorized": false
   },
-  "derivedAfterOwnerContentAndPayment": {
+  "derivedAfterFrozenInputs": {
     "deploymentAnchorAndFundingAbortBootstrap": null,
     "networkFactsAndGenesisBundle": null,
     "browserAndHealthPins": null,

@@ -26,6 +26,7 @@ def require_file(record: dict) -> bytes:
 def main() -> None:
     config = load_json(CONFIG_PATH)
     assert config["schema"] == "PLEBEIAN_SIDEQUEST_MVP_DEPLOYMENT_INPUTS_V1"
+    assert config["status"] == "PUBLIC_INPUTS_BOUND_DERIVED_OUTPUTS_AND_ACTION_SCOPE_REQUIRED"
     assert config["valueProfile"] == "FAKE_MONEY_ONLY"
     accepted = config["acceptedPublicInputs"]
     for record in accepted.values():
@@ -34,6 +35,8 @@ def main() -> None:
     dkg = json.loads(require_file(accepted["authenticatedDkgResult"]))
     runtime = json.loads(require_file(accepted["separatedRuntimeBinding"]))
     genesis_decision = json.loads(require_file(accepted["genesisContentDecision"]))
+    genesis_freeze = json.loads(require_file(accepted["canonicalGenesisInputFreeze"]))
+    genesis_preimage = json.loads(require_file(accepted["unsignedGenesisSigningPreimage"]))
     payment_projection = json.loads(require_file(accepted["ownerPaymentProjection"]))
     threshold = config["threshold"]
     assert dkg == runtime["result"], "runtime does not embed the accepted DKG result"
@@ -108,6 +111,9 @@ def main() -> None:
         "mintOnlyAcceptancePath": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md",
         "mintOnlyAcceptanceSha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da",
         "acceptedAsActualMintOnlyEvidence": True,
+        "productionReceiptPath": "/home/maximoto/Documents/Codex/2026-10-26/task-3/prototype/wednesday-shell-r20-core/mint-payment-public-receipt-projection-r1/OWNER-SUPPLIED-PUBLIC-PROJECTION-R1.json",
+        "productionReceiptSha256": "f671be3673fed9f074cd142640e38bc7c2fb98002881164895477e1f4d9523da",
+        "satisfiesProductionReceiptFileHashContract": True,
         "rawReceiptPath": None,
         "rawReceiptIndependentlyHashed": False,
         "independentlyAcceptedForGenesis": False,
@@ -122,19 +128,28 @@ def main() -> None:
     }
 
     assert genesis_decision["schema"] == "PLEBEIAN_SIDEQUEST_GENESIS_CONTENT_DECISION_V1"
-    assert genesis_decision["status"] == "OWNER_CONTENT_SELECTION_APPROVED_TIMESTAMP_DEFERRED"
+    assert genesis_decision["status"] == "OWNER_CONTENT_FROZEN_UNSIGNED_INDEPENDENT_REVIEW_ACCEPTED"
     assert genesis_decision["ownerApprovalEvidence"] == {
         "messageId": "Sentinel_0229af7bf3308191ad9e9f23f189e586",
         "reportedAtUtcMinute": "2026-11-02T16:18Z",
         "approvedChoicesOnly": True,
     }
     assert genesis_decision["chainId"] == "plebeian-auctions-mvp-20261102"
-    assert genesis_decision["canonicalGenesisTimeUtc"] is None
+    assert genesis_decision["canonicalGenesisTimeUtc"] == "2026-11-02T18:35:21Z"
     assert genesis_decision["canonicalGenesisTimePolicy"]["rule"] == "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE"
     assert genesis_decision["canonicalGenesisTimePolicy"]["requiredFormat"] == "CANONICAL_RFC3339_NANO_UTC_Z"
+    assert genesis_decision["canonicalGenesisTimePolicy"]["freezeRequires"] == [
+        "owner-reviewed sanitized payment-conformance projection file and SHA-256 required by the production renderer",
+        "accepted active SAT keyset ID",
+        "exact accepted DKG and separated runtime bindings",
+        "fresh authority output root selected for the scoped signing action",
+    ]
     assert genesis_decision["authority"] == {
         "contentSelectionApproved": True,
         "timestampCaptureAuthorizedBeforeFreeze": False,
+        "timestampCapturedAtFinalFreeze": True,
+        "independentFreezeReviewPending": False,
+        "independentFreezeReviewAccepted": True,
         "deploymentAnchorSigningApproved": False,
         "releaseInstallAuthorized": False,
         "unitInstallAuthorized": False,
@@ -146,21 +161,48 @@ def main() -> None:
         "chainId": "plebeian-auctions-mvp-20261102",
         "canonicalGenesisTimePolicy": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE",
     }
-    assert config["deferredFreezeValue"] == {
-        "canonicalGenesisTimeUtc": None,
+    assert genesis_freeze["schema"] == "CANONICAL_GENESIS_SIGNING_INPUT_FREEZE_V1"
+    assert genesis_freeze["status"] == "UNSIGNED_FROZEN_CONTENT_REQUIRES_REVIEW_NO_EXECUTION_AUTHORITY"
+    assert genesis_freeze["chainId"] == "plebeian-auctions-mvp-20261102"
+    assert genesis_freeze["genesisTimeUtc"] == "2026-11-02T18:35:21Z"
+    assert genesis_freeze["allLanesMustConsumeThisTimestampAndInputSet"] is True
+    assert genesis_freeze["inputs"]["mintPublicProjection"]["sha256"] == accepted["ownerPaymentProjection"]["sha256"]
+    assert genesis_freeze["legacyGoTestMintUrl"] == "UNRESOLVED_SEPARATE_ASSEMBLY_FIELD_REQUIRES_TEST_MINT_PATH_NOT_AN_ANCHOR_INPUT"
+    assert genesis_preimage["schema"] == "GO_DEPLOYMENT_ANCHOR_UNSIGNED_PREIMAGE_V1"
+    assert genesis_preimage["bytes"] == 2077
+    assert genesis_preimage["sha256"] == "757b4855ed30d05d474636f60ecfa4e8388ef841ba27b39fb83c127e4f0c4d6b"
+    assert genesis_preimage["genesisTimeUtc"] == genesis_freeze["genesisTimeUtc"]
+    assert genesis_preimage["signatureGenerated"] is False
+    assert config["frozenGenesisValue"] == {
+        "canonicalGenesisTimeUtc": "2026-11-02T18:35:21Z",
+        "canonicalFreezeSha256": "e8639dae8da64d5d2c35721c43c7097af2a4844eaedd0076ad62ad38d4f9c9c2",
+        "unsignedSigningMessageBytes": 2077,
+        "unsignedSigningMessageSha256": "757b4855ed30d05d474636f60ecfa4e8388ef841ba27b39fb83c127e4f0c4d6b",
+        "independentFreezeReviewPending": False,
+        "independentFreezeReviewSha256": "4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d",
+        "signatureGenerated": False,
     }
-    assert config["pendingAcceptedPaymentEvidence"] == {
-        "paymentConformanceReceiptPath": None,
-        "paymentConformanceReceiptSha256": "b5bac575046f13e1b030662818fba7ebe89df442cff12a5f8ec3983ac1332add",
+    assert config["boundPaymentEvidence"] == {
+        "paymentConformanceReceiptPath": "/home/maximoto/Documents/Codex/2026-10-26/task-3/prototype/wednesday-shell-r20-core/mint-payment-public-receipt-projection-r1/OWNER-SUPPLIED-PUBLIC-PROJECTION-R1.json",
+        "paymentConformanceReceiptSha256": "f671be3673fed9f074cd142640e38bc7c2fb98002881164895477e1f4d9523da",
+        "underlyingRawReceiptSha256OwnerVerifiedOnly": "b5bac575046f13e1b030662818fba7ebe89df442cff12a5f8ec3983ac1332add",
         "activeSatKeysetId": "001a10236c313f83",
-        "reviewedTestMintTransportUrl": None,
+        "sourceCompatibleTestMintAssemblyCandidate": "http://127.0.0.1:8180/test-mint",
+        "selectedTestMintAssemblyUrl": None,
+        "canonicalCashuMintUrl": "https://139.162.161.233",
+        "conformanceFipsServerUrl": "http://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:3438",
         "mintOnlyAcceptancePath": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md",
         "mintOnlyAcceptanceSha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da",
-        "rawReceiptIndependentlyHashed": False,
-        "genesisAcceptancePath": None,
-        "genesisAcceptanceSha256": None,
-        "acceptedForGenesis": False,
+        "privateProofTransferRequired": False,
     }
+    assert config["boundPaymentEvidence"]["canonicalCashuMintUrl"] == config["application"]["mintOrigin"]
+    assert config["boundPaymentEvidence"]["sourceCompatibleTestMintAssemblyCandidate"] == "http://127.0.0.1:8180/test-mint"
+    assert config["boundPaymentEvidence"]["selectedTestMintAssemblyUrl"] is None
+    assert config["boundPaymentEvidence"]["sourceCompatibleTestMintAssemblyCandidate"] not in {
+        config["boundPaymentEvidence"]["canonicalCashuMintUrl"],
+        config["boundPaymentEvidence"]["conformanceFipsServerUrl"],
+    }
+    assert config["boundPaymentEvidence"]["conformanceFipsServerUrl"] == payment_projection["testMintUrl"]
     assert config["pendingActionScope"] == {
         "freshAuthorityOutputRoot": None,
         "deploymentAnchorSigningApproved": False,
@@ -169,11 +211,11 @@ def main() -> None:
         "configurationInstallAuthorized": False,
         "serviceActivationAuthorized": False,
     }
-    assert set(config["derivedAfterOwnerContentAndPayment"]) == {
+    assert set(config["derivedAfterFrozenInputs"]) == {
         "deploymentAnchorAndFundingAbortBootstrap", "networkFactsAndGenesisBundle",
         "browserAndHealthPins", "observerReceiptAndNodeId",
     }
-    assert all(value is None for value in config["derivedAfterOwnerContentAndPayment"].values())
+    assert all(value is None for value in config["derivedAfterFrozenInputs"].values())
     assert config["authority"] == {
         "ownerPrivateKeyRead": False,
         "remoteActions": False,

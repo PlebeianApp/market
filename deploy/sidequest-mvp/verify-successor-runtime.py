@@ -134,7 +134,7 @@ def verify(release_root: Path, bindings_path: Path, environment_path: Path, appl
     require(isinstance(required["activeSatKeysetId"], str) and required["activeSatKeysetId"], "ACTIVE_KEYSET")
     require(required["deploymentAnchorSigningApproved"] is True, "ANCHOR_NOT_APPROVED")
     require(required["serviceActivationApproved"] is True, "ACTIVATION_NOT_APPROVED")
-    require(required["reviewedTestMintTransportUrl"] == "https://139.162.161.233/test-mint", "MINT_URL")
+    require(required["testMintAssemblyUrl"] == "http://127.0.0.1:8180/test-mint", "MINT_URL")
 
     runtime_files = bindings["runtimeFiles"]
     environment_record = runtime_files["environment"]

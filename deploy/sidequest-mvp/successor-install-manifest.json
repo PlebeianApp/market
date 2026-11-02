@@ -79,8 +79,8 @@
       "name": "verify-sidequest-runtime.py",
       "sourcePath": "deploy/sidequest-mvp/verify-successor-runtime.py",
       "destination": "bin/verify-sidequest-runtime.py",
-      "bytes": 9509,
-      "sha256": "8b9b5e1159d5c15870df5d42c67c0d4d92b1afcf5fca74236bdb2d01d9a9f5a8",
+      "bytes": 9498,
+      "sha256": "35456a9169986c53c627e850a159d14a6ed8ac76001dedb2ccc988cc28d0e824",
       "sourceMode": "0644",
       "installMode": "0755"
     },
