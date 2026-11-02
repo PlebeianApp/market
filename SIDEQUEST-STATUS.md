@@ -38,6 +38,13 @@ not a claim that the public MVP is live.
 - The coordinator was also rebuilt as part of the coherent runtime set;
   consecutive same-path baseline-target builds were byte-identical. It does
   not itself perform mint HTTP reads.
+- A draft create-once APP successor installer now binds the exact old release,
+  new site binary, pre-start verifier and systemd unit. It retains the old unit,
+  journals publication, leaves the site inactive, and refuses production use
+  while its owner-install authority is false.
+- The runtime-binding template fails closed until payment, genesis, anchor,
+  observer, network, browser and health inputs plus exact configuration hashes
+  and scoped approvals are present.
 - A separate validator-4 recovery command now requires its own start approval,
   exact inactive-to-active unit transition, and a pinned four-signature Comet
   commit before sealing `active_rejoined`.
@@ -53,6 +60,10 @@ not a claim that the public MVP is live.
 - Mint encoding/adaptor regressions: 14 pass, 0 fail, 94 assertions.
 - Authority/terminal/signer CLI regressions: 10 pass, 0 fail, 49 assertions.
 - `git diff --check`: pass.
+- The composed successor-release fixture installed the actual 46 MB binary,
+  retained the predecessor unit, produced a receipt, passed the installed
+  pre-start verifier with complete synthetic public inputs, rejected the
+  blocked template and rejected a repeated install without receipt mutation.
 - The rebuilt executable started a loopback site plus four actual local Comet
   processes; all four reached height 6 with one block/app hash and four commit
   signatures, and the HTTP-served browser bundle matched the embedded asset.
@@ -91,8 +102,11 @@ Until the gates above are bound and the five persistent browser profiles run
 the journey against the live origin, deployment status remains **built and
 locally verified, not live**.
 
-Owner execution has now reported the corrected GET-only Coco bootstrap result
-`COCO_BOOTSTRAP_DIAGNOSTIC_R2_COMPLETE_MINT_STOPPED_NO_FUNDING`, receipt
-SHA-256 `a9452ede2dc7704036a9d1f9e5b18b53a6f4b0523d5438e50087f3e160599d9d`.
-Public receipt reconciliation is pending, so it is not yet an accepted bound
-input. No funding/payment conformance has run.
+The corrected GET-only Coco bootstrap is accepted as a bootstrap-only public
+milestone: acceptance report SHA-256
+`734ebc54830e867a3c77441f56d0c3019f08efee5b64a69959ea888110d342ad`,
+owner-verified receipt SHA-256
+`a9452ede2dc7704036a9d1f9e5b18b53a6f4b0523d5438e50087f3e160599d9d`,
+seven GETs and 17,479 accepted bytes, no funding or persisted wallet, with the
+mint stopped and settled. Payment conformance has still not run and remains a
+deployment blocker.

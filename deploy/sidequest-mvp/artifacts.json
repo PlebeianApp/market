@@ -2,6 +2,7 @@
   "schema": "PLEBEIAN_SIDEQUEST_MVP_ARTIFACTS_V1",
   "status": "LOCAL_BUILD_NOT_INSTALLED_NOT_AUTHORIZED",
   "sourceCodeCommit": "96c3000143d3d36c0da7a32de50acc7618eae16f",
+  "sourceCodeCommitScope": "compiled runtime artifacts; later deployment-handoff sources are pinned individually below",
   "valueProfile": "FAKE_MONEY_ONLY",
   "artifacts": [
     { "path": "internal/poc/static/friday-browser.js", "bytes": 1717244, "mode": "0644", "sha256": "dbfc4bd748685854e036098df93aa9604df8bd2e3d79d735934eb54055465a4f" },
@@ -16,6 +17,12 @@
     { "path": "cashu-wrapper/ts/coco-rail.ts", "sha256": "9d7eba6abef659ae98165c6d5aaa9a517e2121263f3e47613e72aafaaf72fc2b" },
     { "path": "cashu-wrapper/ts/demo-friday-acceptance-operator-cli.ts", "sha256": "d7eb58e30169a63227df5917ad676859bd0f93ac342b990d2000fe4cfc3c5fb8" },
     { "path": "deploy/friday/separated/nginx-normal.conf.example", "sha256": "64cebaff298d0832104880e92d74f4aa61a93302c5395ec293a6dbf2ce835eec" },
-    { "path": "deploy/friday/separated/nginx-recovery.conf.example", "sha256": "e870affc3789915406d1ba4b77002e32df3c4070d8f37fc9fe6cf85cb2abd124" }
+    { "path": "deploy/friday/separated/nginx-recovery.conf.example", "sha256": "e870affc3789915406d1ba4b77002e32df3c4070d8f37fc9fe6cf85cb2abd124" },
+    { "path": "deploy/sidequest-mvp/install-successor-release.py", "sha256": "67b02dcb24b0a63f3a2cb3ae7e18f9c5fbe39a21a029ae1b49c316b4cd669517" },
+    { "path": "deploy/sidequest-mvp/verify-successor-runtime.py", "sha256": "8b9b5e1159d5c15870df5d42c67c0d4d92b1afcf5fca74236bdb2d01d9a9f5a8" },
+    { "path": "deploy/sidequest-mvp/plebeian-friday-site-successor.service", "sha256": "a6f0f56f5abf1a4740d034abba402cbfc301aefd334b2963daa3c12d3b53b3e7" },
+    { "path": "deploy/sidequest-mvp/runtime-bindings.template.json", "sha256": "4d4526e684f03133d348c7ce666684a8fa785f5e66d8f8e24ac7abdf39bd6c23" },
+    { "path": "deploy/sidequest-mvp/successor-install-manifest.json", "sha256": "14c3b864f0d170338b61205acff51285a6e555dbfe6b9715adc0383e58dff43b" },
+    { "path": "deploy/sidequest-mvp/test_successor_release.py", "sha256": "9aa6f6d2f60496416c58ab205b976ef847d43e3b8f079426371ea6d589c9ffa7" }
   ]
 }

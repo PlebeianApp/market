@@ -41,6 +41,11 @@
       "bytes": 17716,
       "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a",
       "semanticDigest": "ae4fc0a988cfacac5beca7d28fbbed12ada64c851a751fb4dfa71de21529dc72"
+    },
+    "cocoBootstrapAcceptance": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-COCO-ENCODING-BOOTSTRAP-ACTUAL-RECEIPT-ACCEPTANCE-20261102.md",
+      "bytes": 5458,
+      "sha256": "734ebc54830e867a3c77441f56d0c3019f08efee5b64a69959ea888110d342ad"
     }
   },
   "threshold": {
@@ -55,11 +60,20 @@
     "maxPerRequest": 10000,
     "maxResultingBalanceAdvisory": 50000
   },
+  "acceptedBootstrapOnly": {
+    "ownerVerifiedReceiptSha256": "a9452ede2dc7704036a9d1f9e5b18b53a6f4b0523d5438e50087f3e160599d9d",
+    "requests": 7,
+    "acceptedResponseBytes": 17479,
+    "fundingPerformed": false,
+    "persistedWalletState": false,
+    "mintStoppedSettled": true,
+    "satisfiesPaymentConformance": false
+  },
   "missingOwnerAndMintInputs": {
     "chainId": null,
     "canonicalGenesisTimeUtc": null,
-    "mintConformanceReceiptPath": null,
-    "mintConformanceReceiptSha256": null,
+    "paymentConformanceReceiptPath": null,
+    "paymentConformanceReceiptSha256": null,
     "activeSatKeysetId": null,
     "reviewedTestMintTransportUrl": null,
     "freshAuthorityOutputRoot": null,

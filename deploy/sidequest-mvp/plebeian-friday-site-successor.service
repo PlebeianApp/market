@@ -1,0 +1,27 @@
+[Unit]
+Description=Plebeian Auctions side-quest fake-money site/API
+Wants=plebeian-friday-observer.service
+After=plebeian-friday-observer.service
+
+[Service]
+Type=simple
+User=plebeian-friday-site
+Group=plebeian-friday-public
+Slice=plebeian-friday.slice
+EnvironmentFile=/etc/plebeian-auctions-friday/friday.env
+ExecStartPre=/usr/bin/python3 -I -S -B /opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/verify-sidequest-runtime.py --release-root /opt/plebeian-auctions-friday/releases/sidequest-mvp-r4 --bindings /etc/plebeian-auctions-friday/sidequest-runtime-bindings.json --environment /etc/plebeian-auctions-friday/friday.env --application /etc/plebeian-auctions-friday/application.json
+ExecStart=/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/plebeian-auctions-mvp serve --home ${FRIDAY_NETWORK_ROOT} --listen 127.0.0.1:${FRIDAY_SITE_PORT}
+Restart=always
+RestartSec=5s
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+MemoryMax=160M
+TasksMax=128
+
+LogNamespace=plebeian-friday-separated
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200

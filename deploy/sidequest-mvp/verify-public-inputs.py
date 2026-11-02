@@ -45,10 +45,20 @@ def main() -> None:
     assert len({row["participantId"] for row in dkg["participants"]}) == 4
     assert threshold["minimumSigners"] == 3
 
+    assert config["acceptedBootstrapOnly"] == {
+        "ownerVerifiedReceiptSha256": "a9452ede2dc7704036a9d1f9e5b18b53a6f4b0523d5438e50087f3e160599d9d",
+        "requests": 7,
+        "acceptedResponseBytes": 17479,
+        "fundingPerformed": False,
+        "persistedWalletState": False,
+        "mintStoppedSettled": True,
+        "satisfiesPaymentConformance": False,
+    }
+
     missing = config["missingOwnerAndMintInputs"]
     allowed_nulls = {
-        "chainId", "canonicalGenesisTimeUtc", "mintConformanceReceiptPath",
-        "mintConformanceReceiptSha256", "activeSatKeysetId",
+        "chainId", "canonicalGenesisTimeUtc", "paymentConformanceReceiptPath",
+        "paymentConformanceReceiptSha256", "activeSatKeysetId",
         "reviewedTestMintTransportUrl", "freshAuthorityOutputRoot",
     }
     assert {key for key, value in missing.items() if value is None} == allowed_nulls
