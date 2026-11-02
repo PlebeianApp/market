@@ -7,6 +7,7 @@
   "corePredecessorReleaseRoot": "/opt/plebeian-auctions-friday/releases/separated-deploy-v1",
   "acceptedPublicSources": {
     "signedBootstrap": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/owner-pre-dkg-bootstrap-signing-r1/outputs/pre-dkg-bootstrap.signed.json", "bytes": 4875, "sha256": "e3b9c12d53d85d367390117dd669d4ec0228c94cfb4790ac4418246df7ad2aa9"},
+    "authenticatedDkgResult": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/dkg-attest-controls-r1/evidence/authenticated-dkg-result.json", "bytes": 17321, "sha256": "f16c7bf8eebf7ce29878f9e2a34c21c8974ad3bdef3372c364657dc7ee061877"},
     "runtimeBinding": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/post-dkg-genesis-prerequisites-r1/separated-runtime-binding.json", "bytes": 17716, "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a"},
     "prerequisites": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/post-dkg-genesis-prerequisites-r1/PREREQUISITES.json", "bytes": 10590, "sha256": "8afd2ec097f793706a46d511d274ad91d41476d93c633a11d96a0ebb63395398"},
     "bootstrapAcceptance": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-COCO-ENCODING-BOOTSTRAP-ACTUAL-RECEIPT-ACCEPTANCE-20261102.md", "bytes": 5458, "sha256": "734ebc54830e867a3c77441f56d0c3019f08efee5b64a69959ea888110d342ad"},
@@ -14,6 +15,10 @@
     "genesisInputFreeze": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-signing-inputs-freeze-r1/INPUTS-FROZEN.json", "bytes": 4790, "sha256": "e8639dae8da64d5d2c35721c43c7097af2a4844eaedd0076ad62ad38d4f9c9c2"},
     "genesisSigningPreimage": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-signing-inputs-freeze-r1/SIGNING-PREIMAGE.json", "bytes": 3298, "sha256": "1a002f14248fb052220bb40bd1070ef89fb38eb46c6653b68d01b49cd7915a8a"},
     "genesisFreezeReview": {"path": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-signing-inputs-freeze-r1-independent-review-20261102/INDEPENDENT-REVIEW.md", "bytes": 5917, "sha256": "4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d"},
+    "signedDeploymentAnchor": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/deployment-anchor.json", "bytes": 2411, "sha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb"},
+    "fundingAbortBootstrap": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/funding-abort-bootstrap.json", "bytes": 442, "sha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf"},
+    "authorityRenderReceipt": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/authority-render-receipt.json", "bytes": 731, "sha256": "ca250b51b7dc17f51cca678e11be8180bd047a28d2675e012af70ee70506f0c2"},
+    "actualOwnerRenderReview": {"path": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-render-actual-public-review-20261102/INDEPENDENT-REVIEW.md", "bytes": 6163, "sha256": "da8348fc1d0ae237ad2e9db1437eb68836c9c9e0310d3b506528845a0e04cbf1"},
     "paymentProjection": {"path": "/home/maximoto/Documents/Codex/2026-10-26/task-3/prototype/wednesday-shell-r20-core/mint-payment-public-receipt-projection-r1/OWNER-SUPPLIED-PUBLIC-PROJECTION-R1.json", "bytes": 1686, "sha256": "f671be3673fed9f074cd142640e38bc7c2fb98002881164895477e1f4d9523da"},
     "paymentReconciliation": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md", "bytes": 6030, "sha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da"}
   },
@@ -61,6 +66,7 @@
   "acceptedExistingInputs": {
     "deploymentRunAndDkgIds": true,
     "fiveHostIdsIpv4FipsUlasAndNpubs": true,
+    "authenticatedDkgResultSha256": "f16c7bf8eebf7ce29878f9e2a34c21c8974ad3bdef3372c364657dc7ee061877",
     "ownerApprovalPublicKey": "3210f99b78ecd0150b6a0efcaffc6f3b532f4e5a3d68f977e77a3b8d10febade",
     "committeePublicKey": "026de1d6cb863ef79f5eb6f95298a7740b8bb27ab666cf133a2dc9e089a222155b",
     "manifestDigest": "8dee718183fe708b61c11e809731916af78a01ed09572995e6e8e5b62d616818",
@@ -91,10 +97,16 @@
     "unsignedSigningMessageBytes": 2077,
     "unsignedSigningMessageSha256": "757b4855ed30d05d474636f60ecfa4e8388ef841ba27b39fb83c127e4f0c4d6b",
     "independentFreezeReviewPending": false,
-    "independentFreezeReviewSha256": "4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d"
+    "independentFreezeReviewSha256": "4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d",
+    "signedDeploymentAnchorSha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb",
+    "fundingAbortBootstrapSha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf",
+    "authorityRenderReceiptSha256": "ca250b51b7dc17f51cca678e11be8180bd047a28d2675e012af70ee70506f0c2",
+    "actualOwnerRenderReviewSha256": "da8348fc1d0ae237ad2e9db1437eb68836c9c9e0310d3b506528845a0e04cbf1",
+    "historicalControllerStopPreserved": true,
+    "rendererRerunOrResignAuthorized": false
   },
   "genuinelyMissingInputs": {
-    "derivedAfterThoseInputs": ["deploymentAnchorAndFundingAbortBootstrap", "networkFactsAndGenesisBundle", "browserAndHealthPins", "observerReceiptAndNodeId"]
+    "derivedAfterThoseInputs": ["networkFactsAndGenesisBundle", "browserAndHealthPins", "observerReceiptAndNodeId"]
   },
   "authority": {
     "releaseInstallAuthorized": false,

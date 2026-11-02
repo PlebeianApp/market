@@ -87,7 +87,9 @@ def readiness(decisions: dict, payment_projection: dict, plan: dict) -> tuple[bo
         missing.append("acceptedPaymentEvidence.cashuMintUrl")
     if payment["conformanceFipsServerUrl"] != payment_projection["testMintUrl"]:
         missing.append("acceptedPaymentEvidence.conformanceFipsServerUrl")
-    for key in ("deploymentAnchorSha256", "networkFactsSha256", "browserPinsSha256", "healthPinsSha256", "observerReceiptSha256"):
+    if derived["deploymentAnchorSha256"] != plan["acceptedExistingInputs"]["signedDeploymentAnchorSha256"]:
+        missing.append("derivedRuntimeOutputs.deploymentAnchorSha256")
+    for key in ("networkFactsSha256", "browserPinsSha256", "healthPinsSha256", "observerReceiptSha256"):
         if not hex_value(derived[key], 64):
             missing.append("derivedRuntimeOutputs." + key)
     if not hex_value(derived["observerNodeId"], 40):
@@ -132,6 +134,57 @@ def validate_payment_projection(payment: dict, plan: dict, bootstrap: dict) -> N
         "retryPermitted": False,
         "walletRepository": "DISPOSABLE_MEMORY_ONLY_NOT_RECOVERABLE",
     }, "PAYMENT_PROJECTION_MECHANICS")
+
+
+def validate_signed_authority(anchor: dict, funding: dict, receipt: dict, review: dict, plan: dict, bootstrap: dict, runtime: dict) -> None:
+    accepted = plan["acceptedExistingInputs"]
+    require(anchor["schema"] == "PLEBEIAN_FRIDAY_COMET_DEPLOYMENT_ANCHOR_V1", "SIGNED_ANCHOR_SCHEMA")
+    require(anchor["deployment_id"] == bootstrap["deploymentId"], "SIGNED_ANCHOR_DEPLOYMENT")
+    require(anchor["application_run_id"] == bootstrap["applicationRunId"], "SIGNED_ANCHOR_APPLICATION_RUN")
+    require(anchor["chain_id"] == accepted["selectedChainId"], "SIGNED_ANCHOR_CHAIN")
+    require(anchor["genesis_time"] == accepted["canonicalGenesisTimeUtc"], "SIGNED_ANCHOR_TIME")
+    require(anchor["expected_manifest_digest"] == runtime["manifestDigest"], "SIGNED_ANCHOR_MANIFEST")
+    require(anchor["frost_final_package_sha256"] == accepted["authenticatedDkgResultSha256"], "SIGNED_ANCHOR_DKG_RESULT")
+    require(anchor["funding_abort_bootstrap_sha256"] == accepted["fundingAbortBootstrapSha256"], "SIGNED_ANCHOR_FUNDING_BOOTSTRAP")
+    require(anchor["separated_bootstrap_digest"] == accepted["bootstrapDigest"], "SIGNED_ANCHOR_BOOTSTRAP_DIGEST")
+    require(anchor["separated_runtime_binding_digest"] == accepted["runtimeBindingDigest"], "SIGNED_ANCHOR_RUNTIME_DIGEST")
+    require(anchor["separated_runtime_binding_sha256"] == plan["acceptedPublicSources"]["runtimeBinding"]["sha256"], "SIGNED_ANCHOR_RUNTIME_SHA256")
+    require(anchor["separated_mint_conformance_sha256"] == accepted["paymentProjectionFileSha256"], "SIGNED_ANCHOR_MINT_PROJECTION")
+    require(anchor["active_keyset_id"] == accepted["projectedActiveSatKeysetId"], "SIGNED_ANCHOR_KEYSET")
+    require(anchor["application_fips_ula"] == bootstrap["application"]["fipsUla"], "SIGNED_ANCHOR_APP_ULA")
+    require(anchor["separated_mint_origin"] == accepted["canonicalCashuMintUrl"], "SIGNED_ANCHOR_MINT_ORIGIN")
+    require(anchor["owner_approval_public_key"] == accepted["ownerApprovalPublicKey"], "SIGNED_ANCHOR_OWNER")
+    require(hex_value(anchor["owner_approval_signature"], 128), "SIGNED_ANCHOR_SIGNATURE")
+    participants = runtime["result"]["participants"]
+    require(len(anchor["roster"]) == len(participants) == 4, "SIGNED_ANCHOR_ROSTER")
+    for slot, (actual, participant) in enumerate(zip(anchor["roster"], participants), 1):
+        require(actual == {
+            "slot": slot,
+            "host_id": participant["hostId"],
+            "fips_ula": participant["fipsUla"],
+            "signer_identity": participant["signerIdentity"],
+        }, "SIGNED_ANCHOR_ROSTER_SLOT")
+    require(funding == {
+        "schema": "PLEBEIAN_FRIDAY_FUNDING_ABORT_BOOTSTRAP_V1",
+        "activeKeysetId": accepted["projectedActiveSatKeysetId"],
+        "committeeKeysetId": runtime["result"]["committeeKeysetId"],
+        "committeeKeysetVersion": runtime["result"]["committeeKeysetVersion"],
+        "dkgRunId": runtime["result"]["dkgRunId"],
+        "publicKeyPackageSha256": runtime["result"]["publicKeyPackageSha256"],
+        "signerRosterDigest": runtime["result"]["signerRosterDigest"],
+    }, "SIGNED_FUNDING_BOOTSTRAP")
+    require(receipt == {
+        "schema": "PLEBEIAN_FRIDAY_COMET_AUTHORITY_RENDERED_V1",
+        "deployment_id": bootstrap["deploymentId"],
+        "chain_id": accepted["selectedChainId"],
+        "application_run_id": bootstrap["applicationRunId"],
+        "expected_manifest_digest": runtime["manifestDigest"],
+        "owner_approval_public_key": accepted["ownerApprovalPublicKey"],
+        "frost_final_package_sha256": anchor["frost_final_package_sha256"],
+        "funding_abort_bootstrap_sha256": accepted["fundingAbortBootstrapSha256"],
+        "deployment_anchor_sha256": accepted["signedDeploymentAnchorSha256"],
+    }, "SIGNED_AUTHORITY_RECEIPT")
+    require(review["rawSha256"] == accepted["actualOwnerRenderReviewSha256"], "SIGNED_AUTHORITY_REVIEW")
 
 
 def application(bootstrap: dict, role: str, participant_id: int) -> dict:
@@ -217,6 +270,7 @@ def main() -> int:
     require(decisions["schema"] == "PLEBEIAN_SIDEQUEST_OWNER_DECISIONS_V1", "DECISIONS_SCHEMA")
     sources = {key: require_source(value) for key, value in plan["acceptedPublicSources"].items()}
     bootstrap = sources["signedBootstrap"]
+    authenticated_dkg = sources["authenticatedDkgResult"]
     runtime = sources["runtimeBinding"]
     prerequisites = sources["prerequisites"]
     genesis_decision = sources["genesisContentDecision"]
@@ -225,7 +279,13 @@ def main() -> int:
     genesis_review = sources["genesisFreezeReview"]
     payment_projection = sources["paymentProjection"]
     payment_reconciliation = sources["paymentReconciliation"]
+    signed_anchor = sources["signedDeploymentAnchor"]
+    funding_bootstrap = sources["fundingAbortBootstrap"]
+    authority_receipt = sources["authorityRenderReceipt"]
+    owner_render_review = sources["actualOwnerRenderReview"]
     require(runtime["deploymentId"] == bootstrap["deploymentId"], "DEPLOYMENT_BINDING")
+    require(authenticated_dkg == runtime["result"], "AUTHENTICATED_DKG_RUNTIME_BINDING")
+    require(plan["acceptedPublicSources"]["authenticatedDkgResult"]["sha256"] == plan["acceptedExistingInputs"]["authenticatedDkgResultSha256"], "AUTHENTICATED_DKG_DIGEST")
     runtime_participants = runtime["result"]["manifest"]["participants"]
     require(len(runtime_participants) == len(bootstrap["validators"]) == 4, "BOOTSTRAP_RUNTIME_ROSTER")
     for expected, actual in zip(bootstrap["validators"], runtime_participants):
@@ -286,6 +346,20 @@ def main() -> int:
     require(decisions["acceptedPaymentEvidence"]["mintOnlyAcceptanceSha256"] == payment_reconciliation["rawSha256"], "PAYMENT_MINT_ONLY_ACCEPTANCE_DIGEST")
     require(decisions["acceptedPaymentEvidence"]["underlyingRawReceiptSha256OwnerVerifiedOnly"] == payment_projection["receiptSha256"], "PAYMENT_RAW_RECEIPT_PROVENANCE")
     require(decisions["acceptedPaymentEvidence"]["cashuMintUrl"] == bootstrap["application"]["mintOrigin"], "PAYMENT_CASHU_MINT_IDENTITY")
+    validate_signed_authority(signed_anchor, funding_bootstrap, authority_receipt, owner_render_review, plan, bootstrap, runtime)
+    require(decisions["acceptedSignedAuthorityOutputs"] == {
+        "outputRoot": str(Path(plan["acceptedPublicSources"]["signedDeploymentAnchor"]["path"]).parent),
+        "deploymentAnchorPath": plan["acceptedPublicSources"]["signedDeploymentAnchor"]["path"],
+        "deploymentAnchorSha256": plan["acceptedExistingInputs"]["signedDeploymentAnchorSha256"],
+        "fundingAbortBootstrapPath": plan["acceptedPublicSources"]["fundingAbortBootstrap"]["path"],
+        "fundingAbortBootstrapSha256": plan["acceptedExistingInputs"]["fundingAbortBootstrapSha256"],
+        "authorityRenderReceiptPath": plan["acceptedPublicSources"]["authorityRenderReceipt"]["path"],
+        "authorityRenderReceiptSha256": plan["acceptedExistingInputs"]["authorityRenderReceiptSha256"],
+        "independentReviewPath": plan["acceptedPublicSources"]["actualOwnerRenderReview"]["path"],
+        "independentReviewSha256": plan["acceptedExistingInputs"]["actualOwnerRenderReviewSha256"],
+        "historicalControllerStopPreserved": True,
+        "rendererRerunOrResignAuthorized": False,
+    }, "SIGNED_AUTHORITY_DECISIONS")
     ready, missing = readiness(decisions, payment_projection, plan)
 
     args.output_root.mkdir(mode=0o755)

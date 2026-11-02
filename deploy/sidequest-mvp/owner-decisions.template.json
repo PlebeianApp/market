@@ -26,8 +26,21 @@
     "mintOnlyAcceptanceSha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da",
     "underlyingRawReceiptSha256OwnerVerifiedOnly": "b5bac575046f13e1b030662818fba7ebe89df442cff12a5f8ec3983ac1332add"
   },
+  "acceptedSignedAuthorityOutputs": {
+    "outputRoot": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output",
+    "deploymentAnchorPath": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/deployment-anchor.json",
+    "deploymentAnchorSha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb",
+    "fundingAbortBootstrapPath": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/funding-abort-bootstrap.json",
+    "fundingAbortBootstrapSha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf",
+    "authorityRenderReceiptPath": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/authority-render-receipt.json",
+    "authorityRenderReceiptSha256": "ca250b51b7dc17f51cca678e11be8180bd047a28d2675e012af70ee70506f0c2",
+    "independentReviewPath": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-render-actual-public-review-20261102/INDEPENDENT-REVIEW.md",
+    "independentReviewSha256": "da8348fc1d0ae237ad2e9db1437eb68836c9c9e0310d3b506528845a0e04cbf1",
+    "historicalControllerStopPreserved": true,
+    "rendererRerunOrResignAuthorized": false
+  },
   "derivedRuntimeOutputs": {
-    "deploymentAnchorSha256": null,
+    "deploymentAnchorSha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb",
     "networkFactsSha256": null,
     "browserPinsSha256": null,
     "healthPinsSha256": null,
@@ -35,7 +48,7 @@
     "observerNodeId": null
   },
   "authority": {
-    "deploymentAnchorSigningApproved": false,
+    "deploymentAnchorSigningApproved": true,
     "releaseInstallAuthorized": false,
     "unitInstallAuthorized": false,
     "configurationInstallAuthorized": false,

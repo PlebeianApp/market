@@ -111,6 +111,7 @@ class RuntimeAdoptionFixture(unittest.TestCase):
             self.assertNotIn("frozenGenesisValue.canonicalGenesisTimeUtc", inert_result["missing"])
             self.assertFalse(any(value.startswith("acceptedPaymentEvidence.") for value in inert_result["missing"]))
             self.assertNotIn("acceptedExistingInputs.ownerApprovalPublicKey", inert_result["missing"])
+            self.assertNotIn("derivedRuntimeOutputs.deploymentAnchorSha256", inert_result["missing"])
             self.assertEqual(parse_env(inert_root / "APP/friday.env")["POC_FRIDAY_BROWSER_READY"], "false")
             with self.assertRaises(ValueError):
                 guard.verify_values(parse_env(inert_root / "APP/friday.env"), json.loads((inert_root / "APP/application.json").read_text()), "plebeian-friday-site.service")
@@ -130,7 +131,7 @@ class RuntimeAdoptionFixture(unittest.TestCase):
                 "canonicalGenesisTimePolicy": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE",
             }
             decisions["derivedRuntimeOutputs"] = {
-                "deploymentAnchorSha256": pin,
+                "deploymentAnchorSha256": plan["acceptedExistingInputs"]["signedDeploymentAnchorSha256"],
                 "networkFactsSha256": pin,
                 "browserPinsSha256": pin,
                 "healthPinsSha256": pin,

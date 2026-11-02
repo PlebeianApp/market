@@ -67,6 +67,26 @@
       "bytes": 5917,
       "sha256": "4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d"
     },
+    "signedDeploymentAnchor": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/deployment-anchor.json",
+      "bytes": 2411,
+      "sha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb"
+    },
+    "signedFundingAbortBootstrap": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/funding-abort-bootstrap.json",
+      "bytes": 442,
+      "sha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf"
+    },
+    "authorityRenderReceipt": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/authority-render-receipt.json",
+      "bytes": 731,
+      "sha256": "ca250b51b7dc17f51cca678e11be8180bd047a28d2675e012af70ee70506f0c2"
+    },
+    "actualOwnerRenderPublicReview": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-render-actual-public-review-20261102/INDEPENDENT-REVIEW.md",
+      "bytes": 6163,
+      "sha256": "da8348fc1d0ae237ad2e9db1437eb68836c9c9e0310d3b506528845a0e04cbf1"
+    },
     "ownerPaymentProjection": {
       "path": "/home/maximoto/Documents/Codex/2026-10-26/task-3/prototype/wednesday-shell-r20-core/mint-payment-public-receipt-projection-r1/OWNER-SUPPLIED-PUBLIC-PROJECTION-R1.json",
       "bytes": 1686,
@@ -150,15 +170,19 @@
     "privateProofTransferRequired": false
   },
   "pendingActionScope": {
-    "freshAuthorityOutputRoot": null,
-    "deploymentAnchorSigningApproved": false,
+    "acceptedAuthorityOutputRoot": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output",
+    "deploymentAnchorSigningApprovedAndCompleted": true,
+    "historicalControllerStopPreserved": true,
+    "rendererRerunOrResignAuthorized": false,
     "releaseInstallAuthorized": false,
     "unitInstallAuthorized": false,
     "configurationInstallAuthorized": false,
     "serviceActivationAuthorized": false
   },
   "derivedAfterFrozenInputs": {
-    "deploymentAnchorAndFundingAbortBootstrap": null,
+    "deploymentAnchorSha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb",
+    "fundingAbortBootstrapSha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf",
+    "authorityRenderReceiptSha256": "ca250b51b7dc17f51cca678e11be8180bd047a28d2675e012af70ee70506f0c2",
     "networkFactsAndGenesisBundle": null,
     "browserAndHealthPins": null,
     "observerReceiptAndNodeId": null
@@ -166,6 +190,8 @@
   "authority": {
     "ownerPrivateKeyRead": false,
     "remoteActions": false,
+    "ownerSigningOutputAccepted": true,
+    "rendererRerunAuthorized": false,
     "serviceActivationAuthorized": false,
     "dkgMustNotBeRepeated": true
   }

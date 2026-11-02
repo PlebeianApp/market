@@ -1,8 +1,9 @@
 # Side-quest deployable integration handoff
 
-This directory binds the accepted public 3-of-4 DKG result and separated
-runtime directly into the production Go initialization path. It is not a
-server action, signature request or permission to repeat DKG.
+This directory binds the accepted public 3-of-4 DKG result, separated runtime,
+payment projection and accepted signed authority outputs directly into the
+production Go initialization path. It is not a server action, a request to
+rerender or resign, or permission to repeat DKG.
 
 Run the side-effect-free public check first:
 
@@ -29,10 +30,12 @@ It proves the checked-in blocked template and a repeated install fail closed.
 
 The fourth command composes the APP release plus four distinct validator signer
 releases from the actual built binaries. It verifies every binary/unit hash,
-runs each installed role guard, renders the current incomplete inputs as inert
-configuration, then renders a fully bound synthetic fixture and passes the
-accepted five-host `verify_values` contract for APP site/authority/coordinator
-and V1-V4 signers. It performs no service or network action.
+runs each installed role guard, validates the accepted signed anchor,
+FundingAbort bootstrap and authority receipt, renders the current incomplete
+inputs as inert configuration, then renders a fully bound synthetic fixture and
+passes the accepted five-host `verify_values` contract for APP
+site/authority/coordinator and V1-V4 signers. It performs no service or network
+action.
 
 ## Immutable APP release boundary
 
@@ -80,10 +83,16 @@ The following are already accepted and must be reused, not requested again:
   per-request / 50,000 advisory balance limits;
 - accepted GET-only bootstrap evidence, receipt hash and active-keyset digest;
 - owner-selected chain ID `plebeian-auctions-mvp-20261102` and the policy to
-  capture current UTC exactly once when the final signing inputs are frozen.
+  capture current UTC exactly once when the final signing inputs are frozen;
 - the owner-supplied payment projection and mint-only reconciliation, including
   active SAT keyset ID `001a10236c313f83`, its independently recomputed public
-  ID digest, and the owner-verified receipt digest claim.
+  ID digest, and the owner-verified receipt digest claim;
+- signed deployment anchor SHA-256
+  `777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb`,
+  FundingAbort bootstrap SHA-256
+  `ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf`
+  and authority receipt SHA-256
+  `ca250b51b7dc17f51cca678e11be8180bd047a28d2675e012af70ee70506f0c2`.
 
 No genesis content choice remains. The single canonical UTC timestamp was
 captured at the final input freeze as `2026-11-02T18:35:21Z`; every lane and
@@ -93,7 +102,21 @@ Its unsigned 2,077-byte signing message has SHA-256
 `757b4855ed30d05d474636f60ecfa4e8388ef841ba27b39fb83c127e4f0c4d6b`.
 Independent freeze review is accepted at SHA-256
 `4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d`;
-no signature or execution authority was created.
+that frozen record is intentionally still an unsigned-input record. A later
+owner render produced the accepted public signed outputs above. Their
+independent public review is SHA-256
+`da8348fc1d0ae237ad2e9db1437eb68836c9c9e0310d3b506528845a0e04cbf1`
+at
+`/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-render-actual-public-review-20261102/INDEPENDENT-REVIEW.md`.
+The signed anchor binds the exact frozen preimage, accepted DKG result,
+`f671...` payment-projection bytes, canonical Cashu identity and four-member
+roster.
+
+The historical controller's final state remains `STOP_NO_RETRY` because its
+post-render verifier encountered a recursive JSON property-order defect. The
+accepted independent review records the renderer exit as settled and the
+signature as valid for the exact frozen preimage. Preserve that historical
+STOP: rerendering and resigning are not authorized or needed for this handoff.
 
 The production authority renderer requires an owner-reviewed receipt file and
 the SHA-256 of those exact bytes. It checks that the file exists, is 2 bytes to
@@ -120,10 +143,11 @@ Three mint URL roles are bound without conflation:
   and all real fake-Cashu funding uses the distinct public Cashu identity.
   This later assembly mapping does not alter the accepted anchor/preimage.
 
-The deployment anchor/FundingAbort bootstrap, network facts/genesis bundle,
-browser/health pins and observer receipt/node ID are downstream products after
-those inputs, not missing selections. Fresh output-root selection and signing,
-install, configuration and activation grants are separate action scopes.
+The deployment anchor, FundingAbort bootstrap and public authority receipt now
+exist as accepted public outputs. Network facts/genesis bundle,
+browser/health pins and observer receipt/node ID remain downstream products,
+not missing content selections. Install, configuration and activation grants
+remain separate action scopes.
 
 The owner credential path is deliberately not recorded in this public file. It
 may be supplied only inside the separately approved one-shot anchor-rendering
@@ -154,11 +178,12 @@ The remaining changes must stay separate and exact:
 1. APP inactive successor install: create the immutable site release, retain
    the current unit, reload systemd, and leave the site inactive. No config or
    service action.
-2. Runtime configuration/genesis: after a separate signing grant, render and
-   install the selected chain, exact frozen
-   genesis timestamp, accepted payment/keyset/mint inputs,
-   deployment anchor, observer, network, browser and health pins. No DKG
-   repeat.
+2. Runtime configuration/genesis: derive and validate the network facts/genesis
+   bundle from the already accepted signed authority outputs, then install the
+   selected chain, exact frozen genesis timestamp, accepted
+   payment/keyset/mint inputs, deployment anchor, observer, network, browser
+   and health pins under a separately scoped configuration grant. No DKG
+   repeat and no rerender/resign.
 3. Runtime artifact adoption: install the exact APP successor release and
    authority/coordinator units, then the exact signer release/unit on each of
    V1-V4. Preserve `separated-deploy-v1`, validator node binaries, participant
@@ -168,33 +193,16 @@ The remaining changes must stay separate and exact:
 5. HTTPS/firewall and the five-profile browser rehearsal are separate scopes.
    Validator-4 stop and start/rejoin each require their own approvals.
 
-## Production command shape after those values are accepted
+## Accepted authority output consumption
 
-The deployment owner should substitute the accepted values into this existing
-production command; do not run it as a probe because it reads the owner key:
-
-```sh
-./dist/sidequest/plebeian-auctions-mvp render-friday-comet-authority \
-  --output-root "$FRESH_AUTHORITY_OUTPUT_ROOT" \
-  --frost-final-public /home/maximoto/Documents/Codex/2026-10-28/task-2/dkg-attest-controls-r1/evidence/authenticated-dkg-result.json \
-  --expected-manifest-digest 8dee718183fe708b61c11e809731916af78a01ed09572995e6e8e5b62d616818 \
-  --owner-approval-private-key "$OWNER_PRIVATE_KEY_PATH" \
-  --chain-id "$CHAIN_ID" \
-  --genesis-time "$GENESIS_TIME_UTC" \
-  --active-keyset-id "$ACTIVE_SAT_KEYSET_ID" \
-  --separated-bootstrap /home/maximoto/Documents/Codex/2026-10-28/task-2/owner-pre-dkg-bootstrap-signing-r1/outputs/pre-dkg-bootstrap.signed.json \
-  --separated-runtime-binding /home/maximoto/Documents/Codex/2026-10-28/task-2/post-dkg-genesis-prerequisites-r1/separated-runtime-binding.json \
-  --predecessor-manifest /home/maximoto/Documents/Codex/2026-10-28/task-2/committee-initialization-adapter-r3-normal-pins/ACTION-APPROVED.json \
-  --expected-separated-bootstrap-digest 9fb672320d8188a7e63752c0a435a3d96f2122f6f378b555a729ea4c2a625ca9 \
-  --expected-separated-runtime-digest ae4fc0a988cfacac5beca7d28fbbed12ada64c851a751fb4dfa71de21529dc72 \
-  --mint-conformance-receipt "$MINT_CONFORMANCE_RECEIPT" \
-  --mint-conformance-receipt-sha256 "$MINT_CONFORMANCE_SHA256"
-```
-
-Successful rendering produces the FundingAbort bootstrap, signed deployment
-anchor and public authority receipt in the fresh output root. Validator
-initialization, genesis assembly and service activation remain separate owner
-actions and must consume those exact outputs.
+Do not run the owner-key renderer as a probe or successor step. The canonical
+public output root is
+`/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output`.
+Validator initialization, genesis assembly and service activation remain
+separate owner actions and must consume the exact accepted files from that
+root. `owner-decisions.template.json` and `runtime-adoption-plan.json` pin all
+three files and the independent review, and `render-runtime-config.py` refuses
+source drift or a substituted anchor.
 
 ## Validator-4 rejoin control
 

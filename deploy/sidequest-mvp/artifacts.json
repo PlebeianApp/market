@@ -30,11 +30,11 @@
     { "path": "deploy/sidequest-mvp/successor-install-manifest.json", "sha256": "a47ec9d1fb484b91545446367f7a2689959ccb849855b27303c80a4ba41ee23a" },
     { "path": "deploy/sidequest-mvp/test_successor_release.py", "sha256": "324b56b050005f418ac7750d413fa51b3d6c0a4e02252ebb38354d5e1312fe10" },
     { "path": "deploy/sidequest-mvp/genesis-content-decision.json", "sha256": "afd2d2e0a9eda3c9a7100d82bad37380486acd71731e9ca03eb62f0dfd868371" },
-    { "path": "deploy/sidequest-mvp/runtime-adoption-plan.json", "sha256": "8567baadd2443f606e26ed19df3cc9d675c524f73c4682f4083b2996a7599de2" },
-    { "path": "deploy/sidequest-mvp/owner-decisions.template.json", "sha256": "0e62652805f075b5b5890678116b40400db953db31383fefad05725e6922d242" },
-    { "path": "deploy/sidequest-mvp/render-runtime-config.py", "sha256": "be0a2645c4cb5cda6ac257904746aeeec7645c97aad9768a318f63b388830bc8" },
-    { "path": "deploy/sidequest-mvp/test_runtime_adoption.py", "sha256": "14b636cbcc414212a8dfe483385816b90f7398638b11f07a03b21138a15a0cdf" },
-    { "path": "deploy/sidequest-mvp/deployment-inputs.json", "sha256": "bb4946960fcd4c13cb75baba626814508c9c72aa1fcb83450fe6a65cbefb6af2" },
-    { "path": "deploy/sidequest-mvp/verify-public-inputs.py", "sha256": "000a752f7c7ec4260024cabf5668eacc5d3636600f65894b0efd9ad62b325db4" }
+    { "path": "deploy/sidequest-mvp/runtime-adoption-plan.json", "sha256": "a2b8e49796811090dc65b7189263a8dcac4af08400e293b7a24f9b5140bb8ba4" },
+    { "path": "deploy/sidequest-mvp/owner-decisions.template.json", "sha256": "adffdc93075d95255de093c874803f407910a221696ab756e339f1ce537270e6" },
+    { "path": "deploy/sidequest-mvp/render-runtime-config.py", "sha256": "026f817818536f61ecf9945ce68c3dd778c6e8929bfe0e7db556f6c598e554a4" },
+    { "path": "deploy/sidequest-mvp/test_runtime_adoption.py", "sha256": "c271bd2a9434395f4ee1f66d2616b742a0a4bf081a31c6f47f5a8c29f738dd33" },
+    { "path": "deploy/sidequest-mvp/deployment-inputs.json", "sha256": "9d9ca94ca639d57462390e3f6634b79ecf9579a8c2f7285465fbb93dd8787e8d" },
+    { "path": "deploy/sidequest-mvp/verify-public-inputs.py", "sha256": "78be20fd10aefbf431e40f94b27d09f5e0bee5420221d5ad653e20197b7d9f17" }
   ]
 }

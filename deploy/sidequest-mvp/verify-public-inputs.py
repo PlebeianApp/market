@@ -38,6 +38,9 @@ def main() -> None:
     genesis_freeze = json.loads(require_file(accepted["canonicalGenesisInputFreeze"]))
     genesis_preimage = json.loads(require_file(accepted["unsignedGenesisSigningPreimage"]))
     payment_projection = json.loads(require_file(accepted["ownerPaymentProjection"]))
+    signed_anchor = json.loads(require_file(accepted["signedDeploymentAnchor"]))
+    funding_bootstrap = json.loads(require_file(accepted["signedFundingAbortBootstrap"]))
+    authority_receipt = json.loads(require_file(accepted["authorityRenderReceipt"]))
     threshold = config["threshold"]
     assert dkg == runtime["result"], "runtime does not embed the accepted DKG result"
     assert runtime["bindingDigest"] == accepted["separatedRuntimeBinding"]["semanticDigest"]
@@ -49,6 +52,53 @@ def main() -> None:
     assert len(dkg["participants"]) == threshold["participants"] == 4
     assert len({row["participantId"] for row in dkg["participants"]}) == 4
     assert threshold["minimumSigners"] == 3
+
+    assert signed_anchor["schema"] == "PLEBEIAN_FRIDAY_COMET_DEPLOYMENT_ANCHOR_V1"
+    assert signed_anchor["deployment_id"] == config["deploymentId"]
+    assert signed_anchor["application_run_id"] == runtime["result"]["manifest"]["applicationRunId"]
+    assert signed_anchor["chain_id"] == "plebeian-auctions-mvp-20261102"
+    assert signed_anchor["genesis_time"] == "2026-11-02T18:35:21Z"
+    assert signed_anchor["expected_manifest_digest"] == threshold["manifestDigest"]
+    assert signed_anchor["frost_final_package_sha256"] == accepted["authenticatedDkgResult"]["sha256"]
+    assert signed_anchor["funding_abort_bootstrap_sha256"] == accepted["signedFundingAbortBootstrap"]["sha256"]
+    assert signed_anchor["separated_bootstrap_digest"] == runtime["bootstrapDigest"]
+    assert signed_anchor["separated_runtime_binding_digest"] == runtime["bindingDigest"]
+    assert signed_anchor["separated_runtime_binding_sha256"] == accepted["separatedRuntimeBinding"]["sha256"]
+    assert signed_anchor["separated_mint_conformance_sha256"] == accepted["ownerPaymentProjection"]["sha256"]
+    assert signed_anchor["active_keyset_id"] == "001a10236c313f83"
+    assert signed_anchor["application_fips_ula"] == config["application"]["fipsUla"]
+    assert signed_anchor["separated_mint_origin"] == config["application"]["mintOrigin"]
+    assert signed_anchor["owner_approval_public_key"] == "3210f99b78ecd0150b6a0efcaffc6f3b532f4e5a3d68f977e77a3b8d10febade"
+    assert len(signed_anchor["owner_approval_signature"]) == 128
+    int(signed_anchor["owner_approval_signature"], 16)
+    assert len(signed_anchor["roster"]) == 4
+    for slot, (anchor_member, participant) in enumerate(zip(signed_anchor["roster"], dkg["participants"]), 1):
+        assert anchor_member == {
+            "slot": slot,
+            "host_id": participant["hostId"],
+            "fips_ula": participant["fipsUla"],
+            "signer_identity": participant["signerIdentity"],
+        }
+    assert funding_bootstrap == {
+        "schema": "PLEBEIAN_FRIDAY_FUNDING_ABORT_BOOTSTRAP_V1",
+        "activeKeysetId": signed_anchor["active_keyset_id"],
+        "committeeKeysetId": dkg["committeeKeysetId"],
+        "committeeKeysetVersion": dkg["committeeKeysetVersion"],
+        "dkgRunId": dkg["dkgRunId"],
+        "publicKeyPackageSha256": dkg["publicKeyPackageSha256"],
+        "signerRosterDigest": dkg["signerRosterDigest"],
+    }
+    assert authority_receipt == {
+        "schema": "PLEBEIAN_FRIDAY_COMET_AUTHORITY_RENDERED_V1",
+        "deployment_id": signed_anchor["deployment_id"],
+        "chain_id": signed_anchor["chain_id"],
+        "application_run_id": signed_anchor["application_run_id"],
+        "expected_manifest_digest": signed_anchor["expected_manifest_digest"],
+        "owner_approval_public_key": signed_anchor["owner_approval_public_key"],
+        "frost_final_package_sha256": signed_anchor["frost_final_package_sha256"],
+        "funding_abort_bootstrap_sha256": accepted["signedFundingAbortBootstrap"]["sha256"],
+        "deployment_anchor_sha256": accepted["signedDeploymentAnchor"]["sha256"],
+    }
 
     assert payment_projection["schema"] == "PLEBEIAN_FRIDAY_R4_MINT_CONFORMANCE_PUBLIC_PROJECTION_R1_V1"
     assert payment_projection["status"] == "OWNER_READ_ONLY_PUBLIC_RECEIPT_PROJECTION_NOT_GENESIS_ACCEPTANCE"
@@ -205,21 +255,28 @@ def main() -> None:
     }
     assert config["boundPaymentEvidence"]["conformanceFipsServerUrl"] == payment_projection["testMintUrl"]
     assert config["pendingActionScope"] == {
-        "freshAuthorityOutputRoot": None,
-        "deploymentAnchorSigningApproved": False,
+        "acceptedAuthorityOutputRoot": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output",
+        "deploymentAnchorSigningApprovedAndCompleted": True,
+        "historicalControllerStopPreserved": True,
+        "rendererRerunOrResignAuthorized": False,
         "releaseInstallAuthorized": False,
         "unitInstallAuthorized": False,
         "configurationInstallAuthorized": False,
         "serviceActivationAuthorized": False,
     }
-    assert set(config["derivedAfterFrozenInputs"]) == {
-        "deploymentAnchorAndFundingAbortBootstrap", "networkFactsAndGenesisBundle",
-        "browserAndHealthPins", "observerReceiptAndNodeId",
+    assert config["derivedAfterFrozenInputs"] == {
+        "deploymentAnchorSha256": accepted["signedDeploymentAnchor"]["sha256"],
+        "fundingAbortBootstrapSha256": accepted["signedFundingAbortBootstrap"]["sha256"],
+        "authorityRenderReceiptSha256": accepted["authorityRenderReceipt"]["sha256"],
+        "networkFactsAndGenesisBundle": None,
+        "browserAndHealthPins": None,
+        "observerReceiptAndNodeId": None,
     }
-    assert all(value is None for value in config["derivedAfterFrozenInputs"].values())
     assert config["authority"] == {
         "ownerPrivateKeyRead": False,
         "remoteActions": False,
+        "ownerSigningOutputAccepted": True,
+        "rendererRerunAuthorized": False,
         "serviceActivationAuthorized": False,
         "dkgMustNotBeRepeated": True,
     }
