@@ -1,0 +1,74 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_MVP_DEPLOYMENT_INPUTS_V1",
+  "status": "PUBLIC_INPUTS_BOUND_OWNER_AND_MINT_INPUTS_REQUIRED",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "deploymentId": "friday-demo-20261030-separated-v1",
+  "application": {
+    "underlayIpv4": "139.162.161.233",
+    "publicOrigin": "https://139.162.161.233",
+    "mintOrigin": "https://139.162.161.233",
+    "fipsUla": "fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04"
+  },
+  "validators": [
+    { "slot": 1, "underlayIpv4": "172.105.64.142", "fipsUla": "fdad:d221:cb5f:1d78:1125:b3f6:1a8f:44f8" },
+    { "slot": 2, "underlayIpv4": "172.105.95.57", "fipsUla": "fdd5:9c40:b25b:2ded:d43:fe2d:11c5:4703" },
+    { "slot": 3, "underlayIpv4": "172.104.240.217", "fipsUla": "fd16:51a0:bc17:19bc:8a04:2076:e388:74a3" },
+    { "slot": 4, "underlayIpv4": "172.104.253.247", "fipsUla": "fdbd:1deb:a2b0:9e60:dcb1:10df:90d7:5776" }
+  ],
+  "acceptedPublicInputs": {
+    "authenticatedDkgResult": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/dkg-attest-controls-r1/evidence/authenticated-dkg-result.json",
+      "bytes": 17321,
+      "sha256": "f16c7bf8eebf7ce29878f9e2a34c21c8974ad3bdef3372c364657dc7ee061877"
+    },
+    "dkgActualReview": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-30/task/dkg-attest-r1-actual-public-review-20261102/INDEPENDENT-REVIEW.md",
+      "bytes": 7202,
+      "sha256": "b5d7ee9e043a0bdd8efeab2df35a3230a2012fc9e816b9a1fe8c75ac9edf1cf6"
+    },
+    "signedPreDkgBootstrap": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/owner-pre-dkg-bootstrap-signing-r1/outputs/pre-dkg-bootstrap.signed.json",
+      "bytes": 4875,
+      "sha256": "e3b9c12d53d85d367390117dd669d4ec0228c94cfb4790ac4418246df7ad2aa9"
+    },
+    "predecessorAction": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/committee-initialization-adapter-r3-normal-pins/ACTION-APPROVED.json",
+      "bytes": 82144,
+      "sha256": "233102ef482a040aeeb6eceb688d848fbb15f572ce6f6a83cf34a5a4982a4615"
+    },
+    "separatedRuntimeBinding": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/post-dkg-genesis-prerequisites-r1/separated-runtime-binding.json",
+      "bytes": 17716,
+      "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a",
+      "semanticDigest": "ae4fc0a988cfacac5beca7d28fbbed12ada64c851a751fb4dfa71de21529dc72"
+    }
+  },
+  "threshold": {
+    "minimumSigners": 3,
+    "participants": 4,
+    "manifestDigest": "8dee718183fe708b61c11e809731916af78a01ed09572995e6e8e5b62d616818",
+    "committeePublicKey": "026de1d6cb863ef79f5eb6f95298a7740b8bb27ab666cf133a2dc9e089a222155b",
+    "signerRosterDigest": "c1aca1467fa1485dadfb7260024adf31f23e2d0912c99569292ee920d6d1eea1",
+    "publicKeyPackageSha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5"
+  },
+  "fundingPolicy": {
+    "maxPerRequest": 10000,
+    "maxResultingBalanceAdvisory": 50000
+  },
+  "missingOwnerAndMintInputs": {
+    "chainId": null,
+    "canonicalGenesisTimeUtc": null,
+    "mintConformanceReceiptPath": null,
+    "mintConformanceReceiptSha256": null,
+    "activeSatKeysetId": null,
+    "reviewedTestMintTransportUrl": null,
+    "freshAuthorityOutputRoot": null,
+    "deploymentAnchorSigningApproved": false
+  },
+  "authority": {
+    "ownerPrivateKeyRead": false,
+    "remoteActions": false,
+    "serviceActivationAuthorized": false,
+    "dkgMustNotBeRepeated": true
+  }
+}

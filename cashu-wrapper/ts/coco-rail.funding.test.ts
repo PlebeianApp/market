@@ -84,6 +84,26 @@ describe("Coco rail durable funding lifecycle", () => {
 		const unavailable = await guarded(`${MINT}/v1/info`); expect(unavailable.status).toBe(503); expect(await unavailable.json()).toEqual({ reason: "unchanged" });
 	});
 
+	test("origin-bound fetch forces identity with native header replacement and bounded refusal", async () => {
+		let observed: Headers | undefined, observedSignal: AbortSignal | undefined, cancelled = false;
+		const guarded = createOriginBoundMintFetch(MINT, (async (input, init) => {
+			observed = new Headers(init?.headers); observedSignal = init?.signal ?? undefined;
+			expect(input).toBeInstanceOf(Request);
+			const body = new ReadableStream<Uint8Array>({ cancel() { cancelled = true; } });
+			const compressed = new Response(body, { status: 200, headers: { "content-encoding": "gzip" } });
+			Object.defineProperty(compressed, "url", { value: `${MINT}/v1/info` });
+			return compressed;
+		}) as typeof fetch);
+		const input = new Request(`${MINT}/v1/info`, { headers: { "x-input-only": "must-not-survive" } });
+		await expect(guarded(input, { headers: { "x-init-only": "present" } }))
+			.rejects.toThrow("mint-response-content-encoding-refused");
+		expect(observed?.get("accept-encoding")).toBe("identity");
+		expect(observed?.get("x-init-only")).toBe("present");
+		expect(observed?.has("x-input-only")).toBeFalse();
+		expect(observedSignal?.aborted).toBeTrue();
+		expect(cancelled).toBeTrue();
+	});
+
   test("quote and operation references expose no payment request and preserve distinct Coco identity", async () => {
     const fake = manager(); const rail = createCocoRail(fake.value, { sleep: async () => {} });
     const created = await rail.createMintQuote({ mintUrl: MINT, amount: 120, unit: "sat" });

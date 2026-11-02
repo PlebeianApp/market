@@ -50,6 +50,8 @@ class TargetTest(unittest.TestCase):
   signer=(HERE/'plebeian-friday-signer.service').read_text();self.assertNotIn('--r20-profile',signer);self.assertIn('Restart=no',signer)
  def test_proxy_has_no_rpc_or_signer_route(self):
   t=(HERE/'nginx-normal.conf.example').read_text();self.assertIn('[%FRIDAY_APPLICATION_ULA%]:3438',t);self.assertIn('Host 139.162.161.233',t);self.assertNotIn('27657',t);self.assertNotIn('39101',t)
+  self.assertEqual(t.count('proxy_set_header Accept-Encoding "";'),1)
+  recovery=(HERE/'nginx-recovery.conf.example').read_text();self.assertEqual(recovery.count('proxy_set_header Accept-Encoding "";'),2)
 
 # Real directory traversal/modes, synthetic UID metadata: no chown/accounts/root.
 import os

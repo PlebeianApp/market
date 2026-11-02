@@ -443,6 +443,48 @@ function exactMintOrigin(value: string, options: { allowLoopbackHttp?: boolean; 
 	return url;
 }
 
+const MINT_RESPONSE_CONTENT_ENCODING_REFUSED = "mint-response-content-encoding-refused";
+const MINT_BODY_CANCEL_GRACE_MS = 1_000;
+
+/**
+ * Preserve native Request/init header replacement semantics, then force the
+ * only representation for which body bytes and Content-Length have the same
+ * meaning in Bun. Browsers may treat Accept-Encoding as a forbidden header;
+ * the separated nginx route independently clears it before proxying to the
+ * mint, so browser Coco and server-side Coco share the same identity boundary.
+ */
+function identityMintRequestInit(input: Parameters<typeof fetch>[0], init: RequestInit | undefined,
+	controller: AbortController): RequestInit {
+	const headers = init?.headers !== undefined
+		? new Headers(init.headers)
+		: new Headers(input instanceof Request ? input.headers : undefined);
+	headers.set("accept-encoding", "identity");
+	const inherited = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+	const signal = inherited === undefined ? controller.signal : AbortSignal.any([inherited, controller.signal]);
+	return { ...init, headers, redirect: "error", signal };
+}
+
+async function cancelMintBodyBounded(body: ReadableStream<Uint8Array>, reason: Error): Promise<void> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		await Promise.race([
+			body.cancel(reason).catch(() => undefined),
+			new Promise<void>((resolve) => { timer = setTimeout(resolve, MINT_BODY_CANCEL_GRACE_MS); }),
+		]);
+	} finally {
+		if (timer !== undefined) clearTimeout(timer);
+	}
+}
+
+async function requireIdentityMintResponse(response: Response, controller: AbortController): Promise<void> {
+	const encoding = response.headers.get("content-encoding");
+	if (encoding === null || encoding.trim().toLowerCase() === "identity") return;
+	const refusal = new RailRefusedError(MINT_RESPONSE_CONTENT_ENCODING_REFUSED);
+	controller.abort(refusal);
+	if (response.body !== null) await cancelMintBodyBounded(response.body, refusal);
+	throw refusal;
+}
+
 /**
  * Bind every Coco mint request to one exact origin and fail closed on redirect
  * evidence. HTTP is accepted only for an explicit unprivileged 127.0.0.1 test
@@ -462,7 +504,8 @@ export function createOriginBoundMintFetch(mintUrl: string, fetchImpl: typeof fe
 			throw new RailRefusedError("refused-mint-transport-url");
 		}
 		if (requestUrl.protocol !== expected.protocol || requestUrl.origin !== expected.origin || requestUrl.username !== "" || requestUrl.password !== "" || requestUrl.hash !== "") throw new RailRefusedError("refused-mint-transport-origin");
-		const response = await fetchImpl(input, { ...init, redirect: "error" });
+		const controller = new AbortController();
+		const response = await fetchImpl(input, identityMintRequestInit(input, init, controller));
 		if (response.status >= 300 && response.status < 400 || response.type === "opaqueredirect" || response.redirected) throw new RailRefusedError("refused-mint-transport-redirect");
 		if (response.url === "") throw new RailRefusedError("refused-mint-transport-final-url");
 		let finalUrl: URL;
@@ -472,6 +515,7 @@ export function createOriginBoundMintFetch(mintUrl: string, fetchImpl: typeof fe
 			throw new RailRefusedError("refused-mint-transport-final-url");
 		}
 		if (finalUrl.origin !== expected.origin || finalUrl.protocol !== expected.protocol || finalUrl.username !== "" || finalUrl.password !== "") throw new RailRefusedError("refused-mint-transport-origin");
+		await requireIdentityMintResponse(response, controller);
 		return response;
 	}) as typeof fetch;
 }
@@ -506,7 +550,8 @@ export function createPinnedMintTransportFetch(logicalMintUrl: string, transport
 		const mappedInput = input instanceof Request
 			? new Request(target, input)
 			: target
-		const response = await fetchImpl(mappedInput, { ...init, redirect: "error" })
+		const controller = new AbortController()
+		const response = await fetchImpl(mappedInput, identityMintRequestInit(mappedInput, init, controller))
 		if (response.status >= 300 && response.status < 400 || response.type === "opaqueredirect"
 			|| response.redirected) throw new RailRefusedError("refused-mint-transport-redirect")
 		if (response.url === "") throw new RailRefusedError("refused-mint-transport-final-url")
@@ -517,6 +562,7 @@ export function createPinnedMintTransportFetch(logicalMintUrl: string, transport
 			|| finalUrl.username !== "" || finalUrl.password !== "") {
 			throw new RailRefusedError("refused-mint-transport-origin")
 		}
+		await requireIdentityMintResponse(response, controller)
 		return response
 	}) as typeof fetch
 }

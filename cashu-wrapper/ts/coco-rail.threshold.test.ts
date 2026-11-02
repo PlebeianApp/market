@@ -30,17 +30,17 @@ function token(secrets: string[]) {
 
 describe('Coco Friday threshold token reader', () => {
 	test('maps one canonical HTTPS mint identity to one fixed FIPS transport', async () => {
-		const observed: string[] = []
-		const transport = (async (input: Parameters<typeof fetch>[0]) => {
+		const observed: Array<{ url: string; encoding: string | null }> = []
+		const transport = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
 			const url = input instanceof Request ? input.url : String(input)
-			observed.push(url)
+			observed.push({ url, encoding: new Headers(init?.headers).get('accept-encoding') })
 			const response = new Response('{"ok":true}', { status: 200 })
 			Object.defineProperty(response, 'url', { value: url })
 			return response
 		}) as typeof fetch
 		const mapped = createPinnedMintTransportFetch('https://172.105.64.142', 'http://[fd42::1]:3438', transport)
 		expect((await mapped('https://172.105.64.142/v1/info?unit=sat')).status).toBe(200)
-		expect(observed).toEqual(['http://[fd42::1]:3438/v1/info?unit=sat'])
+		expect(observed).toEqual([{ url: 'http://[fd42::1]:3438/v1/info?unit=sat', encoding: 'identity' }])
 		await expect(mapped('https://evil.invalid/v1/info')).rejects.toThrow(/transport-origin/)
 		await expect(mapped('https://172.105.64.142/v1/info#fragment')).rejects.toThrow(/transport-origin/)
 	})

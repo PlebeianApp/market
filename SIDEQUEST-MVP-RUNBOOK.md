@@ -16,9 +16,11 @@ Run from the repository root with the pinned/cached toolchain:
 (cd cashu-wrapper/ts && bun run typecheck:friday)
 (cd cashu-wrapper/ts && bun run test:friday:browser)
 (cd cashu-wrapper/ts && bun run test:friday:v4-service)
+(cd cashu-wrapper/ts && bun test coco-rail.funding.test.ts coco-rail.threshold.test.ts)
 env GOWORK=off GOTOOLCHAIN=go1.23.1+auto GOPROXY=off \
   GOCACHE=/tmp/plebeian-sidequest-r4-go-cache go test ./...
 python3 deploy/friday/separated/test_separated_target.py
+python3 deploy/sidequest-mvp/verify-public-inputs.py
 (cd cashu-wrapper/ts && bun build poc-friday-browser-entry.ts \
   --target=browser --minify \
   --outfile=../../internal/poc/static/friday-browser.js)

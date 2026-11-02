@@ -6,6 +6,9 @@ location ^~ /v1/ {
     proxy_set_header Host 139.162.161.233;
     proxy_set_header X-Forwarded-Proto https;
     proxy_set_header X-Forwarded-For $remote_addr;
+    # Browsers control Accept-Encoding themselves. Never offer compression to
+    # Nutshell across this proxy: Coco must receive identity response bytes.
+    proxy_set_header Accept-Encoding "";
     proxy_redirect off;
     proxy_intercept_errors on;
     proxy_cache off;

@@ -12,14 +12,17 @@ not a claim that the public MVP is live.
   anti-sniping, one-validator outage, automatic close, seller settlement and
   exact five-wallet conservation.
 - Browser export: `plebeianFridayRunFiveMemberAcceptance`.
-- Browser bundle: 1,716,496 bytes, SHA-256
-  `d0a7eb0048e9f4ec4ea9e8c6589e9a6791278c86f746894c63c80b1d4f169a80`.
-- Linux executable: 46,588,448 bytes, SHA-256
-  `e4da15227b43e208aba8f57b92b9977a6f648e43af1c94bd3a7963f17ec67db0`.
+- Browser bundle: 1,717,244 bytes, SHA-256
+  `9e35199341345caca1aa09e841d05dc7460a000854c980df1cfe520ece16753f`.
+- Linux executable: 46,588,440 bytes, SHA-256
+  `10aba3a4165ac4aa11584581ac7e2eea83b269cc131b5b5c1c0aaffb6a917c2d`.
   It reports version `2026.10.23-friday-tier1` and value profile
   `FAKE_MONEY_ONLY`.
 - Same-path browser rebuild and independent-output Go rebuild were byte-for-byte
   identical to those artifacts.
+- The real Coco runtime now forces identity encoding, rejects and boundedly
+  cancels non-identity responses, and the browser-facing nginx mint routes
+  clear upstream `Accept-Encoding`.
 
 ## Verification actually run
 
@@ -29,11 +32,20 @@ not a claim that the public MVP is live.
 - Go repository suite: pass.
 - Separated-topology suite: 19 pass.
 - Static UI/readiness/authorization/adversarial suites: 49 pass, 0 fail.
+- Mint encoding/adaptor regressions: 14 pass, 0 fail, 94 assertions.
 - `git diff --check`: pass.
+- The rebuilt executable started a loopback site plus four actual local Comet
+  processes; all four reached height 6 with one block/app hash and four commit
+  signatures, and the HTTP-served browser bundle matched the embedded asset.
 
 The five-member tests also prove that duplicate actors and conservation drift
 fail closed. The runner observes automatic close and never calls the manual
 close endpoint.
+
+The local process smoke test was not the separated production profile: it
+reported threshold custody and browser threshold readiness false and used no
+Nutshell or NIP-07. The stronger integrated local harness could not start its
+throwaway mint because this workspace has no `.venv/bin/mint`; it is not a pass.
 
 ## Public activation not yet performed
 

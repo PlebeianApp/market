@@ -1,0 +1,66 @@
+# Test reality and source provenance
+
+## Source line
+
+The isolated repository was copied from the coherent accepted implementation
+at `/home/maximoto/Documents/Codex/2026-10-28/task-4/separated-app-successor-r4`
+and committed unchanged as `4cbed4d`. Commit `a2c1591` adds the five-member
+acceptance runner, its browser export, tests, runbook and first rebuilt bundle.
+No frozen evidence packet, installed release or private runtime state was
+modified.
+
+## What the reported local tests actually exercised
+
+| Test group | Real local components | Simulated or absent |
+|---|---|---|
+| Friday browser suite, 120 tests | Bun runtime, Coco/cashu-ts packages, real secp256k1 signing and DLEQ verification, IndexedDB-compatible repository logic, Web Lock lifecycle, and SQLite durability code | No graphical browser, browser profiles, extension, live HTTP listener, Nutshell process, Comet process or remote validator. Fetch, consensus, authority and mint responses are controlled test ports. NIP-07 signers are local test signers. |
+| Four-validator service suite, 83 tests | Bun runtime, real filesystem-backed and in-memory SQLite transitions, production serializers/verifiers, and in-process 3-of-4 cryptographic computations | No four validator OS processes, FIPS sockets, remote shares, live Comet chain or live mint. RPC/HTTP and participant availability are controlled fixtures. |
+| Go suite | Production Go code, filesystem state in temporary directories, Go cryptography and in-process HTTP handlers | `httptest` recorders and synthetic public vectors; no browser, Comet node, Nutshell, Rust DKG, network listener or server mutation. |
+| Separated topology, 19 tests | Production templates and verifier functions | Pure synthetic configuration/ownership metadata; no installed unit, account, listener or host. |
+| Artifact rebuild | Actual Bun bundler and Go 1.23.1 compiler | Build/reproducibility only; it does not execute a live auction. |
+| Loopback site smoke test | The rebuilt executable, its HTTP server, and four real local Comet processes. All four reached height 6 with one common block/app hash and four commit signatures; the served browser bundle matched the build byte-for-byte. | The local-demo profile explicitly reported `threshold_custody:false`, `browser_threshold_wallet_ready:false`, no FIPS transport and a legacy local mint URL. It did not exercise Coco, Nutshell, accepted validator shares, NIP-07 or a live auction. |
+
+The new five-member runner test uses five distinct in-memory controllers. It
+proves orchestration invariants and fail-closed behavior, not five real browser
+profiles. No test reported in this side-quest used a real Nutshell mint,
+threshold share process, NIP-07 extension, public HTTPS origin or remote host.
+
+The repository's stronger throwaway integration harness was attempted once. It
+stopped before readiness because this isolated source tree has no
+`.venv/bin/mint` Nutshell executable. Its wrapper removed its temporary root;
+no local mint, FROST journey or live-integration pass is claimed. The separate
+local-demo root and its throwaway generated keys were also removed after the
+read-only smoke test.
+
+## Mint transport provenance
+
+The accepted standalone content-encoding boundary is 13,305 bytes with
+SHA-256 `8c73b38ab59fea98d0894d9b7a2ddd1e03207ae0568d0a2aca5bf173de594c15`
+under `mint-r7-coco-content-encoding-fix-r2`. Its rebuilt bootstrap and payment
+clients have SHA-256
+`29d4a6d099257f926ccb2d8c7e4341f0a66623d8e405b3ce16aebecc829e364b`
+and `31275a84fc8efd09a6f8c28db163067bf4a7e7f39480908b2682c28d027e394f`
+respectively.
+
+Those binaries are separate conformance consumers. The separated R4 auction
+source imported for this side-quest did **not** contain the encoding correction:
+`coco-rail.ts` only pinned origins and redirects, while the nginx mint route
+forwarded browser `Accept-Encoding`. Therefore the first side-quest site binary,
+SHA-256 `e4da15227b43e208aba8f57b92b9977a6f648e43af1c94bd3a7963f17ec67db0`,
+did not incorporate the accepted correction.
+
+This branch now adapts the accepted behavior into the real site consumers:
+
+- `createOriginBoundMintFetch` and `createPinnedMintTransportFetch` apply native
+  Request/init header replacement, force `Accept-Encoding: identity`, reject a
+  non-identity response with the fixed
+  `mint-response-content-encoding-refused` error, abort it and cancel its body
+  within a bounded grace period;
+- normal and recovery nginx mint routes clear upstream `Accept-Encoding`, which
+  covers browsers where JavaScript cannot set that forbidden request header;
+- focused Coco tests exercise the packed manager through the corrected fetch
+  seam and verify header replacement, refusal, abort and cancellation.
+
+This establishes source-level adoption and local regression coverage. It is not
+a live Nutshell or public-browser conformance result; those remain activation
+gates.
