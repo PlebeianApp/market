@@ -18,13 +18,21 @@ not a claim that the public MVP is live.
   `ab92ff6d0552f8de88208636cdad77dff3863ee8ef325eb04352e635e93e20c5`.
   It reports version `2026.10.23-friday-tier1` and value profile
   `FAKE_MONEY_ONLY`.
-- Acceptance operator executable: 99,321,106 bytes, SHA-256
-  `cc5c91f7a8698c8608ca3ec06a66f202afaf7f1daebe1bc698522e8d840d1700`.
+- Authority executable: 99,171,906 bytes, SHA-256
+  `af51ff40ddafa496169cb15731c1ab8cf2b3b569f707dfd7f69719c9d294755d`.
+- Terminal executor: 98,846,552 bytes, SHA-256
+  `630f63ed3549812d43f585aa019b20aa90ffa863119f5b505406eaa47a518460`.
+- Signer executable: 98,923,995 bytes, SHA-256
+  `00c448e172c13b1a9862cd97bf79608e879739c0cc44aba74019bc3df66739d9`.
+- Acceptance operator executable: 98,477,330 bytes, SHA-256
+  `99db455714398434a9e3719236c3f05c0356d5e945b926aa31e3951e31d1b25d`.
 - Same-path browser rebuild and independent-output Go rebuild were byte-for-byte
   identical to those artifacts.
 - The real Coco runtime now forces identity encoding, rejects and boundedly
   cancels non-identity responses, and the browser-facing nginx mint routes
   clear upstream `Accept-Encoding`.
+- The authority, terminal executor and signer were rebuilt from that corrected
+  shared transport; consecutive baseline-target builds were byte-identical.
 - A separate validator-4 recovery command now requires its own start approval,
   exact inactive-to-active unit transition, and a pinned four-signature Comet
   commit before sealing `active_rejoined`.
@@ -38,6 +46,7 @@ not a claim that the public MVP is live.
 - Separated-topology suite: 19 pass.
 - Static UI/readiness/authorization/adversarial suites: 49 pass, 0 fail.
 - Mint encoding/adaptor regressions: 14 pass, 0 fail, 94 assertions.
+- Authority/terminal/signer CLI regressions: 10 pass, 0 fail, 49 assertions.
 - `git diff --check`: pass.
 - The rebuilt executable started a loopback site plus four actual local Comet
   processes; all four reached height 6 with one block/app hash and four commit

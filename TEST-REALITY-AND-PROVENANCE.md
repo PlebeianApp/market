@@ -61,6 +61,15 @@ This branch now adapts the accepted behavior into the real site consumers:
 - focused Coco tests exercise the packed manager through the corrected fetch
   seam and verify header replacement, refusal, abort and cancellation.
 
+The browser bundle and Go site binary were rebuilt, and so were the separate
+baseline-target Bun executables that perform server-side mint reads: authority
+SHA-256 `af51ff40ddafa496169cb15731c1ab8cf2b3b569f707dfd7f69719c9d294755d`,
+terminal executor `630f63ed3549812d43f585aa019b20aa90ffa863119f5b505406eaa47a518460`,
+and signer `00c448e172c13b1a9862cd97bf79608e879739c0cc44aba74019bc3df66739d9`.
+Each contains the fixed refusal and identity-header boundary; consecutive
+builds were byte-identical. These are local artifacts, not the currently
+installed inactive release.
+
 This establishes source-level adoption and local regression coverage. It is not
 a live Nutshell or public-browser conformance result; those remain activation
 gates.
