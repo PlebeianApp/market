@@ -43,6 +43,9 @@ public reconciliation, pins the actual Go assembler binary, and proves that
 preparation stops without creating an output root when the four public
 validator descriptors are absent. It also invokes the actual assembler's
 argument gate and confirms that an incomplete command fails before writing.
+It also sends structurally complete, deliberately non-cryptographic public
+fixtures to the actual Go consumer and proves that its signature/address gate
+rejects them before creating the bundle root.
 No validator key, private descriptor state or genesis bundle is created.
 
 ## Immutable APP release boundary
@@ -238,8 +241,16 @@ python3 -I -S -B deploy/sidequest-mvp/prepare-genesis-assembly.py \
 ```
 
 It currently returns `BLOCKED_MISSING_PUBLIC_ASSEMBLY_INPUTS` for exactly the
-four slot-bound public validator descriptors. Those descriptors can only come
-from each validator's separately authorized local Comet identity ceremony.
+four slot-bound public validator descriptors. This means only that the public
+files have not been collected into this workspace; remote validator-key and
+credential state has not been reconciled and no claim is made that it is
+absent. The existing source of a descriptor is
+`InitFridayCometValidator`, exposed as `init-friday-comet-validator` with a
+fresh absolute per-host home, the accepted anchor, pinned owner public key and
+that host's slot. Its sole export is `validator-public.json` mode 0644.
+`node_key.json`, `priv_validator_key.json` and
+`priv_validator_state.json` remain beneath the private per-slot home and must
+never be exported.
 The preparation check never initializes validators, reads private state or
 executes the assembler. Once all four public files are recorded with exact
 byte counts and hashes, it renders the sole assembler argv; the Go assembler

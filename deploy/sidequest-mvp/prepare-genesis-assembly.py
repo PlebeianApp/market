@@ -32,6 +32,11 @@ def load_source(record: dict) -> tuple[bytes, dict | None]:
 
 
 def descriptor_shape(value: dict, expected: dict, anchor: dict, anchor_sha256: str) -> None:
+    require(set(value) == {
+        "schema", "deployment_id", "chain_id", "validator_roster_version", "genesis_time",
+        "host_id", "deployment_anchor_sha256", "validator_public_key", "validator",
+        "descriptor_digest", "validator_signature",
+    }, "DESCRIPTOR_FIELDS")
     require(value.get("schema") == "PLEBEIAN_FRIDAY_COMET_VALIDATOR_PUBLIC_V2", "DESCRIPTOR_SCHEMA")
     require(value.get("deployment_id") == anchor["deployment_id"], "DESCRIPTOR_DEPLOYMENT")
     require(value.get("chain_id") == anchor["chain_id"], "DESCRIPTOR_CHAIN")
@@ -40,11 +45,16 @@ def descriptor_shape(value: dict, expected: dict, anchor: dict, anchor_sha256: s
     require(value.get("host_id") == expected["hostId"], "DESCRIPTOR_HOST")
     require(value.get("deployment_anchor_sha256") == anchor_sha256, "DESCRIPTOR_ANCHOR")
     validator = value.get("validator", {})
+    require(set(validator) == {
+        "slot", "moniker", "node_id", "validator_address", "p2p_listen", "p2p_external", "rpc_listen",
+    }, "DESCRIPTOR_VALIDATOR_FIELDS")
     require(validator.get("slot") == expected["slot"], "DESCRIPTOR_SLOT")
     require(validator.get("moniker") == f"plebeian-friday-validator-{expected['slot']}", "DESCRIPTOR_MONIKER")
     require(validator.get("p2p_external") == expected["p2pExternal"], "DESCRIPTOR_P2P_EXTERNAL")
     require(validator.get("p2p_listen") == expected["p2pExternal"], "DESCRIPTOR_P2P_LISTEN")
     require(validator.get("rpc_listen") == "tcp://127.0.0.1:27657", "DESCRIPTOR_RPC")
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", validator.get("node_id", ""))), "DESCRIPTOR_NODE_ID")
+    require(bool(re.fullmatch(r"[0-9A-F]{40}", validator.get("validator_address", ""))), "DESCRIPTOR_VALIDATOR_ADDRESS")
     require(bool(re.fullmatch(r"[0-9a-f]{64}", value.get("validator_public_key", ""))), "DESCRIPTOR_PUBLIC_KEY")
     require(bool(re.fullmatch(r"[0-9a-f]{64}", value.get("descriptor_digest", ""))), "DESCRIPTOR_DIGEST")
     require(bool(re.fullmatch(r"[0-9a-f]{128}", value.get("validator_signature", ""))), "DESCRIPTOR_SIGNATURE_SHAPE")
@@ -70,6 +80,36 @@ def main() -> int:
         "historicalControllerStopPreserved": True,
         "rerenderOrResign": False,
     }, "PLAN_BOUNDARIES")
+    require(plan["descriptorContract"] == {
+        "schema": "PLEBEIAN_FRIDAY_COMET_VALIDATOR_PUBLIC_V2",
+        "signingDomain": "PLEBEIAN_FRIDAY_COMET_VALIDATOR_DESCRIPTOR_V2",
+        "rosterVersion": "genesis-v1",
+        "initializerImplementation": "internal/poc/friday_comet_init.go:InitFridayCometValidator",
+        "initializerCommand": "dist/sidequest/plebeian-auctions-mvp init-friday-comet-validator",
+        "initializerArgvTemplate": [
+            "dist/sidequest/plebeian-auctions-mvp", "init-friday-comet-validator",
+            "--home", "%FRESH_VALIDATOR_HOME%",
+            "--deployment-anchor", "%ACCEPTED_DEPLOYMENT_ANCHOR_PATH_ON_HOST%",
+            "--owner-approval-public-key", "3210f99b78ecd0150b6a0efcaffc6f3b532f4e5a3d68f977e77a3b8d10febade",
+            "--slot", "%SLOT%",
+        ],
+        "initializerRequiresFreshAbsoluteHome": True,
+        "publicExportRelativePath": "validator-public.json",
+        "publicExportMode": "0644",
+        "authoritativeCollectedArtifact": "%FRESH_VALIDATOR_HOME%/validator-public.json",
+        "privateFilesNeverExport": [
+            "validator-{slot}/config/node_key.json",
+            "validator-{slot}/config/priv_validator_key.json",
+            "validator-{slot}/data/priv_validator_state.json",
+        ],
+        "consumerImplementation": "internal/poc/friday_comet_init.go:publicDescriptors",
+        "consumerStrictUnknownFieldRejection": True,
+        "consumerCryptographicValidation": "SOLE_GO_ASSEMBLER_ONLY",
+        "collectionState": "PUBLIC_DESCRIPTORS_NOT_COLLECTED_LOCALLY_REMOTE_HOST_STATE_NOT_RECONCILED",
+        "remoteCredentialStateClaim": "UNKNOWN_NO_CLAIM",
+        "collectedLocalState": "COLLECTED_PUBLIC_ONLY",
+        "collectedRemoteState": "PUBLIC_DESCRIPTOR_PRESENT_PRIVATE_STATE_NOT_READ",
+    }, "DESCRIPTOR_CONTRACT")
 
     sources: dict[str, dict | None] = {}
     for name, record in plan["acceptedPublicInputs"].items():
@@ -99,7 +139,7 @@ def main() -> int:
     require(reconciliation["publicResult"]["deploymentAnchorSha256"] == anchor_sha256, "RECONCILIATION_ANCHOR")
 
     assembler = plan["soleAssembler"]
-    repo = args.plan.resolve().parents[2]
+    repo = Path(__file__).resolve().parents[2]
     binary = repo / assembler["command"]
     binary_raw = binary.read_bytes()
     require(len(binary_raw) == assembler["bytes"] and digest(binary_raw) == assembler["sha256"], "SOLE_ASSEMBLER_BINARY")
@@ -112,8 +152,10 @@ def main() -> int:
     for expected, roster in zip(plan["validatorDescriptors"], anchor["roster"]):
         require((expected["slot"], expected["hostId"], expected["fipsUla"]) == (roster["slot"], roster["host_id"], roster["fips_ula"]), "DESCRIPTOR_ROSTER")
         if expected["path"] is None or expected["bytes"] is None or expected["sha256"] is None:
-            missing.append(f"validatorDescriptors[{expected['slot']}] public descriptor")
+            require(expected["localCollectionState"] == "NOT_COLLECTED" and expected["remoteGenerationState"] == "NOT_RECONCILED_NO_CLAIM", "DESCRIPTOR_COLLECTION_STATE")
+            missing.append(f"validatorDescriptors[{expected['slot']}] public descriptor not collected locally; remote state not reconciled")
             continue
+        require(expected["localCollectionState"] == "COLLECTED_PUBLIC_ONLY" and expected["remoteGenerationState"] == "PUBLIC_DESCRIPTOR_PRESENT_PRIVATE_STATE_NOT_READ", "DESCRIPTOR_COLLECTION_STATE")
         _, descriptor = load_source(expected)
         require(descriptor is not None, "DESCRIPTOR_JSON")
         descriptor_shape(descriptor, expected, anchor, anchor_sha256)

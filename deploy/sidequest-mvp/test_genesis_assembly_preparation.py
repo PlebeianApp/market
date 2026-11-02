@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 import subprocess
 import tempfile
@@ -29,7 +30,10 @@ class GenesisAssemblyPreparation(unittest.TestCase):
             result = json.loads(completed.stdout)
             self.assertEqual(result["acceptedAnchorSha256"], "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb")
             self.assertEqual(result["status"], "BLOCKED_MISSING_PUBLIC_ASSEMBLY_INPUTS")
-            self.assertEqual(result["missing"], [f"validatorDescriptors[{slot}] public descriptor" for slot in range(1, 5)])
+            self.assertEqual(result["missing"], [
+                f"validatorDescriptors[{slot}] public descriptor not collected locally; remote state not reconciled"
+                for slot in range(1, 5)
+            ])
             self.assertIsNone(result["argv"])
             self.assertFalse(result["assemblerExecuted"])
             self.assertFalse(result["privateExecution"])
@@ -59,6 +63,61 @@ class GenesisAssemblyPreparation(unittest.TestCase):
             self.assertNotEqual(stopped.returncode, 0)
             result = json.loads(stopped.stdout)
             self.assertTrue(result["category"].startswith("SOURCE_SHA256:"))
+
+    def test_public_shape_reaches_only_the_go_cryptographic_gate(self) -> None:
+        plan = json.loads(PLAN.read_text(encoding="utf-8"))
+        anchor_sha256 = plan["acceptedPublicInputs"]["deploymentAnchor"]["sha256"]
+        with tempfile.TemporaryDirectory(prefix="sidequest-genesis-public-", dir="/tmp") as temporary:
+            base = Path(temporary)
+            for record in plan["validatorDescriptors"]:
+                slot = record["slot"]
+                descriptor = {
+                    "schema": "PLEBEIAN_FRIDAY_COMET_VALIDATOR_PUBLIC_V2",
+                    "deployment_id": "friday-demo-20261030-separated-v1",
+                    "chain_id": "plebeian-auctions-mvp-20261102",
+                    "validator_roster_version": "genesis-v1",
+                    "genesis_time": "2026-11-02T18:35:21Z",
+                    "host_id": record["hostId"],
+                    "deployment_anchor_sha256": anchor_sha256,
+                    "validator_public_key": f"{slot:064x}",
+                    "validator": {
+                        "slot": slot,
+                        "moniker": f"plebeian-friday-validator-{slot}",
+                        "node_id": f"{slot:040x}",
+                        "validator_address": f"{slot:040X}",
+                        "p2p_listen": record["p2pExternal"],
+                        "p2p_external": record["p2pExternal"],
+                        "rpc_listen": "tcp://127.0.0.1:27657",
+                    },
+                    "descriptor_digest": f"{slot + 4:064x}",
+                    "validator_signature": f"{slot + 8:0128x}",
+                }
+                raw = (json.dumps(descriptor, separators=(",", ":")) + "\n").encode()
+                path = base / f"validator-{slot}-public.json"
+                path.write_bytes(raw)
+                record.update({
+                    "path": str(path), "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
+                    "localCollectionState": "COLLECTED_PUBLIC_ONLY",
+                    "remoteGenerationState": "PUBLIC_DESCRIPTOR_PRESENT_PRIVATE_STATE_NOT_READ",
+                })
+            plan_path = base / "plan.json"
+            plan_path.write_text(json.dumps(plan), encoding="utf-8")
+            bundle = base / "uncreated-bundle"
+            prepared = subprocess.run([
+                "python3", "-I", "-S", "-B", str(PREPARE), "--plan", str(plan_path),
+                "--bundle-root", str(bundle),
+            ], check=False, capture_output=True, text=True)
+            self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+            result = json.loads(prepared.stdout)
+            self.assertEqual(result["status"], "READY_FOR_SOLE_ASSEMBLER_VALIDATION_NOT_EXECUTED")
+            self.assertEqual(result["missing"], [])
+            self.assertEqual(result["descriptorCryptographicValidation"], "DEFERRED_TO_SOLE_GO_ASSEMBLER")
+            self.assertFalse(result["assemblerExecuted"])
+            self.assertFalse(bundle.exists())
+
+            refused = subprocess.run(result["argv"], check=False, capture_output=True, text=True)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertFalse(bundle.exists())
 
 
 if __name__ == "__main__":

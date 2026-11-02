@@ -29,11 +29,42 @@
     "fakeFundingMaxResultingBalance": 50000,
     "bundleRoot": null
   },
+  "descriptorContract": {
+    "schema": "PLEBEIAN_FRIDAY_COMET_VALIDATOR_PUBLIC_V2",
+    "signingDomain": "PLEBEIAN_FRIDAY_COMET_VALIDATOR_DESCRIPTOR_V2",
+    "rosterVersion": "genesis-v1",
+    "initializerImplementation": "internal/poc/friday_comet_init.go:InitFridayCometValidator",
+    "initializerCommand": "dist/sidequest/plebeian-auctions-mvp init-friday-comet-validator",
+    "initializerArgvTemplate": [
+      "dist/sidequest/plebeian-auctions-mvp",
+      "init-friday-comet-validator",
+      "--home", "%FRESH_VALIDATOR_HOME%",
+      "--deployment-anchor", "%ACCEPTED_DEPLOYMENT_ANCHOR_PATH_ON_HOST%",
+      "--owner-approval-public-key", "3210f99b78ecd0150b6a0efcaffc6f3b532f4e5a3d68f977e77a3b8d10febade",
+      "--slot", "%SLOT%"
+    ],
+    "initializerRequiresFreshAbsoluteHome": true,
+    "publicExportRelativePath": "validator-public.json",
+    "publicExportMode": "0644",
+    "authoritativeCollectedArtifact": "%FRESH_VALIDATOR_HOME%/validator-public.json",
+    "privateFilesNeverExport": [
+      "validator-{slot}/config/node_key.json",
+      "validator-{slot}/config/priv_validator_key.json",
+      "validator-{slot}/data/priv_validator_state.json"
+    ],
+    "consumerImplementation": "internal/poc/friday_comet_init.go:publicDescriptors",
+    "consumerStrictUnknownFieldRejection": true,
+    "consumerCryptographicValidation": "SOLE_GO_ASSEMBLER_ONLY",
+    "collectionState": "PUBLIC_DESCRIPTORS_NOT_COLLECTED_LOCALLY_REMOTE_HOST_STATE_NOT_RECONCILED",
+    "remoteCredentialStateClaim": "UNKNOWN_NO_CLAIM",
+    "collectedLocalState": "COLLECTED_PUBLIC_ONLY",
+    "collectedRemoteState": "PUBLIC_DESCRIPTOR_PRESENT_PRIVATE_STATE_NOT_READ"
+  },
   "validatorDescriptors": [
-    {"slot": 1, "hostId": "linode-108175009", "fipsUla": "fdad:d221:cb5f:1d78:1125:b3f6:1a8f:44f8", "p2pExternal": "tcp://[fdad:d221:cb5f:1d78:1125:b3f6:1a8f:44f8]:27656", "path": null, "bytes": null, "sha256": null},
-    {"slot": 2, "hostId": "linode-108236985", "fipsUla": "fdd5:9c40:b25b:2ded:d43:fe2d:11c5:4703", "p2pExternal": "tcp://[fdd5:9c40:b25b:2ded:d43:fe2d:11c5:4703]:27656", "path": null, "bytes": null, "sha256": null},
-    {"slot": 3, "hostId": "linode-108237290", "fipsUla": "fd16:51a0:bc17:19bc:8a04:2076:e388:74a3", "p2pExternal": "tcp://[fd16:51a0:bc17:19bc:8a04:2076:e388:74a3]:27656", "path": null, "bytes": null, "sha256": null},
-    {"slot": 4, "hostId": "linode-108237424", "fipsUla": "fdbd:1deb:a2b0:9e60:dcb1:10df:90d7:5776", "p2pExternal": "tcp://[fdbd:1deb:a2b0:9e60:dcb1:10df:90d7:5776]:27656", "path": null, "bytes": null, "sha256": null}
+    {"slot": 1, "hostId": "linode-108175009", "fipsUla": "fdad:d221:cb5f:1d78:1125:b3f6:1a8f:44f8", "p2pExternal": "tcp://[fdad:d221:cb5f:1d78:1125:b3f6:1a8f:44f8]:27656", "path": null, "bytes": null, "sha256": null, "localCollectionState": "NOT_COLLECTED", "remoteGenerationState": "NOT_RECONCILED_NO_CLAIM"},
+    {"slot": 2, "hostId": "linode-108236985", "fipsUla": "fdd5:9c40:b25b:2ded:d43:fe2d:11c5:4703", "p2pExternal": "tcp://[fdd5:9c40:b25b:2ded:d43:fe2d:11c5:4703]:27656", "path": null, "bytes": null, "sha256": null, "localCollectionState": "NOT_COLLECTED", "remoteGenerationState": "NOT_RECONCILED_NO_CLAIM"},
+    {"slot": 3, "hostId": "linode-108237290", "fipsUla": "fd16:51a0:bc17:19bc:8a04:2076:e388:74a3", "p2pExternal": "tcp://[fd16:51a0:bc17:19bc:8a04:2076:e388:74a3]:27656", "path": null, "bytes": null, "sha256": null, "localCollectionState": "NOT_COLLECTED", "remoteGenerationState": "NOT_RECONCILED_NO_CLAIM"},
+    {"slot": 4, "hostId": "linode-108237424", "fipsUla": "fdbd:1deb:a2b0:9e60:dcb1:10df:90d7:5776", "p2pExternal": "tcp://[fdbd:1deb:a2b0:9e60:dcb1:10df:90d7:5776]:27656", "path": null, "bytes": null, "sha256": null, "localCollectionState": "NOT_COLLECTED", "remoteGenerationState": "NOT_RECONCILED_NO_CLAIM"}
   ],
   "boundaries": {
     "generatesValidatorKeys": false,
