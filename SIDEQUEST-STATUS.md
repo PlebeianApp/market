@@ -20,6 +20,8 @@ not a claim that the public MVP is live.
   `FAKE_MONEY_ONLY`.
 - Authority executable: 99,171,906 bytes, SHA-256
   `af51ff40ddafa496169cb15731c1ab8cf2b3b569f707dfd7f69719c9d294755d`.
+- Coordinator executable: 98,655,955 bytes, SHA-256
+  `2671bb59de2b8a63ffd34721f28c97b59098935503f322ac833b0339d6e6a777`.
 - Terminal executor: 98,846,552 bytes, SHA-256
   `630f63ed3549812d43f585aa019b20aa90ffa863119f5b505406eaa47a518460`.
 - Signer executable: 98,923,995 bytes, SHA-256
@@ -33,6 +35,9 @@ not a claim that the public MVP is live.
   clear upstream `Accept-Encoding`.
 - The authority, terminal executor and signer were rebuilt from that corrected
   shared transport; consecutive baseline-target builds were byte-identical.
+- The coordinator was also rebuilt as part of the coherent runtime set;
+  consecutive same-path baseline-target builds were byte-identical. It does
+  not itself perform mint HTTP reads.
 - A separate validator-4 recovery command now requires its own start approval,
   exact inactive-to-active unit transition, and a pinned four-signature Comet
   commit before sealing `active_rejoined`.
@@ -74,6 +79,12 @@ depends on the single deployment owner receiving and accepting:
    anchor;
 4. the scoped APP/V1-V4 activation approval and, for the fault exercise, separate
    validator-4 stop and start approvals.
+
+The inactive APP site currently installed under the immutable
+`separated-site-browser-r2` release is the older binary, not this side-quest
+build. Its installed unit is internally consistent with that release. This
+new build requires a separately reviewed create-once successor release and an
+exactly rebound unit; it must not overwrite the accepted release in place.
 
 The four-validator DKG result is already complete and must not be repeated.
 Until the gates above are bound and the five persistent browser profiles run

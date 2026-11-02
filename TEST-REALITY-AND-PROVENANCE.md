@@ -13,7 +13,7 @@ modified.
 
 | Test group | Real local components | Simulated or absent |
 |---|---|---|
-| Friday browser suite, 120 tests | Bun runtime, Coco/cashu-ts packages, real secp256k1 signing and DLEQ verification, IndexedDB-compatible repository logic, Web Lock lifecycle, and SQLite durability code | No graphical browser, browser profiles, extension, live HTTP listener, Nutshell process, Comet process or remote validator. Fetch, consensus, authority and mint responses are controlled test ports. NIP-07 signers are local test signers. |
+| Friday browser suite, 122 tests | Bun runtime, Coco/cashu-ts packages, real secp256k1 signing and DLEQ verification, IndexedDB-compatible repository logic, Web Lock lifecycle, and SQLite durability code | No graphical browser, browser profiles, extension, live HTTP listener, Nutshell process, Comet process or remote validator. Fetch, consensus, authority and mint responses are controlled test ports. NIP-07 signers are local test signers. |
 | Four-validator service suite, 83 tests | Bun runtime, real filesystem-backed and in-memory SQLite transitions, production serializers/verifiers, and in-process 3-of-4 cryptographic computations | No four validator OS processes, FIPS sockets, remote shares, live Comet chain or live mint. RPC/HTTP and participant availability are controlled fixtures. |
 | Go suite | Production Go code, filesystem state in temporary directories, Go cryptography and in-process HTTP handlers | `httptest` recorders and synthetic public vectors; no browser, Comet node, Nutshell, Rust DKG, network listener or server mutation. |
 | Separated topology, 19 tests | Production templates and verifier functions | Pure synthetic configuration/ownership metadata; no installed unit, account, listener or host. |
@@ -69,6 +69,14 @@ and signer `00c448e172c13b1a9862cd97bf79608e879739c0cc44aba74019bc3df66739d9`.
 Each contains the fixed refusal and identity-header boundary; consecutive
 builds were byte-identical. These are local artifacts, not the currently
 installed inactive release.
+
+The coordinator was rebuilt as well (98,655,955 bytes, SHA-256
+`2671bb59de2b8a63ffd34721f28c97b59098935503f322ac833b0339d6e6a777`)
+to complete the application runtime set. It does not import the Coco mint
+transport and is not evidence of a mint-path test. Two consecutive builds to
+the canonical output path were byte-identical; Bun embeds the output path, so
+an intentionally different output pathname produced different bytes and is
+not treated as a reproducibility failure.
 
 This establishes source-level adoption and local regression coverage. It is not
 a live Nutshell or public-browser conformance result; those remain activation

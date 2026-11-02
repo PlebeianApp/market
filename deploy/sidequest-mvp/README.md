@@ -14,8 +14,25 @@ python3 deploy/sidequest-mvp/verify-artifacts.py
 It checks every referenced file byte count and SHA-256, requires the runtime to
 embed the exact accepted DKG result, and verifies the committee/package/roster
 pins. It reads no owner key, validator share, proof or authentication database.
-The second verifier pins the locally built browser, site, authority, terminal,
-signer and recovery-operator artifacts plus the corrected transport sources.
+The second verifier pins the locally built browser, site, authority,
+coordinator, terminal, signer and recovery-operator artifacts plus the
+corrected transport sources.
+
+## Immutable APP release boundary
+
+The currently installed inactive APP site is the earlier immutable release
+`separated-site-browser-r2`. Its accepted installed unit (SHA-256
+`475a8532c4a504c08cd8e5ae48495adaf53a2d4f6ee7cf8dc12d2b82a460f6f4`)
+correctly executes
+`/opt/plebeian-auctions-friday/releases/separated-site-browser-r2/bin/plebeian-auctions-mvp`;
+it does not use the older `separated-deploy-v1` path found in the repository's
+base example unit.
+
+The side-quest artifacts in this directory are newer and must not overwrite or
+be copied into that accepted release. A separately reviewed create-once
+successor release and a unit bound to that exact successor path are required
+before activation. The existing installed unit and binary are therefore not
+evidence that this side-quest build is installed.
 
 ## Missing values
 

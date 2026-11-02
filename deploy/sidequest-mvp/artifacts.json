@@ -7,6 +7,7 @@
     { "path": "internal/poc/static/friday-browser.js", "bytes": 1717244, "mode": "0644", "sha256": "dbfc4bd748685854e036098df93aa9604df8bd2e3d79d735934eb54055465a4f" },
     { "path": "dist/sidequest/plebeian-auctions-mvp", "bytes": 46588440, "mode": "0755", "sha256": "ab92ff6d0552f8de88208636cdad77dff3863ee8ef325eb04352e635e93e20c5" },
     { "path": "dist/sidequest/plebeian-friday-authority", "bytes": 99171906, "mode": "0755", "sha256": "af51ff40ddafa496169cb15731c1ab8cf2b3b569f707dfd7f69719c9d294755d" },
+    { "path": "dist/sidequest/plebeian-friday-coordinator", "bytes": 98655955, "mode": "0755", "sha256": "2671bb59de2b8a63ffd34721f28c97b59098935503f322ac833b0339d6e6a777" },
     { "path": "dist/sidequest/plebeian-friday-terminal-executor", "bytes": 98846552, "mode": "0755", "sha256": "630f63ed3549812d43f585aa019b20aa90ffa863119f5b505406eaa47a518460" },
     { "path": "dist/sidequest/plebeian-friday-signer", "bytes": 98923995, "mode": "0755", "sha256": "00c448e172c13b1a9862cd97bf79608e879739c0cc44aba74019bc3df66739d9" },
     { "path": "dist/sidequest/plebeian-friday-acceptance-operator", "bytes": 98477330, "mode": "0755", "sha256": "99db455714398434a9e3719236c3f05c0356d5e945b926aa31e3951e31d1b25d" }
