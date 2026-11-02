@@ -69,15 +69,29 @@
     "mintStoppedSettled": true,
     "satisfiesPaymentConformance": false
   },
-  "missingOwnerAndMintInputs": {
+  "pendingOwnerChoices": {
     "chainId": null,
-    "canonicalGenesisTimeUtc": null,
+    "canonicalGenesisTimeUtc": null
+  },
+  "pendingAcceptedPaymentEvidence": {
     "paymentConformanceReceiptPath": null,
     "paymentConformanceReceiptSha256": null,
     "activeSatKeysetId": null,
-    "reviewedTestMintTransportUrl": null,
+    "reviewedTestMintTransportUrl": null
+  },
+  "pendingActionScope": {
     "freshAuthorityOutputRoot": null,
-    "deploymentAnchorSigningApproved": false
+    "deploymentAnchorSigningApproved": false,
+    "releaseInstallAuthorized": false,
+    "unitInstallAuthorized": false,
+    "configurationInstallAuthorized": false,
+    "serviceActivationAuthorized": false
+  },
+  "derivedAfterOwnerChoicesAndPayment": {
+    "deploymentAnchorAndFundingAbortBootstrap": null,
+    "networkFactsAndGenesisBundle": null,
+    "browserAndHealthPins": null,
+    "observerReceiptAndNodeId": null
   },
   "authority": {
     "ownerPrivateKeyRead": false,

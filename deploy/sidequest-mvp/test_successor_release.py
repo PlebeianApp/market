@@ -114,6 +114,19 @@ class SuccessorReleaseFixture(unittest.TestCase):
             self.assertTrue(receipt.is_file())
             before_replay = digest(receipt.read_bytes())
 
+            for service in (
+                "plebeian-friday-site.service",
+                "plebeian-friday-authority.service",
+                "plebeian-friday-coordinator.service",
+            ):
+                role_check = subprocess.run([
+                    "python3", "-I", "-S", "-B", str(final_root / "bin/verify-friday-separated-target.py"),
+                    "--environment", "/fixture/friday.env", "--application", "/fixture/application.json",
+                    "--service", service, "--fixture-release-root", str(final_root),
+                ], check=False, capture_output=True, text=True)
+                self.assertEqual(role_check.returncode, 0, role_check.stdout + role_check.stderr)
+                self.assertEqual(role_check.stdout.strip(), "SIDEQUEST_ROLE_TARGET=PASS")
+
             calls = command_log.read_text(encoding="utf-8")
             self.assertIn("daemon-reload", calls)
             self.assertNotIn(" start ", " " + calls + " ")

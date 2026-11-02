@@ -9,6 +9,7 @@ User=plebeian-friday-site
 Group=plebeian-friday-public
 Slice=plebeian-friday.slice
 EnvironmentFile=/etc/plebeian-auctions-friday/friday.env
+ExecStartPre=/usr/bin/python3 -I -S -B /opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/verify-friday-separated-target.py --environment /etc/plebeian-auctions-friday/friday.env --application ${FRIDAY_APPLICATION} --service plebeian-friday-site.service
 ExecStartPre=/usr/bin/python3 -I -S -B /opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/verify-sidequest-runtime.py --release-root /opt/plebeian-auctions-friday/releases/sidequest-mvp-r4 --bindings /etc/plebeian-auctions-friday/sidequest-runtime-bindings.json --environment /etc/plebeian-auctions-friday/friday.env --application /etc/plebeian-auctions-friday/application.json
 ExecStart=/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/plebeian-auctions-mvp serve --home ${FRIDAY_NETWORK_ROOT} --listen 127.0.0.1:${FRIDAY_SITE_PORT}
 Restart=always

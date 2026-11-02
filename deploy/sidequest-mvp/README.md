@@ -10,6 +10,7 @@ Run the side-effect-free public check first:
 python3 deploy/sidequest-mvp/verify-public-inputs.py
 python3 deploy/sidequest-mvp/verify-artifacts.py
 python3 -I -S -B deploy/sidequest-mvp/test_successor_release.py -v
+python3 -I -S -B deploy/sidequest-mvp/test_runtime_adoption.py -v
 ```
 
 It checks every referenced file byte count and SHA-256, requires the runtime to
@@ -19,14 +20,19 @@ The second verifier pins the locally built browser, site, authority,
 coordinator, terminal, signer and recovery-operator artifacts plus the
 corrected transport sources.
 
-The third command performs a real composed installation against a fresh `/tmp`
-filesystem fixture. It uses the actual 46 MB site artifact, the exact accepted
-predecessor release, the successor unit, the pre-start runtime verifier, fake
-systemd command boundaries, atomic create-once publication, retained predecessor
-unit bytes, a journal and a final receipt. It then executes the installed
-runtime verifier with a complete fixture configuration, proves the checked-in
-blocked template is rejected, and proves a repeated install stops without
-changing the receipt.
+The third command performs a real composed APP installation against a fresh
+`/tmp` filesystem fixture. It uses the actual site, authority, coordinator and
+terminal binaries, exact accepted predecessor release, successor unit and
+pre-start guards, fake systemd command boundaries, atomic create-once
+publication, retained predecessor unit bytes, a journal and a final receipt.
+It proves the checked-in blocked template and a repeated install fail closed.
+
+The fourth command composes the APP release plus four distinct validator signer
+releases from the actual built binaries. It verifies every binary/unit hash,
+runs each installed role guard, renders the current incomplete inputs as inert
+configuration, then renders a fully bound synthetic fixture and passes the
+accepted five-host `verify_values` contract for APP site/authority/coordinator
+and V1-V4 signers. It performs no service or network action.
 
 ## Immutable APP release boundary
 
@@ -45,7 +51,9 @@ before activation. The existing installed unit and binary are therefore not
 evidence that this side-quest build is installed.
 
 `successor-install-manifest.json` and `install-successor-release.py` implement
-that create-once inactive APP installation shape. The checked-in manifest is
+the create-once inactive APP release shape, containing the site, authority,
+coordinator and terminal artifacts together so the immutable root never needs
+an in-place addition. The checked-in manifest is
 `DRAFT_NOT_AUTHORIZED`, with install approval false, and the controller refuses
 to use it against production paths. It can run only against an explicit child
 of `/tmp`. A future exact owner action must pin the controller, manifest,
@@ -59,16 +67,35 @@ new exact file with status `READY_FOR_SCOPED_ACTIVATION`, every public input
 filled, exact `friday.env` and `application.json` hashes, and separately scoped
 configuration-install and activation approvals.
 
-## Missing values
+## Input reconciliation
 
-Only these values remain unset in `deployment-inputs.json`:
+The following are already accepted and must be reused, not requested again:
+
+- deployment, application-run and DKG-run IDs;
+- APP/V1-V4 host IDs, IPv4 addresses, FIPS ULAs/npubs and signer identities;
+- owner approval public key;
+- accepted DKG result, committee key, manifest/package/roster digests and the
+  exact separated runtime binding;
+- canonical mint origin `https://139.162.161.233` and the selected 10,000 sats
+  per-request / 50,000 advisory balance limits;
+- accepted GET-only bootstrap evidence, receipt hash and active-keyset digest.
+
+Only two content choices remain for the owner:
 
 - owner-selected new chain ID;
-- canonical UTC genesis time;
+- canonical UTC genesis time.
+
+The payment lane must still supply independently accepted evidence; these are
+not owner choices:
+
 - accepted payment-conformance receipt path and SHA-256;
 - accepted active zero-fee SAT keyset ID;
-- reviewed `/test-mint` transport URL;
-- fresh authority output root and exact deployment-anchor signing approval.
+- reviewed `/test-mint` transport URL.
+
+The deployment anchor/FundingAbort bootstrap, network facts/genesis bundle,
+browser/health pins and observer receipt/node ID are downstream products after
+those inputs, not missing selections. Fresh output-root selection and signing,
+install, configuration and activation grants are separate action scopes.
 
 The owner credential path is deliberately not recorded in this public file. It
 may be supplied only inside the separately approved one-shot anchor-rendering
@@ -93,10 +120,10 @@ The remaining changes must stay separate and exact:
 2. Runtime configuration/genesis: render and install the owner-selected chain,
    accepted payment/keyset/mint inputs, deployment anchor, observer, network,
    browser and health pins. No DKG repeat.
-3. Runtime artifact adoption: create-only APP releases for the rebuilt
-   authority/coordinator/terminal artifacts and V1-V4 releases for the signer
-   artifact, each with exact unit/path rebinding. These are not effects of the
-   site installer.
+3. Runtime artifact adoption: install the exact APP successor release and
+   authority/coordinator units, then the exact signer release/unit on each of
+   V1-V4. Preserve `separated-deploy-v1`, validator node binaries, participant
+   binaries, DKG shares and per-slot confinement drop-ins.
 4. Activation: start the already installed exact graph in dependency order
    only after the pre-start verifier passes. This needs its own approval.
 5. HTTPS/firewall and the five-profile browser rehearsal are separate scopes.

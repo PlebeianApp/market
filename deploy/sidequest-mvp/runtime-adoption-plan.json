@@ -1,0 +1,82 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_RUNTIME_ADOPTION_PLAN_V1",
+  "status": "DRAFT_NOT_AUTHORIZED_NOT_INSTALLED_NOT_ACTIVATED",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "releaseRoot": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4",
+  "sitePredecessorReleaseRoot": "/opt/plebeian-auctions-friday/releases/separated-site-browser-r2",
+  "corePredecessorReleaseRoot": "/opt/plebeian-auctions-friday/releases/separated-deploy-v1",
+  "acceptedPublicSources": {
+    "signedBootstrap": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/owner-pre-dkg-bootstrap-signing-r1/outputs/pre-dkg-bootstrap.signed.json", "bytes": 4875, "sha256": "e3b9c12d53d85d367390117dd669d4ec0228c94cfb4790ac4418246df7ad2aa9"},
+    "runtimeBinding": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/post-dkg-genesis-prerequisites-r1/separated-runtime-binding.json", "bytes": 17716, "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a"},
+    "prerequisites": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/post-dkg-genesis-prerequisites-r1/PREREQUISITES.json", "bytes": 10590, "sha256": "8afd2ec097f793706a46d511d274ad91d41476d93c633a11d96a0ebb63395398"},
+    "bootstrapAcceptance": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-COCO-ENCODING-BOOTSTRAP-ACTUAL-RECEIPT-ACCEPTANCE-20261102.md", "bytes": 5458, "sha256": "734ebc54830e867a3c77441f56d0c3019f08efee5b64a69959ea888110d342ad"}
+  },
+  "artifacts": {
+    "site": {"sourcePath": "dist/sidequest/plebeian-auctions-mvp", "destination": "bin/plebeian-auctions-mvp", "bytes": 46588440, "mode": "0755", "sha256": "ab92ff6d0552f8de88208636cdad77dff3863ee8ef325eb04352e635e93e20c5"},
+    "authority": {"sourcePath": "dist/sidequest/plebeian-friday-authority", "destination": "bin/plebeian-friday-authority", "bytes": 99171906, "mode": "0755", "sha256": "af51ff40ddafa496169cb15731c1ab8cf2b3b569f707dfd7f69719c9d294755d"},
+    "coordinator": {"sourcePath": "dist/sidequest/plebeian-friday-coordinator", "destination": "bin/plebeian-friday-coordinator", "bytes": 98655955, "mode": "0755", "sha256": "2671bb59de2b8a63ffd34721f28c97b59098935503f322ac833b0339d6e6a777"},
+    "terminalExecutor": {"sourcePath": "dist/sidequest/plebeian-friday-terminal-executor", "destination": "bin/plebeian-friday-terminal-executor", "bytes": 98846552, "mode": "0755", "sha256": "630f63ed3549812d43f585aa019b20aa90ffa863119f5b505406eaa47a518460"},
+    "signer": {"sourcePath": "dist/sidequest/plebeian-friday-signer", "destination": "bin/plebeian-friday-signer", "bytes": 98923995, "mode": "0755", "sha256": "00c448e172c13b1a9862cd97bf79608e879739c0cc44aba74019bc3df66739d9"}
+  },
+  "releaseSupportArtifacts": [
+    {"sourcePath": "deploy/sidequest-mvp/verify-sidequest-role-target.py", "destination": "bin/verify-friday-separated-target.py", "bytes": 4795, "mode": "0755", "sha256": "ab5dde96f8fd5896c4c9444a589d49e5e840e3403e3ab90d6c9bf551cca7910c"},
+    {"sourcePath": "deploy/friday/separated/verify-friday-separated-target.py", "destination": "bin/verify-friday-separated-base.py", "bytes": 14508, "mode": "0755", "sha256": "08802310fa9d584354ca4a2ce1a24ba290ffba2e10ce6e4007fe46bd9fe136e3"},
+    {"sourcePath": "deploy/friday/verify-friday-runtime-target.py", "destination": "bin/verify-friday-runtime-target.py", "bytes": 24764, "mode": "0755", "sha256": "d5c7031676fa3e5dc15a5da5c11a8d20c44e5f5e53242b3407df90b1c026b206"}
+  ],
+  "roles": [
+    {
+      "role": "APP",
+      "ipv4": "139.162.161.233",
+      "hostId": "linode-109290386",
+      "artifacts": ["site", "authority", "coordinator", "terminalExecutor"],
+      "successorUnits": [
+        {"service": "plebeian-friday-site.service", "sourcePath": "deploy/sidequest-mvp/plebeian-friday-site-successor.service", "bytes": 1404, "sha256": "dffaa560f8b79beff1f76553b3d2c1cb4e041b82dac403da01c6aab8a95f22fc", "predecessorSha256": "475a8532c4a504c08cd8e5ae48495adaf53a2d4f6ee7cf8dc12d2b82a460f6f4"},
+        {"service": "plebeian-friday-authority.service", "sourcePath": "deploy/sidequest-mvp/plebeian-friday-authority-successor.service", "bytes": 1819, "sha256": "657cfe6a205d500d93117943d3d7aec9c52e0617e599cd11e8d5ad30297c19b7", "predecessorSha256": "83012ab70ca09f773b35c3fe38554ccd98a45bbcdaa2920682201a2ba533bfeb"},
+        {"service": "plebeian-friday-coordinator.service", "sourcePath": "deploy/sidequest-mvp/plebeian-friday-coordinator-successor.service", "bytes": 1598, "sha256": "10c1bb4e8b126f7be4893f3543aa4e3402f5c24830c600f6a70c0a8fd4399fa5", "predecessorSha256": "3adc409a3ee1d0d38afbf7df8f3a7ce5a82f20367bbf3f8a2d54c3333b583af2"}
+      ]
+    },
+    {
+      "role": "V1", "participantId": 1, "ipv4": "172.105.64.142", "hostId": "linode-108175009", "artifacts": ["signer"],
+      "successorUnits": [{"service": "plebeian-friday-signer.service", "sourcePath": "deploy/sidequest-mvp/plebeian-friday-signer-successor.service", "bytes": 1346, "sha256": "d79d99abfd381e8886660a75d2b60cabd7f7f484f8373b36df95cc36e097e744", "predecessorSha256": "ff19937cdc1c1b8b03485adc738eddfee715e57cc5be841c84345194daa47f08", "preservedDropInSha256": "829b9ced00221e4e291d068e162c4d28b47485ca45350f8de22232d8c370a407"}]
+    },
+    {
+      "role": "V2", "participantId": 2, "ipv4": "172.105.95.57", "hostId": "linode-108236985", "artifacts": ["signer"],
+      "successorUnits": [{"service": "plebeian-friday-signer.service", "sourcePath": "deploy/sidequest-mvp/plebeian-friday-signer-successor.service", "bytes": 1346, "sha256": "d79d99abfd381e8886660a75d2b60cabd7f7f484f8373b36df95cc36e097e744", "predecessorSha256": "ff19937cdc1c1b8b03485adc738eddfee715e57cc5be841c84345194daa47f08", "preservedDropInSha256": "158f5fdcdbc47afd08da505c6e53d65c55948ace3703ddd292df4cece512d3cc"}]
+    },
+    {
+      "role": "V3", "participantId": 3, "ipv4": "172.104.240.217", "hostId": "linode-108237290", "artifacts": ["signer"],
+      "successorUnits": [{"service": "plebeian-friday-signer.service", "sourcePath": "deploy/sidequest-mvp/plebeian-friday-signer-successor.service", "bytes": 1346, "sha256": "d79d99abfd381e8886660a75d2b60cabd7f7f484f8373b36df95cc36e097e744", "predecessorSha256": "ff19937cdc1c1b8b03485adc738eddfee715e57cc5be841c84345194daa47f08", "preservedDropInSha256": "832646c2b8ad0464705697c8072324078ef002fae1ee669c9223ffd964ff33ae"}]
+    },
+    {
+      "role": "V4", "participantId": 4, "ipv4": "172.104.253.247", "hostId": "linode-108237424", "artifacts": ["signer"],
+      "successorUnits": [{"service": "plebeian-friday-signer.service", "sourcePath": "deploy/sidequest-mvp/plebeian-friday-signer-successor.service", "bytes": 1346, "sha256": "d79d99abfd381e8886660a75d2b60cabd7f7f484f8373b36df95cc36e097e744", "predecessorSha256": "ff19937cdc1c1b8b03485adc738eddfee715e57cc5be841c84345194daa47f08", "preservedDropInSha256": "6cf0826eb6a9fe6954e3401207d77075efbeac92c0de6e447771048129e32251"}]
+    }
+  ],
+  "acceptedExistingInputs": {
+    "deploymentRunAndDkgIds": true,
+    "fiveHostIdsIpv4FipsUlasAndNpubs": true,
+    "ownerApprovalPublicKey": "3210f99b78ecd0150b6a0efcaffc6f3b532f4e5a3d68f977e77a3b8d10febade",
+    "committeePublicKey": "026de1d6cb863ef79f5eb6f95298a7740b8bb27ab666cf133a2dc9e089a222155b",
+    "manifestDigest": "8dee718183fe708b61c11e809731916af78a01ed09572995e6e8e5b62d616818",
+    "runtimeBindingDigest": "ae4fc0a988cfacac5beca7d28fbbed12ada64c851a751fb4dfa71de21529dc72",
+    "bootstrapDigest": "9fb672320d8188a7e63752c0a435a3d96f2122f6f378b555a729ea4c2a625ca9",
+    "canonicalMintOrigin": "https://139.162.161.233",
+    "fundingMaxPerRequest": 10000,
+    "fundingMaxResultingBalanceAdvisory": 50000,
+    "bootstrapReceiptSha256": "a9452ede2dc7704036a9d1f9e5b18b53a6f4b0523d5438e50087f3e160599d9d",
+    "bootstrapActiveKeysetDigest": "331120d5ce836011fbbbca90ebed8cc0c8da4cd40d2f58db448653d2b882badd"
+  },
+  "genuinelyMissingInputs": {
+    "ownerChoices": ["newChainId", "canonicalGenesisTimeUtc"],
+    "pendingAcceptedEvidence": ["paymentConformanceReceiptPathAndSha256", "activeSatKeysetId", "reviewedTestMintTransportUrl"],
+    "derivedAfterThoseInputs": ["deploymentAnchorAndFundingAbortBootstrap", "networkFactsAndGenesisBundle", "browserAndHealthPins", "observerReceiptAndNodeId"]
+  },
+  "authority": {
+    "releaseInstallAuthorized": false,
+    "unitInstallAuthorized": false,
+    "configurationInstallAuthorized": false,
+    "serviceActivationAuthorized": false,
+    "validatorFaultAuthorized": false,
+    "dkgMustNotBeRepeated": true
+  }
+}

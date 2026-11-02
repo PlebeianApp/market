@@ -1,0 +1,30 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_OWNER_DECISIONS_V1",
+  "status": "INCOMPLETE_NOT_AUTHORIZED",
+  "ownerChoices": {
+    "newChainId": null,
+    "canonicalGenesisTimeUtc": null
+  },
+  "acceptedPaymentEvidence": {
+    "paymentConformanceReceiptPath": null,
+    "paymentConformanceReceiptSha256": null,
+    "activeSatKeysetId": null,
+    "reviewedTestMintTransportUrl": null,
+    "independentlyAccepted": false
+  },
+  "derivedRuntimeOutputs": {
+    "deploymentAnchorSha256": null,
+    "networkFactsSha256": null,
+    "browserPinsSha256": null,
+    "healthPinsSha256": null,
+    "observerReceiptSha256": null,
+    "observerNodeId": null
+  },
+  "authority": {
+    "deploymentAnchorSigningApproved": false,
+    "releaseInstallAuthorized": false,
+    "unitInstallAuthorized": false,
+    "configurationInstallAuthorized": false,
+    "serviceActivationAuthorized": false
+  }
+}

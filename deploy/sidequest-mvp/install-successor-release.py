@@ -155,6 +155,37 @@ def write_create(path: Path, raw: bytes, mode: int, owner: int) -> dict:
     return record(path)
 
 
+def copy_create(source: Path, destination: Path, mode: int, owner: int) -> dict:
+    source_descriptor = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    destination_descriptor = -1
+    try:
+        before = os.fstat(source_descriptor)
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1, "UNSAFE_SOURCE:" + str(source))
+        destination_descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, mode)
+        copied = 0
+        while True:
+            block = os.read(source_descriptor, 1 << 20)
+            if not block:
+                break
+            offset = 0
+            while offset < len(block):
+                offset += os.write(destination_descriptor, block[offset:])
+            copied += len(block)
+        require(copied == before.st_size, "SOURCE_COPY_LENGTH:" + str(source))
+        after = os.fstat(source_descriptor)
+        fields = lambda value: (value.st_dev, value.st_ino, value.st_mode, value.st_size, value.st_mtime_ns, value.st_ctime_ns, value.st_nlink)
+        require(fields(before) == fields(after), "SOURCE_CHANGED_DURING_COPY:" + str(source))
+        os.fsync(destination_descriptor)
+        os.fchmod(destination_descriptor, mode)
+        if os.geteuid() == 0:
+            os.fchown(destination_descriptor, owner, owner)
+    finally:
+        if destination_descriptor >= 0:
+            os.close(destination_descriptor)
+        os.close(source_descriptor)
+    return record(destination)
+
+
 def run(argv: list[str]) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(
         argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -192,13 +223,13 @@ def mapped(root: Path | None, absolute: str) -> Path:
     return path if root is None else root / path.relative_to("/")
 
 
-def verify_source(source_root: Path, value: dict) -> bytes:
+def verify_source(source_root: Path, value: dict) -> Path:
     path = source_root / value["sourcePath"]
     raw, metadata = read_regular(path)
     require(len(raw) == value["bytes"], "SOURCE_BYTES:" + value["name"])
     require(digest(raw) == value["sha256"], "SOURCE_SHA256:" + value["name"])
     require(f"{stat.S_IMODE(metadata.st_mode):04o}" == value["sourceMode"], "SOURCE_MODE:" + value["name"])
-    return raw
+    return path
 
 
 def install(manifest: dict, source_root: Path, fixture_root: Path | None, systemctl: Path, systemd_analyze: Path) -> dict:
@@ -218,7 +249,13 @@ def install(manifest: dict, source_root: Path, fixture_root: Path | None, system
     require(manifest["paths"] == EXPECTED_PATHS, "FIXED_PATHS")
     require([(value["name"], value["sourcePath"], value["destination"]) for value in manifest["artifacts"]] == [
         ("plebeian-auctions-mvp", "dist/sidequest/plebeian-auctions-mvp", "bin/plebeian-auctions-mvp"),
+        ("plebeian-friday-authority", "dist/sidequest/plebeian-friday-authority", "bin/plebeian-friday-authority"),
+        ("plebeian-friday-coordinator", "dist/sidequest/plebeian-friday-coordinator", "bin/plebeian-friday-coordinator"),
+        ("plebeian-friday-terminal-executor", "dist/sidequest/plebeian-friday-terminal-executor", "bin/plebeian-friday-terminal-executor"),
         ("verify-sidequest-runtime.py", "deploy/sidequest-mvp/verify-successor-runtime.py", "bin/verify-sidequest-runtime.py"),
+        ("verify-friday-separated-target.py", "deploy/sidequest-mvp/verify-sidequest-role-target.py", "bin/verify-friday-separated-target.py"),
+        ("verify-friday-separated-base.py", "deploy/friday/separated/verify-friday-separated-target.py", "bin/verify-friday-separated-base.py"),
+        ("verify-friday-runtime-target.py", "deploy/friday/verify-friday-runtime-target.py", "bin/verify-friday-runtime-target.py"),
     ], "ARTIFACT_SET")
     require((manifest["unit"]["name"], manifest["unit"]["sourcePath"]) == (
         "plebeian-friday-site.service", "deploy/sidequest-mvp/plebeian-friday-site-successor.service"
@@ -229,9 +266,10 @@ def install(manifest: dict, source_root: Path, fixture_root: Path | None, system
     controller = Path(__file__).read_bytes()
     require(digest(controller) == manifest["controllerSha256"], "CONTROLLER_SHA256")
 
-    payloads = {value["name"]: verify_source(source_root, value) for value in manifest["artifacts"]}
+    sources = {value["name"]: verify_source(source_root, value) for value in manifest["artifacts"]}
     unit_value = manifest["unit"]
-    unit_raw = verify_source(source_root, unit_value)
+    unit_path = verify_source(source_root, unit_value)
+    unit_raw = unit_path.read_bytes()
 
     paths = {key: mapped(fixture_root, value) for key, value in manifest["paths"].items()}
     owner = 0 if production else os.geteuid()
@@ -275,7 +313,7 @@ def install(manifest: dict, source_root: Path, fixture_root: Path | None, system
         staged: dict[str, dict] = {}
         for value in manifest["artifacts"]:
             destination = incoming_root / value["destination"]
-            staged[value["name"]] = write_create(destination, payloads[value["name"]], int(value["installMode"], 8), owner)
+            staged[value["name"]] = copy_create(sources[value["name"]], destination, int(value["installMode"], 8), owner)
         fsync_directory(incoming_root / "bin")
         fsync_directory(incoming_root)
         fsync_directory(release_parent)

@@ -18,11 +18,21 @@
     { "path": "cashu-wrapper/ts/demo-friday-acceptance-operator-cli.ts", "sha256": "d7eb58e30169a63227df5917ad676859bd0f93ac342b990d2000fe4cfc3c5fb8" },
     { "path": "deploy/friday/separated/nginx-normal.conf.example", "sha256": "64cebaff298d0832104880e92d74f4aa61a93302c5395ec293a6dbf2ce835eec" },
     { "path": "deploy/friday/separated/nginx-recovery.conf.example", "sha256": "e870affc3789915406d1ba4b77002e32df3c4070d8f37fc9fe6cf85cb2abd124" },
-    { "path": "deploy/sidequest-mvp/install-successor-release.py", "sha256": "67b02dcb24b0a63f3a2cb3ae7e18f9c5fbe39a21a029ae1b49c316b4cd669517" },
+    { "path": "deploy/sidequest-mvp/install-successor-release.py", "sha256": "0b21439bbbca650bcaca10622bfa84bb8a7ebe28f8f382c6628acdda44041a41" },
     { "path": "deploy/sidequest-mvp/verify-successor-runtime.py", "sha256": "8b9b5e1159d5c15870df5d42c67c0d4d92b1afcf5fca74236bdb2d01d9a9f5a8" },
-    { "path": "deploy/sidequest-mvp/plebeian-friday-site-successor.service", "sha256": "a6f0f56f5abf1a4740d034abba402cbfc301aefd334b2963daa3c12d3b53b3e7" },
+    { "path": "deploy/sidequest-mvp/verify-sidequest-role-target.py", "sha256": "ab5dde96f8fd5896c4c9444a589d49e5e840e3403e3ab90d6c9bf551cca7910c" },
+    { "path": "deploy/sidequest-mvp/plebeian-friday-site-successor.service", "sha256": "dffaa560f8b79beff1f76553b3d2c1cb4e041b82dac403da01c6aab8a95f22fc" },
+    { "path": "deploy/sidequest-mvp/plebeian-friday-authority-successor.service", "sha256": "657cfe6a205d500d93117943d3d7aec9c52e0617e599cd11e8d5ad30297c19b7" },
+    { "path": "deploy/sidequest-mvp/plebeian-friday-coordinator-successor.service", "sha256": "10c1bb4e8b126f7be4893f3543aa4e3402f5c24830c600f6a70c0a8fd4399fa5" },
+    { "path": "deploy/sidequest-mvp/plebeian-friday-signer-successor.service", "sha256": "d79d99abfd381e8886660a75d2b60cabd7f7f484f8373b36df95cc36e097e744" },
     { "path": "deploy/sidequest-mvp/runtime-bindings.template.json", "sha256": "4d4526e684f03133d348c7ce666684a8fa785f5e66d8f8e24ac7abdf39bd6c23" },
-    { "path": "deploy/sidequest-mvp/successor-install-manifest.json", "sha256": "14c3b864f0d170338b61205acff51285a6e555dbfe6b9715adc0383e58dff43b" },
-    { "path": "deploy/sidequest-mvp/test_successor_release.py", "sha256": "9aa6f6d2f60496416c58ab205b976ef847d43e3b8f079426371ea6d589c9ffa7" }
+    { "path": "deploy/sidequest-mvp/successor-install-manifest.json", "sha256": "e941b3e1a6e61b033fdca21c78f1b32624853f3cdb3c6018c997fa23bdc59c8e" },
+    { "path": "deploy/sidequest-mvp/test_successor_release.py", "sha256": "2c1d6c9572c32507cb8bc4a99a26f915c964dce6cefc80d223149586015086c7" },
+    { "path": "deploy/sidequest-mvp/runtime-adoption-plan.json", "sha256": "1245d71bba575f7ae9e8180bb2c9330984aedf50c96ca249820886cf7ef5b96f" },
+    { "path": "deploy/sidequest-mvp/owner-decisions.template.json", "sha256": "258439767b93e7374410d8bace17245ba70b8c253aa4a9769fa53749d51f3d02" },
+    { "path": "deploy/sidequest-mvp/render-runtime-config.py", "sha256": "e62fa2af381274c85991aeafc4dbb24e9cf246ffe24174f2390c95568bd30d1f" },
+    { "path": "deploy/sidequest-mvp/test_runtime_adoption.py", "sha256": "214388e1a933671ccd0877e964b70a73785ca7c848702684380c9e787f3faefb" },
+    { "path": "deploy/sidequest-mvp/deployment-inputs.json", "sha256": "049dde0669754b7ba816f05ad6dcb3c2a10b3861b063334d3b8946719c0289f1" },
+    { "path": "deploy/sidequest-mvp/verify-public-inputs.py", "sha256": "a51bef05e00f60cd2897af6b7ac952c575d4fc80a2400bd3ee7803aa17a3b6d1" }
   ]
 }

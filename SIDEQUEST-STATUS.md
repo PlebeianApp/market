@@ -45,6 +45,15 @@ not a claim that the public MVP is live.
 - The runtime-binding template fails closed until payment, genesis, anchor,
   observer, network, browser and health inputs plus exact configuration hashes
   and scoped approvals are present.
+- One unauthorized five-role adoption plan now maps site/authority/coordinator/
+  terminal to APP and the signer only to V1-V4, with exact predecessor and
+  successor unit pins. Existing validator binaries, participant binaries,
+  shares and per-slot confinement drop-ins remain predecessor-owned.
+- The public configuration renderer consumes the accepted bootstrap, runtime
+  binding, prerequisites and bootstrap acceptance directly. With current
+  inputs it emits inert configurations; it can emit ready configuration only
+  after complete payment, chain/time, derived runtime pins and all scoped
+  authorities are present.
 - A separate validator-4 recovery command now requires its own start approval,
   exact inactive-to-active unit transition, and a pinned four-signature Comet
   commit before sealing `active_rejoined`.
@@ -65,8 +74,12 @@ not a claim that the public MVP is live.
   pre-start verifier with complete synthetic public inputs, rejected the
   blocked template and rejected a repeated install without receipt mutation.
 - The real local `systemd-analyze verify` parser returned success for the exact
-  successor unit and emitted the expected warning that its production
-  executable path is not installed on this workstation.
+  site, authority, coordinator and signer successor units and emitted expected
+  warnings for production executables/dependencies absent on this workstation.
+- The five-role adoption fixture copied and checked every actual APP/V1-V4
+  binary, ran all installed role artifact guards, proved the current render is
+  inert, rejected output-root reuse, and passed all role contracts with a
+  complete synthetic ready input set.
 - The rebuilt executable started a loopback site plus four actual local Comet
   processes; all four reached height 6 with one block/app hash and four commit
   signatures, and the HTTP-served browser bundle matched the embedded asset.

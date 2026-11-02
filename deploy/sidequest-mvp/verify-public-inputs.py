@@ -55,14 +55,29 @@ def main() -> None:
         "satisfiesPaymentConformance": False,
     }
 
-    missing = config["missingOwnerAndMintInputs"]
-    allowed_nulls = {
-        "chainId", "canonicalGenesisTimeUtc", "paymentConformanceReceiptPath",
-        "paymentConformanceReceiptSha256", "activeSatKeysetId",
-        "reviewedTestMintTransportUrl", "freshAuthorityOutputRoot",
+    assert config["pendingOwnerChoices"] == {
+        "chainId": None,
+        "canonicalGenesisTimeUtc": None,
     }
-    assert {key for key, value in missing.items() if value is None} == allowed_nulls
-    assert missing["deploymentAnchorSigningApproved"] is False
+    assert config["pendingAcceptedPaymentEvidence"] == {
+        "paymentConformanceReceiptPath": None,
+        "paymentConformanceReceiptSha256": None,
+        "activeSatKeysetId": None,
+        "reviewedTestMintTransportUrl": None,
+    }
+    assert config["pendingActionScope"] == {
+        "freshAuthorityOutputRoot": None,
+        "deploymentAnchorSigningApproved": False,
+        "releaseInstallAuthorized": False,
+        "unitInstallAuthorized": False,
+        "configurationInstallAuthorized": False,
+        "serviceActivationAuthorized": False,
+    }
+    assert set(config["derivedAfterOwnerChoicesAndPayment"]) == {
+        "deploymentAnchorAndFundingAbortBootstrap", "networkFactsAndGenesisBundle",
+        "browserAndHealthPins", "observerReceiptAndNodeId",
+    }
+    assert all(value is None for value in config["derivedAfterOwnerChoicesAndPayment"].values())
     assert config["authority"] == {
         "ownerPrivateKeyRead": False,
         "remoteActions": False,

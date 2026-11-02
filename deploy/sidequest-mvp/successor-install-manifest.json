@@ -3,7 +3,7 @@
   "status": "DRAFT_NOT_AUTHORIZED",
   "valueProfile": "FAKE_MONEY_ONLY",
   "target": {"role": "APP", "ipv4": "139.162.161.233", "providerId": 109290386},
-  "controllerSha256": "67b02dcb24b0a63f3a2cb3ae7e18f9c5fbe39a21a029ae1b49c316b4cd669517",
+  "controllerSha256": "0b21439bbbca650bcaca10622bfa84bb8a7ebe28f8f382c6628acdda44041a41",
   "authority": {
     "ownerInactiveInstallApproved": false,
     "serviceActivationApproved": false,
@@ -49,6 +49,33 @@
       "installMode": "0755"
     },
     {
+      "name": "plebeian-friday-authority",
+      "sourcePath": "dist/sidequest/plebeian-friday-authority",
+      "destination": "bin/plebeian-friday-authority",
+      "bytes": 99171906,
+      "sha256": "af51ff40ddafa496169cb15731c1ab8cf2b3b569f707dfd7f69719c9d294755d",
+      "sourceMode": "0755",
+      "installMode": "0755"
+    },
+    {
+      "name": "plebeian-friday-coordinator",
+      "sourcePath": "dist/sidequest/plebeian-friday-coordinator",
+      "destination": "bin/plebeian-friday-coordinator",
+      "bytes": 98655955,
+      "sha256": "2671bb59de2b8a63ffd34721f28c97b59098935503f322ac833b0339d6e6a777",
+      "sourceMode": "0755",
+      "installMode": "0755"
+    },
+    {
+      "name": "plebeian-friday-terminal-executor",
+      "sourcePath": "dist/sidequest/plebeian-friday-terminal-executor",
+      "destination": "bin/plebeian-friday-terminal-executor",
+      "bytes": 98846552,
+      "sha256": "630f63ed3549812d43f585aa019b20aa90ffa863119f5b505406eaa47a518460",
+      "sourceMode": "0755",
+      "installMode": "0755"
+    },
+    {
       "name": "verify-sidequest-runtime.py",
       "sourcePath": "deploy/sidequest-mvp/verify-successor-runtime.py",
       "destination": "bin/verify-sidequest-runtime.py",
@@ -56,13 +83,40 @@
       "sha256": "8b9b5e1159d5c15870df5d42c67c0d4d92b1afcf5fca74236bdb2d01d9a9f5a8",
       "sourceMode": "0644",
       "installMode": "0755"
+    },
+    {
+      "name": "verify-friday-separated-target.py",
+      "sourcePath": "deploy/sidequest-mvp/verify-sidequest-role-target.py",
+      "destination": "bin/verify-friday-separated-target.py",
+      "bytes": 4795,
+      "sha256": "ab5dde96f8fd5896c4c9444a589d49e5e840e3403e3ab90d6c9bf551cca7910c",
+      "sourceMode": "0644",
+      "installMode": "0755"
+    },
+    {
+      "name": "verify-friday-separated-base.py",
+      "sourcePath": "deploy/friday/separated/verify-friday-separated-target.py",
+      "destination": "bin/verify-friday-separated-base.py",
+      "bytes": 14508,
+      "sha256": "08802310fa9d584354ca4a2ce1a24ba290ffba2e10ce6e4007fe46bd9fe136e3",
+      "sourceMode": "0644",
+      "installMode": "0755"
+    },
+    {
+      "name": "verify-friday-runtime-target.py",
+      "sourcePath": "deploy/friday/verify-friday-runtime-target.py",
+      "destination": "bin/verify-friday-runtime-target.py",
+      "bytes": 24764,
+      "sha256": "d5c7031676fa3e5dc15a5da5c11a8d20c44e5f5e53242b3407df90b1c026b206",
+      "sourceMode": "0644",
+      "installMode": "0755"
     }
   ],
   "unit": {
     "name": "plebeian-friday-site.service",
     "sourcePath": "deploy/sidequest-mvp/plebeian-friday-site-successor.service",
-    "bytes": 1141,
-    "sha256": "a6f0f56f5abf1a4740d034abba402cbfc301aefd334b2963daa3c12d3b53b3e7",
+    "bytes": 1404,
+    "sha256": "dffaa560f8b79beff1f76553b3d2c1cb4e041b82dac403da01c6aab8a95f22fc",
     "sourceMode": "0644",
     "installMode": "0644"
   },
