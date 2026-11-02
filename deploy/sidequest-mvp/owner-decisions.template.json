@@ -36,6 +36,10 @@
     "authorityRenderReceiptSha256": "ca250b51b7dc17f51cca678e11be8180bd047a28d2675e012af70ee70506f0c2",
     "independentReviewPath": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-render-actual-public-review-20261102/INDEPENDENT-REVIEW.md",
     "independentReviewSha256": "da8348fc1d0ae237ad2e9db1437eb68836c9c9e0310d3b506528845a0e04cbf1",
+    "publicReconciliationPath": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-anchor-public-reconcile-r1/ACTUAL-RECONCILIATION.json",
+    "publicReconciliationSha256": "f454abb91fce96e381d4c61db20b72770ecfcd5527c4ddbb0680a15edae04aaf",
+    "publicReconciliationReviewPath": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-anchor-public-reconcile-r1-independent-review-20261102/INDEPENDENT-REVIEW.md",
+    "publicReconciliationReviewSha256": "1ce5295130e9b358826b9d2f69a737c6895e97ecde284745348093dc1e6c9718",
     "historicalControllerStopPreserved": true,
     "rendererRerunOrResignAuthorized": false
   },

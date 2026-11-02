@@ -12,6 +12,7 @@ python3 deploy/sidequest-mvp/verify-public-inputs.py
 python3 deploy/sidequest-mvp/verify-artifacts.py
 python3 -I -S -B deploy/sidequest-mvp/test_successor_release.py -v
 python3 -I -S -B deploy/sidequest-mvp/test_runtime_adoption.py -v
+python3 -I -S -B deploy/sidequest-mvp/test_genesis_assembly_preparation.py -v
 ```
 
 It checks every referenced file byte count and SHA-256, requires the runtime to
@@ -36,6 +37,13 @@ inputs as inert configuration, then renders a fully bound synthetic fixture and
 passes the accepted five-host `verify_values` contract for APP
 site/authority/coordinator and V1-V4 signers. It performs no service or network
 action.
+
+The fifth command validates the genuine accepted signed anchor and corrected
+public reconciliation, pins the actual Go assembler binary, and proves that
+preparation stops without creating an output root when the four public
+validator descriptors are absent. It also invokes the actual assembler's
+argument gate and confirms that an incomplete command fails before writing.
+No validator key, private descriptor state or genesis bundle is created.
 
 ## Immutable APP release boundary
 
@@ -117,6 +125,13 @@ post-render verifier encountered a recursive JSON property-order defect. The
 accepted independent review records the renderer exit as settled and the
 signature as valid for the exact frozen preimage. Preserve that historical
 STOP: rerendering and resigning are not authorized or needed for this handoff.
+The corrected public-verifier successor and genuine-output reconciliation are
+independently accepted at SHA-256
+`1ce5295130e9b358826b9d2f69a737c6895e97ecde284745348093dc1e6c9718`.
+The reconciled result itself is SHA-256
+`f454abb91fce96e381d4c61db20b72770ecfcd5527c4ddbb0680a15edae04aaf`.
+It closes the property-order defect without modifying the original STOP or
+creating another signature.
 
 The production authority renderer requires an owner-reviewed receipt file and
 the SHA-256 of those exact bytes. It checks that the file exists, is 2 bytes to
@@ -203,6 +218,33 @@ separate owner actions and must consume the exact accepted files from that
 root. `owner-decisions.template.json` and `runtime-adoption-plan.json` pin all
 three files and the independent review, and `render-runtime-config.py` refuses
 source drift or a substituted anchor.
+
+## Sole genesis assembler preparation
+
+`genesis-assembly-plan.json` binds the genuine anchor, authenticated DKG,
+FundingAbort bootstrap, separated runtime, corrected public reconciliation,
+chain/time, both mint URL roles and the 10,000/50,000 fake-funding limits. The
+only assembler remains the production Go
+`internal/poc/friday_comet_init.go:AssembleFridayCometGenesis` implementation,
+invoked through `plebeian-auctions-mvp assemble-friday-comet`; no second
+assembler or approval controller was added.
+
+The non-executing preparation check is:
+
+```sh
+python3 -I -S -B deploy/sidequest-mvp/prepare-genesis-assembly.py \
+  --plan deploy/sidequest-mvp/genesis-assembly-plan.json \
+  --bundle-root /tmp/plebeian-sidequest-genuine-assembly-uncreated
+```
+
+It currently returns `BLOCKED_MISSING_PUBLIC_ASSEMBLY_INPUTS` for exactly the
+four slot-bound public validator descriptors. Those descriptors can only come
+from each validator's separately authorized local Comet identity ceremony.
+The preparation check never initializes validators, reads private state or
+executes the assembler. Once all four public files are recorded with exact
+byte counts and hashes, it renders the sole assembler argv; the Go assembler
+remains responsible for descriptor signatures, distinct roster membership and
+all genesis semantics.
 
 ## Validator-4 rejoin control
 

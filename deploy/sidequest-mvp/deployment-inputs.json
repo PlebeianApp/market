@@ -87,6 +87,16 @@
       "bytes": 6163,
       "sha256": "da8348fc1d0ae237ad2e9db1437eb68836c9c9e0310d3b506528845a0e04cbf1"
     },
+    "publicAnchorReconciliation": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-anchor-public-reconcile-r1/ACTUAL-RECONCILIATION.json",
+      "bytes": 3677,
+      "sha256": "f454abb91fce96e381d4c61db20b72770ecfcd5527c4ddbb0680a15edae04aaf"
+    },
+    "publicAnchorReconciliationIndependentReview": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-anchor-public-reconcile-r1-independent-review-20261102/INDEPENDENT-REVIEW.md",
+      "bytes": 6631,
+      "sha256": "1ce5295130e9b358826b9d2f69a737c6895e97ecde284745348093dc1e6c9718"
+    },
     "ownerPaymentProjection": {
       "path": "/home/maximoto/Documents/Codex/2026-10-26/task-3/prototype/wednesday-shell-r20-core/mint-payment-public-receipt-projection-r1/OWNER-SUPPLIED-PUBLIC-PROJECTION-R1.json",
       "bytes": 1686,

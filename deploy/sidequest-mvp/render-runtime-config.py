@@ -136,7 +136,7 @@ def validate_payment_projection(payment: dict, plan: dict, bootstrap: dict) -> N
     }, "PAYMENT_PROJECTION_MECHANICS")
 
 
-def validate_signed_authority(anchor: dict, funding: dict, receipt: dict, review: dict, plan: dict, bootstrap: dict, runtime: dict) -> None:
+def validate_signed_authority(anchor: dict, funding: dict, receipt: dict, review: dict, reconciliation: dict, reconciliation_review: dict, plan: dict, bootstrap: dict, runtime: dict) -> None:
     accepted = plan["acceptedExistingInputs"]
     require(anchor["schema"] == "PLEBEIAN_FRIDAY_COMET_DEPLOYMENT_ANCHOR_V1", "SIGNED_ANCHOR_SCHEMA")
     require(anchor["deployment_id"] == bootstrap["deploymentId"], "SIGNED_ANCHOR_DEPLOYMENT")
@@ -185,6 +185,23 @@ def validate_signed_authority(anchor: dict, funding: dict, receipt: dict, review
         "deployment_anchor_sha256": accepted["signedDeploymentAnchorSha256"],
     }, "SIGNED_AUTHORITY_RECEIPT")
     require(review["rawSha256"] == accepted["actualOwnerRenderReviewSha256"], "SIGNED_AUTHORITY_REVIEW")
+    require(reconciliation["schema"] == "PUBLIC_EXISTING_OWNER_ANCHOR_RECONCILIATION_V1", "SIGNED_AUTHORITY_RECONCILIATION_SCHEMA")
+    require(reconciliation["status"] == "EXISTING_PUBLIC_SIGNATURE_AND_OUTPUTS_VERIFIED_REQUIRES_INDEPENDENT_REVIEW", "SIGNED_AUTHORITY_RECONCILIATION_STATUS")
+    require(reconciliation["historicalAttemptStatusUnchanged"] == "STOP_NO_RETRY_PRESERVE_ALL_STATE", "SIGNED_AUTHORITY_HISTORICAL_STOP")
+    require(reconciliation["newSignatureOrRendererRun"] is False and reconciliation["privateSeedReadOrStat"] is False, "SIGNED_AUTHORITY_NO_PRIVATE_RERUN")
+    require(reconciliation["genesisOrRemoteOrActivation"] is False and reconciliation["oldEvidenceOrOutputsModified"] is False, "SIGNED_AUTHORITY_RECONCILIATION_SCOPE")
+    require(reconciliation["process"]["returnCode"] == 0 and reconciliation["process"]["settled"] is True, "SIGNED_AUTHORITY_RECONCILIATION_PROCESS")
+    require(reconciliation["publicResult"] == {
+        "deploymentAnchorSha256": accepted["signedDeploymentAnchorSha256"],
+        "fundingAbortBootstrapSha256": accepted["fundingAbortBootstrapSha256"],
+        "messageBytes": accepted["unsignedSigningMessageBytes"],
+        "messageSha256": accepted["unsignedSigningMessageSha256"],
+        "ownerPublicKey": accepted["ownerApprovalPublicKey"],
+        "rendererStdoutReceiptChecked": False,
+        "semanticReceiptVerified": True,
+        "signatures": 1,
+    }, "SIGNED_AUTHORITY_RECONCILIATION_RESULT")
+    require(reconciliation_review["rawSha256"] == accepted["publicAnchorReconciliationReviewSha256"], "SIGNED_AUTHORITY_RECONCILIATION_REVIEW")
 
 
 def application(bootstrap: dict, role: str, participant_id: int) -> dict:
@@ -283,6 +300,8 @@ def main() -> int:
     funding_bootstrap = sources["fundingAbortBootstrap"]
     authority_receipt = sources["authorityRenderReceipt"]
     owner_render_review = sources["actualOwnerRenderReview"]
+    anchor_reconciliation = sources["publicAnchorReconciliation"]
+    anchor_reconciliation_review = sources["publicAnchorReconciliationReview"]
     require(runtime["deploymentId"] == bootstrap["deploymentId"], "DEPLOYMENT_BINDING")
     require(authenticated_dkg == runtime["result"], "AUTHENTICATED_DKG_RUNTIME_BINDING")
     require(plan["acceptedPublicSources"]["authenticatedDkgResult"]["sha256"] == plan["acceptedExistingInputs"]["authenticatedDkgResultSha256"], "AUTHENTICATED_DKG_DIGEST")
@@ -346,7 +365,7 @@ def main() -> int:
     require(decisions["acceptedPaymentEvidence"]["mintOnlyAcceptanceSha256"] == payment_reconciliation["rawSha256"], "PAYMENT_MINT_ONLY_ACCEPTANCE_DIGEST")
     require(decisions["acceptedPaymentEvidence"]["underlyingRawReceiptSha256OwnerVerifiedOnly"] == payment_projection["receiptSha256"], "PAYMENT_RAW_RECEIPT_PROVENANCE")
     require(decisions["acceptedPaymentEvidence"]["cashuMintUrl"] == bootstrap["application"]["mintOrigin"], "PAYMENT_CASHU_MINT_IDENTITY")
-    validate_signed_authority(signed_anchor, funding_bootstrap, authority_receipt, owner_render_review, plan, bootstrap, runtime)
+    validate_signed_authority(signed_anchor, funding_bootstrap, authority_receipt, owner_render_review, anchor_reconciliation, anchor_reconciliation_review, plan, bootstrap, runtime)
     require(decisions["acceptedSignedAuthorityOutputs"] == {
         "outputRoot": str(Path(plan["acceptedPublicSources"]["signedDeploymentAnchor"]["path"]).parent),
         "deploymentAnchorPath": plan["acceptedPublicSources"]["signedDeploymentAnchor"]["path"],
@@ -357,6 +376,10 @@ def main() -> int:
         "authorityRenderReceiptSha256": plan["acceptedExistingInputs"]["authorityRenderReceiptSha256"],
         "independentReviewPath": plan["acceptedPublicSources"]["actualOwnerRenderReview"]["path"],
         "independentReviewSha256": plan["acceptedExistingInputs"]["actualOwnerRenderReviewSha256"],
+        "publicReconciliationPath": plan["acceptedPublicSources"]["publicAnchorReconciliation"]["path"],
+        "publicReconciliationSha256": plan["acceptedExistingInputs"]["publicAnchorReconciliationSha256"],
+        "publicReconciliationReviewPath": plan["acceptedPublicSources"]["publicAnchorReconciliationReview"]["path"],
+        "publicReconciliationReviewSha256": plan["acceptedExistingInputs"]["publicAnchorReconciliationReviewSha256"],
         "historicalControllerStopPreserved": True,
         "rendererRerunOrResignAuthorized": False,
     }, "SIGNED_AUTHORITY_DECISIONS")

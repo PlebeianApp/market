@@ -41,6 +41,7 @@ def main() -> None:
     signed_anchor = json.loads(require_file(accepted["signedDeploymentAnchor"]))
     funding_bootstrap = json.loads(require_file(accepted["signedFundingAbortBootstrap"]))
     authority_receipt = json.loads(require_file(accepted["authorityRenderReceipt"]))
+    anchor_reconciliation = json.loads(require_file(accepted["publicAnchorReconciliation"]))
     threshold = config["threshold"]
     assert dkg == runtime["result"], "runtime does not embed the accepted DKG result"
     assert runtime["bindingDigest"] == accepted["separatedRuntimeBinding"]["semanticDigest"]
@@ -98,6 +99,25 @@ def main() -> None:
         "frost_final_package_sha256": signed_anchor["frost_final_package_sha256"],
         "funding_abort_bootstrap_sha256": accepted["signedFundingAbortBootstrap"]["sha256"],
         "deployment_anchor_sha256": accepted["signedDeploymentAnchor"]["sha256"],
+    }
+    assert anchor_reconciliation["schema"] == "PUBLIC_EXISTING_OWNER_ANCHOR_RECONCILIATION_V1"
+    assert anchor_reconciliation["status"] == "EXISTING_PUBLIC_SIGNATURE_AND_OUTPUTS_VERIFIED_REQUIRES_INDEPENDENT_REVIEW"
+    assert anchor_reconciliation["historicalAttemptStatusUnchanged"] == "STOP_NO_RETRY_PRESERVE_ALL_STATE"
+    assert anchor_reconciliation["newSignatureOrRendererRun"] is False
+    assert anchor_reconciliation["privateSeedReadOrStat"] is False
+    assert anchor_reconciliation["genesisOrRemoteOrActivation"] is False
+    assert anchor_reconciliation["oldEvidenceOrOutputsModified"] is False
+    assert anchor_reconciliation["process"]["returnCode"] == 0
+    assert anchor_reconciliation["process"]["settled"] is True
+    assert anchor_reconciliation["publicResult"] == {
+        "deploymentAnchorSha256": accepted["signedDeploymentAnchor"]["sha256"],
+        "fundingAbortBootstrapSha256": accepted["signedFundingAbortBootstrap"]["sha256"],
+        "messageBytes": 2077,
+        "messageSha256": "757b4855ed30d05d474636f60ecfa4e8388ef841ba27b39fb83c127e4f0c4d6b",
+        "ownerPublicKey": signed_anchor["owner_approval_public_key"],
+        "rendererStdoutReceiptChecked": False,
+        "semanticReceiptVerified": True,
+        "signatures": 1,
     }
 
     assert payment_projection["schema"] == "PLEBEIAN_FRIDAY_R4_MINT_CONFORMANCE_PUBLIC_PROJECTION_R1_V1"

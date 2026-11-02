@@ -30,11 +30,14 @@
     { "path": "deploy/sidequest-mvp/successor-install-manifest.json", "sha256": "a47ec9d1fb484b91545446367f7a2689959ccb849855b27303c80a4ba41ee23a" },
     { "path": "deploy/sidequest-mvp/test_successor_release.py", "sha256": "324b56b050005f418ac7750d413fa51b3d6c0a4e02252ebb38354d5e1312fe10" },
     { "path": "deploy/sidequest-mvp/genesis-content-decision.json", "sha256": "afd2d2e0a9eda3c9a7100d82bad37380486acd71731e9ca03eb62f0dfd868371" },
-    { "path": "deploy/sidequest-mvp/runtime-adoption-plan.json", "sha256": "a2b8e49796811090dc65b7189263a8dcac4af08400e293b7a24f9b5140bb8ba4" },
-    { "path": "deploy/sidequest-mvp/owner-decisions.template.json", "sha256": "adffdc93075d95255de093c874803f407910a221696ab756e339f1ce537270e6" },
-    { "path": "deploy/sidequest-mvp/render-runtime-config.py", "sha256": "026f817818536f61ecf9945ce68c3dd778c6e8929bfe0e7db556f6c598e554a4" },
+    { "path": "deploy/sidequest-mvp/runtime-adoption-plan.json", "sha256": "79c15ee30850b6b2f9a35646cb46131c432f95c5286945871b0bc7709c4c5f2e" },
+    { "path": "deploy/sidequest-mvp/owner-decisions.template.json", "sha256": "5f8297aa31bdf9cade9e0e54936f78579d485f8d694103d4ae3cbef725fb6e0e" },
+    { "path": "deploy/sidequest-mvp/render-runtime-config.py", "sha256": "7508caa350b1b0bfc3ff1a1cb6e01f24db482c932cb6093592d14245a832244d" },
     { "path": "deploy/sidequest-mvp/test_runtime_adoption.py", "sha256": "c271bd2a9434395f4ee1f66d2616b742a0a4bf081a31c6f47f5a8c29f738dd33" },
-    { "path": "deploy/sidequest-mvp/deployment-inputs.json", "sha256": "9d9ca94ca639d57462390e3f6634b79ecf9579a8c2f7285465fbb93dd8787e8d" },
-    { "path": "deploy/sidequest-mvp/verify-public-inputs.py", "sha256": "78be20fd10aefbf431e40f94b27d09f5e0bee5420221d5ad653e20197b7d9f17" }
+    { "path": "deploy/sidequest-mvp/deployment-inputs.json", "sha256": "25885b0677cb1858ebbbd3d27a884a2f8faab17ae5dbd7fcaa3147930e893b7c" },
+    { "path": "deploy/sidequest-mvp/verify-public-inputs.py", "sha256": "326b835444ad04427646ab03f67853ac66c150d9c01289939b1323a51fe1f3be" },
+    { "path": "deploy/sidequest-mvp/genesis-assembly-plan.json", "sha256": "024b017a04e36ef37e85fa5e9aa1d950fc99feac1014e2124e6910ae008fcbc9" },
+    { "path": "deploy/sidequest-mvp/prepare-genesis-assembly.py", "sha256": "b902fba8f18bf2a633e16be9e83fb0bfd3371a45deddeedae0de5b9cc9609aaf" },
+    { "path": "deploy/sidequest-mvp/test_genesis_assembly_preparation.py", "sha256": "6d78579394b05f73e63a97d5ea446f5240ccd067b489a4ab5c6367b37efbe72e" }
   ]
 }

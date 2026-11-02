@@ -19,6 +19,8 @@
     "fundingAbortBootstrap": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/funding-abort-bootstrap.json", "bytes": 442, "sha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf"},
     "authorityRenderReceipt": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/authority-render-receipt.json", "bytes": 731, "sha256": "ca250b51b7dc17f51cca678e11be8180bd047a28d2675e012af70ee70506f0c2"},
     "actualOwnerRenderReview": {"path": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-render-actual-public-review-20261102/INDEPENDENT-REVIEW.md", "bytes": 6163, "sha256": "da8348fc1d0ae237ad2e9db1437eb68836c9c9e0310d3b506528845a0e04cbf1"},
+    "publicAnchorReconciliation": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-anchor-public-reconcile-r1/ACTUAL-RECONCILIATION.json", "bytes": 3677, "sha256": "f454abb91fce96e381d4c61db20b72770ecfcd5527c4ddbb0680a15edae04aaf"},
+    "publicAnchorReconciliationReview": {"path": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-anchor-public-reconcile-r1-independent-review-20261102/INDEPENDENT-REVIEW.md", "bytes": 6631, "sha256": "1ce5295130e9b358826b9d2f69a737c6895e97ecde284745348093dc1e6c9718"},
     "paymentProjection": {"path": "/home/maximoto/Documents/Codex/2026-10-26/task-3/prototype/wednesday-shell-r20-core/mint-payment-public-receipt-projection-r1/OWNER-SUPPLIED-PUBLIC-PROJECTION-R1.json", "bytes": 1686, "sha256": "f671be3673fed9f074cd142640e38bc7c2fb98002881164895477e1f4d9523da"},
     "paymentReconciliation": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md", "bytes": 6030, "sha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da"}
   },
@@ -102,6 +104,8 @@
     "fundingAbortBootstrapSha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf",
     "authorityRenderReceiptSha256": "ca250b51b7dc17f51cca678e11be8180bd047a28d2675e012af70ee70506f0c2",
     "actualOwnerRenderReviewSha256": "da8348fc1d0ae237ad2e9db1437eb68836c9c9e0310d3b506528845a0e04cbf1",
+    "publicAnchorReconciliationSha256": "f454abb91fce96e381d4c61db20b72770ecfcd5527c4ddbb0680a15edae04aaf",
+    "publicAnchorReconciliationReviewSha256": "1ce5295130e9b358826b9d2f69a737c6895e97ecde284745348093dc1e6c9718",
     "historicalControllerStopPreserved": true,
     "rendererRerunOrResignAuthorized": false
   },
