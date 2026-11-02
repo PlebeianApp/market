@@ -4,12 +4,15 @@ import {
 	DEMO_FRIDAY_BROWSER_ACCEPTANCE_DRIVER_STATUS,
 	expectedDemoFridayAntiSnipingEnd,
 	runDemoFridayBrowserAcceptance,
+	runDemoFridayFiveMemberAcceptance,
 	type DemoFridayAcceptanceAuctionV1,
 	type DemoFridayAcceptanceConsensusPort,
 } from './demo-friday-browser-acceptance-runner'
 import type { PlebeianFridayBrowserController } from './poc-friday-browser-entry'
 
 const ACTORS = { seller: '11'.repeat(32), a: '22'.repeat(32), b: '33'.repeat(32) }
+const FIVE = { seller: '11'.repeat(32), a: '22'.repeat(32), b: '33'.repeat(32),
+	c: '44'.repeat(32), d: '55'.repeat(32) }
 
 function fixture() {
 	const pendingPlans: string[] = [], balances = new Map([[ACTORS.a, 0], [ACTORS.b, 0]])
@@ -76,6 +79,78 @@ function fixture() {
 	return { seller, bidderA: bidder(ACTORS.a), bidderB: bidder(ACTORS.b), consensus, operationActor }
 }
 
+function fiveMemberFixture(options: { duplicateLastActor?: boolean; corruptFinalSellerBalance?: boolean } = {}) {
+	const bidderActors = [FIVE.a, FIVE.b, FIVE.c, options.duplicateLastActor ? FIVE.c : FIVE.d] as const
+	const allActors = [FIVE.seller, ...bidderActors]
+	const balances = new Map(allActors.map((actor) => [actor, 0]))
+	const locked = new Map(allActors.map((actor) => [actor, 0]))
+	const refunds = new Set<string>(), pendingPlans: string[] = []
+	const prepared = new Map<string, string>(), operationActor = new Map<string, string>()
+	let counter = 0, sellerWinnerReady = false, validatorFourOnline = true
+	let auction: DemoFridayAcceptanceAuctionV1 = { auctionId: 'auction-five', seller: FIVE.seller,
+		status: 'open', originalEndTime: 10_000, endTime: 10_000, extensionCount: 0,
+		leaderActor: '', leaderBidId: '', leaderCommittedAt: 0, highBid: 0, winner: '' }
+	const controller = (actor: string, seller = false): PlebeianFridayBrowserController => ({
+		async actor() { return actor }, async sellerPaymentPublicKey() { return `02${'66'.repeat(32)}` },
+		fundingPolicy() { return { schema: 'PLEBEIAN_FRIDAY_R20_FAKE_FUNDING_POLICY_V1', maxPerRequest: 10_000,
+			browserWalletAdvisoryMaxResultingBalance: 50_000, digest: '3588ddbd214b3c1e57926b77a20c070249c1d468fbbe1592ff85e18daf4ae069' } },
+		async pendingFakeFunding() { return null },
+		async balance() { const available = balances.get(actor)!, held = locked.get(actor)!; return {
+			available, reserved: 0, locked: held, pending: 0, unresolved: 0, total: available + held } },
+		async fundFake(amount) { balances.set(actor, balances.get(actor)! + amount); return {
+			operationId: `faucet-${actor.slice(0, 8)}`, state: 'finalized', balance: balances.get(actor)! } },
+		async placeBid(request) {
+			if (seller) throw new Error('seller bid unused')
+			const key = `${actor}:${request.auctionId}:${request.bidAmount}`
+			const operationId = prepared.get(key) ?? `op-${++counter}`
+			if (!prepared.has(key)) { prepared.set(key, operationId); pendingPlans.push(operationId)
+				operationActor.set(operationId, actor); return { status: 'seller_plan_pending', fundingOperationId: operationId,
+					sellerActor: FIVE.seller, expiresAt: 100 } }
+			balances.set(actor, balances.get(actor)! - request.fullPoolAmount); locked.set(actor, request.fullPoolAmount)
+			if (auction.leaderActor !== '') refunds.add(auction.leaderActor)
+			const committedAt = request.bidAmount === 400 ? 9_950 : 9_000 + counter
+			const extendedEnd = request.bidAmount === 400
+				? Math.min(Math.max(auction.endTime, committedAt + 180), auction.originalEndTime + 1_800) : auction.endTime
+			auction = { ...auction, leaderActor: actor, leaderBidId: actor, leaderCommittedAt: committedAt,
+				highBid: request.bidAmount, ...(extendedEnd > auction.endTime
+					? { endTime: extendedEnd, extensionCount: auction.extensionCount + 1 } : {}) }
+			return { status: 'admitted', fundingOperationId: operationId, committedHeight: 20 + counter }
+		},
+		async serviceSellerPlans() { if (!seller) return { registered: 0, operations: [] }
+			const operations = pendingPlans.splice(0); return { registered: operations.length, operations } },
+		async importAvailable() {
+			if (seller && sellerWinnerReady) { sellerWinnerReady = false
+				balances.set(actor, balances.get(actor)! + auction.highBid - (options.corruptFinalSellerBalance ? 1 : 0))
+				return { refunds: 0, winnerPayments: 1 } }
+			if (!refunds.delete(actor)) return { refunds: 0, winnerPayments: 0 }
+			balances.set(actor, balances.get(actor)! + locked.get(actor)!); locked.set(actor, 0)
+			return { refunds: 1, winnerPayments: 0 }
+		},
+		async cancelPending() { throw new Error('unused') }, async recoverCancellation() { throw new Error('unused') },
+	})
+	const seller = controller(FIVE.seller, true)
+	const bidders = bidderActors.map((actor) => controller(actor)) as unknown as readonly [
+		PlebeianFridayBrowserController, PlebeianFridayBrowserController,
+		PlebeianFridayBrowserController, PlebeianFridayBrowserController,
+	]
+	const consensus: DemoFridayAcceptanceConsensusPort = {
+		async createAuctionExact(request) { auction = { ...auction, auctionId: request.auctionId, seller: request.sellerActor } },
+		async readAuctionExact() { return structuredClone(auction) },
+		async waitForLeaderExact(request) { if (auction.leaderActor !== request.actor || auction.highBid !== request.amount) {
+			throw new Error('leader mismatch') } return structuredClone(auction) },
+		async waitUntilLateWindowExact() { return structuredClone(auction) },
+		async waitUntilCloseEligibleExact() { return structuredClone(auction) },
+		async closeAuctionExact() { throw new Error('five-member runner must not submit a manual close') },
+		async waitUntilClosedExact() { auction = { ...auction, status: 'closed', winner: auction.leaderActor }
+			locked.set(auction.winner, 0); sellerWinnerReady = true; return structuredClone(auction) },
+		async setValidatorOfflineExact() { validatorFourOnline = false },
+		async readValidatorsExact() { return [1, 2, 3, 4].map((slot) => ({ slot: slot as 1 | 2 | 3 | 4,
+			online: slot !== 4 || validatorFourOnline, canonicalCommitHeight: 80,
+			commitSignatures: validatorFourOnline ? 4 : 3 })) },
+	}
+	return { seller, bidders, consensus }
+}
+
 describe('Friday browser Coco acceptance runner', () => {
 	test('does not claim the operator adapters are browser-bridged or live-tested', () => {
 		expect(DEMO_FRIDAY_BROWSER_ACCEPTANCE_DRIVER_STATUS)
@@ -90,6 +165,37 @@ describe('Friday browser Coco acceptance runner', () => {
 		expect(receipt.antiSniping).toEqual({ originalEndTime: 10_000, endTime: 10_130, extensionCount: 1 })
 		expect(receipt.consensus).toEqual({ offlineSlot: 4, onlineValidators: 3, commitSignatures: 3 })
 		expect(receipt.settlement).toEqual({ winner: ACTORS.a, amount: 2_000, sellerImports: 1 })
+	})
+
+	test('drives five distinct members through funding, three refunds, automatic close and exact conservation', async () => {
+		const held = fiveMemberFixture()
+		const receipt = await runDemoFridayFiveMemberAcceptance({ ...held, auctionId: 'auction-five',
+			durationSeconds: 360, lateBidWindowSeconds: 180, lateBidExtensionSeconds: 180,
+			maxTotalExtensionSeconds: 1_800, emergencyRecoverySeconds: 900,
+			fundingAmount: 1_000, bidAmounts: [100, 200, 300, 400] })
+		expect(receipt.actors).toEqual({ seller: FIVE.seller, bidders: [FIVE.a, FIVE.b, FIVE.c, FIVE.d] })
+		expect(receipt.outbidRefunds).toEqual([
+			{ actor: FIVE.a, amount: 100, imports: 1 },
+			{ actor: FIVE.b, amount: 200, imports: 1 },
+			{ actor: FIVE.c, amount: 300, imports: 1 },
+		])
+		expect(receipt.consensus).toEqual({ offlineSlot: 4, onlineValidators: 3, commitSignatures: 3, automaticClose: true })
+		expect(receipt.settlement).toEqual({ seller: FIVE.seller, winner: FIVE.d, amount: 400, sellerImports: 1 })
+		expect(receipt.conservation).toEqual({ initialTotal: 0, fundedTotal: 5_000, finalTotal: 5_000,
+			finalSpendable: [1_400, 1_000, 1_000, 1_000, 600], unavailableTotal: 0 })
+	})
+
+	test('five-member acceptance rejects duplicate actors and final conservation drift', async () => {
+		const duplicate = fiveMemberFixture({ duplicateLastActor: true })
+		await expect(runDemoFridayFiveMemberAcceptance({ ...duplicate, auctionId: 'auction-five', durationSeconds: 360,
+			lateBidWindowSeconds: 180, lateBidExtensionSeconds: 180, maxTotalExtensionSeconds: 1_800,
+			emergencyRecoverySeconds: 900, fundingAmount: 1_000, bidAmounts: [100, 200, 300, 400] }))
+			.rejects.toThrow(/five distinct actors/)
+		const drift = fiveMemberFixture({ corruptFinalSellerBalance: true })
+		await expect(runDemoFridayFiveMemberAcceptance({ ...drift, auctionId: 'auction-five', durationSeconds: 360,
+			lateBidWindowSeconds: 180, lateBidExtensionSeconds: 180, maxTotalExtensionSeconds: 1_800,
+			emergencyRecoverySeconds: 900, fundingAmount: 1_000, bidAmounts: [100, 200, 300, 400] }))
+			.rejects.toThrow(/conservation differs/)
 	})
 
 	test('derives a late extension from committed time rather than prior end', () => {

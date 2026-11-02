@@ -39,6 +39,7 @@ import {
 import {
 	DEMO_FRIDAY_BROWSER_ACCEPTANCE_DRIVER_STATUS,
 	runDemoFridayBrowserAcceptance,
+	runDemoFridayFiveMemberAcceptance,
 } from './demo-friday-browser-acceptance-runner'
 import {
 	createDemoFridayR20BrowserRoleController,
@@ -554,6 +555,11 @@ Object.defineProperty(globalThis, 'plebeianFridayConnect', {
 Object.defineProperty(globalThis, 'plebeianFridayRunAcceptance', {
 	configurable: false, enumerable: false, writable: false,
 	value: runDemoFridayBrowserAcceptance,
+})
+
+Object.defineProperty(globalThis, 'plebeianFridayRunFiveMemberAcceptance', {
+	configurable: false, enumerable: false, writable: false,
+	value: runDemoFridayFiveMemberAcceptance,
 })
 
 Object.defineProperty(globalThis, 'plebeianFridayAcceptanceDriverStatus', {
