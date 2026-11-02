@@ -33,6 +33,7 @@ def main() -> None:
 
     dkg = json.loads(require_file(accepted["authenticatedDkgResult"]))
     runtime = json.loads(require_file(accepted["separatedRuntimeBinding"]))
+    genesis_decision = json.loads(require_file(accepted["genesisContentDecision"]))
     threshold = config["threshold"]
     assert dkg == runtime["result"], "runtime does not embed the accepted DKG result"
     assert runtime["bindingDigest"] == accepted["separatedRuntimeBinding"]["semanticDigest"]
@@ -55,8 +56,32 @@ def main() -> None:
         "satisfiesPaymentConformance": False,
     }
 
-    assert config["pendingOwnerChoices"] == {
-        "chainId": None,
+    assert genesis_decision["schema"] == "PLEBEIAN_SIDEQUEST_GENESIS_CONTENT_DECISION_V1"
+    assert genesis_decision["status"] == "OWNER_CONTENT_SELECTION_APPROVED_TIMESTAMP_DEFERRED"
+    assert genesis_decision["ownerApprovalEvidence"] == {
+        "messageId": "Sentinel_0229af7bf3308191ad9e9f23f189e586",
+        "reportedAtUtcMinute": "2026-11-02T16:18Z",
+        "approvedChoicesOnly": True,
+    }
+    assert genesis_decision["chainId"] == "plebeian-auctions-mvp-20261102"
+    assert genesis_decision["canonicalGenesisTimeUtc"] is None
+    assert genesis_decision["canonicalGenesisTimePolicy"]["rule"] == "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE"
+    assert genesis_decision["canonicalGenesisTimePolicy"]["requiredFormat"] == "CANONICAL_RFC3339_NANO_UTC_Z"
+    assert genesis_decision["authority"] == {
+        "contentSelectionApproved": True,
+        "timestampCaptureAuthorizedBeforeFreeze": False,
+        "deploymentAnchorSigningApproved": False,
+        "releaseInstallAuthorized": False,
+        "unitInstallAuthorized": False,
+        "configurationInstallAuthorized": False,
+        "serviceActivationAuthorized": False,
+        "dkgMustNotBeRepeated": True,
+    }
+    assert config["selectedOwnerContent"] == {
+        "chainId": "plebeian-auctions-mvp-20261102",
+        "canonicalGenesisTimePolicy": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE",
+    }
+    assert config["deferredFreezeValue"] == {
         "canonicalGenesisTimeUtc": None,
     }
     assert config["pendingAcceptedPaymentEvidence"] == {
@@ -73,11 +98,11 @@ def main() -> None:
         "configurationInstallAuthorized": False,
         "serviceActivationAuthorized": False,
     }
-    assert set(config["derivedAfterOwnerChoicesAndPayment"]) == {
+    assert set(config["derivedAfterOwnerContentAndPayment"]) == {
         "deploymentAnchorAndFundingAbortBootstrap", "networkFactsAndGenesisBundle",
         "browserAndHealthPins", "observerReceiptAndNodeId",
     }
-    assert all(value is None for value in config["derivedAfterOwnerChoicesAndPayment"].values())
+    assert all(value is None for value in config["derivedAfterOwnerContentAndPayment"].values())
     assert config["authority"] == {
         "ownerPrivateKeyRead": False,
         "remoteActions": False,

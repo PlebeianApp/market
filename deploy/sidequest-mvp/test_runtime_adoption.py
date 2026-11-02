@@ -107,7 +107,8 @@ class RuntimeAdoptionFixture(unittest.TestCase):
             inert_result = json.loads(inert.stdout)
             self.assertFalse(inert_result["ready"])
             self.assertEqual(inert_result["status"], "INERT_MISSING_INPUTS_NOT_INSTALLABLE")
-            self.assertIn("ownerChoices.newChainId", inert_result["missing"])
+            self.assertNotIn("selectedOwnerContent.chainId", inert_result["missing"])
+            self.assertIn("deferredFreezeValue.canonicalGenesisTimeUtc", inert_result["missing"])
             self.assertIn("acceptedPaymentEvidence.independentlyAccepted", inert_result["missing"])
             self.assertNotIn("acceptedExistingInputs.ownerApprovalPublicKey", inert_result["missing"])
             self.assertEqual(parse_env(inert_root / "APP/friday.env")["POC_FRIDAY_BROWSER_READY"], "false")
@@ -124,10 +125,11 @@ class RuntimeAdoptionFixture(unittest.TestCase):
             decisions = json.loads(DECISIONS.read_text(encoding="utf-8"))
             pin = "1" * 64
             decisions["status"] = "FIXTURE_COMPLETE_NOT_AUTHORIZED"
-            decisions["ownerChoices"] = {
-                "newChainId": "plebeian-sidequest-fixture-1",
-                "canonicalGenesisTimeUtc": "2026-11-03T00:00:00Z",
+            decisions["selectedOwnerContent"] = {
+                "chainId": "plebeian-auctions-mvp-20261102",
+                "canonicalGenesisTimePolicy": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE",
             }
+            decisions["deferredFreezeValue"] = {"canonicalGenesisTimeUtc": "2026-11-03T00:00:00Z"}
             decisions["acceptedPaymentEvidence"] = {
                 "paymentConformanceReceiptPath": "/fixture/payment-conformance.json",
                 "paymentConformanceReceiptSha256": pin,

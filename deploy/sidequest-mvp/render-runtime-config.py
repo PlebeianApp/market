@@ -61,16 +61,19 @@ def valid_genesis_time(value: object) -> bool:
 
 
 def readiness(decisions: dict) -> tuple[bool, list[str]]:
-    choices = decisions["ownerChoices"]
+    selected = decisions["selectedOwnerContent"]
+    deferred = decisions["deferredFreezeValue"]
     payment = decisions["acceptedPaymentEvidence"]
     derived = decisions["derivedRuntimeOutputs"]
     authority = decisions["authority"]
     missing: list[str] = []
-    chain = choices["newChainId"]
-    if not isinstance(chain, str) or not re.fullmatch(r"[a-z0-9._-]{1,50}", chain):
-        missing.append("ownerChoices.newChainId")
-    if not valid_genesis_time(choices["canonicalGenesisTimeUtc"]):
-        missing.append("ownerChoices.canonicalGenesisTimeUtc")
+    chain = selected["chainId"]
+    if chain != "plebeian-auctions-mvp-20261102":
+        missing.append("selectedOwnerContent.chainId")
+    if selected["canonicalGenesisTimePolicy"] != "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE":
+        missing.append("selectedOwnerContent.canonicalGenesisTimePolicy")
+    if not valid_genesis_time(deferred["canonicalGenesisTimeUtc"]):
+        missing.append("deferredFreezeValue.canonicalGenesisTimeUtc")
     if not payment["independentlyAccepted"]:
         missing.append("acceptedPaymentEvidence.independentlyAccepted")
     if not isinstance(payment["paymentConformanceReceiptPath"], str) or not payment["paymentConformanceReceiptPath"].startswith("/"):
@@ -177,6 +180,7 @@ def main() -> int:
     bootstrap = sources["signedBootstrap"]
     runtime = sources["runtimeBinding"]
     prerequisites = sources["prerequisites"]
+    genesis_decision = sources["genesisContentDecision"]
     require(runtime["deploymentId"] == bootstrap["deploymentId"], "DEPLOYMENT_BINDING")
     runtime_participants = runtime["result"]["manifest"]["participants"]
     require(len(runtime_participants) == len(bootstrap["validators"]) == 4, "BOOTSTRAP_RUNTIME_ROSTER")
@@ -186,6 +190,24 @@ def main() -> int:
     require(prerequisites["manifestDigest"] == runtime["manifestDigest"], "PREREQUISITE_MANIFEST")
     require(runtime["bindingDigest"] == plan["acceptedExistingInputs"]["runtimeBindingDigest"], "RUNTIME_DIGEST")
     require(prerequisites["ownerPublicKey"] == plan["acceptedExistingInputs"]["ownerApprovalPublicKey"], "OWNER_PUBLIC_KEY")
+    require(genesis_decision["schema"] == "PLEBEIAN_SIDEQUEST_GENESIS_CONTENT_DECISION_V1", "GENESIS_DECISION_SCHEMA")
+    require(genesis_decision["chainId"] == plan["acceptedExistingInputs"]["selectedChainId"], "GENESIS_DECISION_CHAIN")
+    require(genesis_decision["canonicalGenesisTimeUtc"] is None, "GENESIS_DECISION_TIMESTAMP_PRESET")
+    require(genesis_decision["canonicalGenesisTimePolicy"]["rule"] == plan["acceptedExistingInputs"]["canonicalGenesisTimePolicy"], "GENESIS_DECISION_TIME_POLICY")
+    require(genesis_decision["authority"] == {
+        "contentSelectionApproved": True,
+        "timestampCaptureAuthorizedBeforeFreeze": False,
+        "deploymentAnchorSigningApproved": False,
+        "releaseInstallAuthorized": False,
+        "unitInstallAuthorized": False,
+        "configurationInstallAuthorized": False,
+        "serviceActivationAuthorized": False,
+        "dkgMustNotBeRepeated": True,
+    }, "GENESIS_DECISION_AUTHORITY")
+    require(decisions["selectedOwnerContent"] == {
+        "chainId": genesis_decision["chainId"],
+        "canonicalGenesisTimePolicy": genesis_decision["canonicalGenesisTimePolicy"]["rule"],
+    }, "DECISIONS_GENESIS_CONTENT")
     ready, missing = readiness(decisions)
 
     args.output_root.mkdir(mode=0o755)
@@ -222,8 +244,8 @@ def main() -> int:
     payment = decisions["acceptedPaymentEvidence"]
     derived = decisions["derivedRuntimeOutputs"]
     template["requiredInputs"] = {
-        "chainId": decisions["ownerChoices"]["newChainId"],
-        "canonicalGenesisTimeUtc": decisions["ownerChoices"]["canonicalGenesisTimeUtc"],
+        "chainId": decisions["selectedOwnerContent"]["chainId"],
+        "canonicalGenesisTimeUtc": decisions["deferredFreezeValue"]["canonicalGenesisTimeUtc"],
         "paymentConformanceReceiptPath": payment["paymentConformanceReceiptPath"],
         "paymentConformanceReceiptSha256": payment["paymentConformanceReceiptSha256"],
         "activeSatKeysetId": payment["activeSatKeysetId"],

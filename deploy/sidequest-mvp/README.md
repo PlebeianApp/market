@@ -79,11 +79,14 @@ The following are already accepted and must be reused, not requested again:
 - canonical mint origin `https://139.162.161.233` and the selected 10,000 sats
   per-request / 50,000 advisory balance limits;
 - accepted GET-only bootstrap evidence, receipt hash and active-keyset digest.
+- owner-selected chain ID `plebeian-auctions-mvp-20261102` and the policy to
+  capture current UTC exactly once when the final signing inputs are frozen.
 
-Only two content choices remain for the owner:
-
-- owner-selected new chain ID;
-- canonical UTC genesis time.
+No genesis content choice remains. The canonical UTC genesis timestamp value
+is deliberately unset: it must be captured once, in canonical RFC3339 UTC
+form, at the final signing-input freeze after the payment/keyset/transport and
+fresh authority output-root inputs are accepted. Every lane and host must reuse
+that one frozen value unchanged; it must not be sampled early or invented.
 
 The payment lane must still supply independently accepted evidence; these are
 not owner choices:
@@ -117,9 +120,10 @@ The remaining changes must stay separate and exact:
 1. APP inactive successor install: create the immutable site release, retain
    the current unit, reload systemd, and leave the site inactive. No config or
    service action.
-2. Runtime configuration/genesis: render and install the owner-selected chain,
-   accepted payment/keyset/mint inputs, deployment anchor, observer, network,
-   browser and health pins. No DKG repeat.
+2. Runtime configuration/genesis: render and install the selected chain,
+   one freeze-time genesis timestamp, accepted payment/keyset/mint inputs,
+   deployment anchor, observer, network, browser and health pins. No DKG
+   repeat.
 3. Runtime artifact adoption: install the exact APP successor release and
    authority/coordinator units, then the exact signer release/unit on each of
    V1-V4. Preserve `separated-deploy-v1`, validator node binaries, participant

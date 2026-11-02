@@ -9,7 +9,8 @@
     "signedBootstrap": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/owner-pre-dkg-bootstrap-signing-r1/outputs/pre-dkg-bootstrap.signed.json", "bytes": 4875, "sha256": "e3b9c12d53d85d367390117dd669d4ec0228c94cfb4790ac4418246df7ad2aa9"},
     "runtimeBinding": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/post-dkg-genesis-prerequisites-r1/separated-runtime-binding.json", "bytes": 17716, "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a"},
     "prerequisites": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/post-dkg-genesis-prerequisites-r1/PREREQUISITES.json", "bytes": 10590, "sha256": "8afd2ec097f793706a46d511d274ad91d41476d93c633a11d96a0ebb63395398"},
-    "bootstrapAcceptance": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-COCO-ENCODING-BOOTSTRAP-ACTUAL-RECEIPT-ACCEPTANCE-20261102.md", "bytes": 5458, "sha256": "734ebc54830e867a3c77441f56d0c3019f08efee5b64a69959ea888110d342ad"}
+    "bootstrapAcceptance": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-COCO-ENCODING-BOOTSTRAP-ACTUAL-RECEIPT-ACCEPTANCE-20261102.md", "bytes": 5458, "sha256": "734ebc54830e867a3c77441f56d0c3019f08efee5b64a69959ea888110d342ad"},
+    "genesisContentDecision": {"path": "/home/maximoto/Documents/Codex/2026-11-02/task/plebeian-mvp-r4/deploy/sidequest-mvp/genesis-content-decision.json", "bytes": 1423, "sha256": "ae17243d7432cdce69fe822b1ba3b73e6159406b5aac5b8e89e423ff3239b2c4"}
   },
   "artifacts": {
     "site": {"sourcePath": "dist/sidequest/plebeian-auctions-mvp", "destination": "bin/plebeian-auctions-mvp", "bytes": 46588440, "mode": "0755", "sha256": "ab92ff6d0552f8de88208636cdad77dff3863ee8ef325eb04352e635e93e20c5"},
@@ -64,10 +65,12 @@
     "fundingMaxPerRequest": 10000,
     "fundingMaxResultingBalanceAdvisory": 50000,
     "bootstrapReceiptSha256": "a9452ede2dc7704036a9d1f9e5b18b53a6f4b0523d5438e50087f3e160599d9d",
-    "bootstrapActiveKeysetDigest": "331120d5ce836011fbbbca90ebed8cc0c8da4cd40d2f58db448653d2b882badd"
+    "bootstrapActiveKeysetDigest": "331120d5ce836011fbbbca90ebed8cc0c8da4cd40d2f58db448653d2b882badd",
+    "selectedChainId": "plebeian-auctions-mvp-20261102",
+    "canonicalGenesisTimePolicy": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE"
   },
   "genuinelyMissingInputs": {
-    "ownerChoices": ["newChainId", "canonicalGenesisTimeUtc"],
+    "deferredFreezeValue": ["canonicalGenesisTimeUtc"],
     "pendingAcceptedEvidence": ["paymentConformanceReceiptPathAndSha256", "activeSatKeysetId", "reviewedTestMintTransportUrl"],
     "derivedAfterThoseInputs": ["deploymentAnchorAndFundingAbortBootstrap", "networkFactsAndGenesisBundle", "browserAndHealthPins", "observerReceiptAndNodeId"]
   },

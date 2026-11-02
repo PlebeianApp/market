@@ -50,10 +50,12 @@ not a claim that the public MVP is live.
   successor unit pins. Existing validator binaries, participant binaries,
   shares and per-slot confinement drop-ins remain predecessor-owned.
 - The public configuration renderer consumes the accepted bootstrap, runtime
-  binding, prerequisites and bootstrap acceptance directly. With current
-  inputs it emits inert configurations; it can emit ready configuration only
-  after complete payment, chain/time, derived runtime pins and all scoped
-  authorities are present.
+  binding, prerequisites, bootstrap acceptance and approved genesis-content
+  decision directly. Chain ID `plebeian-auctions-mvp-20261102` is fixed. The
+  timestamp remains deliberately unset until the final signing-input freeze.
+  With current inputs it emits inert configurations; it can emit ready
+  configuration only after complete payment, the one frozen time value,
+  derived runtime pins and all scoped authorities are present.
 - A separate validator-4 recovery command now requires its own start approval,
   exact inactive-to-active unit transition, and a pinned four-signature Comet
   commit before sealing `active_rejoined`.
@@ -102,8 +104,8 @@ depends on the single deployment owner receiving and accepting:
 1. the completed fake-mint GET and payment conformance result plus canonical
    mint URL and active zero-fee sat keyset;
 2. a fresh verified HTTPS/firewall evidence set and explicit issuance approval;
-3. owner-selected chain ID and genesis time plus the exact signed deployment
-   anchor;
+3. the single canonical genesis timestamp captured at final input freeze plus
+   the exact signed deployment anchor (the chain ID is already selected);
 4. the scoped APP/V1-V4 activation approval and, for the fault exercise, separate
    validator-4 stop and start approvals.
 

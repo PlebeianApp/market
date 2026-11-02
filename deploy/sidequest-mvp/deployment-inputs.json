@@ -46,6 +46,11 @@
       "path": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-COCO-ENCODING-BOOTSTRAP-ACTUAL-RECEIPT-ACCEPTANCE-20261102.md",
       "bytes": 5458,
       "sha256": "734ebc54830e867a3c77441f56d0c3019f08efee5b64a69959ea888110d342ad"
+    },
+    "genesisContentDecision": {
+      "path": "/home/maximoto/Documents/Codex/2026-11-02/task/plebeian-mvp-r4/deploy/sidequest-mvp/genesis-content-decision.json",
+      "bytes": 1423,
+      "sha256": "ae17243d7432cdce69fe822b1ba3b73e6159406b5aac5b8e89e423ff3239b2c4"
     }
   },
   "threshold": {
@@ -69,8 +74,11 @@
     "mintStoppedSettled": true,
     "satisfiesPaymentConformance": false
   },
-  "pendingOwnerChoices": {
-    "chainId": null,
+  "selectedOwnerContent": {
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "canonicalGenesisTimePolicy": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE"
+  },
+  "deferredFreezeValue": {
     "canonicalGenesisTimeUtc": null
   },
   "pendingAcceptedPaymentEvidence": {
@@ -87,7 +95,7 @@
     "configurationInstallAuthorized": false,
     "serviceActivationAuthorized": false
   },
-  "derivedAfterOwnerChoicesAndPayment": {
+  "derivedAfterOwnerContentAndPayment": {
     "deploymentAnchorAndFundingAbortBootstrap": null,
     "networkFactsAndGenesisBundle": null,
     "browserAndHealthPins": null,

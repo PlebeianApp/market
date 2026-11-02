@@ -1,0 +1,33 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_GENESIS_CONTENT_DECISION_V1",
+  "status": "OWNER_CONTENT_SELECTION_APPROVED_TIMESTAMP_DEFERRED",
+  "ownerApprovalEvidence": {
+    "messageId": "Sentinel_0229af7bf3308191ad9e9f23f189e586",
+    "reportedAtUtcMinute": "2026-11-02T16:18Z",
+    "approvedChoicesOnly": true
+  },
+  "chainId": "plebeian-auctions-mvp-20261102",
+  "canonicalGenesisTimeUtc": null,
+  "canonicalGenesisTimePolicy": {
+    "rule": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE",
+    "requiredFormat": "CANONICAL_RFC3339_NANO_UTC_Z",
+    "freezeRequires": [
+      "independently accepted payment-conformance receipt and exact SHA-256",
+      "accepted active SAT keyset ID",
+      "reviewed https://139.162.161.233/test-mint transport URL",
+      "exact accepted DKG and separated runtime bindings",
+      "fresh authority output root selected for the scoped signing action"
+    ],
+    "singleValueRequirement": "The captured timestamp must be written once into the canonical frozen signing-input record and reused unchanged by every lane and host."
+  },
+  "authority": {
+    "contentSelectionApproved": true,
+    "timestampCaptureAuthorizedBeforeFreeze": false,
+    "deploymentAnchorSigningApproved": false,
+    "releaseInstallAuthorized": false,
+    "unitInstallAuthorized": false,
+    "configurationInstallAuthorized": false,
+    "serviceActivationAuthorized": false,
+    "dkgMustNotBeRepeated": true
+  }
+}

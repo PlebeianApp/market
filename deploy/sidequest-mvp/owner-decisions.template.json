@@ -1,8 +1,11 @@
 {
   "schema": "PLEBEIAN_SIDEQUEST_OWNER_DECISIONS_V1",
   "status": "INCOMPLETE_NOT_AUTHORIZED",
-  "ownerChoices": {
-    "newChainId": null,
+  "selectedOwnerContent": {
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "canonicalGenesisTimePolicy": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE"
+  },
+  "deferredFreezeValue": {
     "canonicalGenesisTimeUtc": null
   },
   "acceptedPaymentEvidence": {
