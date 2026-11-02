@@ -64,6 +64,9 @@ not a claim that the public MVP is live.
   retained the predecessor unit, produced a receipt, passed the installed
   pre-start verifier with complete synthetic public inputs, rejected the
   blocked template and rejected a repeated install without receipt mutation.
+- The real local `systemd-analyze verify` parser returned success for the exact
+  successor unit and emitted the expected warning that its production
+  executable path is not installed on this workstation.
 - The rebuilt executable started a loopback site plus four actual local Comet
   processes; all four reached height 6 with one block/app hash and four commit
   signatures, and the HTTP-served browser bundle matched the embedded asset.
