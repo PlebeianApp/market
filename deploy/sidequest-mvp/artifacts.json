@@ -1,0 +1,20 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_MVP_ARTIFACTS_V1",
+  "status": "LOCAL_BUILD_NOT_INSTALLED_NOT_AUTHORIZED",
+  "sourceCodeCommit": "96c3000143d3d36c0da7a32de50acc7618eae16f",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "artifacts": [
+    { "path": "internal/poc/static/friday-browser.js", "bytes": 1717244, "mode": "0644", "sha256": "dbfc4bd748685854e036098df93aa9604df8bd2e3d79d735934eb54055465a4f" },
+    { "path": "dist/sidequest/plebeian-auctions-mvp", "bytes": 46588440, "mode": "0755", "sha256": "ab92ff6d0552f8de88208636cdad77dff3863ee8ef325eb04352e635e93e20c5" },
+    { "path": "dist/sidequest/plebeian-friday-authority", "bytes": 99171906, "mode": "0755", "sha256": "af51ff40ddafa496169cb15731c1ab8cf2b3b569f707dfd7f69719c9d294755d" },
+    { "path": "dist/sidequest/plebeian-friday-terminal-executor", "bytes": 98846552, "mode": "0755", "sha256": "630f63ed3549812d43f585aa019b20aa90ffa863119f5b505406eaa47a518460" },
+    { "path": "dist/sidequest/plebeian-friday-signer", "bytes": 98923995, "mode": "0755", "sha256": "00c448e172c13b1a9862cd97bf79608e879739c0cc44aba74019bc3df66739d9" },
+    { "path": "dist/sidequest/plebeian-friday-acceptance-operator", "bytes": 98477330, "mode": "0755", "sha256": "99db455714398434a9e3719236c3f05c0356d5e945b926aa31e3951e31d1b25d" }
+  ],
+  "sourcePins": [
+    { "path": "cashu-wrapper/ts/coco-rail.ts", "sha256": "9d7eba6abef659ae98165c6d5aaa9a517e2121263f3e47613e72aafaaf72fc2b" },
+    { "path": "cashu-wrapper/ts/demo-friday-acceptance-operator-cli.ts", "sha256": "d7eb58e30169a63227df5917ad676859bd0f93ac342b990d2000fe4cfc3c5fb8" },
+    { "path": "deploy/friday/separated/nginx-normal.conf.example", "sha256": "64cebaff298d0832104880e92d74f4aa61a93302c5395ec293a6dbf2ce835eec" },
+    { "path": "deploy/friday/separated/nginx-recovery.conf.example", "sha256": "e870affc3789915406d1ba4b77002e32df3c4070d8f37fc9fe6cf85cb2abd124" }
+  ]
+}

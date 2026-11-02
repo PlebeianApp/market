@@ -8,11 +8,14 @@ Run the side-effect-free public check first:
 
 ```sh
 python3 deploy/sidequest-mvp/verify-public-inputs.py
+python3 deploy/sidequest-mvp/verify-artifacts.py
 ```
 
 It checks every referenced file byte count and SHA-256, requires the runtime to
 embed the exact accepted DKG result, and verifies the committee/package/roster
 pins. It reads no owner key, validator share, proof or authentication database.
+The second verifier pins the locally built browser, site, authority, terminal,
+signer and recovery-operator artifacts plus the corrected transport sources.
 
 ## Missing values
 
