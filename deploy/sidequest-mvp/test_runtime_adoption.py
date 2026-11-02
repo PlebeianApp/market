@@ -109,11 +109,7 @@ class RuntimeAdoptionFixture(unittest.TestCase):
             self.assertEqual(inert_result["status"], "INERT_MISSING_INPUTS_NOT_INSTALLABLE")
             self.assertNotIn("selectedOwnerContent.chainId", inert_result["missing"])
             self.assertNotIn("frozenGenesisValue.canonicalGenesisTimeUtc", inert_result["missing"])
-            self.assertIn("acceptedPaymentEvidence.testMintAssemblyUrl", inert_result["missing"])
-            self.assertFalse(any(
-                value.startswith("acceptedPaymentEvidence.") and value != "acceptedPaymentEvidence.testMintAssemblyUrl"
-                for value in inert_result["missing"]
-            ))
+            self.assertFalse(any(value.startswith("acceptedPaymentEvidence.") for value in inert_result["missing"]))
             self.assertNotIn("acceptedExistingInputs.ownerApprovalPublicKey", inert_result["missing"])
             self.assertEqual(parse_env(inert_root / "APP/friday.env")["POC_FRIDAY_BROWSER_READY"], "false")
             with self.assertRaises(ValueError):
@@ -133,7 +129,6 @@ class RuntimeAdoptionFixture(unittest.TestCase):
                 "chainId": "plebeian-auctions-mvp-20261102",
                 "canonicalGenesisTimePolicy": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE",
             }
-            decisions["acceptedPaymentEvidence"]["testMintAssemblyUrl"] = decisions["acceptedPaymentEvidence"]["sourceCompatibleTestMintAssemblyCandidate"]
             decisions["derivedRuntimeOutputs"] = {
                 "deploymentAnchorSha256": pin,
                 "networkFactsSha256": pin,

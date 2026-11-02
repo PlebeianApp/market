@@ -18,7 +18,7 @@
     "paymentConformanceReceiptPath": "/home/maximoto/Documents/Codex/2026-10-26/task-3/prototype/wednesday-shell-r20-core/mint-payment-public-receipt-projection-r1/OWNER-SUPPLIED-PUBLIC-PROJECTION-R1.json",
     "paymentConformanceReceiptSha256": "f671be3673fed9f074cd142640e38bc7c2fb98002881164895477e1f4d9523da",
     "activeSatKeysetId": "001a10236c313f83",
-    "testMintAssemblyUrl": null,
+    "testMintAssemblyUrl": "http://127.0.0.1:8180/test-mint",
     "sourceCompatibleTestMintAssemblyCandidate": "http://127.0.0.1:8180/test-mint",
     "cashuMintUrl": "https://139.162.161.233",
     "conformanceFipsServerUrl": "http://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:3438",

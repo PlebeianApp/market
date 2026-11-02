@@ -188,7 +188,8 @@ def main() -> None:
         "underlyingRawReceiptSha256OwnerVerifiedOnly": "b5bac575046f13e1b030662818fba7ebe89df442cff12a5f8ec3983ac1332add",
         "activeSatKeysetId": "001a10236c313f83",
         "sourceCompatibleTestMintAssemblyCandidate": "http://127.0.0.1:8180/test-mint",
-        "selectedTestMintAssemblyUrl": None,
+        "selectedTestMintAssemblyUrl": "http://127.0.0.1:8180/test-mint",
+        "testMintAssemblyRole": "DISABLED_LEGACY_NOTE_NAMESPACE_NOT_OPERATIONAL_MINT_API",
         "canonicalCashuMintUrl": "https://139.162.161.233",
         "conformanceFipsServerUrl": "http://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:3438",
         "mintOnlyAcceptancePath": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md",
@@ -197,7 +198,7 @@ def main() -> None:
     }
     assert config["boundPaymentEvidence"]["canonicalCashuMintUrl"] == config["application"]["mintOrigin"]
     assert config["boundPaymentEvidence"]["sourceCompatibleTestMintAssemblyCandidate"] == "http://127.0.0.1:8180/test-mint"
-    assert config["boundPaymentEvidence"]["selectedTestMintAssemblyUrl"] is None
+    assert config["boundPaymentEvidence"]["selectedTestMintAssemblyUrl"] == config["boundPaymentEvidence"]["sourceCompatibleTestMintAssemblyCandidate"]
     assert config["boundPaymentEvidence"]["sourceCompatibleTestMintAssemblyCandidate"] not in {
         config["boundPaymentEvidence"]["canonicalCashuMintUrl"],
         config["boundPaymentEvidence"]["conformanceFipsServerUrl"],

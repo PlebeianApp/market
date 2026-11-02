@@ -45,6 +45,13 @@ The authority renderer's actual receipt contract is only an owner-reviewed
 file plus its exact byte hash; therefore the accepted public projection and
 SHA-256 are sufficient for that contract without transferring private proofs.
 
+A focused composed Go handler test resolves the later legacy assembly identity
+to `http://127.0.0.1:8180/test-mint`: Go's validator accepts that private exact
+path and rejects the public Cashu origin in the legacy slot; the actual site
+handler returns 404/non-JSON there, while `/api/config` retains it separately
+from `https://139.162.161.233`. This is a disabled namespace binding, not a
+working mint route or payment test.
+
 ## Mint transport provenance
 
 The accepted standalone content-encoding boundary is 13,305 bytes with

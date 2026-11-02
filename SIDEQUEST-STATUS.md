@@ -54,9 +54,9 @@ not a claim that the public MVP is live.
   decision, authoritative payment projection and mint-only reconciliation
   directly. Chain ID `plebeian-auctions-mvp-20261102` and timestamp
   `2026-11-02T18:35:21Z` are frozen once for all lanes. With current inputs it
-  emits inert configurations; it can emit ready configuration only after the
-  later assembly-only legacy URL is selected, derived runtime pins and all
-  scoped authorities are present. Independent freeze review is accepted at
+  emits inert configurations; it can emit ready configuration only after
+  derived runtime pins and all scoped authorities are present. Independent
+  freeze review is accepted at
   SHA-256 `4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d`.
   The owner-reviewed sanitized payment
   projection and exact file hash satisfy the existing renderer's receipt-file
@@ -64,11 +64,12 @@ not a claim that the public MVP is live.
 - A separate validator-4 recovery command now requires its own start approval,
   exact inactive-to-active unit transition, and a pinned four-signature Comet
   commit before sealing `active_rejoined`.
-- Source and topology constrain the Go assembly-only legacy note namespace to
-  candidate `http://127.0.0.1:8180/test-mint`. It is not an anchor/preimage
-  field and not the private FIPS Cashu server URL. The threshold application
-  disables the corresponding legacy note authority. The accepted freeze leaves
-  this later assembly input unresolved, so the candidate is not yet promoted.
+- The Go assembly-only legacy note namespace is selected as
+  `http://127.0.0.1:8180/test-mint`. Port 8180 is the loopback site/API process;
+  a composed handler test proves the path is a 404 non-JSON namespace, not an
+  operational mint API. It is not an anchor/preimage field or the private FIPS
+  Cashu server URL, and the threshold application disables its legacy note
+  authority.
 
 ## Verification actually run
 
@@ -95,6 +96,9 @@ not a claim that the public MVP is live.
 - The rebuilt executable started a loopback site plus four actual local Comet
   processes; all four reached height 6 with one block/app hash and four commit
   signatures, and the HTTP-served browser bundle matched the embedded asset.
+- The focused Go route test accepted only the private loopback `/test-mint`
+  namespace, rejected the public Cashu origin as that namespace, observed 404
+  non-JSON route behavior, and preserved distinct config identities.
 
 The five-member tests also prove that duplicate actors and conservation drift
 fail closed. The runner observes automatic close and never calls the manual
@@ -113,8 +117,8 @@ depends on the single deployment owner receiving and accepting:
 
 1. a separately scoped owner-signing grant and resulting public authority
    outputs; the frozen preimage is independently accepted and the mint
-   projection, active keyset and public Cashu identity are pinned; the later
-   genesis assembly must explicitly select its private `/test-mint` namespace;
+   projection, active keyset, public Cashu identity and later private
+   `/test-mint` assembly namespace are pinned;
 2. a fresh verified HTTPS/firewall evidence set and explicit issuance approval;
 3. the exact signed deployment anchor derived from the frozen chain ID,
    timestamp and preimage; no new timestamp may be sampled;

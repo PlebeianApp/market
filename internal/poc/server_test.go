@@ -136,6 +136,39 @@ func TestFridayThresholdConfigNeverFallsBackToSharedKeyBrowserFunding(t *testing
 	}
 }
 
+func TestFridayThresholdLegacyTestMintAssemblyNamespaceIsNonOperational(t *testing.T) {
+	t.Parallel()
+	const legacyNamespace = "http://127.0.0.1:8180/test-mint"
+	const cashuIdentity = "https://139.162.161.233"
+	if err := validateFakeMoneyEndpoint(legacyNamespace, "/test-mint"); err != nil {
+		t.Fatalf("source-compatible legacy namespace was rejected: %v", err)
+	}
+	if err := validateFakeMoneyEndpoint(cashuIdentity+"/test-mint", "/test-mint"); err == nil {
+		t.Fatal("public Cashu identity was accepted as the private legacy namespace")
+	}
+	server := &APIServer{manifest: NetworkManifest{
+		Schema: "PlebeianAuctionsPOCNetworkV4", ChainID: "friday", Mode: "remote",
+		MintURL: legacyNamespace, CashuMintURL: cashuIdentity,
+	}}
+	handler, err := server.Handler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyResponse := httptest.NewRecorder()
+	handler.ServeHTTP(legacyResponse, httptest.NewRequest(http.MethodGet, "/test-mint", nil))
+	if legacyResponse.Code != http.StatusNotFound || strings.Contains(legacyResponse.Header().Get("Content-Type"), "application/json") {
+		t.Fatalf("disabled legacy namespace became an operational API: status=%d content-type=%q body=%q",
+			legacyResponse.Code, legacyResponse.Header().Get("Content-Type"), legacyResponse.Body.String())
+	}
+	configResponse := httptest.NewRecorder()
+	handler.ServeHTTP(configResponse, httptest.NewRequest(http.MethodGet, "/api/config", nil))
+	body := configResponse.Body.String()
+	if configResponse.Code != http.StatusOK || !strings.Contains(body, `"mint_url":"`+legacyNamespace+`"`) ||
+		!strings.Contains(body, `"cashu_mint_url":"`+cashuIdentity+`"`) {
+		t.Fatalf("config did not preserve distinct legacy and Cashu identities: status=%d body=%s", configResponse.Code, body)
+	}
+}
+
 func TestFridayFakeFundingPolicyGoldenIsRuntimeData(t *testing.T) {
 	t.Parallel()
 	policy := r20FakeFundingPolicy(Policy{FaucetAmount: 10_000, FaucetCap: 50_000})

@@ -77,7 +77,9 @@
     "projectedExactFipsMintUrl": "http://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:3438",
     "canonicalCashuMintUrl": "https://139.162.161.233",
     "sourceCompatibleTestMintAssemblyCandidate": "http://127.0.0.1:8180/test-mint",
-    "testMintAssemblyUrlSelected": false,
+    "selectedTestMintAssemblyUrl": "http://127.0.0.1:8180/test-mint",
+    "testMintAssemblyUrlSelected": true,
+    "testMintAssemblyRole": "DISABLED_LEGACY_NOTE_NAMESPACE_NOT_OPERATIONAL_MINT_API",
     "mintOnlyProjectionAccepted": true,
     "mintOnlyProjectionAcceptanceSha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da",
     "rawReceiptIndependentlyHashed": false,
@@ -92,7 +94,6 @@
     "independentFreezeReviewSha256": "4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d"
   },
   "genuinelyMissingInputs": {
-    "genesisAssemblyInput": ["selectedTestMintAssemblyUrl"],
     "derivedAfterThoseInputs": ["deploymentAnchorAndFundingAbortBootstrap", "networkFactsAndGenesisBundle", "browserAndHealthPins", "observerReceiptAndNodeId"]
   },
   "authority": {

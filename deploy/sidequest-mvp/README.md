@@ -107,19 +107,18 @@ The underlying raw-receipt digest `b5bac575...` remains owner-verified
 provenance and is not substituted for the projection file's digest. No private
 proof transfer is required.
 
-Three mint URL roles are distinguished without conflation; the Cashu URLs are
-bound and the later legacy assembly value remains a candidate:
+Three mint URL roles are bound without conflation:
 
 - `http://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:3438` is the private FIPS
   Cashu server transport used by the conformance client;
 - `https://139.162.161.233` is the canonical public Cashu mint identity already
   fixed by the separated bootstrap;
-- `http://127.0.0.1:8180/test-mint` is the source- and topology-compatible
-  candidate for the separate loopback legacy-note namespace required by
-  `assemble-friday-comet`. The FROST application has no corresponding legacy
-  private key and the namespace is not the Cashu server. The accepted anchor
-  freeze deliberately leaves this later assembly input unresolved, so it is
-  not silently promoted to a selected value here.
+- `http://127.0.0.1:8180/test-mint` is the selected separate loopback
+  legacy-note namespace required by `assemble-friday-comet`. Port 8180 is the
+  site/API process; a composed handler test confirms the path returns 404, not
+  a mint API. The FROST application has no corresponding legacy private key,
+  and all real fake-Cashu funding uses the distinct public Cashu identity.
+  This later assembly mapping does not alter the accepted anchor/preimage.
 
 The deployment anchor/FundingAbort bootstrap, network facts/genesis bundle,
 browser/health pins and observer receipt/node ID are downstream products after
