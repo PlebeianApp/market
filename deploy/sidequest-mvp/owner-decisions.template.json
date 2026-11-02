@@ -10,10 +10,15 @@
   },
   "acceptedPaymentEvidence": {
     "paymentConformanceReceiptPath": null,
-    "paymentConformanceReceiptSha256": null,
-    "activeSatKeysetId": null,
+    "paymentConformanceReceiptSha256": "b5bac575046f13e1b030662818fba7ebe89df442cff12a5f8ec3983ac1332add",
+    "activeSatKeysetId": "001a10236c313f83",
     "reviewedTestMintTransportUrl": null,
-    "independentlyAccepted": false
+    "mintOnlyAcceptancePath": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md",
+    "mintOnlyAcceptanceSha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da",
+    "rawReceiptIndependentlyHashed": false,
+    "genesisAcceptancePath": null,
+    "genesisAcceptanceSha256": null,
+    "acceptedForGenesis": false
   },
   "derivedRuntimeOutputs": {
     "deploymentAnchorSha256": null,

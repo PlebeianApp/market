@@ -81,6 +81,9 @@ The following are already accepted and must be reused, not requested again:
 - accepted GET-only bootstrap evidence, receipt hash and active-keyset digest.
 - owner-selected chain ID `plebeian-auctions-mvp-20261102` and the policy to
   capture current UTC exactly once when the final signing inputs are frozen.
+- the owner-supplied payment projection and mint-only reconciliation, including
+  active SAT keyset ID `001a10236c313f83`, its independently recomputed public
+  ID digest, and the owner-verified receipt digest claim.
 
 No genesis content choice remains. The canonical UTC genesis timestamp value
 is deliberately unset: it must be captured once, in canonical RFC3339 UTC
@@ -88,11 +91,13 @@ form, at the final signing-input freeze after the payment/keyset/transport and
 fresh authority output-root inputs are accepted. Every lane and host must reuse
 that one frozen value unchanged; it must not be sampled early or invented.
 
-The payment lane must still supply independently accepted evidence; these are
-not owner choices:
+The payment projection is accepted as actual mint-only evidence, not as a
+genesis input or full auction result. The remaining payment/genesis bindings
+are not owner content choices:
 
-- accepted payment-conformance receipt path and SHA-256;
-- accepted active zero-fee SAT keyset ID;
+- raw payment-conformance receipt path and an independently computed matching
+  SHA-256 (the current digest is owner-verified only);
+- a separate genesis-payment acceptance record;
 - reviewed `/test-mint` transport URL.
 
 The deployment anchor/FundingAbort bootstrap, network facts/genesis bundle,
@@ -112,6 +117,15 @@ owner-verified receipt SHA-256
 seven GETs and 17,479 accepted bytes, no funding or persisted wallet, with the
 mint stopped and settled. This is explicitly not payment conformance and does
 not fill the payment receipt fields above.
+
+The later owner projection reports the six expected mint-only operation kinds,
+two 10,000-fake-sat faucets, 120/180 locks, complete refund/settlement
+conservation, zero fees, Nutshell 0.19.2 and 46 bounded exact-FIPS requests.
+Its reconciliation report SHA-256 is
+`9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da`.
+It explicitly used one shared application key rather than FROST custody,
+disposable memory-only wallets with no recovery or retry, and does not prove
+browser login, auction selection, automatic settlement, HTTPS or deployment.
 
 ## Required action scopes
 

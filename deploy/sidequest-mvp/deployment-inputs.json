@@ -51,6 +51,16 @@
       "path": "/home/maximoto/Documents/Codex/2026-11-02/task/plebeian-mvp-r4/deploy/sidequest-mvp/genesis-content-decision.json",
       "bytes": 1423,
       "sha256": "ae17243d7432cdce69fe822b1ba3b73e6159406b5aac5b8e89e423ff3239b2c4"
+    },
+    "ownerPaymentProjection": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-26/task-3/prototype/wednesday-shell-r20-core/mint-payment-public-receipt-projection-r1/OWNER-SUPPLIED-PUBLIC-PROJECTION-R1.json",
+      "bytes": 1686,
+      "sha256": "f671be3673fed9f074cd142640e38bc7c2fb98002881164895477e1f4d9523da"
+    },
+    "mintProjectionReconciliation": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md",
+      "bytes": 6030,
+      "sha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da"
     }
   },
   "threshold": {
@@ -74,6 +84,26 @@
     "mintStoppedSettled": true,
     "satisfiesPaymentConformance": false
   },
+  "ownerSuppliedPaymentProjection": {
+    "sourceMessageId": "Sentinel_4df77bca677481918cff4772b0a9138e",
+    "reportedAtUtcMinute": "2026-11-02T18:30Z",
+    "status": "OWNER_READ_ONLY_PUBLIC_RECEIPT_PROJECTION_NOT_GENESIS_ACCEPTANCE",
+    "receiptSha256Claim": "b5bac575046f13e1b030662818fba7ebe89df442cff12a5f8ec3983ac1332add",
+    "mintOnlyAcceptancePath": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md",
+    "mintOnlyAcceptanceSha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da",
+    "acceptedAsActualMintOnlyEvidence": true,
+    "rawReceiptPath": null,
+    "rawReceiptIndependentlyHashed": false,
+    "independentlyAcceptedForGenesis": false,
+    "activeSatKeysetId": "001a10236c313f83",
+    "activeSatKeysetIdSha256": "331120d5ce836011fbbbca90ebed8cc0c8da4cd40d2f58db448653d2b882badd",
+    "exactFipsMintUrl": "http://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:3438",
+    "reviewedPublicTestMintTransportUrl": null,
+    "committeeThreshold": false,
+    "recoverySupported": false,
+    "retryPermitted": false,
+    "walletRepository": "DISPOSABLE_MEMORY_ONLY_NOT_RECOVERABLE"
+  },
   "selectedOwnerContent": {
     "chainId": "plebeian-auctions-mvp-20261102",
     "canonicalGenesisTimePolicy": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE"
@@ -83,9 +113,15 @@
   },
   "pendingAcceptedPaymentEvidence": {
     "paymentConformanceReceiptPath": null,
-    "paymentConformanceReceiptSha256": null,
-    "activeSatKeysetId": null,
-    "reviewedTestMintTransportUrl": null
+    "paymentConformanceReceiptSha256": "b5bac575046f13e1b030662818fba7ebe89df442cff12a5f8ec3983ac1332add",
+    "activeSatKeysetId": "001a10236c313f83",
+    "reviewedTestMintTransportUrl": null,
+    "mintOnlyAcceptancePath": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md",
+    "mintOnlyAcceptanceSha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da",
+    "rawReceiptIndependentlyHashed": false,
+    "genesisAcceptancePath": null,
+    "genesisAcceptanceSha256": null,
+    "acceptedForGenesis": false
   },
   "pendingActionScope": {
     "freshAuthorityOutputRoot": null,

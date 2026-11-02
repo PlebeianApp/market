@@ -33,6 +33,15 @@ no local mint, FROST journey or live-integration pass is claimed. The separate
 local-demo root and its throwaway generated keys were also removed after the
 read-only smoke test.
 
+Separately from these local tests, the owner supplied a public projection of an
+actual mint-only payment run. A3 accepted it as reported mint-only evidence in
+`A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md`
+(SHA-256 `9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da`).
+That review independently checked the public keyset-ID digest, arithmetic,
+operation set, timing and request caps. It did not read the raw receipt or
+private proofs, independently recompute the reported receipt digest, or prove
+threshold custody, browser auction behavior, HTTPS, genesis or deployment.
+
 ## Mint transport provenance
 
 The accepted standalone content-encoding boundary is 13,305 bytes with

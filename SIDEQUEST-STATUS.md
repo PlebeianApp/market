@@ -50,12 +50,14 @@ not a claim that the public MVP is live.
   successor unit pins. Existing validator binaries, participant binaries,
   shares and per-slot confinement drop-ins remain predecessor-owned.
 - The public configuration renderer consumes the accepted bootstrap, runtime
-  binding, prerequisites, bootstrap acceptance and approved genesis-content
-  decision directly. Chain ID `plebeian-auctions-mvp-20261102` is fixed. The
-  timestamp remains deliberately unset until the final signing-input freeze.
-  With current inputs it emits inert configurations; it can emit ready
-  configuration only after complete payment, the one frozen time value,
-  derived runtime pins and all scoped authorities are present.
+  binding, prerequisites, bootstrap acceptance, approved genesis-content
+  decision, authoritative payment projection and mint-only reconciliation
+  directly. Chain ID `plebeian-auctions-mvp-20261102` is fixed. The timestamp
+  remains deliberately unset until the final signing-input freeze. With
+  current inputs it emits inert configurations; it can emit ready
+  configuration only after raw-receipt/genesis payment acceptance, reviewed
+  public mint transport, the one frozen time value, derived runtime pins and
+  all scoped authorities are present.
 - A separate validator-4 recovery command now requires its own start approval,
   exact inactive-to-active unit transition, and a pinned four-signature Comet
   commit before sealing `active_rejoined`.
@@ -101,8 +103,9 @@ No SSH, service, mint transaction, firewall, credential, genesis-signing or
 deployment-cutover action was executed in this lane. Public activation still
 depends on the single deployment owner receiving and accepting:
 
-1. the completed fake-mint GET and payment conformance result plus canonical
-   mint URL and active zero-fee sat keyset;
+1. the raw payment receipt and independently computed matching hash, a
+   genesis-payment acceptance and reviewed public `/test-mint` URL; the
+   mint-only projection and active zero-fee SAT keyset are now pinned;
 2. a fresh verified HTTPS/firewall evidence set and explicit issuance approval;
 3. the single canonical genesis timestamp captured at final input freeze plus
    the exact signed deployment anchor (the chain ID is already selected);
@@ -126,5 +129,10 @@ milestone: acceptance report SHA-256
 owner-verified receipt SHA-256
 `a9452ede2dc7704036a9d1f9e5b18b53a6f4b0523d5438e50087f3e160599d9d`,
 seven GETs and 17,479 accepted bytes, no funding or persisted wallet, with the
-mint stopped and settled. Payment conformance has still not run and remains a
-deployment blocker.
+mint stopped and settled. A later owner-supplied projection is accepted as
+actual mint-only payment evidence: reconciliation SHA-256
+`9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da`,
+active keyset `001a10236c313f83`, and owner-verified receipt digest
+`b5bac575046f13e1b030662818fba7ebe89df442cff12a5f8ec3983ac1332add`.
+The raw receipt was not independently rehashed, and this is not genesis,
+threshold custody, browser-auction, HTTPS or deployment acceptance.
