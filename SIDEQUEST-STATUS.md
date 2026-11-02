@@ -13,21 +13,26 @@ not a claim that the public MVP is live.
   exact five-wallet conservation.
 - Browser export: `plebeianFridayRunFiveMemberAcceptance`.
 - Browser bundle: 1,717,244 bytes, SHA-256
-  `9e35199341345caca1aa09e841d05dc7460a000854c980df1cfe520ece16753f`.
+  `dbfc4bd748685854e036098df93aa9604df8bd2e3d79d735934eb54055465a4f`.
 - Linux executable: 46,588,440 bytes, SHA-256
-  `10aba3a4165ac4aa11584581ac7e2eea83b269cc131b5b5c1c0aaffb6a917c2d`.
+  `ab92ff6d0552f8de88208636cdad77dff3863ee8ef325eb04352e635e93e20c5`.
   It reports version `2026.10.23-friday-tier1` and value profile
   `FAKE_MONEY_ONLY`.
+- Acceptance operator executable: 99,321,106 bytes, SHA-256
+  `cc5c91f7a8698c8608ca3ec06a66f202afaf7f1daebe1bc698522e8d840d1700`.
 - Same-path browser rebuild and independent-output Go rebuild were byte-for-byte
   identical to those artifacts.
 - The real Coco runtime now forces identity encoding, rejects and boundedly
   cancels non-identity responses, and the browser-facing nginx mint routes
   clear upstream `Accept-Encoding`.
+- A separate validator-4 recovery command now requires its own start approval,
+  exact inactive-to-active unit transition, and a pinned four-signature Comet
+  commit before sealing `active_rejoined`.
 
 ## Verification actually run
 
 - Friday TypeScript typecheck: pass.
-- Friday browser suite: 120 pass, 0 fail, 432 assertions.
+- Friday browser suite: 122 pass, 0 fail, 441 assertions.
 - Four-validator service suite: 83 pass, 0 fail, 366 assertions.
 - Go repository suite: pass.
 - Separated-topology suite: 19 pass.
@@ -65,3 +70,9 @@ The four-validator DKG result is already complete and must not be repeated.
 Until the gates above are bound and the five persistent browser profiles run
 the journey against the live origin, deployment status remains **built and
 locally verified, not live**.
+
+Owner execution has now reported the corrected GET-only Coco bootstrap result
+`COCO_BOOTSTRAP_DIAGNOSTIC_R2_COMPLETE_MINT_STOPPED_NO_FUNDING`, receipt
+SHA-256 `a9452ede2dc7704036a9d1f9e5b18b53a6f4b0523d5438e50087f3e160599d9d`.
+Public receipt reconciliation is pending, so it is not yet an accepted bound
+input. No funding/payment conformance has run.

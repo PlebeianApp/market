@@ -85,8 +85,23 @@ export interface DemoFridayAcceptanceFaultApprovalV1 {
 	expiresAt: number
 	nonce: string
 }
+export interface DemoFridayAcceptanceRecoveryApprovalV1 {
+	schema: 'PLEBEIAN_FRIDAY_VALIDATOR_RECOVERY_APPROVAL_V1'
+	deploymentId: string
+	action: 'START_VALIDATOR_4_ONCE'
+	targetSlot: 4
+	targetHostId: typeof V4_HOST_ID
+	targetIpv4: typeof V4_HOST
+	unit: typeof VALIDATOR_UNIT
+	notBefore: number
+	expiresAt: number
+	nonce: string
+}
 export interface DemoFridayAcceptanceFaultPort {
 	setValidatorOfflineExact(slot: 4): Promise<void>
+}
+export interface DemoFridayAcceptanceRecoveryPort {
+	setValidatorOnlineExact(slot: 4): Promise<void>
 }
 export interface DemoFridayAcceptanceCometPreflightV1 {
 	schema: 'PLEBEIAN_FRIDAY_ACCEPTANCE_COMET_PREFLIGHT_V1'
@@ -150,6 +165,26 @@ export function exactDemoFridayFaultApproval(encoded: Uint8Array, expectedSha256
 	return Object.freeze(value as unknown as DemoFridayAcceptanceFaultApprovalV1)
 }
 
+export function exactDemoFridayRecoveryApproval(encoded: Uint8Array, expectedSha256: string,
+	nowSeconds: number,
+	expectedDeploymentId: DemoFridayAcceptanceDeploymentId = DEMO_FRIDAY_ACCEPTANCE_R14_DEPLOYMENT_ID,
+): DemoFridayAcceptanceRecoveryApprovalV1 {
+	if (!HEX32.test(expectedSha256) || bytesToHex(sha256(encoded)) !== expectedSha256
+		|| encoded.length < 2 || encoded.length > 8_192) fail('recovery approval bytes differ from the external pin')
+	let parsed: unknown
+	try { parsed = JSON.parse(new TextDecoder().decode(encoded)) }
+	catch { return fail('recovery approval is not JSON') }
+	const value = exactObject(parsed, ['schema', 'deploymentId', 'action', 'targetSlot', 'targetHostId', 'targetIpv4',
+		'unit', 'notBefore', 'expiresAt', 'nonce'], 'recovery approval')
+	if (value.schema !== 'PLEBEIAN_FRIDAY_VALIDATOR_RECOVERY_APPROVAL_V1' || value.action !== 'START_VALIDATOR_4_ONCE'
+		|| value.targetSlot !== 4 || value.targetHostId !== V4_HOST_ID || value.targetIpv4 !== V4_HOST
+		|| value.unit !== VALIDATOR_UNIT || value.deploymentId !== expectedDeploymentId || !HEX32.test(String(value.nonce ?? ''))
+		|| !Number.isSafeInteger(value.notBefore) || !Number.isSafeInteger(value.expiresAt)
+		|| Number(value.expiresAt) <= Number(value.notBefore) || Number(value.expiresAt) - Number(value.notBefore) > 900
+		|| nowSeconds < Number(value.notBefore) || nowSeconds > Number(value.expiresAt)) fail('recovery approval scope or validity is invalid')
+	return Object.freeze(value as unknown as DemoFridayAcceptanceRecoveryApprovalV1)
+}
+
 export function createDemoFridayValidator4FaultControl(options: {
 	command: DemoFridayExactCommandPort
 	approvalBytes: Uint8Array
@@ -178,6 +213,44 @@ export function createDemoFridayValidator4FaultControl(options: {
 			const status = await options.command.runExact(sshArgs(V4_HOST,
 				['/usr/bin/systemctl', 'is-active', VALIDATOR_UNIT]), 15_000)
 			if (status.exitCode !== 3 || status.stdout !== 'inactive\n' || status.stderr !== '') fail('validator-4 did not reach exact inactive state')
+			consumed = true
+		},
+	})
+}
+
+export function createDemoFridayValidator4RecoveryControl(options: {
+	command: DemoFridayExactCommandPort
+	approvalBytes: Uint8Array
+	expectedApprovalSha256: string
+	expectedUnitSha256: string
+	nowSeconds?: () => number
+	expectedDeploymentId?: DemoFridayAcceptanceDeploymentId
+}): DemoFridayAcceptanceRecoveryPort {
+	if (!HEX32.test(options.expectedUnitSha256)) fail('validator unit pin is invalid')
+	let consumed = false
+	return Object.freeze({
+		async setValidatorOnlineExact(slot: 4) {
+			if (slot !== 4 || consumed) fail('only one approved validator-4 recovery is permitted')
+			exactDemoFridayRecoveryApproval(options.approvalBytes, options.expectedApprovalSha256,
+				(options.nowSeconds ?? (() => Math.floor(Date.now() / 1_000)))(),
+				options.expectedDeploymentId ?? DEMO_FRIDAY_ACCEPTANCE_R14_DEPLOYMENT_ID)
+			const unit = await options.command.runExact(sshArgs(V4_HOST,
+				['/usr/bin/sha256sum', '--', `/etc/systemd/system/${VALIDATOR_UNIT}`]), 15_000)
+			if (unit.exitCode !== 0 || unit.stderr !== ''
+				|| unit.stdout !== `${options.expectedUnitSha256}  /etc/systemd/system/${VALIDATOR_UNIT}\n`) {
+				fail('validator-4 unit differs from the approved artifact')
+			}
+			const before = await options.command.runExact(sshArgs(V4_HOST,
+				['/usr/bin/systemctl', 'is-active', VALIDATOR_UNIT]), 15_000)
+			if (before.exitCode !== 3 || before.stdout !== 'inactive\n' || before.stderr !== '') {
+				fail('validator-4 was not in the exact approved inactive pre-state')
+			}
+			const started = await options.command.runExact(sshArgs(V4_HOST,
+				['/usr/bin/systemctl', 'start', VALIDATOR_UNIT]), 20_000)
+			if (started.exitCode !== 0 || started.stdout !== '' || started.stderr !== '') fail('validator-4 start failed or returned diagnostics')
+			const status = await options.command.runExact(sshArgs(V4_HOST,
+				['/usr/bin/systemctl', 'is-active', VALIDATOR_UNIT]), 15_000)
+			if (status.exitCode !== 0 || status.stdout !== 'active\n' || status.stderr !== '') fail('validator-4 did not reach exact active state')
 			consumed = true
 		},
 	})

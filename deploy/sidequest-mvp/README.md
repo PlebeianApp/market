@@ -56,3 +56,20 @@ Successful rendering produces the FundingAbort bootstrap, signed deployment
 anchor and public authority receipt in the fresh output root. Validator
 initialization, genesis assembly and service activation remain separate owner
 actions and must consume those exact outputs.
+
+## Validator-4 rejoin control
+
+The source now provides `validator-4-online` in
+`demo-friday-acceptance-operator-cli.ts`. A live invocation requires a fresh
+separate `START_VALIDATOR_4_ONCE` approval and these exact pins:
+
+```text
+validator-4-online --approval ABS --approval-sha256 HEX --unit-sha256 HEX \
+  --probe-sha256 HEX --chain-id ID --validators-hash HEX \
+  --validator-addresses A1,A2,A3,A4
+```
+
+It consumes a recovery approval under a separate create-once root, verifies the
+unit, requires inactive state, starts only V4, and withholds completion until
+the pinned canonical Comet commit contains all four roster signatures. This is
+implemented and locally tested, but is not installed or authorized remotely.

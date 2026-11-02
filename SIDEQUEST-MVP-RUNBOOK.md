@@ -76,6 +76,14 @@ NIP-07 public keys. Do not share profiles, wallet storage or private keys.
    rejoin current commits. Never interpret a configured restart policy as
    evidence of rejoin.
 
+The recovery implementation is the separate `validator-4-online` operator
+command. It verifies the approved unit hash, requires V4 to be exactly inactive,
+starts it once, requires exact `active` state, then polls the pinned Comet view
+until a canonical commit contains all four roster signatures. Only then does it
+seal `active_rejoined`. Its approval, consumption root and result schema are
+distinct from the stop action. The source/build still requires independent
+pinning, installation and the exact owner approval before live use.
+
 With zero starting balances, the final spendable vector in role order is
 `[1400, 1000, 1000, 1000, 600]`; its sum remains 5,000 and every reserved,
 locked, pending and unresolved projection is zero. With nonzero starting

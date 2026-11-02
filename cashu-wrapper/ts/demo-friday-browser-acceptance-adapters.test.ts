@@ -10,13 +10,16 @@ import {
 	createDemoFridayAuthenticatedAcceptanceConsensus,
 	createDemoFridaySshCometReader,
 	createDemoFridayValidator4FaultControl,
+	createDemoFridayValidator4RecoveryControl,
 	verifyDemoFridayAcceptanceCometPreflight,
 	type DemoFridayAcceptanceFaultApprovalV1,
+	type DemoFridayAcceptanceRecoveryApprovalV1,
 	type DemoFridayExactCommandPort,
 } from './demo-friday-browser-acceptance-adapters'
 import { runDemoFridayCometProbe } from './demo-friday-comet-probe-cli'
 import {
 	DEMO_FRIDAY_FAULT_CONSUMPTION_ROOT,
+	DEMO_FRIDAY_RECOVERY_CONSUMPTION_ROOT,
 	runDemoFridayAcceptanceOperatorCli,
 } from './demo-friday-acceptance-operator-cli'
 import type { DemoParticipantConsensusReader } from './demo-comet-displacement-verifier'
@@ -177,6 +180,31 @@ describe('concrete Friday acceptance adapters', () => {
 		await expect(fault.setValidatorOfflineExact(4)).rejects.toThrow(/scope or validity/)
 	})
 
+	test('executes one separately approved validator-4 start from exact inactive to active', async () => {
+		const approval: DemoFridayAcceptanceRecoveryApprovalV1 = {
+			schema: 'PLEBEIAN_FRIDAY_VALIDATOR_RECOVERY_APPROVAL_V1', deploymentId: 'friday-demo-20261023-r14',
+			action: 'START_VALIDATOR_4_ONCE', targetSlot: 4, targetHostId: 'linode-108237424',
+			targetIpv4: '172.104.253.247', unit: 'plebeian-friday-validator.service',
+			notBefore: 900, expiresAt: 1_200, nonce: 'bc'.repeat(32),
+		}
+		const bytes = utf8ToBytes(JSON.stringify(approval)), pin = bytesToHex(sha256(bytes)), unit = 'ab'.repeat(32)
+		const calls: string[][] = []; let statusReads = 0
+		const command: DemoFridayExactCommandPort = { async runExact(argv) { calls.push([...argv])
+			if (argv.includes('/usr/bin/sha256sum')) return { exitCode: 0,
+				stdout: `${unit}  /etc/systemd/system/plebeian-friday-validator.service\n`, stderr: '' }
+			if (argv.includes('start')) return { exitCode: 0, stdout: '', stderr: '' }
+			statusReads++
+			return statusReads === 1 ? { exitCode: 3, stdout: 'inactive\n', stderr: '' }
+				: { exitCode: 0, stdout: 'active\n', stderr: '' } } }
+		const recovery = createDemoFridayValidator4RecoveryControl({ command, approvalBytes: bytes,
+			expectedApprovalSha256: pin, expectedUnitSha256: unit, nowSeconds: () => 1_000 })
+		await recovery.setValidatorOnlineExact(4)
+		expect(calls).toHaveLength(4)
+		expect(calls.some((argv) => argv.includes('start'))).toBeTrue()
+		expect(calls.every((argv) => argv.includes('root@172.104.253.247') && argv.includes('ForwardAgent=no'))).toBeTrue()
+		await expect(recovery.setValidatorOnlineExact(4)).rejects.toThrow(/only one/)
+	})
+
 	test('operator CLI durably consumes the exact fault approval before one bounded stop', async () => {
 		const root = await mkdtemp(join(tmpdir(), 'friday-fault-cli-'))
 		try {
@@ -212,6 +240,53 @@ describe('concrete Friday acceptance adapters', () => {
 			await expect(runDemoFridayAcceptanceOperatorCli([...argv, '--consumption', consumptionPath], {
 				command, nowSeconds: () => 1_000, reserveFaultConsumption,
 			})).rejects.toThrow(/usage|rejected/)
+		} finally { await rm(root, { recursive: true, force: true }) }
+	})
+
+	test('operator CLI consumes a distinct start approval only after four-signature rejoin', async () => {
+		const root = await mkdtemp(join(tmpdir(), 'friday-recovery-cli-'))
+		try {
+			const approval: DemoFridayAcceptanceRecoveryApprovalV1 = {
+				schema: 'PLEBEIAN_FRIDAY_VALIDATOR_RECOVERY_APPROVAL_V1', deploymentId: 'friday-demo-20261023-r14',
+				action: 'START_VALIDATOR_4_ONCE', targetSlot: 4, targetHostId: 'linode-108237424',
+				targetIpv4: '172.104.253.247', unit: 'plebeian-friday-validator.service',
+				notBefore: 900, expiresAt: 1_200, nonce: 'de'.repeat(32),
+			}
+			const bytes = utf8ToBytes(JSON.stringify(approval)), approvalPath = join(root, 'approval.json')
+			const consumptionPath = join(root, 'consumption.json'), approvalHash = bytesToHex(sha256(bytes)), unitHash = 'ab'.repeat(32)
+			await writeFile(approvalPath, bytes, { mode: 0o600 })
+			let calls = 0, statusReads = 0, reserved = false
+			const command: DemoFridayExactCommandPort = { async runExact(argv) { calls++
+				if (argv.includes('/usr/bin/sha256sum')) return { exitCode: 0,
+					stdout: `${unitHash}  /etc/systemd/system/plebeian-friday-validator.service\n`, stderr: '' }
+				if (argv.includes('start')) return { exitCode: 0, stdout: '', stderr: '' }
+				statusReads++
+				return statusReads === 1 ? { exitCode: 3, stdout: 'inactive\n', stderr: '' }
+					: { exitCode: 0, stdout: 'active\n', stderr: '' } } }
+			const reserveRecoveryConsumption = async (hash: string) => {
+				if (reserved || hash !== approvalHash) throw new Error('replayed or wrong recovery approval')
+				reserved = true
+				return { async finalize(result: unknown) { await writeFile(consumptionPath,
+					`${JSON.stringify({ schema: 'PLEBEIAN_FRIDAY_RECOVERY_CONSUMPTION_V1', approvalSha256: hash,
+						status: 'completed', result })}\n`, { mode: 0o600 }) }, async close() {} }
+			}
+			const preflight = { schema: 'PLEBEIAN_FRIDAY_ACCEPTANCE_COMET_PREFLIGHT_V1' as const,
+				trustModel: 'PINNED_LOCAL_COMET_RPC_NOT_INDEPENDENT_LIGHT_CLIENT' as const, chainId: 'friday-chain',
+				stateHeight: 51, commitHeight: 52, commitSignatures: 4, onlineSlots: [1, 2, 3, 4] }
+			const argv = ['validator-4-online', '--approval', approvalPath, '--approval-sha256', approvalHash,
+				'--unit-sha256', unitHash, '--probe-sha256', '12'.repeat(32), '--chain-id', 'friday-chain',
+				'--validators-hash', validatorsHash, '--validator-addresses', roster.map((entry) => entry.address).join(',')]
+			expect(await runDemoFridayAcceptanceOperatorCli(argv, { command, nowSeconds: () => 1_000,
+				reserveRecoveryConsumption, verifyRecoveryRejoin: async () => preflight })).toEqual({
+				schema: 'PLEBEIAN_FRIDAY_VALIDATOR_RECOVERY_RESULT_V1', slot: 4, status: 'active_rejoined',
+				approvalSha256: approvalHash, commitHeight: 52, commitSignatures: 4,
+			})
+			expect(JSON.parse(await readFile(consumptionPath, 'utf8')).status).toBe('completed')
+			expect(calls).toBe(4)
+			expect(DEMO_FRIDAY_RECOVERY_CONSUMPTION_ROOT)
+				.toBe('/var/lib/plebeian-auctions-friday-operator/acceptance-recovery')
+			await expect(runDemoFridayAcceptanceOperatorCli(argv, { command, nowSeconds: () => 1_000,
+				reserveRecoveryConsumption, verifyRecoveryRejoin: async () => preflight })).rejects.toThrow()
 		} finally { await rm(root, { recursive: true, force: true }) }
 	})
 
