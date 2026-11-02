@@ -1,0 +1,55 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_R19_READONLY_DKG_INPUT_VALIDATOR_RECEIPT_V1",
+  "status": "LOCAL_ONLY_COMPOSITE_REVIEW_CANDIDATE_NOT_RUN_REMOTELY",
+  "liveRunPreserved": "friday-demo-20261023-r14-dkg1",
+  "sourceSha256": {
+    "cashu-wrapper/frost-participant-3of4/src/main.rs": "d02e6610672f5ebdb4a51d76f8814594513a0642aaf1e6606e3cae084e535c1a",
+    "cashu-wrapper/frost-participant-3of4/src/dkg_input_validator_main.rs": "419e80300c675e299e61651973da467e8e8f7b0275c26b9c62212ce67da3e61a",
+    "cashu-wrapper/frost-participant-3of4/tests/dkg_input_validator_cli.rs": "c971f4419c6c0916aee5304575024510ec84ed4f5ed169125ea8a5aa7955ca3e",
+    "cashu-wrapper/frost-participant-3of4/Cargo.toml": "c91d146ffefc1ceb2fdb19c0b1034018390596ba1633eec4133ca872e5ab7eab",
+    "cashu-wrapper/frost-participant-3of4/Cargo.lock": "5adbd1be21d7a28b9b52f58bfc43c670673059f1f1e97f14bf064189270dbec8"
+  },
+  "typescriptRepairSha256": {
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-host-cli.ts": "38061d4189a39fdae5afbec4690aa1907676c72827f98e6bd7a256472fc1097f",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-host-cli.test.ts": "a0d0219fac4dee698065f65431191ddca8dbdcba484d50454ac3dbae8d303ce8",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-bootstrap.ts": "4e2a841d1d20afc7395d109b59e6928e5397c766195e2c221b1c76fc64899457",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-bootstrap.test.ts": "fe0e9413f2d76f862706ca3c20f37ad4845dee8ea5be0610e0a5294be58d4b50",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-bootstrap-v2.test.ts": "beb3d4423d636bcdbe24effd3aefa01cbf0fc5df33afa585fa1df225d710264f",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-relay.ts": "74e6f96ead45795b72beed548701c1af9eaea41ef16b7b06399734afbda640b0",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-relay.test.ts": "73e7a80c1214f3558558e9441d2a6348fe3ce5369031a8f5f71b0f6191859a12",
+    "scripts/friday-r19-validator-action.py": "e4276bd77eb5815523aee726d008266ae49df5c05f20484db5fd74673bd6e1b3",
+    "scripts/friday-r19-validator-action.test.py": "3cf8e914540cf8b1e34733bae56fbf0fd59f48abbb326e19047cfba2736cd960"
+  },
+  "artifact": {
+    "path": "live-bin-friday-candidate-r19-diagnostic/plebeian-friday-dkg-input-validator",
+    "sha256": "243910674f59a3cbb4c22a9ef3e351bd35fd75d6bd8fc49101ffdba1bddb9098",
+    "size": 762544,
+    "mode": "0755",
+    "target": "linux-x86_64-rustc-1.86.0"
+  },
+  "gates": {
+    "rustUnitAndCompiledCli": "PASS: 23/23",
+    "inputIdentityModeSizeDigestMtimeCtimeUnchanged": true,
+    "fixedSuccessFailureOutputContract": true,
+    "noStateEntropyWriteListenerNetworkEntrypoint": true,
+    "typescriptHostCompiledRuntime": "PASS: 15/15 tests, 75 assertions",
+    "typescriptBootstrap": "PASS: 14/14 tests, 71 assertions",
+    "relayPureSuite": "PASS: 8/8 tests; child-pipe CLI EPERM is excluded",
+    "stagingHelper": "PASS: 4/4 create-once promotion, real promoted-artifact execution, exact input metadata, full bounded journal reads, baseline equality/mismatch handling and non-logging pathname+inode executable-process-scan fixtures",
+    "sealedReleaseTraversal": "PASS_LIMITED_UNPRIVILEGED: root/service UID separation is NOT_RUN",
+    "literalR18PreservationPreflight": "PASS: the composite persists a sanitized CURRENT_STATE_NOT_HISTORICAL_PROOF baseline, immediately recollects all fields and invokes once only on exact equality",
+    "decodedTransportSecretsZeroized": true,
+    "postReadPathDescriptorIdentity": true,
+    "coreDumpDisabledAndNetworkNamespaceIsolated": true,
+    "fridayTypecheck": "PASS",
+    "diffCheck": "PASS"
+  },
+  "notRun": [
+    "composite R18 current-state collection and read-only validator invocation",
+    "remote artifact staging",
+    "live R18 input validation",
+    "R18 abort marker",
+    "fresh DKG run",
+    "any service, listener, key generation or network operation"
+  ]
+}

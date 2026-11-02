@@ -1,0 +1,56 @@
+{
+  "schema": "PlebeianAuctionsPOCCashuEvidenceV1",
+  "started_at": "2026-10-20T18:00:22.251Z",
+  "completed_at": "2026-10-20T18:00:33.337Z",
+  "mint": {
+    "url": "http://127.0.0.1:3338",
+    "server_version": "Nutshell/0.19.2",
+    "active_sat_keyset_id": "0049a8f48ab83b8e",
+    "denomination_key_digest": "68c892abff4d02868551485ad1720fa39ab5363774719008fa00bbefec7f2195",
+    "nuts": [
+      4,
+      5,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      14,
+      17,
+      20
+    ]
+  },
+  "mechanics": {
+    "coco_v2": true,
+    "nutshell_fake_wallet": true,
+    "nut_11_conditional_proofs": true,
+    "committee_threshold": false,
+    "committee_shortcut": "one shared application-level key; NOT FROST or threshold custody"
+  },
+  "amounts": {
+    "faucet_each": 10000,
+    "losing_bid": 120,
+    "winning_bid": 180,
+    "seller_after_payout": 180,
+    "loser_after_refund": 10000,
+    "winner_after_close": 9820
+  },
+  "locks": {
+    "locktime": 1792519231,
+    "committee_public_key": "02e3c6b28d465aa7e11573eb2bb8a5a93f785b43abcfdcbf5bf8ed59d6ecfb6efa",
+    "losing_refund_public_key": "02a34f74c1bcb4bbc2e2becab76ab5812e26ac6946c6e51b8b070bf3d74c3f67bd",
+    "winning_refund_public_key": "02da0894e484e125fb46a012163f0f93c1db144094f55658ab38ec6c78fdf60eed",
+    "losing_token_sha256": "1f23129460d2ce6ab281d1db1c91e20176bd77e9b94c86830f1fe6477266d078",
+    "winning_token_sha256": "275ee20d26f3eea338aab3dc3b07209ec3517cf136c53e6ca7e952f90410bb55"
+  },
+  "operations": {
+    "winning_lock": "737c0fe6-7840-462f-94e7-0cea886e7f29-bid-b-lock",
+    "winning_redeem": "737c0fe6-7840-462f-94e7-0cea886e7f29-winner-redeem",
+    "seller_payout": "737c0fe6-7840-462f-94e7-0cea886e7f29-seller-payout",
+    "seller_receive": "737c0fe6-7840-462f-94e7-0cea886e7f29-seller-receive",
+    "losing_lock": "737c0fe6-7840-462f-94e7-0cea886e7f29-bid-a-lock",
+    "losing_refund": "737c0fe6-7840-462f-94e7-0cea886e7f29-loser-refund"
+  },
+  "passed": true
+}

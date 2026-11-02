@@ -1,0 +1,41 @@
+{
+  "schema": "PlebeianFridayPreparedOperationAuditV1",
+  "observed_at": "2026-10-21T22:44:00.452Z",
+  "operation_id": "send-payout-process-crash-1792622445026",
+  "intent": {
+    "amount": 2500,
+    "unit": "sat",
+    "state": "prepared",
+    "needs_swap": true
+  },
+  "selected_inputs": {
+    "identities": 1,
+    "aggregates": [
+      {
+        "state": "ready",
+        "count": 1,
+        "amount": 8192
+      }
+    ],
+    "total_amount": 8192,
+    "mint_states": {
+      "UNSPENT": 1
+    }
+  },
+  "other_ready": {
+    "count": 4,
+    "amount": 1808
+  },
+  "issued": 10000,
+  "durable_token_present": false,
+  "owner_rows": 1,
+  "duplicate_operation_rows": 0,
+  "assertions": {
+    "immutable_intent": true,
+    "unique_operation_owner": true,
+    "unique_selected_inputs": true,
+    "all_selected_inputs_unspent_at_mint": true,
+    "locally_accounted_value_equals_issued": true,
+    "no_bearer_output_yet": true
+  }
+}

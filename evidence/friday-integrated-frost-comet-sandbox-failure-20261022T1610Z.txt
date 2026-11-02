@@ -1,0 +1,17 @@
+Friday unified FROST/Comet/Cashu harness — sandbox mint readiness failure
+Timestamp: 2026-10-22T16:10Z
+Source base: 079374e1d24568bbe6da6743522dee0746106619 plus dirty Friday integration diff
+Command: timeout --signal=TERM --kill-after=20s 9m ./scripts/friday-integrated-frost-comet.sh
+Exit: 1
+
+Observed output:
+  throwaway mint readiness timed out
+  forcing cleanup of owned mint PID 186
+  sanitized mint log: INFO Started server process [186]
+  cleanup complete for /tmp/plebeian-friday-integrated.wP2ihc
+
+The run failed before the fault proxy, Bun test, Comet network, policy workers,
+FROST signing, or mint operation began. The wrapper removed the throwaway root.
+This is consistent with the already-observed restricted-sandbox listener
+boundary; the exact same unprivileged loopback harness is the only planned
+outside-sandbox retry. It remains explicitly non-FIPS.

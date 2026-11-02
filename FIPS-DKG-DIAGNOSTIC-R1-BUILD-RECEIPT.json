@@ -1,0 +1,28 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_FIPS_DKG_DIAGNOSTIC_BUILD_RECEIPT_V1",
+  "source_commit": "9861b97a232c2449bbe4b37983a295151a11112e",
+  "bun_version": "1.3.11",
+  "bun_sha256": "6d5bb405b1d037a2a466b92757de7e47e4369930fa94bd42f8ff44ba49de6c57",
+  "build_target": "bun-linux-x64-modern",
+  "artifacts": {
+    "lab-bin-dkg-diagnostic-r1/plebeian-friday-frost-dkg": "58e2970313caa3d42e97fe26353ce62ab09b960cc9cacb677e09ad04d1860247",
+    "lab-bin/coco-demo-frost-participant-3of4": "715aeb0c390c7f6dd1af26076caaf50afb8aace6cbbaa1ed605d69875bb38d8b",
+    "lab-bin/coco-demo-frost-public-inspect": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f",
+    "/usr/bin/timeout": "12690a043dfd555a6c14ccc1564f5649c18f1762c0d6ff66729948130898ec52",
+    "scripts/friday-fips-dkg-diagnostic-r1.py": "c9a6712649ace9caf41a4ff20089668e0d64c311e14b1de122686911537eea60",
+    "scripts/friday-fips-dkg-diagnostic-r1-build.sh": "369cfb0b448fb6f521573295c716d2f95c271afe52bb47c8ef71287b6e166c7d"
+  },
+  "checks": {
+    "typescript_typecheck": "PASS",
+    "phase_journal_tests": "3 pass, 0 fail, 17 assertions",
+    "controller_tests": "6 pass, 0 fail",
+    "python_compile": "PASS",
+    "shell_syntax": "PASS",
+    "compiled_provision_executed": false,
+    "credentials_generated": false,
+    "network_used": false
+  },
+  "known_failed_attempts": [
+    "python -m unittest cannot address the hyphenated test filename as a module; direct isolated execution passed"
+  ]
+}

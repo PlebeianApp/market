@@ -1,0 +1,22 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_HEALTH_PINS_V1",
+  "pins": {
+    "deploymentId": "%DEPLOYMENT_ID%",
+    "chainId": "%CHAIN_ID%",
+    "genesisSha256": "%GENESIS_SHA256%",
+    "validatorsHash": "%VALIDATORS_HASH%",
+    "committeeKeysetId": "%COMMITTEE_KEYSET_ID%",
+    "committeeKeysetVersion": "%COMMITTEE_KEYSET_VERSION%",
+    "dkgRunId": "%DKG_RUN_ID%",
+    "publicKeyPackageSha256": "%PUBLIC_KEY_PACKAGE_SHA256%",
+    "signerRosterDigest": "%SIGNER_ROSTER_DIGEST%",
+    "mintUrl": "%CANONICAL_MINT_URL%"
+  },
+  "mint": {
+    "mintPublicKey": "%MINT_PUBLIC_KEY%",
+    "activeSatKeysetId": "%ACTIVE_SAT_KEYSET_ID%",
+    "denominationKeyDigest": "%DENOMINATION_KEY_DIGEST%",
+    "serverVersion": "%MINT_SERVER_VERSION%"
+  },
+  "mintConformanceReceiptSha256": "%REVIEWED_MINT_CONFORMANCE_RECEIPT_SHA256%"
+}

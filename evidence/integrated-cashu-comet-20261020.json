@@ -1,0 +1,153 @@
+{
+  "schema": "PlebeianAuctionsPOCIntegratedEvidenceV1",
+  "started_at": "2026-10-20T18:05:30.645Z",
+  "completed_at": "2026-10-20T18:06:00.525Z",
+  "auction_id": "cashu-comet-1792519532244",
+  "seller": "de1740c8e77a607d4801c24646dd8f3691d2e3e2483fa4f8647e7d100b518b27",
+  "bidder_a": "835491f504b6975efee46bd8246560ad8d9c70f07712de1e0b43d8aee500457a",
+  "bidder_b": "0a03cb23748748aafe5510a2b2b5cb489d7a90e7f2fc29e0adfed8422bf075cb",
+  "mint_url": "http://127.0.0.1:3338",
+  "committee_public_key": "03cad7a5c68bee06ce72bc4cb778031a5441af8c2e8a5aa01fe8f441959a45b8be",
+  "cashu": {
+    "coco_v2": true,
+    "nutshell_fake_wallet": true,
+    "nut_11": true,
+    "losing_token_sha256": "5c80331233b6d0e213ff7bee64fec8769925774aab76b28be6be805ef0b80948",
+    "winning_token_sha256": "6eba2dc3107f8c200bf89255b5d0eab56ae4cb11807457993f326f5adce77fd9",
+    "locktime": 1792519557,
+    "balances": {
+      "seller": 180,
+      "loser": 10000,
+      "winner": 9820
+    },
+    "operations": {
+      "winning_redeem": "a2ec0c50-5bbf-45fb-bae6-1514b1b3dd9d-committee-winner-redeem",
+      "seller_payout": "a2ec0c50-5bbf-45fb-bae6-1514b1b3dd9d-seller-payout",
+      "seller_receive": "a2ec0c50-5bbf-45fb-bae6-1514b1b3dd9d-seller-receive",
+      "loser_refund": "a2ec0c50-5bbf-45fb-bae6-1514b1b3dd9d-loser-refund"
+    }
+  },
+  "consensus": {
+    "create_height": 34,
+    "bid_a_height": 35,
+    "bid_b_height": 36,
+    "close_height": 46,
+    "winner": "0a03cb23748748aafe5510a2b2b5cb489d7a90e7f2fc29e0adfed8422bf075cb",
+    "winning_token_sha256": "6eba2dc3107f8c200bf89255b5d0eab56ae4cb11807457993f326f5adce77fd9",
+    "invalid_bid_http_status": 422,
+    "invalid_bid_error": "consensus transaction rejected: error in json rpc client, with http response metadata: (Status: 200 OK, Protocol HTTP/1.1). RPC error -32603 - Internal error: broadcast error on transaction validation: tx 915034151ACA44810A757830B5D2741E18DEEE2C29C9080A21EE8B893A608BA6 is invalid: code=1, data=, log='Cashu lock receipt signature is invalid', codespace='plebeian-auctions-poc'",
+    "validators_before_offline": [
+      {
+        "slot": 1,
+        "moniker": "poc-validator-1",
+        "online": true,
+        "node_id": "b73bfb1f647d289cc55b919b02bb0c1e253b20af",
+        "validator_address": "6484BB3F77C77554D47BFA3EDE05649AA99A9749",
+        "voting_power": 1,
+        "peers": 3,
+        "height": 36,
+        "block_hash": "6C65E3A8407F01ADDA36CD2F3A0288A1175EED87506776A30DE71E6DC19AEB0F",
+        "app_hash": "82CE06D49CD4F092B1AD587C30F7CD8D66044D7C401FEB448FE2D4595EED5556",
+        "canonical_commit_height": 35,
+        "commit_signatures": 4
+      },
+      {
+        "slot": 2,
+        "moniker": "poc-validator-2",
+        "online": true,
+        "node_id": "1cfccae08e1afd8224fd99f3ebf2d40967e62da7",
+        "validator_address": "8E6A6A1E69E68FBFADDF256C8F0A50189624DA18",
+        "voting_power": 1,
+        "peers": 3,
+        "height": 36,
+        "block_hash": "6C65E3A8407F01ADDA36CD2F3A0288A1175EED87506776A30DE71E6DC19AEB0F",
+        "app_hash": "82CE06D49CD4F092B1AD587C30F7CD8D66044D7C401FEB448FE2D4595EED5556",
+        "canonical_commit_height": 35,
+        "commit_signatures": 4
+      },
+      {
+        "slot": 3,
+        "moniker": "poc-validator-3",
+        "online": true,
+        "node_id": "975b48e1715f6804ed793e1196de9ce7b71e93e9",
+        "validator_address": "D634920346186904F312334739A4AE6F9B0B1CF4",
+        "voting_power": 1,
+        "peers": 3,
+        "height": 36,
+        "block_hash": "6C65E3A8407F01ADDA36CD2F3A0288A1175EED87506776A30DE71E6DC19AEB0F",
+        "app_hash": "82CE06D49CD4F092B1AD587C30F7CD8D66044D7C401FEB448FE2D4595EED5556",
+        "canonical_commit_height": 35,
+        "commit_signatures": 4
+      },
+      {
+        "slot": 4,
+        "moniker": "poc-validator-4",
+        "online": true,
+        "node_id": "e6232638632e3c4a21469ea3aa8478a537c4e930",
+        "validator_address": "3E5FB5C262132AE2569D165391226DE495347BF6",
+        "voting_power": 1,
+        "peers": 3,
+        "height": 36,
+        "block_hash": "6C65E3A8407F01ADDA36CD2F3A0288A1175EED87506776A30DE71E6DC19AEB0F",
+        "app_hash": "82CE06D49CD4F092B1AD587C30F7CD8D66044D7C401FEB448FE2D4595EED5556",
+        "canonical_commit_height": 35,
+        "commit_signatures": 4
+      }
+    ],
+    "validators_after_offline": [
+      {
+        "slot": 1,
+        "moniker": "poc-validator-1",
+        "online": true,
+        "node_id": "b73bfb1f647d289cc55b919b02bb0c1e253b20af",
+        "validator_address": "6484BB3F77C77554D47BFA3EDE05649AA99A9749",
+        "voting_power": 1,
+        "peers": 2,
+        "height": 51,
+        "block_hash": "78F2994CA08EB770F05F7B405E80148CE99026D6D2775589D261087468E30AEA",
+        "app_hash": "D84DC8DDD7CC7D874DF4418D3619C487894286DC9EF82C88F2C3C7D9B4BFB2FE",
+        "canonical_commit_height": 50,
+        "commit_signatures": 3
+      },
+      {
+        "slot": 2,
+        "moniker": "poc-validator-2",
+        "online": true,
+        "node_id": "1cfccae08e1afd8224fd99f3ebf2d40967e62da7",
+        "validator_address": "8E6A6A1E69E68FBFADDF256C8F0A50189624DA18",
+        "voting_power": 1,
+        "peers": 2,
+        "height": 51,
+        "block_hash": "78F2994CA08EB770F05F7B405E80148CE99026D6D2775589D261087468E30AEA",
+        "app_hash": "D84DC8DDD7CC7D874DF4418D3619C487894286DC9EF82C88F2C3C7D9B4BFB2FE",
+        "canonical_commit_height": 50,
+        "commit_signatures": 3
+      },
+      {
+        "slot": 3,
+        "moniker": "poc-validator-3",
+        "online": true,
+        "node_id": "975b48e1715f6804ed793e1196de9ce7b71e93e9",
+        "validator_address": "D634920346186904F312334739A4AE6F9B0B1CF4",
+        "voting_power": 1,
+        "peers": 2,
+        "height": 51,
+        "block_hash": "78F2994CA08EB770F05F7B405E80148CE99026D6D2775589D261087468E30AEA",
+        "app_hash": "D84DC8DDD7CC7D874DF4418D3619C487894286DC9EF82C88F2C3C7D9B4BFB2FE",
+        "canonical_commit_height": 50,
+        "commit_signatures": 3
+      },
+      {
+        "slot": 4,
+        "moniker": "poc-validator-4",
+        "online": false,
+        "error": "post failed: Post \"http://127.0.0.1:28957\": dial tcp 127.0.0.1:28957: connect: connection refused"
+      }
+    ],
+    "final_app_hash": "48892a39b93ef508c5166cc3902fd006f5102c8b10681e044edcf633b33a8574"
+  },
+  "shortcuts": [
+    "one shared application-level committee key; NOT FROST or threshold custody"
+  ],
+  "passed": true
+}

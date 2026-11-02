@@ -1,0 +1,20 @@
+Friday unified FROST/Comet/Cashu harness — first outside-sandbox failure
+Timestamp: 2026-10-22T16:12Z
+Source base: 079374e1d24568bbe6da6743522dee0746106619 plus dirty Friday integration diff
+Command: timeout --signal=TERM --kill-after=20s 9m ./scripts/friday-integrated-frost-comet.sh
+Exit: 1
+Result: 0 pass, 1 fail, 1 assertion, 8.19 seconds
+
+The real Nutshell 0.19.2 FakeWallet mint became ready. Auction creation and
+keyset discovery ran, but bid-package preparation failed before admission:
+
+  DEMO_RECIPIENT_KEYSET: invalid denomination 9007199254740992
+
+Nutshell advertises powers-of-two above JavaScript's safe-integer range. The
+recipient helper rejected an unused high denomination while preparing a
+1,000-sat exact output. The repair must continue to reject unsafe requested
+amounts while accepting a real keyset whose exact used denominations are safe.
+
+The wrapper stopped its owned mint and removed
+/tmp/plebeian-friday-integrated.wj6otf. No evidence file was emitted and no
+admission, FROST, swap, or recipient import occurred.

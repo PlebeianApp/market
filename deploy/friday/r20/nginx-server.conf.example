@@ -1,0 +1,15 @@
+# R20 TEMPLATE ONLY. Destination: /etc/nginx/sites-available/plebeian-friday-r20.conf
+# Do not copy it to sites-enabled until private acceptance and a separate
+# public-activation approval. The TLS paths are deliberately unresolved gates.
+server {
+    listen 172.105.95.57:443 ssl default_server;
+    server_name 172.105.95.57;
+    ssl_certificate %FRIDAY_TLS_FULLCHAIN_PATH%;
+    ssl_certificate_key %FRIDAY_TLS_PRIVATE_KEY_PATH%;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_tickets off;
+    server_tokens off;
+    access_log /var/log/nginx/plebeian-friday-r20-access.log;
+    error_log /var/log/nginx/plebeian-friday-r20-error.log warn;
+    include /etc/nginx/plebeian-friday-r20-active.conf;
+}

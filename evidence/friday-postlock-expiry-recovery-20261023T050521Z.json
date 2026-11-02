@@ -1,0 +1,48 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_POSTLOCK_EXPIRY_RECOVERY_EVIDENCE_V1",
+  "observed_at": "2026-10-23T05:05:21Z",
+  "source_commit": "e340b25a32b3a886a53fd2ff718775e742452a5a",
+  "fake_money_only": true,
+  "files": {
+    "internal/poc/model.go": "dda78a237c1aac970b3470f048e748f3afa352e3d705b3d1c42d4ba84650550e",
+    "internal/poc/model_test.go": "89399bbd080c6b532e8b12508168470d5ff20ccfca6ea39c4c875fefa1aaf040",
+    "cashu-wrapper/ts/poc-friday-browser-entry.ts": "138cb133a2d20cf8f2138c7d6d36db7e72729700fa6377cf9a85a0c3f56ed092",
+    "cashu-wrapper/ts/demo-friday-v4-comet-admission.ts": "62a6d083af12b3dd41848556d0cb554a80e55db2e5500d5c949b5ce909ea06d7",
+    "cashu-wrapper/ts/demo-friday-v4-comet-admission.test.ts": "b4e0afdbe9cf604dc71498ac8c7c7349c38d1c4a3c754b93f422409741dcb09d",
+    "internal/poc/static/friday-browser.js": "e5328718c7e23464f84662f5fb12848094596ba59ba52f2b559aa176e60d81e3",
+    "FIPS-LOCAL-LAB-R6-EXECUTION.json": "798abe0d8179bdde461483a4160ac42b2086ca3bced95729080017593f0c3670"
+  },
+  "verified": {
+    "authenticated_expired_receipt": "commits one funding_expired rejected-return entitlement",
+    "malformed_expired_receipt": "hard failure with no integrated funding or proof-use mutation",
+    "browser_discovery": "expiry does not delete unresolved operation; deletion follows terminal import acknowledgement only",
+    "authenticated_finality_adapter": "permits post-expiry only for committed funding_expired return state; rejects active, mismatched-reason, and fabricated expiry states",
+    "cross_layer_expiry_precedence": "an authenticated expired V4 receipt commits funding_expired even when the same block is also late, so Go and TypeScript observe one terminal cause",
+    "go_focused": "PASS",
+    "go_all_packages": "PASS",
+    "typescript_friday": "PASS",
+    "focused_typescript": {
+      "passed": 23,
+      "failed": 0,
+      "assertions": 75
+    },
+    "focused_expiry_finality_typescript": {
+      "passed": 10,
+      "failed": 0,
+      "assertions": 31,
+      "scope": "separate focused run; not summed with overlapping prior suite"
+    },
+    "browser_bundle_rebuilt": true
+  },
+  "not_verified": {
+    "prebroadcast_structural_cancellation": "no independent 3-of-4 authority exists for a package rejected before a signed bid can be committed",
+    "browser_coco_over_fips": "not run",
+    "privileged_fips_lab": "not run",
+    "live_vps": "not changed"
+  },
+  "preserved_invocation_failures": [
+    "Two initial focused-test invocations ran from directories incompatible with the test's historical relative fixture path; both executed zero assertions and failed ENOENT before any service or external effect. The intended cashu-wrapper/ts invocation then passed."
+  ],
+  "activation": "BLOCKED",
+  "r6_manifest": "approval_ready=false"
+}

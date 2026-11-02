@@ -1,0 +1,51 @@
+{
+  "schema": "PlebeianFridayDisabledV4AuthorityEvidenceV1",
+  "recorded_at": "2026-10-23T01:06:17Z",
+  "candidate_commit": "59773c022cb78020795570d7a23e99cad913c510",
+  "activation": "blocked_fail_closed",
+  "public_funding_http_status": 503,
+  "source_sha256": {
+    "cashu-wrapper/ts/demo-friday-prepared-funding.ts": "e98bfb00ea301b3f5f8980985d6bc24a9e6f29cb052994ed421c19660350286d",
+    "cashu-wrapper/ts/demo-friday-authority-process.ts": "ad11a8c82f7fe6bf05a91eb489bb093b4d122675762350a3cb49ab74cd9c04af",
+    "cashu-wrapper/ts/demo-friday-authority-runtime.ts": "64fd012b021a12a23e2f981dd89a67ad1247ef861642e22a22ee2132c583295c",
+    "cashu-wrapper/ts/demo-integrated-funding-receipt-v4.ts": "4aed868a8f9b579756dab0458e5a1371c2d41a8e1586a0d9c7792a004702c421",
+    "cashu-wrapper/fixtures/integrated-funding-v4-browser-golden.json": "237d12e45b6f28f8da6d2811977a002c9bfe4314b0afe8762262424a8f186871",
+    "internal/poc/model.go": "e684e4c816c7c07415b3319732460ad4194b4f7993c9565a4622e192cfced01a",
+    "cashu-wrapper/frost-participant-3of4/src/admission.rs": "d003f7fd2bcce403593eeecbd88de9a70f2a74aa9e1546270b9204cfbadfbebd"
+  },
+  "checks": {
+    "focused_typescript": { "passed": 29, "failed": 0, "assertions": 111 },
+    "typescript_typecheck": "passed",
+    "go_all": "passed",
+    "rust_admission": { "passed": 7, "failed": 0 },
+    "friday_suite_restricted": { "passed": 171, "failed": 2, "reason": "OS child-process send blocked with EPERM" },
+    "affected_process_file_ordinary_runner": { "passed": 6, "failed": 0, "assertions": 38 },
+    "independent_read_only_review": "no_P0_inert_checkpoint_accepted_activation_blocked"
+  },
+  "closed_source_findings": [
+    "Go and Rust reject V3 receipts carrying unsigned V4-only fields",
+    "Rust admission validity is bounded to 300 seconds",
+    "prepared package verification recomputes exact package and authorization bindings",
+    "replay claim, encrypted package persistence, stored and admitted phases are durable and anchored",
+    "terminal references take a SQLite CAS resolving lease and recover interrupted leases",
+    "loopback authority lifecycle stops its listener on every exit path",
+    "TypeScript, Go and Rust share one frozen public-only V4 framing vector"
+  ],
+  "activation_blockers": [
+    "no concrete authenticated Comet confirmation adapter calls the admitted transition",
+    "no reviewed CLI constructs the fixed terminal resolver and Comet/DKG/signer/mint ports",
+    "browser bearer-proof custody decision is pending",
+    "emergency unilateral refund first-spend-race decision is pending",
+    "no unified real Nutshell, Comet, FROST and FIPS execution exists for these exact artifacts",
+    "restart evidence is source and SQLite fixture coverage, not every real process-kill boundary"
+  ],
+  "scope": {
+    "real_value": false,
+    "services_started": false,
+    "keys_generated": false,
+    "network_changed": false,
+    "vps_changed": false,
+    "deployed": false,
+    "pushed": false
+  }
+}

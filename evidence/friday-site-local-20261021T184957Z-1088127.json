@@ -1,0 +1,113 @@
+{
+  "schema": "PlebeianFridayLocalAcceptanceV1",
+  "run": "c288f746-5ae6-43f7-b25a-c423bc585843",
+  "started_at": "2026-10-21T18:49:57.351Z",
+  "completed_at": "2026-10-21T18:53:53.927Z",
+  "auction_id": "friday-1792608637534",
+  "actors": {
+    "seller": "43591b8f225885517fc76fa21f47bf19b8df55b4166a6f6b71b2b3f96b9fdcdb",
+    "b": "0453005fc7ac79a4b56bb2d9a0a37ef57358c7e6b08bf26d7c310a9ac05de372",
+    "c": "ae392fe9f0c4caf7c4f65fa243d3f4c6b38d916740308efff9229b0020e268f6",
+    "d": "4f3abdbdb484f0514e5488c0f4a4dd7c2de887bdfba0680f5cd9212364650195"
+  },
+  "faucet": {
+    "b_total": 50000,
+    "sixth_http_status": 409
+  },
+  "auction": {
+    "winner": "4f3abdbdb484f0514e5488c0f4a4dd7c2de887bdfba0680f5cd9212364650195",
+    "amount": 2500,
+    "original_end_time": 1792608828,
+    "end_time": 1792608830
+  },
+  "reserve_no_sale": {
+    "auction_id": "reserve-1792608638318",
+    "reserve": 5000,
+    "top_bid": 3000,
+    "bidder_spendable": 10000
+  },
+  "balances": {
+    "seller": 2500,
+    "b": 50000,
+    "c": 10000,
+    "d": 7500
+  },
+  "payments": [
+    {
+      "id": "payout-friday-1792608637534",
+      "reservation_id": "reserve-f7d5e7e4bcdd17c216790e21438b338781ff88008fe15848c67bae570e57c241",
+      "direction": "incoming",
+      "counterparty": "4f3abdbdb484f0514e5488c0f4a4dd7c2de887bdfba0680f5cd9212364650195",
+      "amount": 2500,
+      "status": "paid",
+      "send_operation_id": "send-payout-friday-1792608637534",
+      "receive_operation_id": "receive-payout-friday-1792608637534"
+    }
+  ],
+  "validators": [
+    {
+      "slot": 1,
+      "moniker": "poc-validator-1",
+      "online": true,
+      "node_id": "3a70f3a5a7ca943b4af3817cd0383b7371b1c42b",
+      "validator_address": "ADC244CA59E54E2EC136DD7109294803B2DB2822",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 188,
+      "block_hash": "EDA93AD13EE9274C5DF725ECFD5B482AB4AF0C356DC4BB29930C445CE2F7B800",
+      "app_hash": "06CCABA540671147520E108385C7719D471105223C6F0A56F37213064BF8DBCC",
+      "canonical_commit_height": 187,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 2,
+      "moniker": "poc-validator-2",
+      "online": true,
+      "node_id": "49b3eca18af7677a40d66cf6fad17a33fb9d3be3",
+      "validator_address": "FB773FAB6B986E9AF9BDC284F06E183F5E16F379",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 188,
+      "block_hash": "EDA93AD13EE9274C5DF725ECFD5B482AB4AF0C356DC4BB29930C445CE2F7B800",
+      "app_hash": "06CCABA540671147520E108385C7719D471105223C6F0A56F37213064BF8DBCC",
+      "canonical_commit_height": 187,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 3,
+      "moniker": "poc-validator-3",
+      "online": true,
+      "node_id": "8fd8431f67b20f0eadad898f118f3f557716cafd",
+      "validator_address": "A48B3814AC7AB2348FF2DC04A66EE8AC56066D22",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 188,
+      "block_hash": "EDA93AD13EE9274C5DF725ECFD5B482AB4AF0C356DC4BB29930C445CE2F7B800",
+      "app_hash": "06CCABA540671147520E108385C7719D471105223C6F0A56F37213064BF8DBCC",
+      "canonical_commit_height": 187,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 4,
+      "moniker": "poc-validator-4",
+      "online": true,
+      "node_id": "ae9253bbbab5e354e9a01ad84ad5517b8348971d",
+      "validator_address": "EB8AFB80CAF132E9AA959EBBA600F07D2B3CE12D",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 188,
+      "block_hash": "EDA93AD13EE9274C5DF725ECFD5B482AB4AF0C356DC4BB29930C445CE2F7B800",
+      "app_hash": "06CCABA540671147520E108385C7719D471105223C6F0A56F37213064BF8DBCC",
+      "canonical_commit_height": 187,
+      "commit_signatures": 4
+    }
+  ],
+  "mint": {
+    "implementation": "Nutshell 0.19.2",
+    "backend": "FakeWallet",
+    "input_fee_ppk": 0,
+    "coco_v2": true
+  },
+  "trust_boundary": "custodial server-held proofs; validators verify one coordinator reservation signature, not Cashu bearer proofs; shared committee key is not FROST",
+  "passed": true
+}

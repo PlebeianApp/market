@@ -1,0 +1,53 @@
+# TEMPLATE ONLY — FRIDAY RECOVERY-ONLY MINT BOUNDARY — NOT INSTALLED.
+#
+# This replaces the normal Friday `location ^~ /v1/` block only after an
+# operator has enabled POC_FRIDAY_RECOVERY_ONLY=true on the fixed Friday site
+# and authority. It preserves the same distinct Friday origin, mint and keysets.
+# It must never proxy a new quote request or a mint execution request.
+#
+# Exact originating application operations remain authorized by the authority
+# journal. At the mint boundary, swap/checkstate/restore remain available
+# because they are required to recover already-held proofs; they conserve value
+# and do not issue new fake sats. A browser cannot create a new quote or mint a
+# paid quote through this configuration.
+
+location ~ ^/v1/(?:info|keys(?:/[0-9a-fA-F]+)?|keysets|mint/quote/bolt11/[A-Za-z0-9_-]+)$ {
+    if ($request_method != GET) { return 405; }
+    proxy_pass http://[%FRIDAY_APPLICATION_ULA%]:3438;
+    proxy_http_version 1.1;
+    proxy_set_header Host %FRIDAY_PUBLIC_ORIGIN_HOST%;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_redirect off;
+    proxy_intercept_errors on;
+    proxy_cache off;
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 30s;
+    proxy_send_timeout 30s;
+    client_max_body_size 64k;
+    add_header Cache-Control "no-store" always;
+}
+
+location ~ ^/v1/(?:swap|checkstate|restore)$ {
+    if ($request_method != POST) { return 405; }
+    proxy_pass http://[%FRIDAY_APPLICATION_ULA%]:3438;
+    proxy_http_version 1.1;
+    proxy_set_header Host %FRIDAY_PUBLIC_ORIGIN_HOST%;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_redirect off;
+    proxy_intercept_errors on;
+    proxy_cache off;
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 30s;
+    proxy_send_timeout 30s;
+    client_max_body_size 64k;
+    add_header Cache-Control "no-store" always;
+}
+
+# Deny `/v1/mint/quote/bolt11`, `/v1/mint/bolt11`, melts and every unknown
+# mint route. This prefix is intentionally not `^~`: the two reviewed regex
+# recovery locations above must be considered first.
+location /v1/ {
+    return 403;
+}

@@ -1,0 +1,98 @@
+{
+  "schema": "plebeian.friday.fips-mesh-corrected-run.v1",
+  "recorded_at_utc": "2026-10-23T15:46:46Z",
+  "action_commit": "3d9191bcfdaa0c619f4a8787b18a9339baa20627",
+  "safe_update_commit": "8b9a53cc5d757a8cf08f014cb9ce26bb3033a664",
+  "action_document_sha256": "e70d0958ba77c1439ccbbcff6810adb4ce75e2b29c8257f559292f02f775968f",
+  "unit_sha256": "15f18917bfe35e4d5b772e8eb591a96718a95990b73550f515c2ec3b938d1051",
+  "remote_script_sha256": "318e387124249e7108b69900c9bc8cf604be39a0c934605d71f53e9e46dd3549",
+  "controller_sha256": "044aefe627166ee13767a6b9acaa60116b2400ba9d7029a44fe14f3f0fe0761e",
+  "safe_update_remote_sha256": "a17ccadd4902f4d80eae083fc46038a52f36cecbf45ab49c6d1033836e097113",
+  "safe_update_controller_sha256": "2546e3beccf4bd7e3b846be57ac7cab721a959b092ecb0395d13e205eb581979",
+  "fips": {
+    "version": "0.5.2",
+    "source_revision_prefix": "53a3ec4b2f",
+    "identity_slots": [1, 2, 3, 4]
+  },
+  "preflight": {
+    "ssh_identity_fingerprint_matched": true,
+    "pinned_host_keys_matched": true,
+    "local_packet_hashes_matched": true,
+    "remote_corrected_unit_and_manifest_hashes_matched": 4,
+    "wednesday_validators_present": 4,
+    "hosts_passed": 4,
+    "mem_available_kib": [3370284, 3498968, 3502600, 3488296]
+  },
+  "mesh": {
+    "bounded_window_seconds": 90,
+    "start_order": [1, 2, 3, 4],
+    "systemctl_start_exit_codes": [0, 0, 0, 0],
+    "inspection_exit_codes": [0, 0, 0, 0],
+    "interfaces_verified": 4,
+    "interface_mtu": 1280,
+    "udp_32121_listeners_verified": 4,
+    "control_sockets_verified": 4,
+    "authenticated_peer_count_per_host": [3, 3, 3, 3],
+    "authenticated_link_count_per_host": [3, 3, 3, 3],
+    "estimated_mesh_size_per_host": [4, 4, 4, 4],
+    "transport_udp_peer_count_per_host": [3, 3, 3, 3],
+    "all_hosts_observed_same_root": true,
+    "route_boundary": "Only exact FIPS ULA /128 routes, fd00::/8 through fips0, and link-local fips0 routes were added; default underlay routes remained unchanged.",
+    "mesh_established": true
+  },
+  "directed_probes": {
+    "execution": "All twelve directed ten-second probes were launched concurrently inside the bounded window.",
+    "attempted": 12,
+    "passed": 11,
+    "failed_or_partial": 1,
+    "strict_acceptance_passed": false,
+    "exception": {
+      "source_slot": 3,
+      "target_slot": 1,
+      "exit_code": 1,
+      "overall": "partial",
+      "authenticated_path_valid": true,
+      "direct_peer": true,
+      "session_state": "established_or_preexisting",
+      "path_mtu": 1280,
+      "diagnostic_reason": "Both RTT reports were sub_millisecond; the probe emitted zero_samples=2, samples=0 and classified the otherwise established path as partial after 4087 ms."
+    }
+  },
+  "shutdown": {
+    "reverse_order": [4, 3, 2, 1],
+    "systemctl_stop_exit_codes": [0, 0, 0, 0],
+    "postcheck_exit_codes": [0, 0, 0, 0],
+    "fips_units_active_state": ["inactive", "inactive", "inactive", "inactive"],
+    "fips_units_sub_state": ["dead", "dead", "dead", "dead"],
+    "fips_units_main_pid": [0, 0, 0, 0],
+    "fips_units_nrestarts": [0, 0, 0, 0],
+    "fips_units_result": ["success", "success", "success", "success"],
+    "fips0_absent_all_hosts": true,
+    "udp_32121_absent_all_hosts": true,
+    "control_socket_absent_all_hosts": true,
+    "default_routes_unchanged": true,
+    "cleanup_complete": true
+  },
+  "wednesday": {
+    "units": [
+      "plebeian-poc-validator@1.service",
+      "plebeian-poc-validator@2.service",
+      "plebeian-poc-validator@3.service",
+      "plebeian-poc-validator@4.service"
+    ],
+    "main_pids": [91863, 65966, 65081, 66255],
+    "active_state": ["active", "active", "active", "active"],
+    "sub_state": ["running", "running", "running", "running"],
+    "nrestarts": [0, 0, 0, 0],
+    "result": ["success", "success", "success", "success"],
+    "unchanged": true
+  },
+  "outcome": {
+    "transport_mesh_established": true,
+    "strict_packet_acceptance": "FAIL_11_OF_12",
+    "reason": "One authenticated V3-to-V1 path was classified partial solely because the diagnostic produced no numeric RTT samples for sub-millisecond responses.",
+    "automatic_retry_performed": false,
+    "deployment_readiness_claimed": false
+  },
+  "next_step": "Do not rerun automatically. Independently review whether sub_millisecond is an acceptable successful RTT observation or requires a narrowly corrected probe classifier and a separately approved acceptance run. Payment, DKG, Comet and application services remain outside this transport-only result."
+}

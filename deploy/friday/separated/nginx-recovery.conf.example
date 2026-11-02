@@ -1,0 +1,45 @@
+# Complete Separated recovery-only location set. Destination:
+# /etc/nginx/plebeian-friday-separated-modes/recovery.conf (root:root 0644).
+location ~ ^/v1/(?:info|keys(?:/[0-9a-fA-F]+)?|keysets|mint/quote/bolt11/[A-Za-z0-9_-]+)$ {
+    if ($request_method != GET) { return 405; }
+    proxy_pass http://[%FRIDAY_APPLICATION_ULA%]:3438;
+    proxy_http_version 1.1;
+    proxy_set_header Host 139.162.161.233;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_cache off;
+    client_max_body_size 64k;
+    add_header Cache-Control "no-store" always;
+}
+location ~ ^/v1/(?:swap|checkstate|restore)$ {
+    if ($request_method != POST) { return 405; }
+    proxy_pass http://[%FRIDAY_APPLICATION_ULA%]:3438;
+    proxy_http_version 1.1;
+    proxy_set_header Host 139.162.161.233;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_cache off;
+    client_max_body_size 64k;
+    add_header Cache-Control "no-store" always;
+}
+location /v1/ { return 403; }
+location ^~ /api/friday/ {
+    proxy_pass http://127.0.0.1:8181;
+    proxy_http_version 1.1;
+    proxy_set_header Host 139.162.161.233;
+    proxy_set_header Origin $http_origin;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_cache off;
+    client_max_body_size 32k;
+    add_header Cache-Control "no-store" always;
+}
+location / {
+    proxy_pass http://127.0.0.1:8180;
+    proxy_http_version 1.1;
+    proxy_set_header Host 139.162.161.233;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_cache off;
+    add_header Cache-Control "no-store" always;
+}

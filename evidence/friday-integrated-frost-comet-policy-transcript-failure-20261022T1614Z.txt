@@ -1,0 +1,23 @@
+Friday unified FROST/Comet/Cashu harness — dynamic policy transcript mismatch
+Timestamp: 2026-10-22T16:14Z
+Source base: 079374e1d24568bbe6da6743522dee0746106619 plus dirty Friday integration diff
+Command: timeout --signal=TERM --kill-after=20s 9m ./scripts/friday-integrated-frost-comet.sh
+Exit: 1
+Result: 0 pass, 1 fail, 1 assertion, 14.58 seconds
+
+Independent participant policy services approved the first real funded bid. The
+Rust admission adapter then required each selected signer to execute its local
+policy again. That second authenticated Comet observation had advanced, so the
+entire evidence object no longer matched byte-for-byte:
+
+  DEMO_FROST_ADMISSION_POLICY_SERVICE: signer-local policy evidence differs
+  from coordinator transcript
+
+The fail-closed check occurred before nonce commitment, FROST signing, Comet
+broadcast, or mint spend. The repair must compare immutable admission facts
+exactly and require the second consensus observation to be same-chain and
+monotonic, rather than requiring a live chain's height/evidence digest to be
+identical. All three selected signers must still perform local validation.
+
+The wrapper stopped owned processes and removed
+/tmp/plebeian-friday-integrated.C7OwvC.

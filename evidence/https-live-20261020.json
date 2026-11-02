@@ -1,0 +1,75 @@
+{
+  "type": "plebeian-poc-public-https-acceptance",
+  "observed_at": "2026-10-20T21:05:12Z",
+  "url": "https://172.105.64.142/",
+  "host": {
+    "role": "V1",
+    "linode_id": 108175009,
+    "interface_id": 1029488,
+    "ipv4": "172.105.64.142",
+    "firewall": "plebeian-poc-web-v1"
+  },
+  "acme": {
+    "ca": "Let's Encrypt / ISRG",
+    "server": "https://acme-v02.api.letsencrypt.org/directory",
+    "subscriber_agreement": "https://letsencrypt.org/documents/LE-SA-v1.8-July-06-2026.pdf",
+    "agreement_accepted_via_client": true,
+    "account_registered_at": "2026-10-20T21:01:02Z",
+    "contact": "dieeoaz@gmail.com",
+    "profile": "shortlived",
+    "challenge": "tls-alpn-01",
+    "client": "lego 5.3.1 linux/amd64"
+  },
+  "certificate": {
+    "issuer": "C=US, O=Let's Encrypt, CN=YE2",
+    "serial_hex": "055CB77FF45FBF0E7A704E5C2A3C216B81B1",
+    "sha256_fingerprint": "09:84:41:3E:E4:08:30:5E:14:4B:E9:FE:8B:FC:A7:76:AA:E6:42:0E:13:45:B9:A0:B3:14:3D:84:6A:53:5C:68",
+    "not_before": "2026-10-20T20:02:40Z",
+    "not_after": "2026-10-27T12:02:39Z",
+    "subject_alt_name": "IP:172.105.64.142",
+    "external_openssl_verification": "OK",
+    "external_tls_protocol": "TLSv1.3"
+  },
+  "key_storage": {
+    "directory": "/etc/plebeian-auctions-poc/acme",
+    "directory_owner_mode": "root:root 0700",
+    "account_key_owner_mode": "root:root 0600",
+    "certificate_key_owner_mode": "root:root 0600"
+  },
+  "https": {
+    "proxy": "nginx 1.24.0-2ubuntu7.18",
+    "status": 200,
+    "index_sha256": "326fa0b321bd268478b1fa82e4533bfde25a6cb9e16e00e646d32f4dc3b36bf3",
+    "nginx_active": true,
+    "nginx_enabled": true,
+    "nginx_restarts": 0,
+    "nginx_restart_policy": "on-failure with 5s delay",
+    "nginx_memory_max_bytes": 134217728,
+    "nginx_tasks_max": 64,
+    "nginx_log_rotation": "daily, 14 rotations, compressed",
+    "public_listener": "172.105.64.142:443",
+    "blocked_public_ports_verified": [80, 3338, 3339, 8080, 26657]
+  },
+  "renewal": {
+    "timer": "plebeian-poc-acme.timer",
+    "enabled": true,
+    "active": true,
+    "cadence": "00:00 and 12:00 UTC with up to 30 minutes randomized delay",
+    "next_check_observed": "2026-10-21T00:20:05Z",
+    "immediate_not_due_check": "passed-without-nginx-restart"
+  },
+  "consensus_after_https": {
+    "height": 5197,
+    "block_hash": "FD3891D9EC7F2C2F34244167E61B551537D966DB8CCD5AFCAB4C1F0FE54EB713",
+    "app_hash": "0A2FEB3B549F44A3158F26061B769C6EFCA20AE412142321E3DF277771C108C6",
+    "online_slots": [1, 2, 3, 4],
+    "commit_signatures": 4,
+    "validator_restarts": 0,
+    "mint_restarts": 0,
+    "coordinator_restarts": 0,
+    "site_restarts": 0
+  },
+  "dns_changed": false,
+  "private_material_recorded": false,
+  "notes": "Initial certificate issuance succeeded, but the first post-hook could not run nginx -t inside the hardened ACME service because /run was read-only. The hook was corrected to rely on nginx.service's own ExecStartPre validation, nginx started successfully, and the subsequent not-due renewal check preserved the same nginx PID with zero restarts."
+}

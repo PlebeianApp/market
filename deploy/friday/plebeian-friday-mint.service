@@ -1,0 +1,32 @@
+[Unit]
+Description=Plebeian Friday worthless-token Nutshell FakeWallet mint
+Requires=plebeian-friday-fips.service
+After=plebeian-friday-fips.service
+ConditionPathExists=/etc/plebeian-auctions-friday/mint.env
+
+[Service]
+Type=simple
+User=plebeian-friday
+Group=plebeian-friday
+Slice=plebeian-friday.slice
+WorkingDirectory=/opt/plebeian-auctions-friday
+EnvironmentFile=/etc/plebeian-auctions-friday/friday.env
+EnvironmentFile=/etc/plebeian-auctions-friday/mint.env
+ExecStartPre=/usr/bin/python3 -I -S -B /opt/plebeian-auctions-friday/bin/verify-friday-runtime-target.py --environment /etc/plebeian-auctions-friday/friday.env --application ${FRIDAY_APPLICATION} --service plebeian-friday-mint.service
+ExecStart=/opt/plebeian-auctions-friday/.venv/bin/python -m cashu.mint --host ${FRIDAY_FIPS_ULA} --port ${FRIDAY_MINT_PORT}
+Restart=always
+RestartSec=5s
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/plebeian-auctions-friday/mint
+RestrictAddressFamilies=AF_INET6 AF_UNIX
+MemoryMax=384M
+TasksMax=192
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=300
+
+[Install]
+WantedBy=multi-user.target

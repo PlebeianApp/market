@@ -1,0 +1,43 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_ACCEPTANCE_OPERATOR_BUILD_RECEIPT_V1",
+  "status": "BUILT_OFFLINE_TESTED_PENDING_INDEPENDENT_REVIEW_NOT_RUN_ON_HOSTS",
+  "generatedAtUtc": "2026-10-23T17:24:12Z",
+  "sourceCommit": "c3c797d3a1164682791e454edb9dc990dd1a2aa3",
+  "sourceTree": "c65c1e5dd67c22cd3fe9150d5c74ed6616a5193c",
+  "artifact": {
+    "name": "plebeian-friday-acceptance-operator",
+    "path": "live-bin-friday-candidate-r17/plebeian-friday-acceptance-operator",
+    "sha256": "791c4977bfd4d9cab2e615298c4b6b305dddde14ad231823994a2d0303b53bff",
+    "size": 98485792,
+    "mode": "0755",
+    "target": "bun-linux-x64-baseline-v1.3.11"
+  },
+  "sourceSha256": {
+    "cashu-wrapper/ts/demo-friday-acceptance-operator-cli.ts": "17adda3076a1a2e2fc425222b9ad5dc9645e22ebb8b30b2dee3e4da60a735627",
+    "cashu-wrapper/ts/demo-friday-browser-acceptance-adapters.ts": "9de0ff8cb3e26267f0067ecd236cedba1454df95449aad4029ea8a779d76bf2d",
+    "cashu-wrapper/ts/demo-friday-browser-acceptance-adapters.test.ts": "c2359608f2bb93a2c8412a6b90a0ef31f20820c6f8843cbd3f1b412f1340831d"
+  },
+  "securityBindings": {
+    "cometTrustModel": "PINNED_LOCAL_COMET_RPC_NOT_INDEPENDENT_LIGHT_CLIENT",
+    "transactionCommit": "exact transaction, block hash, unique >=3 signer addresses, exact four-validator roster subset, authenticated commit time",
+    "faultDeploymentId": "friday-demo-20261023-r14",
+    "faultConsumptionRoot": "/var/lib/plebeian-auctions-friday-operator/acceptance-fault",
+    "faultConsumptionName": "<externally-pinned-approval-sha256>.json",
+    "faultConsumptionParent": "real root-owned mode-0700 directory",
+    "callerSelectedConsumptionPath": false
+  },
+  "gates": {
+    "acceptanceFocused": "PASS: 13 tests, 34 assertions",
+    "fridayTypecheck": "PASS",
+    "diffCheck": "PASS",
+    "compiledInvalidArgumentContract": "PASS: exit 1 with fixed stderr and zero stdout"
+  },
+  "preservedFailedAttempt": "bunx tsc could not write its temporary files in the restricted executor; the checked-in local TypeScript binary then completed the same Friday project typecheck successfully",
+  "notRun": [
+    "remote Comet probe",
+    "validator fault exercise",
+    "browser-to-operator bridge",
+    "four-host payment acceptance",
+    "deployment or public activation"
+  ]
+}

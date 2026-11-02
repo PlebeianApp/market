@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Plebeian POC IP certificate every 12 hours
+
+[Timer]
+OnCalendar=*-*-* 00,12:00:00 UTC
+RandomizedDelaySec=30m
+Persistent=true
+Unit=plebeian-poc-acme.service
+
+[Install]
+WantedBy=timers.target

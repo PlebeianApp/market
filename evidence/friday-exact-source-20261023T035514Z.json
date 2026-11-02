@@ -1,0 +1,112 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_EXACT_SOURCE_EVIDENCE_V1",
+  "recorded_at": "2026-10-23T03:55:14Z",
+  "candidate_commit": "d9d751415afbaeab5495d6ace4833206e946067d",
+  "status": "source_coherent_runtime_activation_blocked",
+  "fake_money_only": true,
+  "artifacts": {
+    "browser_entry": {
+      "path": "cashu-wrapper/ts/poc-friday-browser-entry.ts",
+      "sha256": "fd3504eb9d8c449f5adffef4fcc4c5d195bec8fc0057788b2fb86be2ce71f212"
+    },
+    "browser_bundle": {
+      "path": "internal/poc/static/friday-browser.js",
+      "sha256": "33039d6349d43395337cf807916698526b9d432782a8f8744bdbba97ceacebb4"
+    },
+    "static_app": {
+      "path": "internal/poc/static/app.js",
+      "sha256": "4a89d9df58bb875eacebaffc3ac2f125e026665ec3ce1b21f1d39bdd004a7409"
+    },
+    "static_index": {
+      "path": "internal/poc/static/index.html",
+      "sha256": "118bf5c102b8dcfec07af93f22d2b69960e775856f28c90f6dc8ee712dcbfcd2"
+    },
+    "package_manifest": {
+      "path": "cashu-wrapper/ts/package.json",
+      "sha256": "0fe0aa3c90426694be9ffab3e2d2ce376517e8e9e3396041ddf8c3d7ab092a2a"
+    },
+    "dependency_lock": {
+      "path": "cashu-wrapper/ts/bun.lock",
+      "sha256": "2610381f8ad8771443752675059807266f4c716644a1f13550d4c92a9eb0e29b"
+    }
+  },
+  "checks": [
+    {
+      "command": "bun run test:friday:browser",
+      "result": "pass",
+      "tests": 39,
+      "assertions": 161,
+      "files": 14
+    },
+    {
+      "command": "bun run typecheck:friday",
+      "result": "pass"
+    },
+    {
+      "command": "GOCACHE=/tmp/plebeian-friday-go-cache go test ./...",
+      "result": "pass"
+    },
+    {
+      "command": "bun run test:friday",
+      "result": "restricted_runner_partial",
+      "passed": 193,
+      "failed": 2,
+      "assertions": 699,
+      "files": 42,
+      "failure_scope": "two OS-child FROST process cases failed EPERM in the managed sandbox"
+    },
+    {
+      "command": "bun test demo-frost-threshold3-process.test.ts",
+      "execution": "approved ordinary runner outside the restricted sandbox",
+      "result": "pass",
+      "tests": 6,
+      "assertions": 38
+    },
+    {
+      "command": "bun test demo-friday-browser-coco-wallet.test.ts demo-friday-browser-coco-client.test.ts",
+      "result": "pass",
+      "tests": 13,
+      "assertions": 47
+    },
+    {
+      "command": "bun build poc-friday-browser-entry.ts --target=browser --minify --outfile=../../internal/poc/static/friday-browser.js",
+      "result": "pass",
+      "modules": 63
+    },
+    {
+      "command": "GOCACHE=/tmp/plebeian-friday-go-cache go test ./internal/poc",
+      "result": "pass"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "independent_reviews": [
+    {
+      "role": "adversarial",
+      "result": "accept_inert_source_block_runtime_activation",
+      "scope": "exact d9d751415afbaeab5495d6ace4833206e946067d follow-up"
+    },
+    {
+      "role": "coco_browser",
+      "result": "source_coherent_genuine_coco_v2_runtime_unproven",
+      "scope": "exact d9d751415afbaeab5495d6ace4833206e946067d follow-up"
+    }
+  ],
+  "activation_blocks": [
+    "browser threshold wallet and admission readiness flags remain false",
+    "a lost quote-create response before a durable quote id remains unavailable and requires no-duplicate reconciliation",
+    "own raises remain fail closed pending complete cumulative-pool and stable-key continuity",
+    "emergency unilateral refund authority is not composed",
+    "all required Friday databases and independent anchors lack one reviewed create-once initializer",
+    "no exact-current browser-to-Coco-to-mint-to-Comet-to-FROST-over-FIPS runtime evidence exists",
+    "no exact-current build receipt or privileged one-run packet has been reviewed and approved"
+  ],
+  "explicit_non_claims": [
+    "This record is not FIPS traversal evidence.",
+    "This record is not a deployment approval or production-readiness claim.",
+    "The older R5 lab packet does not prove this candidate.",
+    "No live VPS, firewall, DNS, service, persistent key, or Wednesday fallback was changed."
+  ]
+}

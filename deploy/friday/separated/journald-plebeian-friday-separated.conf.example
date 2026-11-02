@@ -1,0 +1,4 @@
+[Journal]
+SystemMaxUse=128M
+RuntimeMaxUse=32M
+MaxRetentionSec=2day

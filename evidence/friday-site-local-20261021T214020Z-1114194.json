@@ -1,0 +1,132 @@
+{
+  "schema": "PlebeianFridayLocalAcceptanceV1",
+  "run": "b0b78412-b170-43cd-9e04-7012d7c91fae",
+  "started_at": "2026-10-21T21:40:20.729Z",
+  "completed_at": "2026-10-21T21:44:19.960Z",
+  "auction_id": "friday-1792618863853",
+  "actors": {
+    "seller": "cb40d95df58b558c6f8c777f04878ee42db9ea2118007ff40c049d70379c3358",
+    "b": "2486f46752b27cf8a0f6bbe200d3af9e10084fbfe731cda4d638d77d54ba60e5",
+    "c": "ee9182ffe4321bce9bb1a925c770df1e129caa1f367dae763213e575713bce96",
+    "d": "487f48d557e05d0ee3c49fe66d503741e67f1e24a5be8f8c3bc947becd6a8c3b"
+  },
+  "faucet": {
+    "b_total": 50000,
+    "sixth_http_status": 409
+  },
+  "auction": {
+    "winner": "487f48d557e05d0ee3c49fe66d503741e67f1e24a5be8f8c3bc947becd6a8c3b",
+    "amount": 2500,
+    "original_end_time": 1792619054,
+    "end_time": 1792619057
+  },
+  "reserve_no_sale": {
+    "auction_id": "reserve-1792618864874",
+    "reserve": 5000,
+    "top_bid": 3000,
+    "bidder_spendable": 10000
+  },
+  "balances": {
+    "seller": 2500,
+    "b": 50000,
+    "c": 10000,
+    "d": 7500
+  },
+  "payments": [
+    {
+      "id": "payout-friday-1792618863853",
+      "reservation_id": "reserve-2d2e8fbb10c5a9fc9a30292c9fac88c4896ec1c8b4bdf328c72567d7e7a42afb",
+      "direction": "incoming",
+      "counterparty": "487f48d557e05d0ee3c49fe66d503741e67f1e24a5be8f8c3bc947becd6a8c3b",
+      "amount": 2500,
+      "status": "paid",
+      "send_operation_id": "send-payout-friday-1792618863853",
+      "receive_operation_id": "receive-payout-friday-1792618863853"
+    }
+  ],
+  "conservation": {
+    "issued": 70000,
+    "walletBacking": 70000,
+    "spendable": 70000,
+    "reserved": 0,
+    "inFlight": 0,
+    "unknown": 0,
+    "incomingPending": 0,
+    "fundingPending": 0,
+    "accountedTotal": 70000,
+    "observationsExact": true,
+    "conserved": true,
+    "actual_wallet_backing": 70000,
+    "fees": {
+      "input_fee_ppk": 0,
+      "required": 0
+    },
+    "observation": "coordinator SQLite balances plus encrypted funding/payment journals"
+  },
+  "validators": [
+    {
+      "slot": 1,
+      "moniker": "poc-validator-1",
+      "online": true,
+      "node_id": "c849982895b3ca868bd13939f9aff995563d344e",
+      "validator_address": "55BA3496B9DEFFC9EFF02CCBBF221E1A550EDCA9",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 189,
+      "block_hash": "3025B0E5C277EBB918717288ABE7CBDE08366E54842ECEAC973628D8875D69A2",
+      "app_hash": "1C1EEB0EF2AB25AA7E5A164D7EA86649D0262795B3B0005722F8E751E6E996B7",
+      "canonical_commit_height": 188,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 2,
+      "moniker": "poc-validator-2",
+      "online": true,
+      "node_id": "1ec5454fc11e8368315acb000e8ddd7c3e9e9493",
+      "validator_address": "6F917758159E8B3BFB94735DB3B07163641AE4CE",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 189,
+      "block_hash": "3025B0E5C277EBB918717288ABE7CBDE08366E54842ECEAC973628D8875D69A2",
+      "app_hash": "1C1EEB0EF2AB25AA7E5A164D7EA86649D0262795B3B0005722F8E751E6E996B7",
+      "canonical_commit_height": 188,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 3,
+      "moniker": "poc-validator-3",
+      "online": true,
+      "node_id": "d32a2abbe00a9da894d6423fbd2dcc4182d4105f",
+      "validator_address": "3C0E1D9A50F43EC7F3584D82EF1E10F662EEEB0E",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 189,
+      "block_hash": "3025B0E5C277EBB918717288ABE7CBDE08366E54842ECEAC973628D8875D69A2",
+      "app_hash": "1C1EEB0EF2AB25AA7E5A164D7EA86649D0262795B3B0005722F8E751E6E996B7",
+      "canonical_commit_height": 188,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 4,
+      "moniker": "poc-validator-4",
+      "online": true,
+      "node_id": "de2560ef7a9105dfd009575d748a3797c36b7b61",
+      "validator_address": "A78F72BCCF27FBF68827A6A5A2FBEDAFED10CFBE",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 189,
+      "block_hash": "3025B0E5C277EBB918717288ABE7CBDE08366E54842ECEAC973628D8875D69A2",
+      "app_hash": "1C1EEB0EF2AB25AA7E5A164D7EA86649D0262795B3B0005722F8E751E6E996B7",
+      "canonical_commit_height": 188,
+      "commit_signatures": 4
+    }
+  ],
+  "mint": {
+    "implementation": "Nutshell 0.19.2",
+    "backend": "FakeWallet",
+    "input_fee_ppk": 0,
+    "coco_v2": true
+  },
+  "trust_boundary": "custodial server-held proofs; validators verify one coordinator reservation signature, not Cashu bearer proofs; shared committee key is not FROST; not FIPS",
+  "passed": true
+}

@@ -1,0 +1,39 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_FIPS_R6_BUILD_RECEIPT_V1",
+  "source_base_commit": "0e717fa6c696ac71fa4566b9d91f4b8c3e765b26",
+  "status": "BUILT_NOT_STAGED_NOT_EXECUTED_NOT_REVIEWED",
+  "controller": {
+    "path": "scripts/friday-fips-lab-r6.py",
+    "sha256": "6263946ad69bfa394e9599d0d54e9ae411c26c82968d3badaf4186e4ce9942ca",
+    "python_compile": "PASS"
+  },
+  "current_driver_builds": [
+    {
+      "command": "bun build ./demo-fips-integrated-driver.ts --compile --target=bun-linux-x64-baseline --outfile ../../live-bin-friday-candidate-r5/plebeian-friday-integrated-driver-r6",
+      "cwd": "cashu-wrapper/ts",
+      "path": "live-bin-friday-candidate-r5/plebeian-friday-integrated-driver-r6",
+      "sha256": "05e3db686f994df5b7835a451de6e6e954a7e949cd507f663da9c41e5dd5b38a"
+    },
+    {
+      "command": "bun build ./demo-fips-r4-terminal-cli.ts --compile --target=bun-linux-x64-baseline --outfile ../../live-bin-friday-candidate-r5/plebeian-friday-terminal-driver-r6",
+      "cwd": "cashu-wrapper/ts",
+      "path": "live-bin-friday-candidate-r5/plebeian-friday-terminal-driver-r6",
+      "sha256": "5235e92ebb0e24d576f76b2f11b5f4218efa536fa16002d536aa79548e8d1125"
+    }
+  ],
+  "reused_current_artifacts": {
+    "live-bin-friday-candidate-r5/plebeian-auctions-poc": "2b57523f6fca7398a95f64d61df6df77762d8f54c8a57588e5bb449f825c3940",
+    "live-bin-friday-candidate-r5/plebeian-friday-frost-dkg": "776fd495f58067ebdc02f4ee9cac8aed559518959849e6f86f05b8dfa7fa03fd",
+    "live-bin-friday-candidate-r5/plebeian-friday-signer": "d7205533e365ffbd57999884faefe42e1dc04c069bae302625895013a3835127",
+    "live-bin-friday-candidate-r5/coco-demo-frost-participant-3of4": "5fcef0c0e0518b2c107e5e0a319790ac3ad2e35be2637bb4ecd17f16e9a3b83c",
+    "live-bin-friday-candidate-r5/coco-demo-frost-public-inspect": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f",
+    "live-bin-friday-candidate-r5/fips": "7b26e81e2607483d46b716a330c88ee18c881e3adaefc0542909e6f2a9a287f2",
+    "live-bin-friday-candidate-r5/fipsctl": "15df75d3d9942747c62f690b0f4f5d5a2f9df45c976a96f4799a9574b988fab3"
+  },
+  "claim_boundary": {
+    "backend_fips": "NOT_RUN",
+    "browser_coco_v2": "NOT_IN_THIS_PACKET",
+    "live_vps": "NOT_RUN",
+    "real_value": false
+  }
+}

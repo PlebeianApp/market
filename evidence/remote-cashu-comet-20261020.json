@@ -1,0 +1,167 @@
+{
+  "schema": "PlebeianAuctionsPOCSiteEvidenceV1",
+  "run": "466983c7-1553-4734-86fd-9995c899ffc4",
+  "started_at": "2026-10-20T19:39:27.158Z",
+  "completed_at": "2026-10-20T19:40:43.472Z",
+  "auction_id": "site-1792525168030",
+  "mint": {
+    "implementation": "Nutshell 0.19.2",
+    "backend": "FakeWallet",
+    "coco_v2": true,
+    "nut_11": true
+  },
+  "actors": {
+    "seller": "d8684bbc41176595661a4c51ca52c059ff8cfcaee4f086330c3c5105bc4a8e21",
+    "loser": "619effd5a1e78332363edc0c43711cb72246c105bcfeb684c22dcf57049bf32e",
+    "winner": "d9de7f1b9dcd0dcdfe815de622510b2aa41d9d0a20ee48a48155d8e0efc2364a"
+  },
+  "balances": {
+    "seller": 180,
+    "loser": 10000,
+    "winner": 9820
+  },
+  "cashu": {
+    "losing_token_sha256": "2d5327ab350866fb71c044c5e4eb1135855d5baa7d3733f901e3afb5c90fb95a",
+    "winning_token_sha256": "ee5f6a4fa1022282e9047d058b5c6f3b1262b485fba9f94980adde58d92b0189",
+    "locktime": 1792525240,
+    "early_refund_http_status": 409,
+    "settlement_state": "finalized",
+    "observed_fees": {
+      "seller_receive": 0,
+      "loser_round_trip": 0,
+      "winner_lock": 0
+    }
+  },
+  "consensus": {
+    "create_height": 885,
+    "bid_a_height": 886,
+    "bid_b_height": 887,
+    "close_height": 909,
+    "invalid_assertion_http_status": 422,
+    "winner": "d9de7f1b9dcd0dcdfe815de622510b2aa41d9d0a20ee48a48155d8e0efc2364a",
+    "winning_token_sha256": "ee5f6a4fa1022282e9047d058b5c6f3b1262b485fba9f94980adde58d92b0189",
+    "validators_before_offline": [
+      {
+        "slot": 1,
+        "moniker": "poc-validator-1",
+        "online": true,
+        "node_id": "96d85f721cb753ef46f662c70c942d09567d3f5b",
+        "validator_address": "BFEF069608CD1FC751EAEC466198281794DD7740",
+        "voting_power": 1,
+        "height": 886,
+        "block_hash": "C70FC51D4B391454F3C6471C4DD1CE96D9CEF8658C81684866E7592A6D8B4B1E",
+        "app_hash": "840D272A654AB5DF5BF6A13CE7A57AF3A80266891DCAC890F347EAD93C65C410",
+        "canonical_commit_height": 886,
+        "commit_signatures": 4,
+        "observation": "canonical commit signature observed via validator 1 loopback RPC"
+      },
+      {
+        "slot": 2,
+        "moniker": "poc-validator-2",
+        "online": true,
+        "node_id": "a40658e4311ebb4f9fa6bf43203d0f02762fa6c5",
+        "validator_address": "AB74E1248328DB725152C4AB28992EA5623ECC93",
+        "voting_power": 1,
+        "height": 886,
+        "block_hash": "C70FC51D4B391454F3C6471C4DD1CE96D9CEF8658C81684866E7592A6D8B4B1E",
+        "app_hash": "840D272A654AB5DF5BF6A13CE7A57AF3A80266891DCAC890F347EAD93C65C410",
+        "canonical_commit_height": 886,
+        "commit_signatures": 4,
+        "observation": "canonical commit signature observed via validator 1 loopback RPC"
+      },
+      {
+        "slot": 3,
+        "moniker": "poc-validator-3",
+        "online": true,
+        "node_id": "4096ed623b0f6a6b4e294ca1af25471808ec0826",
+        "validator_address": "0495D6DB5A2C1E88A21771D8246B8DC9EAEA7876",
+        "voting_power": 1,
+        "height": 886,
+        "block_hash": "C70FC51D4B391454F3C6471C4DD1CE96D9CEF8658C81684866E7592A6D8B4B1E",
+        "app_hash": "840D272A654AB5DF5BF6A13CE7A57AF3A80266891DCAC890F347EAD93C65C410",
+        "canonical_commit_height": 886,
+        "commit_signatures": 4,
+        "observation": "canonical commit signature observed via validator 1 loopback RPC"
+      },
+      {
+        "slot": 4,
+        "moniker": "poc-validator-4",
+        "online": true,
+        "node_id": "55da27cafa11354acdfebef5fbee83ba80ebcbf7",
+        "validator_address": "B42EB2047DD9365A335554332A70E5EEBDA7C7C2",
+        "voting_power": 1,
+        "height": 886,
+        "block_hash": "C70FC51D4B391454F3C6471C4DD1CE96D9CEF8658C81684866E7592A6D8B4B1E",
+        "app_hash": "840D272A654AB5DF5BF6A13CE7A57AF3A80266891DCAC890F347EAD93C65C410",
+        "canonical_commit_height": 886,
+        "commit_signatures": 4,
+        "observation": "canonical commit signature observed via validator 1 loopback RPC"
+      }
+    ],
+    "validators_after_offline": [
+      {
+        "slot": 1,
+        "moniker": "poc-validator-1",
+        "online": true,
+        "node_id": "96d85f721cb753ef46f662c70c942d09567d3f5b",
+        "validator_address": "BFEF069608CD1FC751EAEC466198281794DD7740",
+        "voting_power": 1,
+        "height": 925,
+        "block_hash": "9A6C6692689CC8EF14FA54B9416E1F18783E7F278746B27AE8E0E4DD3E7DFF78",
+        "app_hash": "53BCB6EC99F9869C47B58F0C539DD55445CB8835C86F6B38C519210D2F11A273",
+        "canonical_commit_height": 925,
+        "commit_signatures": 3,
+        "observation": "canonical commit signature observed via validator 1 loopback RPC"
+      },
+      {
+        "slot": 2,
+        "moniker": "poc-validator-2",
+        "online": true,
+        "node_id": "a40658e4311ebb4f9fa6bf43203d0f02762fa6c5",
+        "validator_address": "AB74E1248328DB725152C4AB28992EA5623ECC93",
+        "voting_power": 1,
+        "height": 925,
+        "block_hash": "9A6C6692689CC8EF14FA54B9416E1F18783E7F278746B27AE8E0E4DD3E7DFF78",
+        "app_hash": "53BCB6EC99F9869C47B58F0C539DD55445CB8835C86F6B38C519210D2F11A273",
+        "canonical_commit_height": 925,
+        "commit_signatures": 3,
+        "observation": "canonical commit signature observed via validator 1 loopback RPC"
+      },
+      {
+        "slot": 3,
+        "moniker": "poc-validator-3",
+        "online": true,
+        "node_id": "4096ed623b0f6a6b4e294ca1af25471808ec0826",
+        "validator_address": "0495D6DB5A2C1E88A21771D8246B8DC9EAEA7876",
+        "voting_power": 1,
+        "height": 925,
+        "block_hash": "9A6C6692689CC8EF14FA54B9416E1F18783E7F278746B27AE8E0E4DD3E7DFF78",
+        "app_hash": "53BCB6EC99F9869C47B58F0C539DD55445CB8835C86F6B38C519210D2F11A273",
+        "canonical_commit_height": 925,
+        "commit_signatures": 3,
+        "observation": "canonical commit signature observed via validator 1 loopback RPC"
+      },
+      {
+        "slot": 4,
+        "moniker": "poc-validator-4",
+        "online": false,
+        "error": "validator signature absent from canonical commit 925",
+        "node_id": "55da27cafa11354acdfebef5fbee83ba80ebcbf7",
+        "validator_address": "B42EB2047DD9365A335554332A70E5EEBDA7C7C2",
+        "voting_power": 1,
+        "height": 925,
+        "block_hash": "9A6C6692689CC8EF14FA54B9416E1F18783E7F278746B27AE8E0E4DD3E7DFF78",
+        "app_hash": "53BCB6EC99F9869C47B58F0C539DD55445CB8835C86F6B38C519210D2F11A273",
+        "canonical_commit_height": 925,
+        "commit_signatures": 3,
+        "observation": "canonical commit signature observed via validator 1 loopback RPC"
+      }
+    ]
+  },
+  "trust_boundary": "validators verify one coordinator signature over public lock facts; they do not independently verify Cashu bearer proofs",
+  "fault_control": "pinned operator SSH channel",
+  "shortcuts": [
+    "single in-memory application-level coordinator and committee key; NOT FROST or threshold custody"
+  ],
+  "passed": true
+}

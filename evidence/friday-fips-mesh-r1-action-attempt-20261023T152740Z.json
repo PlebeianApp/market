@@ -1,0 +1,45 @@
+{
+  "schema": "plebeian.friday.fips-mesh-action-attempt.v1",
+  "recorded_at_utc": "2026-10-23T15:27:40Z",
+  "action_commit": "82c82ca357f14ce397f8e1729a807a7216c53c55",
+  "action_document_sha256": "5cbd55834738cbb876a32587dfd013cb6b70e90797d2f64360651039effcd4a2",
+  "unit_sha256": "d6e080d453f8978811fd9cf0a1e352fb64084c9fde8dc50bf4cb0608b352d4fa",
+  "attempt_outcome": "failed_before_destination_install",
+  "failure": {
+    "slot": 1,
+    "phase": "remote_install_command_construction",
+    "exit_code": 127,
+    "cause": "Local double-quoted shell construction expanded remote command substitutions before SSH and corrupted the remote command.",
+    "automatic_retry_performed": false
+  },
+  "observed_remote_effects": {
+    "v1_temporary_directory_created": true,
+    "v1_public_temporary_files_transferred": 5,
+    "destination_files_installed": 0,
+    "configuration_directories_created": 0,
+    "services_started": 0,
+    "interfaces_created": 0,
+    "listeners_created": 0,
+    "routes_changed": 0,
+    "v2_v3_v4_touched": false
+  },
+  "cleanup": {
+    "v1_public_temporary_files_removed": 5,
+    "v1_temporary_directory_removed": true,
+    "cleanup_exit_code": 0,
+    "cleanup_complete": true
+  },
+  "postcheck": {
+    "all_four_temporary_directories_absent": true,
+    "all_four_slice_destinations_absent": true,
+    "all_four_mesh_units_absent": true,
+    "all_four_mesh_manifests_absent": true,
+    "all_four_mesh_configs_absent": true,
+    "all_four_mesh_verifier_release_directories_absent": true,
+    "all_four_fips0_absent": true,
+    "all_four_udp_32121_listeners_absent": true,
+    "wednesday_validator_pids_present": [91863, 65966, 65081, 66255]
+  },
+  "status": "known_clean_no_uncertain_remote_outcome",
+  "next_step": "Do not retry without a new explicit owner authorization. Any successor must use single-quoted or argument-safe remote commands and must repeat all access, integrity, resource and host-state gates."
+}

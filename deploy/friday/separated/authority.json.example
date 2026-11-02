@@ -1,0 +1,7 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_AUTHORITY_CONFIG_V1",
+  "public_origin": "https://139.162.161.233",
+  "network_facts_sha256": "%FRIDAY_NETWORK_FACTS_SHA256%",
+  "dkg_result_sha256": "%FRIDAY_DKG_RESULT_SHA256%",
+  "participant_binary_sha256": "%FRIDAY_PARTICIPANT_BINARY_SHA256%"
+}

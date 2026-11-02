@@ -1,0 +1,60 @@
+{
+  "schema": "plebeian.friday.fips-mesh-retry.v1",
+  "recorded_at_utc": "2026-10-23T15:35:30Z",
+  "action_commit": "82c82ca357f14ce397f8e1729a807a7216c53c55",
+  "command_fix_commit": "e669b05f43120b1d029710176c89f6d2ee157e1a",
+  "action_document_sha256": "5cbd55834738cbb876a32587dfd013cb6b70e90797d2f64360651039effcd4a2",
+  "unit_sha256": "d6e080d453f8978811fd9cf0a1e352fb64084c9fde8dc50bf4cb0608b352d4fa",
+  "argument_safe_remote_sha256": "65f79404952b77659cf2210111f9d88ce6cc861ab1bf2c8f4c2ef01e3b3d98cf",
+  "argument_safe_controller_sha256": "f7d4d73442701056b797e455a544e4428ad5d5982cb76444a41680dc21450d89",
+  "command_regression_sha256": "85d9644a18ab3a7094e5bf55879f1fbd930ca45195437088df42e1609e60c481",
+  "command_regression": "PASS: literal stdin, positional argv, no environment output",
+  "staging": {
+    "hosts_prepared": 4,
+    "hosts_transferred": 4,
+    "hosts_installed": 4,
+    "destination_hash_checks_passed": 4,
+    "service_user_identity_checks_passed": 4,
+    "units_static_inactive_before_start": 4
+  },
+  "prestart": {
+    "hosts_passed": 4,
+    "mem_available_kib": [3364692, 3490816, 3503836, 3472992],
+    "swap_free_kib": [436988, 476924, 472828, 478972]
+  },
+  "run": {
+    "systemctl_start_commands_succeeded": 4,
+    "daemon_processes_reached_running_state": 0,
+    "common_exit_status": 2,
+    "common_failure": "The reviewed unit passed unsupported --log-file to pinned fips 0.5.2. The binary reported: unexpected argument '--log-file'; usage permits --config <FILE>.",
+    "nrestarts": [0, 0, 0, 0],
+    "interfaces_created": 0,
+    "udp_32121_listeners_created": 0,
+    "control_sockets_created": 0,
+    "mesh_log_files_created": 0,
+    "route_changes_observed": 0,
+    "peer_inspection_passed": false,
+    "probes_attempted": 0,
+    "mesh_result": "FAIL_NOT_ESTABLISHED"
+  },
+  "shutdown": {
+    "reverse_order": [4, 3, 2, 1],
+    "systemctl_stop_exit_codes": [0, 0, 0, 0],
+    "process_cleanup_verified": true,
+    "fips0_absent_all_hosts": true,
+    "udp_32121_absent_all_hosts": true,
+    "control_socket_absent_all_hosts": true,
+    "unit_state_preserved_for_evidence": "failed",
+    "unit_failed_result": "exit-code",
+    "unit_exec_main_status": 2
+  },
+  "wednesday": {
+    "main_pids": [91863, 65966, 65081, 66255],
+    "nrestarts": [0, 0, 0, 0],
+    "active_state": ["active", "active", "active", "active"],
+    "sub_state": ["running", "running", "running", "running"]
+  },
+  "persistent_staging_state": "Reviewed slice, config parents, unit, verifier, manifests and per-host fips.yaml remain installed. The unit is static and not enabled.",
+  "automatic_retry_performed": false,
+  "next_step": "Do not reset-failed, edit the live unit or retry without new explicit authority. Review a corrected unit removing unsupported --log-file, update all bound hashes/manifests, run offline checks and obtain independent/action-time review."
+}

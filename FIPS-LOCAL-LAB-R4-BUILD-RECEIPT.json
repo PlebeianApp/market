@@ -1,0 +1,75 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_FIPS_R4_BUILD_RECEIPT_V1",
+  "built_at_utc": "2026-10-22T22:27:48Z",
+  "application_source_commit": "60f62bdd031fbc9f5684517bfea6e80c3968467d",
+  "source_tree": "13580ddd56c2d77f6b13ac0fa66b4e7cb141b0e6",
+  "toolchain": {
+    "bun_version": "1.3.11+af24e281e",
+    "bun_path": "/home/maximoto/.bun/bin/bun",
+    "bun_sha256": "6d5bb405b1d037a2a466b92757de7e47e4369930fa94bd42f8ff44ba49de6c57",
+    "build_target": "bun-linux-x64-modern"
+  },
+  "lockfiles": {
+    "cashu-wrapper/ts/package.json": "dcb01c1e18950576b7fd9670bf81c427c61d95758e3712fb018c7fb61c6d39f3",
+    "cashu-wrapper/ts/bun.lock": "2610381f8ad8771443752675059807266f4c716644a1f13550d4c92a9eb0e29b"
+  },
+  "source_inputs": {
+    "cashu-wrapper/ts/demo-fips-r4-terminal-cli.ts": "4926a46ab67b001b3b92c1b808aafc658ec6ef0ae834b82ad9a0da0182116644",
+    "cashu-wrapper/ts/demo-fips-integrated-driver.ts": "5c7774fce5fd12d895755e33367b1da480e95c646d40c11f16f42e4b18bc7bb6",
+    "cashu-wrapper/ts/demo-maintainer-offline.ts": "d448c9ccc7b6109559d6f8334e0eebaa98d30fba92c4d21ad877ddda63693a87",
+    "scripts/friday-fips-lab-r4.py": "77dbd1bb29e47f71eda570e4af0dc02f683cb093910385bae6e3def20f68f422"
+  },
+  "builds": [
+    {
+      "command": "bun build ./demo-fips-r4-terminal-cli.ts --compile --target=bun-linux-x64-modern --outfile ../../lab-bin/plebeian-friday-terminal-driver-r4",
+      "cwd": "cashu-wrapper/ts",
+      "output": "lab-bin/plebeian-friday-terminal-driver-r4",
+      "sha256": "841d6ea4d344dbdee6d391362dd0cfdf7f6ed634fe5f4e393e6bb934837fc6a5",
+      "size": 99998291,
+      "mode": "0755"
+    },
+    {
+      "command": "bun build ./demo-fips-integrated-driver.ts --compile --target=bun-linux-x64-modern --outfile ../../lab-bin/plebeian-friday-integrated-driver",
+      "cwd": "cashu-wrapper/ts",
+      "output": "lab-bin/plebeian-friday-integrated-driver",
+      "sha256": "61bbdf64060ba90e76a977b12aed32e2341c5ad43b4ac195fdc43273fd0341ab",
+      "size": 99902751,
+      "mode": "0755"
+    }
+  ],
+  "reused_dkg_artifact": {
+    "output": "lab-bin/plebeian-friday-frost-dkg-r4",
+    "sha256": "58e2970313caa3d42e97fe26353ce62ab09b960cc9cacb677e09ad04d1860247",
+    "byte_identical_to": "lab-bin-dkg-diagnostic-r1/plebeian-friday-frost-dkg",
+    "provenance_receipt": "FIPS-DKG-DIAGNOSTIC-R1-BUILD-RECEIPT.json",
+    "provenance_receipt_sha256": "6c7524cbe466d07b7924dab50cfd3a5c6d7a0444aa7eee1c003e3ce9273dcecc"
+  },
+  "gates": {
+    "typescript_typecheck": "PASS",
+    "offline_restart_payment_tests": "11 passed, 0 failed, 44 assertions",
+    "terminal_and_admission_focused_tests": "15 passed, 0 failed, 47 assertions",
+    "python_compile": "PASS",
+    "git_diff_check": "PASS",
+    "privileged_lab_execution": "NOT_RUN",
+    "fips_traversal": "NOT_RUN",
+    "emergency_refund_authority": "NOT_COMPOSED"
+  },
+  "preserved_failed_invocations": [
+    "A mixed focused command included demo-integrated-frost-comet.live.test.ts without its exact throwaway wrapper environment. Its preflight guard refused before services or keys; the other 15 tests in that invocation passed. No live result is claimed from that command."
+  ],
+  "packet_changes_after_binary_build": "The Python controller changed only to validate this receipt as a root-owned manifest-pinned source and to retain the reviewed child-to-parent evidence handoff. Neither Bun executable was rebuilt from Python source.",
+  "action_scope": {
+    "path": "FIPS-LOCAL-LAB-R4-ACTION-SCOPE.md",
+    "sha256": "4585e6b0796c324d1037918e874e9f038786686678db142181d372919b776cd0"
+  },
+  "security_boundary": {
+    "private_keys_or_bearer_proofs_embedded": false,
+    "runtime_credentials_generated_by_build": false,
+    "network_used_by_build_or_gates": false,
+    "privileged_actions_performed": false,
+    "live_vps_changes_performed": false,
+    "exclusive_root_or_cap_net_admin_actor_required_during_future_run": true,
+    "single_local_uid_for_ephemeral_signer_state": true,
+    "nonhermetic_dependency_note": "The future run uses the separately pinned 6410-file Nutshell 0.19.2 site-packages tree; Bun compiled already-installed lockfile dependencies without an install or network update."
+  }
+}

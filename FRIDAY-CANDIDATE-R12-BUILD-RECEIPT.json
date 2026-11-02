@@ -1,0 +1,74 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_CANDIDATE_R12_BUILD_RECEIPT_V1",
+  "generated_at_utc": "2026-10-23T09:28:11Z",
+  "artifact_source_commit": "d43cbb3efbfd1a55b830e07a1c5073cf83a4045e",
+  "artifact_source_tree": "10f27bd4a1b4163217d109abd8a267d3a6186b94",
+  "status": "BUILT_REGRESSION_TESTED_STATIC_REVIEW_ACCEPTED_INTEGRATION_RUN_NOT_RUN_NOT_DEPLOYED",
+  "scope": "fake-money Friday candidate with phase-aware recovery confirmation and a no-new-issuance recovery mint proxy",
+  "lockfiles": {
+    "go.mod": "19d643a94778aca6f1acc7fcca813b76127eb292fdbbc2a57aa6d27f71546818",
+    "go.sum": "7af3f193325fa8aea77ae23cf980b9464bf97fcb6ffe8e8d642607eba04fcf08",
+    "cashu-wrapper/ts/package.json": "b4bc357a9f5cc3d8ff4842f9838b2171bc27b1ea54083dfa48e31c1aca100b6d",
+    "cashu-wrapper/ts/bun.lock": "2610381f8ad8771443752675059807266f4c716644a1f13550d4c92a9eb0e29b",
+    "cashu-wrapper/frost-participant-3of4/Cargo.toml": "1a3930e8b9f1c8c6ecd826e397c591ab20744e92ce3a2e036bdf1d8f887dfd28",
+    "cashu-wrapper/frost-participant-3of4/Cargo.lock": "f7c5fe9fc706653c86a5cb84c785bf9da445a92c7824a822b837702afaa998dc",
+    "cashu-wrapper/frost-public-inspect/Cargo.toml": "4124afd3096f582b2f263e6c0619878f0257b6897bfd98032373df7f44cb3f36",
+    "cashu-wrapper/frost-public-inspect/Cargo.lock": "73fdab70dfc75725eff334328f351f1eef64f2fbe3e79453749bc43f06876b29"
+  },
+  "artifacts": {
+    "live-bin-friday-candidate-r12/plebeian-auctions-poc": "c5d8a6a1cb26cf153202242a0bdbb3fdcf0d380e3fdc0c38d83ffca0e1f74e22",
+    "live-bin-friday-candidate-r12/plebeian-friday-authority": "a573e9166f2543bc58bb33653de22a574b4f754142454ac8e8866654cd00bbab",
+    "live-bin-friday-candidate-r12/plebeian-friday-coordinator": "f713780ccd7474cd5e7eb457833546527fcb64b482a94a248c327a495798fc76",
+    "live-bin-friday-candidate-r12/plebeian-friday-terminal-executor": "0f94c3f845e45e0d7b745511731bfae97422c93b356eb6e8fb8a333e97946a50",
+    "live-bin-friday-candidate-r12/plebeian-friday-signer": "dc666fa8c3130a668c07e3b3ce039bb178a96b9b6be2136b1aa3ee2aea1b788b",
+    "live-bin-friday-candidate-r12/plebeian-friday-frost-dkg": "776fd495f58067ebdc02f4ee9cac8aed559518959849e6f86f05b8dfa7fa03fd",
+    "live-bin-friday-candidate-r12/plebeian-friday-integrated-driver-r12": "55ea2a143e18c918b81ca41f87f4333ad2d84a6071709bdffa3c9837209cb766",
+    "live-bin-friday-candidate-r12/plebeian-friday-terminal-driver-r12": "6f8382984176437e358268f00bfd0289797a524ab8425a32ea7ba0f301e12ea2",
+    "live-bin-friday-candidate-r12/coco-demo-frost-participant-3of4": "a96aaa3cc884d446834bdcdccd97403456f1743577b002ec8b9d335dfcbbf52b",
+    "live-bin-friday-candidate-r12/coco-demo-frost-public-inspect": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f",
+    "live-bin-friday-candidate-r12/fips": "7b26e81e2607483d46b716a330c88ee18c881e3adaefc0542909e6f2a9a287f2",
+    "live-bin-friday-candidate-r12/fipsctl": "15df75d3d9942747c62f690b0f4f5d5a2f9df45c976a96f4799a9574b988fab3",
+    "live-bin-friday-candidate-r12/friday-browser.js": "6f36a9fee8efb6839befe17149bec955f318c528117045f06e87a6e2b17e99c8"
+  },
+  "artifact_sizes_and_modes": {
+    "coco-demo-frost-participant-3of4": {"size": 2381144, "mode": "0755"},
+    "coco-demo-frost-public-inspect": {"size": 724232, "mode": "0755"},
+    "fips": {"size": 18921048, "mode": "0755"},
+    "fipsctl": {"size": 1888632, "mode": "0755"},
+    "friday-browser.js": {"size": 1685609, "mode": "0644"},
+    "plebeian-auctions-poc": {"size": 46015040, "mode": "0755"},
+    "plebeian-friday-authority": {"size": 99481452, "mode": "0755"},
+    "plebeian-friday-coordinator": {"size": 98491110, "mode": "0755"},
+    "plebeian-friday-frost-dkg": {"size": 98534001, "mode": "0755"},
+    "plebeian-friday-integrated-driver-r12": {"size": 99078059, "mode": "0755"},
+    "plebeian-friday-signer": {"size": 99081935, "mode": "0755"},
+    "plebeian-friday-terminal-driver-r12": {"size": 98768532, "mode": "0755"},
+    "plebeian-friday-terminal-executor": {"size": 98991518, "mode": "0755"}
+  },
+  "build_provenance": {
+    "go_vcs_revision": "d43cbb3efbfd1a55b830e07a1c5073cf83a4045e",
+    "go_vcs_modified": false,
+    "go_build": "clean local clone; -trimpath -mod=readonly -buildvcs=true; GOAMD64=v1",
+    "discarded_go_build": "one working-checkout build reported vcs.modified=true and was replaced before hashing",
+    "bun_target": "bun-linux-x64-baseline-v1.3.11",
+    "browser_build": "bun target browser with --minify; byte-identical to committed internal/poc/static/friday-browser.js",
+    "unchanged_reviewed_artifacts": "Rust participant/inspector and jmcorgan/fips binaries are byte-identical to R11; their tracked sources did not change"
+  },
+  "gates": {
+    "typescript_typecheck": "PASS",
+    "focused_recovery_authority": "14 passed, 0 failed, 54 assertions",
+    "deployment_template_regression": "5 passed, 0 failed",
+    "full_friday_restricted_runner": "254 passed, 2 sandbox OS-child EPERM failures, 1002 assertions",
+    "affected_os_child_file_normal_runner": "6 passed, 0 failed, 38 assertions",
+    "go_all_packages": "PASS",
+    "independent_static_review": "ACCEPT d43cbb3 source logic; no P0/P1; activation blocked until R12 artifacts and operator inventory",
+    "exact_current_privileged_fips_integration": "NOT_RUN",
+    "exact_current_trusted_https_browser_coco_journey": "NOT_RUN",
+    "live_vps_deployment": "NOT_RUN"
+  },
+  "review_limits": [
+    "real nginx -t and rendered method/path matrix are not run",
+    "permissionless /v1/swap remains value-conserving but is not application-operation-bound at nginx",
+    "safe-mode switch must prove no old broad /v1/ location or normal authority process remains active"
+  ]
+}

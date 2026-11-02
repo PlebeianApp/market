@@ -1,0 +1,24 @@
+[Unit]
+Description=Renew Plebeian POC short-lived IP certificate
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/bin/lego run --accept-tos --email dieeoaz@gmail.com --server https://acme-v02.api.letsencrypt.org/directory --domains 172.105.64.142 --key-type EC256 --profile shortlived --ipv4only --tls --tls.address 172.105.64.142:443 --path /etc/plebeian-auctions-poc/acme --pre-hook /usr/local/libexec/plebeian-poc-acme-pre --post-hook /usr/local/libexec/plebeian-poc-acme-post
+TimeoutStartSec=5min
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/etc/plebeian-auctions-poc/acme
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+RestrictAddressFamilies=AF_INET AF_UNIX
+LockPersonality=yes
+MemoryMax=256M
+TasksMax=64
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200

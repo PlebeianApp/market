@@ -1,0 +1,15 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V1",
+  "deployment_id": "friday-demo-20261023-r20",
+  "auth_network_id": "%FRIDAY_AUTH_NETWORK_ID%",
+  "chain_id": "%FRIDAY_CHAIN_ID%",
+  "genesis_sha256": "%FRIDAY_GENESIS_SHA256%",
+  "cashu_mint_url": "https://172.105.95.57",
+  "committee_public_key": "%FRIDAY_COMMITTEE_PUBLIC_KEY%",
+  "committee_keyset_id": "friday-demo-frost-keyset-v2",
+  "committee_keyset_version": "2",
+  "dkg_run_id": "friday-demo-20261023-r20-dkg2",
+  "public_key_package_sha256": "%FRIDAY_PUBLIC_KEY_PACKAGE_SHA256%",
+  "signer_roster_digest": "%FRIDAY_SIGNER_ROSTER_DIGEST%",
+  "fake_funding_policy_digest": "%FRIDAY_FAKE_FUNDING_POLICY_DIGEST%"
+}

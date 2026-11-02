@@ -1,0 +1,47 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_DKG_COMPOSER_BUILD_RECEIPT_V1",
+  "status": "BUILT_OFFLINE_TESTED_PENDING_INDEPENDENT_REVIEW_NOT_RUN_ON_HOSTS",
+  "generatedAtUtc": "2026-10-23T16:52:42Z",
+  "sourceCommit": "1531a5175df9af7b441f20dfa079e9407974515d",
+  "sourceTree": "a3fa7398cf4749205007db46a3ae05ee46011f7f",
+  "scope": "recoverable public enrollment manifest and receipt composition only",
+  "artifact": {
+    "path": "live-bin-friday-dkg-deployment-1531a51/plebeian-friday-dkg-deployment",
+    "sha256": "3aebe6a07236fba1d6082812e2b4f8b91c78d9cf0b51331c012af64b0b5558f6",
+    "size": 98559565,
+    "mode": "0755",
+    "target": "bun-linux-x64-baseline-v1.3.11"
+  },
+  "sourceSha256": {
+    "cashu-wrapper/ts/demo-friday-dkg-deployment-tools.ts": "801b1131e9d6355beea81460630ce349fe0c8c4765141616bd1b57f7c265e206",
+    "cashu-wrapper/ts/demo-friday-dkg-deployment-cli.ts": "7a4b765439d29253b85c02b3034663bb9d3df42e4fa86f30712f29c8b21d5c19",
+    "cashu-wrapper/ts/demo-friday-dkg-deployment-tools.test.ts": "5c5737d9de0de79689cc72bf9ef3b819434731f6f4541b5f2d26dfa0f82bec73"
+  },
+  "lockfileSha256": {
+    "cashu-wrapper/ts/package.json": "a2b5f9c53eab0cf070085738512fde367f29567bf046809bac8f4b3c9d5cccb8",
+    "cashu-wrapper/ts/bun.lock": "2610381f8ad8771443752675059807266f4c716644a1f13550d4c92a9eb0e29b"
+  },
+  "gates": {
+    "focusedComposer": "PASS: 10 tests, 33 assertions",
+    "fridayTypecheck": "PASS",
+    "broaderDkgSuite": "60 pass; one sandbox child-pipe EPERM",
+    "affectedRelayOutsideSandbox": "PASS: 8 tests, 27 assertions",
+    "compiledArtifactPublicOnlyCanary": "PASS: four enrolled public records composed; stdout byte-equals stored receipt; no control files remain",
+    "compiledCanaryManifestSha256": "5fd9e31d35657992dba5736a87b3484d7755d6d7199fc49748ef3b946a96e66c",
+    "compiledCanaryReceiptSha256": "cb71e4c567e953a2d17dd96efa47e5e76586f4b5f6ceaa4dd4ef222ffbef92e9"
+  },
+  "preservedFailures": [
+    "The first compiled canary invocation used relative enrollment paths and was rejected before lock or output creation.",
+    "The second compiled canary used a participant signer identity as the synthetic coordinator identity and was rejected before lock or output creation.",
+    "The broader sandboxed DKG suite hit the known relay child-pipe EPERM; the exact affected file passed outside that sandbox."
+  ],
+  "notRun": [
+    "live coordinator identity initialization",
+    "live manifest composition",
+    "DKG rounds",
+    "FROST share generation",
+    "Comet initialization",
+    "service startup",
+    "browser acceptance"
+  ]
+}

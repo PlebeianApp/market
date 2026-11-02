@@ -1,0 +1,49 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_FIPS_DKG_DIAGNOSTIC_EXECUTION_V1",
+  "approval_ready": true,
+  "reason_not_ready": "",
+  "run_id": "friday-fips-dkg-diagnostic-20261022-r1",
+  "run_root": "/tmp/plebeian-friday-fips-lab.20261022-dkg-r1",
+  "host": {
+    "hostname": "DESKTOP-P59VRK7",
+    "kernel_release": "6.6.87.2-microsoft-standard-WSL2",
+    "uid": 1000,
+    "gid": 1000,
+    "user": "maximoto"
+  },
+  "limits": {
+    "soft_action_seconds": 300,
+    "hard_kill_grace_seconds": 60,
+    "child_seconds": 240,
+    "shutdown_seconds": 5,
+    "max_log_bytes": 10485760,
+    "nofile": 256,
+    "nproc": 128
+  },
+  "effects": {
+    "namespaces": false,
+    "network": false,
+    "listeners": false,
+    "external_egress": false,
+    "fips_services": false,
+    "host_firewall_changes": false,
+    "host_routes": false,
+    "file_capabilities": false,
+    "persistent_credentials": false
+  },
+  "binary_pins": {
+    "/usr/bin/python3.12": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f",
+    "/usr/bin/timeout": "12690a043dfd555a6c14ccc1564f5649c18f1762c0d6ff66729948130898ec52",
+    "/usr/bin/env": "886e5fa8be716b03eeda48856e0f04493f2969fc148fb7812594ffac647fa050",
+    "/usr/bin/setpriv": "62ec0120791f3afcfb689fed52384ec2b0accc6e118a6b9a1d6fcfa7450aaf37",
+    "/usr/bin/prlimit": "17064f67e650d6152a6902b013aab496b54c87587c8eea6f5023aafee6154069",
+    "/var/lib/plebeian-friday-fips-dkg-r1-reviewed/lab-bin/plebeian-friday-frost-dkg": "58e2970313caa3d42e97fe26353ce62ab09b960cc9cacb677e09ad04d1860247",
+    "/var/lib/plebeian-friday-fips-dkg-r1-reviewed/lab-bin/coco-demo-frost-participant-3of4": "715aeb0c390c7f6dd1af26076caaf50afb8aace6cbbaa1ed605d69875bb38d8b",
+    "/var/lib/plebeian-friday-fips-dkg-r1-reviewed/lab-bin/coco-demo-frost-public-inspect": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f"
+  },
+  "source_pins": {
+    "/var/lib/plebeian-friday-fips-dkg-r1-reviewed/scripts/friday-fips-dkg-diagnostic-r1.py": "c9a6712649ace9caf41a4ff20089668e0d64c311e14b1de122686911537eea60",
+    "reviewed_source_commit": "9861b97a232c2449bbe4b37983a295151a11112e"
+  },
+  "evidence_result": "/var/lib/plebeian-friday-fips-dkg-r1-reviewed/evidence/outcome.json"
+}

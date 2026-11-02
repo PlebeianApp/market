@@ -1,0 +1,33 @@
+{
+  "schema": "PlebeianFridayMintStalledFailureRecordV1",
+  "recorded_at": "2026-10-21T23:26:00Z",
+  "attempts": [
+    {
+      "temporary_root": "/tmp/plebeian-friday-mint-down.aThIXw",
+      "exit_code": 1,
+      "failed_assertion": "unknown mint outcome occupies one exclusive conserved bucket",
+      "numeric_snapshot_available": false,
+      "cause": "harness accepted sending-or-unknown and then required unknown immediately",
+      "root_absent_at_final_check": true
+    },
+    {
+      "temporary_root": "/tmp/plebeian-friday-mint-down.gwsSsS",
+      "exit_code": 1,
+      "failed_assertion": "unknown mint outcome occupies one exclusive conserved bucket",
+      "observed": {
+        "issued": 10000,
+        "accounted_total": 10000,
+        "in_flight": 0,
+        "unknown": 0,
+        "incoming_pending": 0,
+        "observations_exact": true,
+        "conserved": true,
+        "input_fee_ppk": 0
+      },
+      "cause": "separate global endpoint ran after the worker had already recovered the terminal result",
+      "root_absent_at_final_check": true
+    }
+  ],
+  "resolution": "wait for durable unknown and use a bounded 10-second test-only worker interval for a stable observation window; coordinator default remains two seconds",
+  "bearer_material_recorded": false
+}

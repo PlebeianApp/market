@@ -1,0 +1,27 @@
+[Unit]
+Description=Plebeian worthless-token Nutshell FakeWallet mint
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=plebeian-poc
+Group=plebeian-poc
+WorkingDirectory=/opt/plebeian-auctions-poc
+EnvironmentFile=/etc/plebeian-auctions-poc/mint.env
+ExecStart=/opt/plebeian-auctions-poc/.venv/bin/python -m cashu.mint --host 127.0.0.1 --port 3338
+Restart=always
+RestartSec=5s
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/plebeian-auctions-poc
+MemoryMax=650M
+TasksMax=192
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=300
+
+[Install]
+WantedBy=multi-user.target

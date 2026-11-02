@@ -1,0 +1,43 @@
+{
+  "schema": "PlebeianFridayPhoneUIEvidenceV1",
+  "observed_at": "2026-10-21T23:22:45Z",
+  "browser": "ChatGPT in-app browser",
+  "url": "http://127.0.0.1:18081/",
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "device_pixel_ratio": 1,
+    "document_client_width": 375,
+    "document_scroll_width": 375,
+    "body_scroll_width": 375,
+    "horizontal_overflow": false
+  },
+  "layout": {
+    "auction_form_width": 323,
+    "validator_panel_width": 323,
+    "visible_controls": 14,
+    "minimum_visible_button_height": 44,
+    "minimum_visible_form_control_height": 38,
+    "single_column_phone_layout": true,
+    "full_page_visually_inspected": true,
+    "screenshot_persisted_in_repository": false
+  },
+  "content": {
+    "validators_visible": true,
+    "fake_money_disclosure_visible": true,
+    "custodial_disclosure_visible": true,
+    "not_frost_disclosure_visible": true,
+    "not_fips_disclosure_visible": true,
+    "local_only_fault_control_visible": true,
+    "fault_control_invoked": false
+  },
+  "console_warning_or_error_count": 0,
+  "mutations": {
+    "identity_created": false,
+    "faucet_used": false,
+    "auction_created": false,
+    "bid_submitted": false,
+    "validator_stopped": false
+  },
+  "passed": true
+}

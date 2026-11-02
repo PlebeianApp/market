@@ -1,0 +1,70 @@
+{
+  "schema": "PlebeianFridayPersistentTerminalSliceEvidenceV1",
+  "observed_at": "2026-10-23T00:16:04Z",
+  "source_commit": "65e8ad748f10744fe91f1e87719874882e9327cb",
+  "parent_commit": "5a1fe8b08ee0bddd95102c7f5c62588e02f3cfaa",
+  "scope": "offline post-R5 persistent terminal queue, executor, rollback anchor, and browser fail-closed boundary",
+  "results": {
+    "friday_typecheck": {
+      "status": "PASS"
+    },
+    "focused_persistent_boundaries": {
+      "status": "PASS",
+      "tests": 17,
+      "assertions": 62
+    },
+    "deterministic_terminal_vertical": {
+      "status": "PASS",
+      "tests": 13,
+      "assertions": 56,
+      "actual_path": "prepared threshold authorization -> durable authority binding -> authenticated queue -> exact executor -> deterministic mint-port swap -> recipient import",
+      "limit": "deterministic fake-mint test ports; not fresh Nutshell, Comet, FIPS, or four-host evidence"
+    },
+    "friday_full_gate_restricted_sandbox": {
+      "status": "EXPECTED_SANDBOX_LIMIT",
+      "passed": 151,
+      "failed": 2,
+      "assertions": 540,
+      "failure": "known EPERM send for two OS-child-process transport cases"
+    },
+    "focused_process_transport_outside_restrictive_sandbox": {
+      "status": "PASS",
+      "tests": 6,
+      "assertions": 38
+    },
+    "go_all": {
+      "status": "PASS"
+    },
+    "standalone_compile": {
+      "status": "PASS",
+      "target": "bun-linux-x64-modern",
+      "temporary_only": true,
+      "coordinator_sha256": "9a1eae335fb1dda98f480f2276d3e9f909851837e0abcad7af583f2e5e11ada4",
+      "terminal_executor_sha256": "0fc189ff4d277b94d0cae3c52c72d1d3786ee126dec3f823b6776617861c9935"
+    }
+  },
+  "source_sha256": {
+    "coordinator_cli": "d2c51e24366593a88e1a667a48ce57cc7d7ec803baf6738d46fa19ee24cbbd1c",
+    "terminal_executor_cli": "d12c45f87eeab63229ce6f5a751ec100eb57a70cc4659ce445f3575c00d5c785",
+    "authorized_queue": "a32591f96cb26bdb326c2abaa4eeaf93a223292ed70bff0ff8aaecd7c750c26a",
+    "rollback_anchor": "67832e721c82fe3c797e09a5dfad63964473faeab2e21c3a475f19d601e4e80b"
+  },
+  "security_boundaries": {
+    "bearer_material_in_evidence": false,
+    "private_keys_in_evidence": false,
+    "new_keys_generated": false,
+    "listeners_started": false,
+    "vps_accessed": false,
+    "network_or_firewall_changed": false,
+    "deployed": false,
+    "pushed": false,
+    "r5_modified": false,
+    "wednesday_fallback_modified": false
+  },
+  "remaining_blockers": [
+    "R5 does not test this newer source; fresh real Nutshell/Comet/FIPS integration and independent review are required.",
+    "The browser two-phase client-held bidder/refund signer and authenticated admission API are not implemented; Friday V4 wallet, faucet, bid, and legacy settle actions fail closed.",
+    "A coherent rollback of coordinator database plus same-host anchor still needs an external monotonic authority or operator quarantine.",
+    "Emergency unilateral refund remains disabled pending the explicit owner choice on the disclosed post-locktime first-valid-mint-spend race."
+  ]
+}

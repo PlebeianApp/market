@@ -1,0 +1,16 @@
+Friday unified FROST/Comet/Cashu harness — transaction version rejection
+Timestamp: 2026-10-22T16:20Z
+Source base: 079374e1d24568bbe6da6743522dee0746106619 plus dirty Friday integration diff
+Command: timeout --signal=TERM --kill-after=20s 9m ./scripts/friday-integrated-frost-comet.sh
+Exit: 1
+Result: 0 pass, 1 fail, 1 assertion, 15.48 seconds
+
+After switching to Comet v1's exact 0x byte-slice query framing, ABCI received
+and decoded the transaction JSON, then refused it:
+
+  unsupported transaction version
+
+The earlier transport-framing problem is therefore closed. This attempt failed
+before commit, displacement, SIG_ALL mint spend, NUT-09 recovery, or recipient
+import. The wrapper stopped owned processes and removed
+/tmp/plebeian-friday-integrated.jrBSf6.

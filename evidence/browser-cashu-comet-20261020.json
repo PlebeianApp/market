@@ -1,0 +1,57 @@
+{
+  "schema": "PlebeianAuctionsPOCBrowserEvidenceV1",
+  "observed_at": "2026-10-20T18:33:31Z",
+  "browser": "ChatGPT in-app browser with three independent tabs",
+  "identity_mode": "fresh disposable Nostr key held only in each tab's browser-memory closure",
+  "auction_id": "auction-1792521081330",
+  "auction": {
+    "title": "Browser acceptance item",
+    "duration_seconds": 25,
+    "reserve": 150,
+    "status": "closed",
+    "high_bid": 180,
+    "seller": "9db38d3512f0b643c9c399a8aaed24b4468688c0795b61d246f869bb20440515",
+    "losing_bidder": "70a183cfaa7146a34dba0a5d12b606b23fd32d24898ffa4e24bbacd6b1f85661",
+    "winner": "e58268d3f98418bf57b09d051d7823a194e3374196c77b587d8ff3956f492313"
+  },
+  "browser_exercised": [
+    "create a disposable Nostr identity without transmitting its private key",
+    "obtain 10000 mint-issued fake sats in each bidder Coco wallet",
+    "create and sign a short auction",
+    "create and commit 120 and 180 sat NUT-11 locked bids from separate tabs",
+    "restart the coordinator and recover wallets plus outstanding locks from its encrypted checkpoint and mint restore",
+    "take validator four offline and close on three validator signatures",
+    "spend the winning lock and receive the seller payout",
+    "spend the losing refund branch after locktime"
+  ],
+  "cashu": {
+    "mint": "Nutshell 0.19.2",
+    "backend": "FakeWallet",
+    "wallet": "Coco v2",
+    "losing_token_sha256": "3f9c5ba7b639bac135fe572b583f242a5ceaa8e669b5fd442f4b3d0b7936fb2f",
+    "winning_token_sha256": "b4861fef842bdd9e2ee6a6afa15466fa31b76cd8bfcb4c5e2228e1dd183b9570",
+    "balances_after": {
+      "seller": 10180,
+      "loser": 10000,
+      "winner": 9820
+    },
+    "seller_note": "seller used the faucet during this browser-only run, so 10180 is its 10000 faucet balance plus the actual 180 payout"
+  },
+  "coordinator_restart": {
+    "checkpoint": "encrypted-file-plus-mint-restore",
+    "state_loaded": true,
+    "loser_balance_before_refund_after_restart": 9880,
+    "outstanding_loser_lock_visible_after_restart": true
+  },
+  "consensus_after_offline": {
+    "height": 153,
+    "canonical_commit_height": 152,
+    "commit_signatures": 3,
+    "online_slots": [1, 2, 3],
+    "offline_slot": 4,
+    "app_hash": "A30D93F5AFF7BDAD843AD20599C8F53AF0AE000823F30C9A3B48278758E5679F"
+  },
+  "trust_boundary": "validators verified one coordinator signature over public lock facts; they did not independently inspect or verify Cashu bearer proofs",
+  "private_material_recorded": false,
+  "passed": true
+}

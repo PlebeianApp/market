@@ -1,0 +1,55 @@
+# TEMPLATE ONLY — REVIEWED FRIDAY APPLICATION HOST ONLY — NOT A COMPLETE SERVER BLOCK.
+#
+# Include these locations only inside the already configured public TLS server
+# after substituting the reviewed Friday application-host FIPS ULA and passing
+# `nginx -t`. The browser-visible Cashu mint identity must be a distinct Friday
+# HTTPS origin; only the fixed server-side hop uses the non-public FIPS address.
+
+location ^~ /v1/ {
+    proxy_pass http://[%FRIDAY_APPLICATION_ULA%]:3438;
+    proxy_http_version 1.1;
+    proxy_set_header Host %FRIDAY_PUBLIC_ORIGIN_HOST%;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_redirect off;
+    proxy_intercept_errors on;
+    proxy_cache off;
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 30s;
+    proxy_send_timeout 30s;
+    client_max_body_size 64k;
+    add_header Cache-Control "no-store" always;
+}
+
+location ^~ /api/friday/ {
+    proxy_pass http://127.0.0.1:8181;
+    proxy_http_version 1.1;
+    proxy_set_header Host %FRIDAY_PUBLIC_ORIGIN_HOST%;
+    # Preserve the browser-supplied Origin. The authority compares it with its
+    # fixed reviewed origin; overwriting it here would defeat that check.
+    proxy_set_header Origin $http_origin;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_redirect off;
+    proxy_intercept_errors on;
+    proxy_cache off;
+    proxy_connect_timeout 3s;
+    proxy_read_timeout 30s;
+    proxy_send_timeout 30s;
+    client_max_body_size 32k;
+    add_header Cache-Control "no-store" always;
+}
+
+location / {
+    proxy_pass http://127.0.0.1:8180;
+    proxy_http_version 1.1;
+    proxy_set_header Host %FRIDAY_PUBLIC_ORIGIN_HOST%;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_redirect off;
+    proxy_cache off;
+    proxy_connect_timeout 3s;
+    proxy_read_timeout 30s;
+    proxy_send_timeout 30s;
+    add_header Cache-Control "no-store" always;
+}

@@ -1,0 +1,189 @@
+{
+  "schema": "PlebeianFridayMintDownCloseV2",
+  "run": "c380106a-f93b-4c8a-a4b6-6c9eaf5a7e22",
+  "started_at": "2026-10-21T23:01:23.541Z",
+  "completed_at": "2026-10-21T23:04:47.224Z",
+  "fault_mode": "stopped",
+  "auction": {
+    "id": "mint-down-1792623684078",
+    "winner": "1b74974b2307a261013e440ff288d154c468e423edbf243653435a0e5d186288",
+    "amount": 2500,
+    "closed_while_mint_down": true
+  },
+  "outage_observation": {
+    "seller_spendable": 0,
+    "seller_backing": 0,
+    "payment_statuses": [
+      "unknown"
+    ],
+    "longest_status_ms": 6,
+    "conservation": {
+      "issued": 10000,
+      "walletBacking": 10000,
+      "walletSpendable": 1808,
+      "operationLocked": 5692,
+      "spendable": 1808,
+      "reserved": 0,
+      "inFlight": 0,
+      "unknown": 2500,
+      "incomingPending": 0,
+      "fundingPending": 0,
+      "accountedTotal": 10000,
+      "observationsExact": true,
+      "conserved": true,
+      "actual_wallet_backing": 10000,
+      "actual_wallet_spendable": 1808,
+      "actual_wallet_reserved": 8192,
+      "fees": {
+        "input_fee_ppk": 0,
+        "required": 0
+      },
+      "observation": "coordinator SQLite balances plus encrypted funding/payment journals"
+    }
+  },
+  "recovery": {
+    "seller_spendable": 2500,
+    "bidder_spendable": 7500,
+    "paid_rows": 1,
+    "zero_pending": true
+  },
+  "conservation": {
+    "issued": 10000,
+    "walletBacking": 10000,
+    "walletSpendable": 10000,
+    "operationLocked": 0,
+    "spendable": 10000,
+    "reserved": 0,
+    "inFlight": 0,
+    "unknown": 0,
+    "incomingPending": 0,
+    "fundingPending": 0,
+    "accountedTotal": 10000,
+    "observationsExact": true,
+    "conserved": true,
+    "actual_wallet_backing": 10000,
+    "actual_wallet_spendable": 10000,
+    "actual_wallet_reserved": 0,
+    "fees": {
+      "input_fee_ppk": 0,
+      "required": 0
+    },
+    "observation": "coordinator SQLite balances plus encrypted funding/payment journals"
+  },
+  "validators_before": [
+    {
+      "slot": 1,
+      "moniker": "poc-validator-1",
+      "online": true,
+      "node_id": "42d299f286ce94ae3f9fce318aca78645d7dfebf",
+      "validator_address": "F1FDD4E01D7A7C8180D681B406AEA578811F164F",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 4,
+      "block_hash": "EED42F15CBA58748FB53B8D34B2D2548188D96BBC33AAF2C8FB6838EBAA09F11",
+      "app_hash": "24E1F2702F8B11B5C3D3E22A4084A7BD295BCAE8A6B35598B598FF0DE92B8273",
+      "canonical_commit_height": 3,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 2,
+      "moniker": "poc-validator-2",
+      "online": true,
+      "node_id": "c9fc4dd0460166cc1a5ee21d240712d3903b06cf",
+      "validator_address": "EDC34A18BDE41FD545686ABB9501FF463E33E51D",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 4,
+      "block_hash": "EED42F15CBA58748FB53B8D34B2D2548188D96BBC33AAF2C8FB6838EBAA09F11",
+      "app_hash": "24E1F2702F8B11B5C3D3E22A4084A7BD295BCAE8A6B35598B598FF0DE92B8273",
+      "canonical_commit_height": 3,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 3,
+      "moniker": "poc-validator-3",
+      "online": true,
+      "node_id": "011ed879815e6f9f313b0f9a178a1de3bef7438a",
+      "validator_address": "E69A4D893B42C0A619E3ACFBE390D0F7095CEF90",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 4,
+      "block_hash": "EED42F15CBA58748FB53B8D34B2D2548188D96BBC33AAF2C8FB6838EBAA09F11",
+      "app_hash": "24E1F2702F8B11B5C3D3E22A4084A7BD295BCAE8A6B35598B598FF0DE92B8273",
+      "canonical_commit_height": 3,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 4,
+      "moniker": "poc-validator-4",
+      "online": true,
+      "node_id": "9fe428a40e56b198fff3dcb3474d56ddceb33032",
+      "validator_address": "9CED10DE41FE7D9EAEEA4C005C945B66F1211F60",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 3,
+      "block_hash": "EB43EEAB53FF7DFAEBE6EE233C50144DE5AF958B6E4CA769BFC3051FB65F442F",
+      "app_hash": "DC2BDDE7755281E350D8488C24DE9A13E38C2EA2E02546C4EF52E1C4A45ADE16",
+      "canonical_commit_height": 2,
+      "commit_signatures": 4
+    }
+  ],
+  "validators_after": [
+    {
+      "slot": 1,
+      "moniker": "poc-validator-1",
+      "online": true,
+      "node_id": "42d299f286ce94ae3f9fce318aca78645d7dfebf",
+      "validator_address": "F1FDD4E01D7A7C8180D681B406AEA578811F164F",
+      "voting_power": 1,
+      "peers": 2,
+      "height": 87,
+      "block_hash": "E9F4350A9A1FAA390D7492C0065E926256741069CFF03C51D8A4C2EB41B1E521",
+      "app_hash": "6FD8047C73DC20CD6DCFBAD9087ACA129A491166A253246C450579A73D3D48B1",
+      "canonical_commit_height": 86,
+      "commit_signatures": 3
+    },
+    {
+      "slot": 2,
+      "moniker": "poc-validator-2",
+      "online": true,
+      "node_id": "c9fc4dd0460166cc1a5ee21d240712d3903b06cf",
+      "validator_address": "EDC34A18BDE41FD545686ABB9501FF463E33E51D",
+      "voting_power": 1,
+      "peers": 2,
+      "height": 87,
+      "block_hash": "E9F4350A9A1FAA390D7492C0065E926256741069CFF03C51D8A4C2EB41B1E521",
+      "app_hash": "6FD8047C73DC20CD6DCFBAD9087ACA129A491166A253246C450579A73D3D48B1",
+      "canonical_commit_height": 86,
+      "commit_signatures": 3
+    },
+    {
+      "slot": 3,
+      "moniker": "poc-validator-3",
+      "online": true,
+      "node_id": "011ed879815e6f9f313b0f9a178a1de3bef7438a",
+      "validator_address": "E69A4D893B42C0A619E3ACFBE390D0F7095CEF90",
+      "voting_power": 1,
+      "peers": 2,
+      "height": 87,
+      "block_hash": "E9F4350A9A1FAA390D7492C0065E926256741069CFF03C51D8A4C2EB41B1E521",
+      "app_hash": "6FD8047C73DC20CD6DCFBAD9087ACA129A491166A253246C450579A73D3D48B1",
+      "canonical_commit_height": 86,
+      "commit_signatures": 3
+    },
+    {
+      "slot": 4,
+      "moniker": "poc-validator-4",
+      "online": false,
+      "error": "post failed: Post \"http://127.0.0.1:28957\": dial tcp 127.0.0.1:28957: connect: connection refused"
+    }
+  ],
+  "mint": {
+    "implementation": "Nutshell 0.19.2",
+    "backend": "FakeWallet",
+    "restarted_same_database_and_seed": true,
+    "stalled_response_released": false
+  },
+  "trust_boundary": "custodial server-held proofs; coordinator-trusted reservation attestations; shared committee key is not FROST; not FIPS",
+  "passed": true
+}

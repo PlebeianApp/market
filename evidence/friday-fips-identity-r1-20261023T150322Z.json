@@ -1,0 +1,98 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_FIPS_IDENTITY_ACTION_EVIDENCE_V1",
+  "observedAt": "2026-10-23T15:03:22Z",
+  "actionPacket": {
+    "commit": "45855521109a9b5085c37d28be1e252be46c6366",
+    "path": "FRIDAY-FIPS-IDENTITY-R1-ACTION.md",
+    "sha256": "bcb4c6fd9993325c84aa13b0bb498f5b60988b87089f5a9f5b696783ecdb7c83"
+  },
+  "inputs": {
+    "fipsSha256": "7b26e81e2607483d46b716a330c88ee18c881e3adaefc0542909e6f2a9a287f2",
+    "fipsctlSha256": "15df75d3d9942747c62f690b0f4f5d5a2f9df45c976a96f4799a9574b988fab3",
+    "promotionHelperSha256": "91ce335a08919a792f8ca8fd7ca0a4424cea8120522b0c30906368e5b2c672a9"
+  },
+  "hosts": [
+    {
+      "slot": 1,
+      "hostId": "linode-108175009",
+      "ipv4": "172.105.64.142",
+      "serviceUid": 997,
+      "serviceGid": 986,
+      "npub": "npub1tdcsm26d34sd7tlwmqypc2ctd8hjvpqzwaeechr688ah42mypg0sxga6nj",
+      "ula": "fd08:3b4:d506:649e:50ab:bcaf:4263:9cdf",
+      "receiptSha256": "8cd0c582c3538a86df7a06d80facc0d6f4a6189855c5bc4f5a64403c2927f734",
+      "wednesdayUnit": "plebeian-poc-validator@1.service",
+      "wednesdayPid": 91863,
+      "wednesdayRestarts": 0
+    },
+    {
+      "slot": 2,
+      "hostId": "linode-108236985",
+      "ipv4": "172.105.95.57",
+      "serviceUid": 997,
+      "serviceGid": 986,
+      "npub": "npub10jac6jktr07h90d4txuer4xpu9taxfq458c0yr0enqcg2l798fps0pzlty",
+      "ula": "fd8d:74d8:4685:355:3df4:3595:f5cd:65c6",
+      "receiptSha256": "67c4f054bbb7d74aba5bf1fd197b909c10581e424254942d93fffce60137889d",
+      "wednesdayUnit": "plebeian-poc-validator@2.service",
+      "wednesdayPid": 65966,
+      "wednesdayRestarts": 0
+    },
+    {
+      "slot": 3,
+      "hostId": "linode-108237290",
+      "ipv4": "172.104.240.217",
+      "serviceUid": 997,
+      "serviceGid": 986,
+      "npub": "npub1698v40hxh2y8denwrygl46m9m78ayf8p8277f4murx2u3gzqrjxqdytc6r",
+      "ula": "fdbc:58a:eabf:3991:adee:607f:fbc7:9b10",
+      "receiptSha256": "02bfe48861ae23bc3204f726fb7334fd293f64efd0c054648b32fa468776695b",
+      "wednesdayUnit": "plebeian-poc-validator@3.service",
+      "wednesdayPid": 65081,
+      "wednesdayRestarts": 0
+    },
+    {
+      "slot": 4,
+      "hostId": "linode-108237424",
+      "ipv4": "172.104.253.247",
+      "serviceUid": 997,
+      "serviceGid": 986,
+      "npub": "npub14k9gzekwy6gt3vewmazawspxf84fhz94mjmfpqwspyaq5fwa2axsa7s2uc",
+      "ula": "fd27:e968:2c52:42e4:50b9:4a2e:f665:aefe",
+      "receiptSha256": "be4527195d94a62329204ea6de6c81b5e28005bc4dbde3cb5a209914e21ff3be",
+      "wednesdayUnit": "plebeian-poc-validator@4.service",
+      "wednesdayPid": 66255,
+      "wednesdayRestarts": 0
+    }
+  ],
+  "commonPostState": {
+    "generationAttemptsPerHost": 1,
+    "identityDirectory": "/var/lib/plebeian-auctions-friday/fips/identity",
+    "identityDirectoryOwnerMode": "plebeian-friday:plebeian-friday 0700",
+    "identityEntries": ["fips.key", "fips.pub"],
+    "identityFileMetadata": "single-link regular files, plebeian-friday:plebeian-friday, 0600, 64 bytes",
+    "stagingAbsent": true,
+    "promotionLockAbsent": true,
+    "persistentSentinel": "/var/lib/plebeian-auctions-friday-operator/fips-identity-generation-20261023-r1",
+    "persistentSentinelOwnerMode": "root:root 0700",
+    "completeReceiptOwnerMode": "root:root 0600",
+    "privatePublicAddressMatch": true,
+    "fridayProcesses": 0,
+    "udp32121Listeners": 0,
+    "fips0Present": false,
+    "servicesStarted": false
+  },
+  "scope": {
+    "generatedFrostOrDkgKeys": false,
+    "generatedCometKeys": false,
+    "generatedPaymentOrMintKeys": false,
+    "modifiedFirewall": false,
+    "modifiedWednesday": false,
+    "startedFridayService": false
+  },
+  "limitations": [
+    "This proves persistent per-host FIPS identities only; it does not prove a running FIPS mesh.",
+    "Live DKG, Comet, FROST, Coco, auction and fault acceptance remain NOT_RUN.",
+    "The first V1 read-only preflight wrapper printed ordinary SSH-session environment metadata due to argument grouping; it printed no application data or private identity material and made no mutation."
+  ]
+}

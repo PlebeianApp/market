@@ -1,0 +1,50 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_FIXED_AUTHORITY_COCO_EVIDENCE_V1",
+  "observed_at": "2026-10-23T01:26:16Z",
+  "source_commit": "dcb411a5236ba8357dcb12f4d7f868d71ad2236d",
+  "wallet": {
+    "implementation": "Coco v2",
+    "package_version": "2.0.0",
+    "source_commit": "60b7b070393eaad8746cb74a03c42017186da647",
+    "sqlite_adapter_tgz_sha256": "351b94a57a505551b179c8cbf73be1aa0eb9d77d8393aa9c32a7f9ad32c7dcdf",
+    "legacy_nip60_used": false,
+    "threshold_send_adapter": true,
+    "browser_indexeddb_adapter": true,
+    "public_browser_route_enabled": false
+  },
+  "completed_checks": [
+    { "name": "friday_typescript_typecheck", "result": "PASS" },
+    { "name": "fixed_authority_comet_resolver_cli_and_coco", "result": "PASS", "tests": 12, "assertions": 33 },
+    { "name": "coco_threshold_browser_gate", "result": "PASS", "tests": 4, "assertions": 12 },
+    { "name": "go_all", "result": "PASS" },
+    { "name": "git_diff_check", "result": "PASS" }
+  ],
+  "builds": [
+    {
+      "name": "plebeian-friday-authority-coco-gated",
+      "sha256": "9771e62de784ae2f051450644ae2701594354c19cca918488d43bd0170337519",
+      "deployment_pin": false
+    },
+    {
+      "name": "plebeian-friday-browser-coco.js",
+      "sha256": "f46cd2161d197a49ce9c21b6288bfc81474ee8d80058bdc08f12a1d5679e8c1c",
+      "deployment_pin": false
+    }
+  ],
+  "preserved_failures_and_unknowns": [
+    "The first V4 Comet fixture used an unsigned receipt and failed two checks; the fixture was corrected to exercise the real signature domain.",
+    "A full Friday suite invocation produced passing partial output but its final exit record was not retained by the command session; it is not counted as a pass."
+  ],
+  "activation": {
+    "public_funding_status": 503,
+    "terminal_browser_coco_delivery": "fail_closed",
+    "reason": "The browser-visible HTTPS origin and the internal FIPS ULA mint origin have no reviewed identity-preserving transport mapping.",
+    "custom_json_wallet_used_as_live_fallback": false,
+    "unified_browser_coco_comet_frost_fips_mint_run": false,
+    "deployment_ready": false
+  },
+  "real_value": false,
+  "vps_changed": false,
+  "network_changed": false,
+  "pushed": false
+}

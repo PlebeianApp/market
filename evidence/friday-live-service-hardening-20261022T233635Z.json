@@ -1,0 +1,50 @@
+{
+  "schema": "PlebeianFridayLiveServiceHardeningEvidenceV1",
+  "observed_at": "2026-10-22T23:36:35Z",
+  "source_commit": "5a0a867566193d397ea3ab42c9ef3fdc404e8d2b",
+  "predecessor_evidence": {
+    "path": "evidence/friday-live-service-build-20261022T233518Z.json",
+    "sha256": "1fdfbcdeec4906284fbc59aa6bb3acc454ba7ca1b2f77f48073f81b007b53f09"
+  },
+  "fake_money_only": true,
+  "deployed": false,
+  "service_started": false,
+  "network_executed": false,
+  "persistent_keys_generated": false,
+  "changes": [
+    "all four signer identities, verifying shares and exact FIPS endpoints are cross-checked against the application topology",
+    "public package, participant config and signer state paths are confined to the selected lab or Friday state root",
+    "signer and coordinator service templates set UMask=0077 for newly created private state"
+  ],
+  "source_files": {
+    "cashu-wrapper/ts/demo-fips-signer-cli.ts": "ca4bf1583fe875130855a9b0f0b3fc36f8c78eb166ec94b58b1af9703c6279c4",
+    "cashu-wrapper/ts/demo-friday-runtime-config.ts": "d00845c4824a6ad4f671697e94df6d064ad0b695047a2d0e4518e8f3c5f54c22",
+    "cashu-wrapper/ts/demo-friday-coordinator-runtime.ts": "2712687d00a7164f2dcf2a1b681a2ac704ee8db05102f70880cbee951855385a",
+    "cashu-wrapper/ts/demo-friday-coordinator-cli.ts": "f37d27ca0a608d077c0de40351cafd2f098128ca016ae73b507084093f3dfc6c",
+    "deploy/friday/plebeian-friday-signer.service": "f76cd818482460f34a09b695840a453146776dbb22f7a9dbc37972b1b4cba134",
+    "deploy/friday/plebeian-friday-coordinator.service": "76976a93840d9313243f17be6e2928c47425ac2e062e355974052503d91ae216"
+  },
+  "artifacts": {
+    "plebeian-friday-signer": {
+      "sha256": "2aa2ce2ecabcf55503bd2e629c218b1a4998c5e3e5b1581dbbf16e27d7ced3a6",
+      "bytes": 99823870,
+      "target": "bun-linux-x64-modern"
+    },
+    "plebeian-friday-coordinator": {
+      "sha256": "595cd57036ff9567c750d8566f1bf14295b7835c0d9226dff5086d8625801e15",
+      "bytes": 99315009,
+      "target": "bun-linux-x64-modern"
+    }
+  },
+  "verification": {
+    "focused_new": { "status": "PASS", "tests": 7, "failures": 0, "assertions": 30 },
+    "typescript_friday": { "status": "PASS", "command": "tsc -p tsconfig.friday.json" },
+    "standalone_compile": { "status": "PASS", "services": 2 }
+  },
+  "blocking_gaps_unchanged": [
+    "concrete terminal executor is not implemented for the persistent service",
+    "browser admission is not connected to the durable coordinator queue",
+    "emergency unilateral refund lacks a client-held export/import path",
+    "this newer source needs its own integrated FIPS/payment run and independent review"
+  ]
+}

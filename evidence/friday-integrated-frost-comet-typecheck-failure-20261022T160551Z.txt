@@ -1,0 +1,19 @@
+Friday integrated FROST/Comet harness — first scoped typecheck failure
+Timestamp: 2026-10-22T16:05:51Z
+Source base: 079374e1d24568bbe6da6743522dee0746106619 plus dirty Friday integration diff
+Command: timeout --signal=TERM --kill-after=10s 4m bun run typecheck:friday
+Exit: 2
+
+demo-integrated-frost-comet.live.test.ts(25,10): error TS2724: '"./demo-comet-bid-consensus"' has no exported member named 'createDemoCometBidBroadcaster'. Did you mean 'createLoopbackCometBidBroadcaster'?
+demo-integrated-frost-comet.live.test.ts(34,49): error TS6133: 'DemoIntegratedAdmissionServiceResult' is declared but its value is never read.
+demo-integrated-frost-comet.live.test.ts(63,7): error TS6133: 'DemoRecipientKeyset' is declared but its value is never read.
+demo-integrated-frost-comet.live.test.ts(90,1): error TS6133: 'deriveSellerChildPubkey' is declared but its value is never read.
+demo-integrated-frost-comet.live.test.ts(155,19): error TS7006: Parameter 'unsigned' implicitly has an 'any' type.
+demo-integrated-frost-comet.live.test.ts(658,18): error TS2352: participant array was not proven to be an exact four-element tuple.
+demo-integrated-frost-comet.live.test.ts(786,33): error TS2769: lifecycle was narrowed to outbid_return_pending before later recipient_imported transition.
+
+No test, mint, validator, or signer process was launched by this compiler command.
+
+First repair retry: exit 2. The six earlier diagnostics were closed; TypeScript
+retained one control-flow narrowing at the final lifecycle assertion. The
+assertion was changed to a fresh durable read rather than weakening its value.

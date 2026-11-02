@@ -1,0 +1,17 @@
+Friday unified FROST/Comet/Cashu harness — policy quorum failure
+Timestamp: 2026-10-22T16:22Z
+Source base: 079374e1d24568bbe6da6743522dee0746106619 plus dirty Friday integration diff
+Command: timeout --signal=TERM --kill-after=20s 9m ./scripts/friday-integrated-frost-comet.sh
+Exit: 1
+Result: 0 pass, 1 fail, 1 assertion, 15.50 seconds
+
+The run failed before nonce creation because fewer than three independent
+participant policy services approved the first admission. Participant 4 was
+deliberately unavailable; the service's generic error discarded the other
+participant refusal reasons, so this attempt cannot distinguish a timeout from
+a policy rejection.
+
+The threshold remains unchanged. A bounded diagnostic will report only
+participant IDs and redacted error text. No FROST admission signature, Comet
+bid, SIG_ALL spend, NUT-09 recovery, or recipient import occurred. The wrapper
+stopped owned processes and removed /tmp/plebeian-friday-integrated.gLppie.

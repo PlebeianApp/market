@@ -1,0 +1,72 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_FIPS_LAB_EXECUTION_V1",
+  "approval_ready": false,
+  "reason_not_ready": "Application binaries have not been rebuilt from the reviewed integration snapshot, so their paths and SHA-256 pins remain deliberately empty. The harness refuses before mutation while approval_ready is false or any pin is absent.",
+  "run_id": "friday-fips-lab-20261022-r1",
+  "run_root": "/tmp/plebeian-friday-fips-lab.20261022-r1",
+  "host": {
+    "hostname": "DESKTOP-P59VRK7",
+    "kernel_release": "6.6.87.2-microsoft-standard-WSL2",
+    "uid": 1000,
+    "gid": 1000,
+    "user": "maximoto"
+  },
+  "limits": {
+    "wall_seconds": 3600,
+    "startup_seconds": 45,
+    "shutdown_seconds": 15,
+    "max_log_bytes_per_process": 10485760
+  },
+  "fixed_network": {
+    "namespaces": [
+      "poc-friday-fips-sw",
+      "poc-friday-fips-n1",
+      "poc-friday-fips-n2",
+      "poc-friday-fips-n3",
+      "poc-friday-fips-n4"
+    ],
+    "underlay_cidr": "198.18.242.0/29",
+    "underlay_addresses": [
+      "198.18.242.1/29",
+      "198.18.242.2/29",
+      "198.18.242.3/29",
+      "198.18.242.4/29"
+    ],
+    "udp_port": 32121,
+    "comet_p2p_port": 26656,
+    "comet_rpc_port": 26657,
+    "signer_rpc_port": 39101,
+    "external_egress": false,
+    "host_routes": false,
+    "host_firewall_changes": false,
+    "host_file_capabilities": false
+  },
+  "binary_pins": {
+    "/usr/bin/python3.12": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f",
+    "/usr/bin/fips": "7b26e81e2607483d46b716a330c88ee18c881e3adaefc0542909e6f2a9a287f2",
+    "/usr/bin/fipsctl": "15df75d3d9942747c62f690b0f4f5d5a2f9df45c976a96f4799a9574b988fab3",
+    "/usr/bin/ip": "81a95d97c70f3677d1883b9d8fe13b1771ab208d5bca56bc447aaaff0b0480e0",
+    "/usr/sbin/nft": "3f1c21553e62716ef1abfcf31f51ff94eb73ff4234a6653bac754a42f936d1c7",
+    "/usr/bin/setpriv": "62ec0120791f3afcfb689fed52384ec2b0accc6e118a6b9a1d6fcfa7450aaf37",
+    "/usr/bin/prlimit": "17064f67e650d6152a6902b013aab496b54c87587c8eea6f5023aafee6154069",
+    "/usr/bin/ss": "439f93984948302cc298d86367e6a276bb3a21c95f2f8d4a967f163476c6393f",
+    "/usr/bin/env": "886e5fa8be716b03eeda48856e0f04493f2969fc148fb7812594ffac647fa050",
+    "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/lab-bin/plebeian-auctions-poc": null,
+    "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/lab-bin/plebeian-friday-frost-dkg": null,
+    "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/lab-bin/plebeian-friday-signer": null,
+    "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/lab-bin/plebeian-friday-integrated-driver": null,
+    "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/lab-bin/coco-demo-frost-participant-3of4": null,
+    "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/lab-bin/coco-demo-frost-public-inspect": null
+  },
+  "source_pins": {
+    "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/scripts/friday-fips-lab.py": "c7b3a55d00cb3fd27c40530f9a62fce028b8e366e11b4f6ad90467c7ec31d306",
+    "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/scripts/friday-fips-capture.py": "fc84886b96da0fe06ea0b135a1d9afb8f27017ae3504ecaa860686cbfac77e3d",
+    "reviewed_integration_commit": "b9f3d48c8cd09393d8a130e793f1707bc02fded9"
+  },
+  "public_test_markers_hex": {
+    "comet": "504c45424549414e2d4652494441592d434f4d45542d5452414e53504f52542d5631",
+    "signer": "504c45424549414e2d4652494441592d5349474e45522d5452414e53504f52542d5631"
+  },
+  "evidence_path": "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/evidence/friday-fips-lab-20261022-r1.json",
+  "failure_evidence_path": "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/evidence/friday-fips-lab-20261022-r1-failure.json"
+}

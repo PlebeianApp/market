@@ -1,0 +1,64 @@
+{
+  "schema": "PlebeianFridayConcurrencyAcceptanceV1",
+  "run": "a8fb7fed-b584-4ce3-8bb2-f4a78fe2845f",
+  "started_at": "2026-10-21T21:45:48.706Z",
+  "completed_at": "2026-10-21T21:46:02.910Z",
+  "actors": {
+    "cross": "9b64082b2559d9bb5fe21bc95e589c0aacf5771199f1577e654406948761023c",
+    "raise": "53304c83c53568494318dac9297dd2c98d79cdd552620487989cdfb6ba3361fd",
+    "challenger": "dd569cdbac47e510f58baaf02b815b79bf6db97470948cbf142d5b4782fa6f6c"
+  },
+  "auctions": {
+    "anchor": "race-1792619149909-anchor",
+    "crossA": "race-1792619149909-a",
+    "crossB": "race-1792619149909-b",
+    "raise": "race-1792619149909-raise",
+    "duel": "race-1792619149909-duel"
+  },
+  "cross_auction": {
+    "statuses": [
+      200,
+      422
+    ],
+    "committed": "race-1792619149909-a",
+    "backing": 10000,
+    "reserved": 9000,
+    "spendable": 1000
+  },
+  "own_raise": {
+    "statuses": [
+      200,
+      422
+    ],
+    "committed_amount": 1500
+  },
+  "raise_vs_outbid": {
+    "submission_statuses": [
+      200,
+      200
+    ],
+    "final_amount": 2500,
+    "final_bidder": "dd569cdbac47e510f58baaf02b815b79bf6db97470948cbf142d5b4782fa6f6c",
+    "active_reservations": 1
+  },
+  "conservation": {
+    "issued": 30000,
+    "walletBacking": 30000,
+    "spendable": 15000,
+    "reserved": 15000,
+    "inFlight": 0,
+    "unknown": 0,
+    "incomingPending": 0,
+    "fundingPending": 0,
+    "accountedTotal": 30000,
+    "observationsExact": true,
+    "conserved": true,
+    "actual_wallet_backing": 30000,
+    "fees": {
+      "input_fee_ppk": 0,
+      "required": 0
+    },
+    "observation": "coordinator SQLite balances plus encrypted funding/payment journals"
+  },
+  "passed": true
+}

@@ -1,0 +1,93 @@
+{
+  "schema": "PlebeianFridayIntegratedFrostCometV1",
+  "completed_at": "2026-10-22T17:12:01.929Z",
+  "value_profile": "fake-money-only",
+  "mint": {
+    "implementation": "Nutshell 0.19.2",
+    "backend": "FakeWallet",
+    "input_fee_ppk": 0
+  },
+  "consensus": {
+    "chain_id": "plebeian-poc-1792689054",
+    "validators": 4,
+    "unavailable_validator": 4,
+    "first_height": 9,
+    "displacement_height": 22,
+    "initial_commit_signatures": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "post_fault_commit_signatures": [
+      3,
+      3,
+      3
+    ]
+  },
+  "admission": {
+    "participant_processes": 4,
+    "unavailable_policy_pid": 1355199,
+    "selected_participants": [
+      1,
+      2,
+      3
+    ],
+    "real_rust_frost": true,
+    "dkg_run_id": "friday-integrated-f1670ad3-48c0-4bea-b7a4-17884e4b2dbf",
+    "public_package_sha256": "5a184deac471124e4e4979d9529eeb255e24c5a89d621f6c79b47b99e7c35ea0"
+  },
+  "outbid_return": {
+    "displaced_bid_id": "b344b3636f308e582a67f959d40f8149400b7a5a712ef16c780198907c7b1667",
+    "replacement_bid_id": "4101a1e3204ae642668432a810de7608450c7f6808c74f3a2bbd5d6687a3d296",
+    "amount": 1000,
+    "sigall_participants": [
+      1,
+      2,
+      3
+    ],
+    "terminal_participant_processes": 4,
+    "unavailable_terminal_policy_pid": 1356380,
+    "participant_policy_digest": "57573a4b5350d746340b377d7b53d90d6c61797213560dac32c0044983b7a521",
+    "frost_transcript_hash": "dc2ce1c85c7d65dc495cd1e52c84ee17dc60e536aa20f7bb771aa585f564ebe1",
+    "sigall_operation_root": "fb93e892f53280823bdc0f13aef8b31e4be5e1465e6101d3aaa026a2ec0585a6",
+    "mint_swap_calls": 1,
+    "nut07_input_states": [
+      "SPENT",
+      "SPENT",
+      "SPENT",
+      "SPENT",
+      "SPENT",
+      "SPENT"
+    ],
+    "nut07_exact_input_match": true,
+    "nut07_input_set_digest": "557595fcd389e1de8644d7056855e8a89a00973d49b40e9a0f9191f861ac266d",
+    "nut09_restored_outputs": 6,
+    "recipient_proof_count": 6,
+    "recipient_amount": 1000,
+    "recipient_nut07_states": [
+      "UNSPENT",
+      "UNSPENT",
+      "UNSPENT",
+      "UNSPENT",
+      "UNSPENT",
+      "UNSPENT"
+    ],
+    "recipient_exact_input_match": true,
+    "recipient_proof_set_digest": "0d691723af367eefe3ab1913b3300cff1ec7a0cd2f8b5bc0cd5936211ea9e3fe",
+    "durable_lifecycle": "recipient_imported"
+  },
+  "transport": {
+    "admission_policy": "separate local processes over stdio",
+    "terminal_policy": "separate local signer processes over stdio",
+    "consensus": "four loopback CometBFT processes",
+    "fips": false
+  },
+  "limitations": [
+    "not FIPS transport",
+    "not production custody",
+    "one local operator",
+    "no real-value endpoint"
+  ],
+  "passed": true
+}

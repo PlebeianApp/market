@@ -1,0 +1,47 @@
+{
+  "schema": "PlebeianFridayFrostAdmissionInteroperabilityV1",
+  "completed_at": "2026-10-22T14:50:21Z",
+  "source_checkpoint": "77bcaccc4cf09b21a9be0ddb2029d0363e48aba1",
+  "participant_executable_sha256": "a467e935b7ca414f87d7cbb9503711863ee37a6988f529f35854f26ace5ce836",
+  "public_inspector_executable_sha256": "bc9beec4685c30937796db656d0751fe9f3bda11272835ff2fbb459f595f1e65",
+  "dealerless_dkg": {
+    "participants": 4,
+    "threshold": 3,
+    "distinct_verifying_shares": 4,
+    "signing_participants": [1, 2, 3],
+    "withheld_participant": 4,
+    "result": "PASS"
+  },
+  "admission_signature": {
+    "domain": "COCO_DEMO_FROST_ADMISSION_SIGNATURE_V1",
+    "rust_threshold_signature_accepted_by_full_go_receipt_verifier": true,
+    "mutated_signature_rejected_by_go": true,
+    "result": "PASS"
+  },
+  "gates": {
+    "go_all": "PASS",
+    "typescript_typecheck": "PASS",
+    "typescript_friday": { "passed": 109, "failed": 0, "assertions": 390 },
+    "typescript_focused_integration": { "passed": 82, "failed": 0, "assertions": 307 },
+    "rust_participant": { "passed": 17, "failed": 0 },
+    "live_interoperability": { "passed": 2, "failed": 0, "assertions": 8 }
+  },
+  "actual_components": [
+    "fresh four-party dealerless DKG",
+    "three separate Rust FROST participant command invocations",
+    "Rust FROST aggregate",
+    "TypeScript admission adapter",
+    "Go integrated funding receipt verifier"
+  ],
+  "not_proved_here": [
+    "live CometBFT admission or terminal history",
+    "independent four-host participant-local mint and Comet policy reads",
+    "a real SIG_ALL terminal mint swap",
+    "recipient proof import",
+    "jmcorgan/fips packet traversal"
+  ],
+  "secrets_recorded": false,
+  "bearer_proofs_recorded": false,
+  "ephemeral_key_root_removed": true,
+  "passed": true
+}

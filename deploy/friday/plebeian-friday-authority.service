@@ -1,0 +1,39 @@
+[Unit]
+Description=Plebeian Friday authenticated funding and terminal authority
+Wants=plebeian-friday-validator.service plebeian-friday-signer.service plebeian-friday-coordinator.service
+After=plebeian-friday-validator.service plebeian-friday-signer.service plebeian-friday-coordinator.service
+ConditionPathExists=/etc/plebeian-auctions-friday/application.json
+ConditionPathExists=/etc/plebeian-auctions-friday/authority.json
+ConditionPathExists=/var/lib/plebeian-auctions-friday-anchor/coordinator.sqlite3
+ConditionPathExists=/var/lib/plebeian-auctions-friday-anchor/funding-replay.sqlite3
+ConditionPathExists=/var/lib/plebeian-auctions-friday-anchor/funding-broadcast.sqlite3
+ConditionPathExists=/var/lib/plebeian-auctions-friday-anchor/funding-abort.sqlite3
+ConditionPathExists=/var/lib/plebeian-auctions-friday-anchor/seller-plan.sqlite3
+ConditionPathExists=/var/lib/plebeian-auctions-friday/coordinator/coordinator-rpc-identity.key
+
+[Service]
+Type=simple
+User=plebeian-friday
+Group=plebeian-friday
+Slice=plebeian-friday.slice
+UMask=0077
+EnvironmentFile=/etc/plebeian-auctions-friday/friday.env
+ExecStartPre=/usr/bin/python3 -I -S -B /opt/plebeian-auctions-friday/bin/verify-friday-runtime-target.py --environment /etc/plebeian-auctions-friday/friday.env --application ${FRIDAY_APPLICATION} --service plebeian-friday-authority.service
+ExecStart=/opt/plebeian-auctions-friday/bin/plebeian-friday-authority serve --application ${FRIDAY_APPLICATION}
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/plebeian-auctions-friday/coordinator /var/lib/plebeian-auctions-friday-anchor
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=448M
+TasksMax=192
+LimitNOFILE=8192
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=300
+
+[Install]
+WantedBy=multi-user.target

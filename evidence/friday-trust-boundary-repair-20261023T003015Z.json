@@ -1,0 +1,60 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_TRUST_BOUNDARY_REPAIR_EVIDENCE_V1",
+  "observed_at": "2026-10-23T00:30:15Z",
+  "commit": "32a5a66ead7f042ba80ff5ceb528972d09bd0284",
+  "tree": "4340fae160e1e13153b23894444dfff623d8a536",
+  "preserved_prior_evidence_commit": "163c22b52c7ff3f0a56e2dabca3464ce81c8cafe",
+  "source_sha256": {
+    "internal/poc/server.go": "4026f7fbaa8bddde2dc2b52baf8a6d698f47599c231ea6471aa9bdebd7e9da9e",
+    "cashu-wrapper/ts/demo-friday-authorized-terminal-queue.ts": "1f8e8aadc0376abd1adecd6df3cd80bb038c0bdf48656dcc93be1d10db4b0d04",
+    "cashu-wrapper/ts/demo-friday-terminal-executor-runtime.ts": "e3c6fd0055de1d9969319ea35342154f8bf37280548de4e3b99646c297cbff73",
+    "cashu-wrapper/ts/demo-friday-terminal-authority-runtime.ts": "861abe6fb0a39afb85efc626c5b1cfc93fc49ab305250f9cde4c9c0e22f98ce3",
+    "cashu-wrapper/ts/demo-friday-coordinator-runtime.ts": "5e46dd39ca4b8a23c1dbd532674902cf51ca609f0446453971db0ce7dece1491"
+  },
+  "observed_checks": {
+    "typescript_typecheck_friday": "PASS",
+    "focused_queue_coordinator_executor_offline": {
+      "result": "PASS",
+      "tests": 28,
+      "assertions": 105
+    },
+    "full_friday_restricted_sandbox": {
+      "result": "151_PASS_2_SANDBOX_EPERM",
+      "tests": 153,
+      "assertions": 540,
+      "note": "The two child-process IPC tests failed at EPERM send in the restrictive sandbox; this is preserved and is not counted as a product failure or a pass."
+    },
+    "affected_child_process_file_ordinary_runner": {
+      "result": "PASS",
+      "tests": 6,
+      "assertions": 38,
+      "note": "This scope overlaps the full suite and must not be added to its test count."
+    },
+    "go_test_all": "PASS",
+    "standalone_local_bun_compile": {
+      "result": "PASS",
+      "coordinator_sha256": "3d1ac9d935d7543b0147fd5b72efddf733568fd47b433b188b0a630f07a07ca0",
+      "terminal_executor_sha256": "f495c0b7dd9f8c6d01ff33e2d70d4cb98e8162aeee4fe33eade0690145e499e3",
+      "deployment_pin": false
+    },
+    "baseline_target_compile": {
+      "result": "NOT_RUN_TO_COMPLETION",
+      "reason": "The restricted environment could not download bun-linux-x64-baseline-v1.3.11; no baseline artifact was produced."
+    }
+  },
+  "closed_boundaries": [
+    "V4 direct /api/cashu requests are rejected by the Go server before the Wednesday reverse proxy.",
+    "The private prepared-authorization reader and independent rollback anchor are mandatory construction dependencies, not enqueue input.",
+    "The concrete Rust FROST operation root is saved with the threshold authorization and carried through the queue, child argv, and executor re-verification."
+  ],
+  "limitations": [
+    "The positive mint-port test is deterministic local code, not a fresh Nutshell, Comet, FIPS, browser, or four-host run.",
+    "The V4 browser wallet and bid path remain deliberately disabled: NIP-07 does not provide arbitrary Cashu Schnorr signing, and the client-held payment-key authorization API is not implemented.",
+    "The in-process authority runtime has no public listener or deployed service entrypoint.",
+    "A coherent rollback of both coordinator and same-host anchor still requires operator quarantine or an external monotonic authority.",
+    "Emergency unilateral refund authority remains disabled pending explicit acceptance of the post-locktime first-valid-mint-spend race.",
+    "Independent re-review of this repair was pending when this evidence was recorded."
+  ],
+  "no_bearer_proofs_or_private_keys": true,
+  "deployed": false
+}

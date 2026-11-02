@@ -1,0 +1,140 @@
+{
+  "schema": "PlebeianFridayMintDownCloseV1",
+  "run": "cab9ba9b-40f2-41ca-842f-abd1bbbc2ce2",
+  "started_at": "2026-10-21T19:16:06.848Z",
+  "completed_at": "2026-10-21T19:19:31.771Z",
+  "auction": {
+    "id": "mint-down-1792610167250",
+    "winner": "9e0af99bc85ebe0114e6d56658fe3d7d96c36853d4fd3a9f3b0e090f8a4dd095",
+    "amount": 2500,
+    "closed_while_mint_down": true
+  },
+  "outage_observation": {
+    "seller_spendable": 0,
+    "seller_backing": 0,
+    "payment_statuses": [
+      "unknown"
+    ]
+  },
+  "recovery": {
+    "seller_spendable": 2500,
+    "bidder_spendable": 7500,
+    "paid_rows": 1,
+    "zero_pending": true
+  },
+  "validators_before": [
+    {
+      "slot": 1,
+      "moniker": "poc-validator-1",
+      "online": true,
+      "node_id": "e16470da2fd91664dec0eb523381fa4112dbc25a",
+      "validator_address": "F29D3BA3ACD7A882BD88FDEB8B170A2420FFE173",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 4,
+      "block_hash": "1730DB8A9EFA9BAF69C3F7D1DB4A3A59D037A8D98201A12A8F238AB297C72D72",
+      "app_hash": "7B34CDB95E925FF03AEFDAA7AD87DC38F83E44E638736EF54072FCB954829B56",
+      "canonical_commit_height": 3,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 2,
+      "moniker": "poc-validator-2",
+      "online": true,
+      "node_id": "374c0cb09d843db216899d455ccc41326efa027c",
+      "validator_address": "4167FED5DE8316C84951EFD0D3771BA0A6F6CBAB",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 4,
+      "block_hash": "1730DB8A9EFA9BAF69C3F7D1DB4A3A59D037A8D98201A12A8F238AB297C72D72",
+      "app_hash": "7B34CDB95E925FF03AEFDAA7AD87DC38F83E44E638736EF54072FCB954829B56",
+      "canonical_commit_height": 3,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 3,
+      "moniker": "poc-validator-3",
+      "online": true,
+      "node_id": "88a4241f45b5f69c2d1a668056f22dda1bb94154",
+      "validator_address": "8FD1CC787B38347A12E6E58D91DD12A6A084BB13",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 4,
+      "block_hash": "1730DB8A9EFA9BAF69C3F7D1DB4A3A59D037A8D98201A12A8F238AB297C72D72",
+      "app_hash": "7B34CDB95E925FF03AEFDAA7AD87DC38F83E44E638736EF54072FCB954829B56",
+      "canonical_commit_height": 3,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 4,
+      "moniker": "poc-validator-4",
+      "online": true,
+      "node_id": "2e31146b59516a8c07c1c8f90119cbef623d8189",
+      "validator_address": "1E7835557FFB3E7C356835933BA935E61449E6C4",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 4,
+      "block_hash": "1730DB8A9EFA9BAF69C3F7D1DB4A3A59D037A8D98201A12A8F238AB297C72D72",
+      "app_hash": "7B34CDB95E925FF03AEFDAA7AD87DC38F83E44E638736EF54072FCB954829B56",
+      "canonical_commit_height": 3,
+      "commit_signatures": 4
+    }
+  ],
+  "validators_after": [
+    {
+      "slot": 1,
+      "moniker": "poc-validator-1",
+      "online": true,
+      "node_id": "e16470da2fd91664dec0eb523381fa4112dbc25a",
+      "validator_address": "F29D3BA3ACD7A882BD88FDEB8B170A2420FFE173",
+      "voting_power": 1,
+      "peers": 2,
+      "height": 87,
+      "block_hash": "3F93A13B05251ADC5C0DDDE5BC6BF6D0AF6CBA9792CCA1B25107A2CE44DB91E9",
+      "app_hash": "8386791EB6963D21FCA8BB0305FD2753D05A7998340090A4C6450F3C8B070863",
+      "canonical_commit_height": 86,
+      "commit_signatures": 3
+    },
+    {
+      "slot": 2,
+      "moniker": "poc-validator-2",
+      "online": true,
+      "node_id": "374c0cb09d843db216899d455ccc41326efa027c",
+      "validator_address": "4167FED5DE8316C84951EFD0D3771BA0A6F6CBAB",
+      "voting_power": 1,
+      "peers": 2,
+      "height": 87,
+      "block_hash": "3F93A13B05251ADC5C0DDDE5BC6BF6D0AF6CBA9792CCA1B25107A2CE44DB91E9",
+      "app_hash": "8386791EB6963D21FCA8BB0305FD2753D05A7998340090A4C6450F3C8B070863",
+      "canonical_commit_height": 86,
+      "commit_signatures": 3
+    },
+    {
+      "slot": 3,
+      "moniker": "poc-validator-3",
+      "online": true,
+      "node_id": "88a4241f45b5f69c2d1a668056f22dda1bb94154",
+      "validator_address": "8FD1CC787B38347A12E6E58D91DD12A6A084BB13",
+      "voting_power": 1,
+      "peers": 2,
+      "height": 87,
+      "block_hash": "3F93A13B05251ADC5C0DDDE5BC6BF6D0AF6CBA9792CCA1B25107A2CE44DB91E9",
+      "app_hash": "8386791EB6963D21FCA8BB0305FD2753D05A7998340090A4C6450F3C8B070863",
+      "canonical_commit_height": 86,
+      "commit_signatures": 3
+    },
+    {
+      "slot": 4,
+      "moniker": "poc-validator-4",
+      "online": false,
+      "error": "post failed: Post \"http://127.0.0.1:28957\": dial tcp 127.0.0.1:28957: connect: connection refused"
+    }
+  ],
+  "mint": {
+    "implementation": "Nutshell 0.19.2",
+    "backend": "FakeWallet",
+    "restarted_same_database_and_seed": true
+  },
+  "trust_boundary": "custodial server-held proofs; coordinator-trusted reservation attestations; shared committee key is not FROST",
+  "passed": true
+}

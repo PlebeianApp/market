@@ -1,0 +1,163 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_R19_READONLY_DKG_INPUT_VALIDATOR_ACTION_V2",
+  "status": "PROPOSED_NOT_APPROVED_NOT_RUN",
+  "executableAfterExplicitApproval": true,
+  "host": {
+    "slot": 1,
+    "hostId": "linode-108175009",
+    "ipv4": "172.105.64.142",
+    "sshTarget": "root@172.105.64.142",
+    "expectedHostKeySha256": "SHA256:gPo3YN+P9EUShH80R80nizQy6QFG0WtU75EFthvhydc"
+  },
+  "ssh": {
+    "binary": "/usr/bin/ssh",
+    "agentSocket": "/tmp/plebeian-poc-owner-agent.sock",
+    "identityFile": "/home/maximoto/.ssh/id_ed25519",
+    "expectedIdentitySha256": "SHA256:IGu9dXOSXw4JoPmwNjAgDRI2AY+zJil/haJGjKRYt34",
+    "knownHosts": "/home/maximoto/.ssh/known_hosts",
+    "fixedOptions": [
+      "-o", "BatchMode=yes",
+      "-o", "IdentitiesOnly=yes",
+      "-o", "IdentityAgent=/tmp/plebeian-poc-owner-agent.sock",
+      "-o", "StrictHostKeyChecking=yes",
+      "-o", "UserKnownHostsFile=/home/maximoto/.ssh/known_hosts",
+      "-o", "HostKeyAlgorithms=ssh-ed25519",
+      "-o", "ConnectTimeout=10",
+      "-o", "ConnectionAttempts=1",
+      "-o", "ForwardAgent=no",
+      "-o", "ControlMaster=no",
+      "-i", "/home/maximoto/.ssh/id_ed25519"
+    ]
+  },
+  "preservedRun": "friday-demo-20261023-r14-dkg1",
+  "helper": {
+    "absoluteLocalPath": "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/scripts/friday-r19-validator-action.py",
+    "sha256": "e4276bd77eb5815523aee726d008266ae49df5c05f20484db5fd74673bd6e1b3",
+    "transport": "stdin_to_remote_python_only_not_installed",
+    "pythonArgvPrefix": ["/usr/bin/python3", "-I", "-S", "-B", "-"]
+  },
+  "artifact": {
+    "absoluteLocalPath": "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/live-bin-friday-candidate-r19-diagnostic/plebeian-friday-dkg-input-validator",
+    "remoteStagingPath": "/opt/plebeian-auctions-friday/releases/.r19-input-validator.staging/plebeian-friday-dkg-input-validator",
+    "destinationPath": "/opt/plebeian-auctions-friday/releases/r19-input-validator/plebeian-friday-dkg-input-validator",
+    "sha256": "243910674f59a3cbb4c22a9ef3e351bd35fd75d6bd8fc49101ffdba1bddb9098",
+    "size": 762544,
+    "owner": "root:root",
+    "mode": "0755",
+    "install": "create_exclusive_staging_fsync_renameat2_noreplace_parent_fsync"
+  },
+  "inputs": [
+    "/var/lib/plebeian-auctions-friday/frost/keyset-v1/participant.config.json",
+    "/var/lib/plebeian-auctions-friday/frost/keyset-v1/transport-secrets.json"
+  ],
+  "preservedR18ExpectedMetadata": {
+    "manifestDigest": "5c91cffa47f0cc90412472b7401b42f02a3416c68a70099357c2cf4cd6f87a87",
+    "exchange": {"path":"/var/lib/plebeian-auctions-friday/frost/keyset-v1/exchange/friday-demo-20261023-r14-dkg1","type":"directory","owner":"997:986","mode":"0700"},
+    "journal": {
+      "path": "/var/lib/plebeian-auctions-friday/frost/keyset-v1/exchange/friday-demo-20261023-r14-dkg1/participant-1.host-journal.jsonl",
+      "type": "regular", "owner": "997:986", "mode": "0600",
+      "linkCount": null,
+      "size": null,
+      "sha256": null,
+      "historicalPinUnavailable": true,
+      "handling": "collect a sanitized CURRENT_STATE_NOT_HISTORICAL_PROOF baseline twice within this one operation and invoke only if every field is identical"
+    },
+    "config": {"path":"/var/lib/plebeian-auctions-friday/frost/keyset-v1/participant.config.json","type":"regular","owner":"997:986","mode":"0600","linkCount":1},
+    "transport": {"path":"/var/lib/plebeian-auctions-friday/frost/keyset-v1/transport-secrets.json","type":"regular","owner":"997:986","mode":"0600","linkCount":1,"contentsMustNotBeReturnedOrHashed":true},
+    "lock": {
+      "path": "/var/lib/plebeian-auctions-friday/frost/keyset-v1/exchange/friday-demo-20261023-r14-dkg1/participant-1.host.lock",
+      "type": "directory", "owner": "997:986", "mode": "0700",
+      "ownerRecord": {"schema":"PLEBEIAN_FRIDAY_PER_VALIDATOR_DKG_HOST_LOCK_V2","pid":123609,"bootId":"15a02667-f822-4d53-88bf-6cc7a518dda5","processStartTicks":"74886913","manifestDigest":"5c91cffa47f0cc90412472b7401b42f02a3416c68a70099357c2cf4cd6f87a87","participantId":1},
+      "ownerPidMustBeAbsent": true
+    },
+    "state": {"path":"/var/lib/plebeian-auctions-friday/frost/keyset-v1/state","type":"directory","owner":"997:986","mode":"0700","exactEntryCount":0},
+    "round1Output": {"path":"/var/lib/plebeian-auctions-friday/frost/keyset-v1/exchange/friday-demo-20261023-r14-dkg1/participant-1.round1.json","mustBeAbsent":true}
+  },
+  "r18PreservationStopConditions": [
+    "any path is a symlink, non-canonical, wrong type, wrong owner or wrong mode",
+    "either current collection is not the exact eight known transitions or any field differs between the immediately repeated current collections",
+    "the lock owner differs from PID 123609, boot ID 15a02667-f822-4d53-88bf-6cc7a518dda5 and start ticks 74886913",
+    "PID 123609 exists, either pinned DKG host/participant executable appears anywhere in /proc/*/exe, the state directory is nonempty, or participant-1.round1.json exists"
+  ],
+  "bundledCurrentBaseline": {
+    "label": "CURRENT_STATE_NOT_HISTORICAL_PROOF",
+    "path": "/var/lib/plebeian-auctions-friday-operator/r19-input-validator/r18-current-baseline.json",
+    "owner": "root:root",
+    "mode": "0600",
+    "creation": "create_once_fsync_parent",
+    "sequence": ["collect and persist sanitized current baseline", "immediately recollect", "compare every JSON field", "invoke validator once only on exact equality"],
+    "returns": ["journal SHA-256, byte size, uid, gid, mode and link count", "config/transport uid, gid, mode, link count and size", "boolean executable-process absence", "current and recorded-dead-owner boot IDs", "empty-state and absent-output booleans"],
+    "forbiddenOutput": ["journal records", "configuration contents", "transport secret contents or digest", "process command lines or environments"]
+  },
+  "preflight": [
+    "verify the loaded SSH identity and V1 pinned host key",
+    "verify V1 host ID and Friday account 997:986",
+    "require /opt/plebeian-auctions-friday/releases root:root and non-writable by group/world",
+    "require final, staging and /var/lib/plebeian-auctions-friday-operator/r19-input-validator all absent",
+    "require root-owned non-writable /usr/bin/python3, prlimit, timeout, unshare, setpriv and test",
+    "require the recorded ELF interpreter /lib64/ld-linux-x86-64.so.2 and only libc.so.6 plus libgcc_s.so.1 as root-owned non-writable dependencies; no install is permitted",
+    "verify the absolute local helper and artifact hashes before each transfer"
+  ],
+  "literalSteps": [
+    {
+      "name": "prepare",
+      "localStdin": "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/scripts/friday-r19-validator-action.py",
+      "remoteArgv": ["/usr/bin/python3", "-I", "-S", "-B", "-", "prepare"]
+    },
+    {
+      "name": "copy-artifact",
+      "binary": "/usr/bin/scp",
+      "fixedOptions": [
+        "-o", "BatchMode=yes",
+        "-o", "IdentitiesOnly=yes",
+        "-o", "IdentityAgent=/tmp/plebeian-poc-owner-agent.sock",
+        "-o", "StrictHostKeyChecking=yes",
+        "-o", "UserKnownHostsFile=/home/maximoto/.ssh/known_hosts",
+        "-o", "HostKeyAlgorithms=ssh-ed25519",
+        "-o", "ConnectTimeout=10",
+        "-o", "ConnectionAttempts=1",
+        "-o", "ForwardAgent=no",
+        "-o", "ControlMaster=no",
+        "-i", "/home/maximoto/.ssh/id_ed25519"
+      ],
+      "source": "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/live-bin-friday-candidate-r19-diagnostic/plebeian-friday-dkg-input-validator",
+      "destination": "root@172.105.64.142:/opt/plebeian-auctions-friday/releases/.r19-input-validator.staging/plebeian-friday-dkg-input-validator"
+    },
+    {
+      "name": "seal-baseline-recheck-invoke-once",
+      "localStdin": "/home/maximoto/Documents/Codex/2026-10-20/task-2/plebeian-auctions-poc/scripts/friday-r19-validator-action.py",
+      "remoteArgv": ["/usr/bin/python3", "-I", "-S", "-B", "-", "composite"]
+    }
+  ],
+  "innerValidatorArgv": [
+    "/usr/bin/prlimit", "--core=0:0", "--",
+    "/usr/bin/timeout", "--signal=TERM", "--kill-after=5s", "30s",
+    "/usr/bin/unshare", "--net", "--",
+    "/usr/bin/setpriv", "--reuid=997", "--regid=986", "--clear-groups",
+    "--no-new-privs", "--bounding-set=-all", "--inh-caps=-all", "--ambient-caps=-all",
+    "/opt/plebeian-auctions-friday/releases/r19-input-validator/plebeian-friday-dkg-input-validator",
+    "/var/lib/plebeian-auctions-friday/frost/keyset-v1/participant.config.json",
+    "/var/lib/plebeian-auctions-friday/frost/keyset-v1/transport-secrets.json"
+  ],
+  "expectedOutput": {"exitCode": 0, "stdout": "DKG_INPUT_VALIDATION_OK\n", "stderr": ""},
+  "evidence": {
+    "path": "/var/lib/plebeian-auctions-friday-operator/r19-input-validator/outcome.json",
+    "owner": "root:root",
+    "mode": "0600",
+    "creation": "create_once_fsync_parent",
+    "contents": "fixed contracts, exit status, artifact hash and metadata equality only; no input hash, secret or raw error"
+  },
+  "releaseDirectory": {
+    "stagingMode": "0700",
+    "sealedFinalMode": "0755",
+    "reason": "the service UID 997 must traverse the root-owned final release to execute the pinned artifact"
+  },
+  "allowedPersistentChange": "the create-once root-owned 0755 release directory/artifact, root-only operation root and sanitized outcome only",
+  "forbidden": [
+    "R18 lock, journal, state, transport or courier mutation",
+    "same-run replay or recovery",
+    "new key, entropy, DKG round, service, listener or network access",
+    "core dump",
+    "retry after failure, timeout, denial or uncertain outcome"
+  ]
+}

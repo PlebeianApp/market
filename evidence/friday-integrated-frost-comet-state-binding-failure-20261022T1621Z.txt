@@ -1,0 +1,21 @@
+Friday unified FROST/Comet/Cashu harness — post-commit state binding failure
+Timestamp: 2026-10-22T16:21Z
+Source base: 079374e1d24568bbe6da6743522dee0746106619 plus dirty Friday integration diff
+Command: timeout --signal=TERM --kill-after=20s 9m ./scripts/friday-integrated-frost-comet.sh
+Exit: 1
+Result: 0 pass, 1 fail, 1 assertion, 21.71 seconds
+
+The real admission policy quorum and FROST signature completed, and the signed
+transaction broadcast and committed after the framing/version fixes. The
+independent authenticated state check then failed closed:
+
+  authenticated post-commit state does not contain the exact committed
+  funding receipt
+
+The current error combines several binding fields, so this preserved attempt
+does not identify which field differed. No displacement, SIG_ALL spend,
+NUT-09 recovery, or recipient import occurred. The next bounded diagnostic
+will report field names only, never receipt or bearer-proof values.
+
+The wrapper stopped all owned processes and removed
+/tmp/plebeian-friday-integrated.D329Mb.

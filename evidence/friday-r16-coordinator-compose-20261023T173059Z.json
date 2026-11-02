@@ -1,0 +1,79 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_R16_COORDINATOR_COMPOSE_EVIDENCE_V1",
+  "recordedAt": "2026-10-23T17:30:59Z",
+  "status": "PASS",
+  "host": {
+    "slot": 2,
+    "hostId": "linode-108236985",
+    "ipv4": "172.105.95.57",
+    "bootId": "75f64c66-510d-4575-b9a7-29203db0f6ed",
+    "serviceUid": 997,
+    "serviceGid": 986
+  },
+  "authorization": {
+    "sourceCommit": "08e14ea228a7d2b403c7854cd04ee7d355cc08c2",
+    "actionPacket": "FRIDAY-R16-COORDINATOR-COMPOSER-ACTION.md",
+    "actionPacketSha256": "c32634db77d0d3a302c0195ce2a2154d84c9d59039cb80ea9c3bdb351bcc5c59",
+    "review": "A4_FINAL_GO",
+    "attempts": 1
+  },
+  "execution": {
+    "preflightScriptSha256": "d1dd6c0de7f06aba0966af7043c68531c4d295ae89ac02eb536c8303df97405c",
+    "actionScriptSha256": "f3f3e5c543c6d3805a19cd71152914878f959e4c5615d7de55cdf919a89b1714",
+    "postcheckScriptSha256": "47bb68d1f51c1e33651893d2131139412bfc621fa13be16451071c3dc70e6704",
+    "toolSha256": "b4e8099424a9916e08d608723d7cee4792cc21a9cb118307483b3d31aaefaed9",
+    "buildReceiptSha256": "6f881a8a50a8f966278be9cb51d081bc67059c8aa3628b59c2cb93c6407d1e74",
+    "preflight": {
+      "memoryAvailableKiB": 3495372,
+      "diskAvailableBytes": 40265179136,
+      "releaseActionCoordinatorInitiallyAbsent": true,
+      "fridayProcessListenerInterfaceInitiallyAbsent": true
+    }
+  },
+  "publicOutputs": {
+    "attempt": {
+      "path": "deploy/friday/dkg-coordinator-r16/attempt.json",
+      "sha256": "36ce73d63374123f96529d5e366b20047416165fe66df543a49bf0e294093031"
+    },
+    "completion": {
+      "path": "deploy/friday/dkg-coordinator-r16/complete.json",
+      "sha256": "0486c967da9686e858ca64cfd49f7c929e6f3caba2b18c52a33b05219d0357cf"
+    },
+    "coordinatorPublic": {
+      "path": "deploy/friday/dkg-coordinator-r16/coordinator-rpc-identity.public.json",
+      "sha256": "b36b61e97a50d0cadda1f043ecbc2a6df785f0a74bd046aecb22344e27018110"
+    },
+    "manifest": {
+      "path": "deploy/friday/dkg-coordinator-r16/initial-dkg-manifest.json",
+      "sha256": "9a3228bc0535ed73b0df33f59355a7edadc42c994223cff948215084fc8be114",
+      "manifestDigest": "5c91cffa47f0cc90412472b7401b42f02a3416c68a70099357c2cf4cd6f87a87"
+    },
+    "manifestReceipt": {
+      "path": "deploy/friday/dkg-coordinator-r16/initial-dkg-manifest.receipt.json",
+      "sha256": "b58ae17a3c5751bc0e5844aadc912029d9aeb114b036fdf0d6fe92605ddbfb65"
+    }
+  },
+  "privateBoundary": {
+    "coordinatorPrivatePath": "/var/lib/plebeian-auctions-friday/coordinator/coordinator-rpc-identity.key",
+    "retainedOnlyOnV2": true,
+    "privateBytesReadOrExported": false,
+    "privateHashRecorded": false
+  },
+  "postState": {
+    "coordinatorRoot": "service-owned 0700 with exactly two 0600 single-link files",
+    "compositionLocksOrStagingRemaining": false,
+    "temporaryUploadStageRemaining": false,
+    "wednesdayValidatorPid": 65966,
+    "wednesdayValidatorRestarts": 0,
+    "fridayProcessListenerInterfaceRemaining": false,
+    "uncertainOutcome": false
+  },
+  "notRun": [
+    "pairwise transport key export",
+    "DKG rounds",
+    "FROST share generation",
+    "Comet, signer, mint, authority, site or browser service startup",
+    "four-host payment acceptance",
+    "public activation"
+  ]
+}

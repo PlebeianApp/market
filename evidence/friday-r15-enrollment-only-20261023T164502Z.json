@@ -1,0 +1,63 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_R15_ENROLLMENT_ONLY_EVIDENCE_V1",
+  "recordedAt": "2026-10-23T16:45:02Z",
+  "sourceCommit": "2cd3165d",
+  "actionPacketSha256": "6fc6053b857c56e9ab5fef513b8d6869e8c96ded57ce210cfd9f095f248427e6",
+  "scope": "per-host enrollment only; fake-money demo; no DKG rounds, FROST shares, Comet keys, mint keys, listeners or services",
+  "artifactSha256": {
+    "initializer": "35f0ea080c3dd4bd73d614032da9d719ee3f2a651c0584cf58a1ece62649f6ad",
+    "participant": "ed2014392707a00387570a56708e32dc7f7a50e3ab3acb11fb58672d75c7e578",
+    "inspector": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f"
+  },
+  "participants": [
+    {
+      "slot": 1,
+      "hostId": "linode-108175009",
+      "underlayIpv4": "172.105.64.142",
+      "publicEnrollment": "deploy/friday/dkg-enrollment-r15/participant-1.host-enrollment.json",
+      "publicEnrollmentSha256": "6f40bb1694239278615941ee1ef0c9b1ea239180576b9cbb242aa52455081979",
+      "hostCompletionReceiptSha256": "bc8de5bef37cf1d5d6ff413e7d583c06274d52e0e261003ddb75bbe548fcd10d"
+    },
+    {
+      "slot": 2,
+      "hostId": "linode-108236985",
+      "underlayIpv4": "172.105.95.57",
+      "publicEnrollment": "deploy/friday/dkg-enrollment-r15/participant-2.host-enrollment.json",
+      "publicEnrollmentSha256": "83f351b1b638aa29e931cbd1e40703885a72c46b080e41c02b58286a94efe513",
+      "hostCompletionReceiptSha256": "ad9397173c880cf273bbcb450c662b2389934e9daf62a4ea92876abfba3ee992"
+    },
+    {
+      "slot": 3,
+      "hostId": "linode-108237290",
+      "underlayIpv4": "172.104.240.217",
+      "publicEnrollment": "deploy/friday/dkg-enrollment-r15/participant-3.host-enrollment.json",
+      "publicEnrollmentSha256": "ec93b3cb6a279b1a7b8713d0fa6c2deec2389088beec18b211c612a325253161",
+      "hostCompletionReceiptSha256": "4a26ec1785cb813901eae1dea822c42fab45d9aae711a618b25871811147e138"
+    },
+    {
+      "slot": 4,
+      "hostId": "linode-108237424",
+      "underlayIpv4": "172.104.253.247",
+      "publicEnrollment": "deploy/friday/dkg-enrollment-r15/participant-4.host-enrollment.json",
+      "publicEnrollmentSha256": "1bd6349411976adbc341dc67dcf03e76599ebf73f9d0182a145d73d0fe640e2e",
+      "hostCompletionReceiptSha256": "3d50ffc2926ac7af2af1a50d2e52f5f3cce00c3fe42363e32f0d8daa17924341"
+    }
+  ],
+  "postState": {
+    "compiledNoReplaceFfiCanary": "PASS_ON_ALL_FOUR_HOSTS",
+    "publicEnrollmentVerified": "PASS_ON_ALL_FOUR_HOSTS",
+    "fridayServicesOrListenersRemaining": false,
+    "fipsInterfaceRemaining": false,
+    "wednesdayPidAndRestartCountersChanged": false,
+    "uncertainOutcome": false
+  },
+  "notRun": [
+    "DKG rounds",
+    "pairwise transport export",
+    "FROST share generation",
+    "Comet initialization",
+    "mint identity generation",
+    "browser acceptance",
+    "public activation"
+  ]
+}

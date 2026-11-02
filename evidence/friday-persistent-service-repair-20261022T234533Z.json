@@ -1,0 +1,64 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_PERSISTENT_SERVICE_REPAIR_EVIDENCE_V1",
+  "recorded_at": "2026-10-22T23:45:33Z",
+  "source_commit": "f1a4a871ba860f9a129315618c85d1518b706f59",
+  "frozen_r5_unchanged": "132f22170e543815988fdbc9612909595b7ca423",
+  "scope": "local post-R5 signer/coordinator activation-blocker repairs; no keys, listeners, mint, Comet, FIPS namespace, VPS or deployment action",
+  "source_sha256": {
+    "cashu-wrapper/ts/demo-fips-signer-cli.ts": "c208fa36a6ad275c68b964930418d7edd4a9ddc7e64f1e19dd6e4dffada28d83",
+    "cashu-wrapper/ts/demo-friday-signer-enrollment.ts": "a6e6a8b8dad987510ec73c84a17a3a89cfe259db98890e297218b87434b79075",
+    "cashu-wrapper/ts/demo-friday-coordinator-runtime.ts": "f702e5993516ab70af35390b040276e7c0c57c1a36476415b1eb5434e0529717",
+    "cashu-wrapper/ts/demo-friday-coordinator-cli.ts": "fd162ca00ba3aaa161c33811bcf48c9618afbb9c57fd4fb42b5615bdc41b3519"
+  },
+  "candidate_binaries": {
+    "directory": "live-bin-friday-candidate-r1",
+    "tracked_in_git": false,
+    "plebeian-friday-signer": {
+      "bytes": 99826920,
+      "mode": "0755",
+      "sha256": "f0f6508f9f5e89013bf91d2ffa3bad083834058532887cb1f9aae507a41b85c3"
+    },
+    "plebeian-friday-coordinator": {
+      "bytes": 99321423,
+      "mode": "0755",
+      "sha256": "64f6dd6f12f99fcc9419fe35f529e3556c0e6b95a6b68951d42d6697f2f4d125"
+    }
+  },
+  "verification": {
+    "typecheck_friday": { "status": "PASS", "exit": 0 },
+    "focused_repairs": { "status": "PASS", "tests": 10, "failures": 0, "assertions": 41 },
+    "full_friday_restricted": {
+      "status": "EXPECTED_SANDBOX_LIMITATION",
+      "tests_passed": 140,
+      "tests_failed": 2,
+      "assertions": 503,
+      "only_failed_file": "demo-frost-threshold3-process.test.ts",
+      "failure_boundary": "restricted sandbox terminated OS child-process transport",
+      "log_sha256": "892c937035adfe3a60dfb4aa37b5112626d7b36bd6a610747af76d4086dec630"
+    },
+    "affected_process_test_outside_restricted_sandbox": {
+      "status": "PASS",
+      "tests": 6,
+      "failures": 0,
+      "assertions": 38,
+      "authorization": "ordinary exact bun test escalation; no service or network access"
+    },
+    "binary_builds": { "status": "PASS", "count": 2 }
+  },
+  "closed_review_findings": [
+    "signer enrollment validates an existing mode-0600 owner-bound signed file on restart instead of recreating it",
+    "coordinator metadata and records bind one deployment and exact chain/authority/outcome identity",
+    "interrupted execution enters exact mint recovery rather than terminal quarantine or fresh payment",
+    "public caller-driven enqueue CLI removed; child request and response bind complete durable operation identity",
+    "child output is streamed with a byte limit and executed under a bounded timeout wrapper",
+    "DKG participant configuration and state paths are exact per-slot paths rather than lexical descendants"
+  ],
+  "remaining_blockers": [
+    "no persistent exact terminal executor composes the real FROST/mint/recovery/import services",
+    "no authenticated admission/terminal authority adapter inserts authorized records into the coordinator database",
+    "no browser/API Friday composition consumes these services",
+    "R5 is pending owner action-time approval and does not test this newer source",
+    "emergency unilateral refund export/import authority remains unimplemented and its Cashu first-valid-spend race remains an owner decision"
+  ],
+  "claim": "build and focused/static regression evidence only; unaccepted, undeployed, not live readiness"
+}

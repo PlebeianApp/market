@@ -1,0 +1,16 @@
+Friday unified FROST/Comet/Cashu harness — three-validator S+1 wait failure
+Timestamp: 2026-10-22T16:24Z
+Source base: 079374e1d24568bbe6da6743522dee0746106619 plus dirty Friday integration diff
+Command: timeout --signal=TERM --kill-after=20s 9m ./scripts/friday-integrated-frost-comet.sh
+Exit: 1
+Result: 0 pass, 1 fail, 4 assertions, 34.31 seconds
+
+The first funded bid, independent policy quorum, real 3-of-4 admission FROST,
+and Comet commit succeeded. Validator 4 and participant worker 4 were genuinely
+unavailable. During the second-bid policy check, participants 1-3 each refused
+because the S+1 Comet header did not become available inside the current wait
+budget; participant 4 reported its expected SIGTERM.
+
+No second bid, displacement, SIG_ALL mint spend, NUT-09 recovery, or recipient
+import occurred. The wrapper stopped owned processes and removed
+/tmp/plebeian-friday-integrated.tdoEK3.

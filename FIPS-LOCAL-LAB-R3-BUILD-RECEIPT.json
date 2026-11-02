@@ -1,0 +1,51 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_FIPS_R3_BUILD_RECEIPT_V1",
+  "prepared_at_utc": "2026-10-22T20:50:52Z",
+  "application_source_commit": "96c81d8e23602fc9126e63cc6e05ce1f87a56ebc",
+  "reviewed_r3_controller_commit": "888be41b516d527373e66459dbaae18e93ddd617",
+  "r3_change_scope": "Python controller attribution, cleanup ownership, namespace TUN binding and evidence only; application executables are byte-identical to the R2 receipt.",
+  "inherits_r2": {
+    "controller_sha256": "ed90e2ae32148f20007694bd1f9a13de090d80142b6ead9ac19c8fce7bb57468",
+    "build_receipt_sha256": "4cf0d056925e4efd9a6c6f69ea21f1ac46d93d7645d702e8abd7dd5989a1fe58",
+    "nutshell_site_packages_tree_sha256": "5390903ab5cd9b13c2d1476b0e1aa5c28187ca85376b60d3bd02626aba3af64d",
+    "site_packages_file_count": 6410
+  },
+  "r3_sources": {
+    "scripts/friday-fips-lab-r3.py": "cc0c0b6b254a38d483b109bd072817be4685cf98d0de83dc338213f7af975dd3",
+    "scripts/friday-fips-lab-r3.test.py": "fd41bbfca8d116bb135158c55ee695c3d36e8551e6ead363ef67f9c08299f6a1",
+    "FIPS-LOCAL-LAB-R3-EXECUTION.json": "675e93a43a99f7a9f0d7423ff5743f258cdf8177dd9c14892870035f09257b31"
+  },
+  "unchanged_source_entrypoints": {
+    "scripts/friday-fips-lab-r2.py": "ed90e2ae32148f20007694bd1f9a13de090d80142b6ead9ac19c8fce7bb57468",
+    "scripts/friday-fips-lab.py": "c7b3a55d00cb3fd27c40530f9a62fce028b8e366e11b4f6ad90467c7ec31d306",
+    "scripts/friday-fips-capture.py": "bb13334c6091a40363ed2ae1cfa67e831ee98f47dd809a11716f8a4c4de787c6",
+    "scripts/friday-fips-mint-bootstrap.py": "070b40682dd94d27782de4c2bc37b5f8c277d3e8a3c39b25d433130f10591b85"
+  },
+  "unchanged_outputs": {
+    "plebeian-auctions-poc": "78601e7c6b17ec41fe21023fcf375fb920c5fe160b0fd89389ab37a25af23ed0",
+    "plebeian-friday-frost-dkg": "2dc6ea0daf368e33c2a2f03acab54814c2ce611c3d87b4a22b64959c816e7d21",
+    "plebeian-friday-signer": "6e06fc91dbb4202d97ecc04cfa42441b92b8bebfc3411aaaeca07ff9a3a8c95e",
+    "plebeian-friday-integrated-driver": "93dc2ba24f9397882584d1d177df11669fda27ce46251341eb2159cbe6f1164c",
+    "coco-demo-frost-participant-3of4": "715aeb0c390c7f6dd1af26076caaf50afb8aace6cbbaa1ed605d69875bb38d8b",
+    "coco-demo-frost-public-inspect": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f"
+  },
+  "r3_gates": {
+    "python_py_compile": "PASS",
+    "focused_unprivileged_regressions": "19 passed, 0 failed",
+    "git_diff_check": "PASS",
+    "independent_static_review": "ACCEPT for precise approval-packet generation; no P0/P1/P2",
+    "privileged_lab_execution": "NOT_RUN"
+  },
+  "preserved_failure": {
+    "r2_failure_path": "/tmp/plebeian-friday-fips-lab.20261022-r2-failure.json",
+    "r2_failure_sha256": "3f43c3f14b7607a8bb7b1d6dde85758e4a30c51e75f082825225d1608bf61030",
+    "r2_staging_unchanged": true
+  },
+  "security_boundary": {
+    "persistent_credentials_generated": false,
+    "private_keys_or_bearer_proofs_embedded": false,
+    "privileged_network_actions_performed_by_r3": false,
+    "live_vps_changes_performed": false,
+    "exclusive_root_or_cap_net_admin_actor_required_during_run": true
+  }
+}

@@ -1,0 +1,22 @@
+# TEMPLATE ONLY — V2 FRIDAY IP ORIGIN — NOT INSTALLED.
+#
+# This is a complete, isolated IPv4 TLS server for the proposed Friday origin.
+# It is valid only after fresh inventory proves V2 has no conflicting TCP 443
+# server and the exact certificate metadata/paths are added to the deployment
+# manifest. It must never be installed on V1 or made to answer for Wednesday.
+
+server {
+    listen 172.105.95.57:443 ssl default_server;
+    server_name 172.105.95.57;
+
+    ssl_certificate %FRIDAY_TLS_FULLCHAIN_PATH%;
+    ssl_certificate_key %FRIDAY_TLS_PRIVATE_KEY_PATH%;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_tickets off;
+    server_tokens off;
+
+    access_log /var/log/nginx/plebeian-friday-access.log;
+    error_log /var/log/nginx/plebeian-friday-error.log warn;
+
+    include /etc/nginx/plebeian-friday-locations.conf;
+}

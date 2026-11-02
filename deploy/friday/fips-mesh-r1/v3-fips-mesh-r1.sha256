@@ -1,0 +1,6 @@
+7b26e81e2607483d46b716a330c88ee18c881e3adaefc0542909e6f2a9a287f2  /opt/plebeian-auctions-friday/releases/fips-identity-20261023-r1/bin/fips
+15df75d3d9942747c62f690b0f4f5d5a2f9df45c976a96f4799a9574b988fab3  /opt/plebeian-auctions-friday/releases/fips-identity-20261023-r1/bin/fipsctl
+5753d4c95aa55ec91ecb1ac0be0b4729f65808cee59f59431fb9d5f327295808  /opt/plebeian-auctions-friday/releases/fips-mesh-20261023-r1/scripts/verify-friday-fips-identity.py
+704133a7c0572d1bf8e2f73fc328773813605993170e9031f5c20af4d94018d6  /etc/systemd/system/plebeian-friday.slice
+15f18917bfe35e4d5b772e8eb591a96718a95990b73550f515c2ec3b938d1051  /etc/systemd/system/plebeian-friday-fips-mesh-r1.service
+33a9693bfde2f705f6bb40d41014a0c46b9e538923b987ea5c7370d3f3ee0770  /var/lib/plebeian-auctions-friday/fips/identity/fips.yaml

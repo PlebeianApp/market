@@ -1,0 +1,42 @@
+node:
+  identity:
+    persistent: true
+  control:
+    socket_path: "/var/lib/plebeian-auctions-friday/fips/control.sock"
+  rendezvous:
+    nostr:
+      enabled: false
+    lan:
+      enabled: false
+tun:
+  enabled: true
+  name: fips0
+  mtu: 1280
+dns:
+  enabled: false
+transports:
+  udp:
+    bind_addr: "172.104.240.217:32121"
+    advertise_on_nostr: false
+    public: false
+    accept_connections: true
+    outbound_only: false
+peers:
+  - npub: "npub1tdcsm26d34sd7tlwmqypc2ctd8hjvpqzwaeechr688ah42mypg0sxga6nj"
+    alias: "friday-v1"
+    addresses:
+      - transport: udp
+        addr: "172.105.64.142:32121"
+    connect_policy: auto_connect
+  - npub: "npub10jac6jktr07h90d4txuer4xpu9taxfq458c0yr0enqcg2l798fps0pzlty"
+    alias: "friday-v2"
+    addresses:
+      - transport: udp
+        addr: "172.105.95.57:32121"
+    connect_policy: auto_connect
+  - npub: "npub14k9gzekwy6gt3vewmazawspxf84fhz94mjmfpqwspyaq5fwa2axsa7s2uc"
+    alias: "friday-v4"
+    addresses:
+      - transport: udp
+        addr: "172.104.253.247:32121"
+    connect_policy: auto_connect

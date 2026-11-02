@@ -1,0 +1,67 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_R18_STAGING_AMENDMENT_ACTION_V1",
+  "status": "PENDING_INDEPENDENT_REVIEW_AND_FRESH_OWNER_APPROVAL_NOT_EXECUTED",
+  "originalActionSha256": "d48e1592ed9e8753e05d4edf66be0309f9cd26cd3ebd3c7784bf4214a0a7a29a",
+  "amendmentDocument": {
+    "path": "FRIDAY-R18-DKG-CEREMONY-STAGING-AMENDMENT-R1.md",
+    "sha256": "d407ecc69a5113fe0644d49d6d957bd3d7c46039c9f7be659c06eee0c63988a9"
+  },
+  "helper": {
+    "path": "scripts/friday-r18-staged-promote.py",
+    "sha256": "2563ebc98016f5382f367ea48fac04c3925dfbc4db3fac419a9453a0a4fab919",
+    "transport": "stdin_to_remote_python_only_not_installed"
+  },
+  "ssh": {
+    "agentSocket": "/tmp/plebeian-poc-owner-agent.sock",
+    "expectedIdentitySha256": "SHA256:IGu9dXOSXw4JoPmwNjAgDRI2AY+zJil/haJGjKRYt34",
+    "knownHosts": "/home/maximoto/.ssh/known_hosts",
+    "fixedOptions": [
+      "-o", "BatchMode=yes",
+      "-o", "IdentitiesOnly=yes",
+      "-o", "StrictHostKeyChecking=yes",
+      "-o", "UserKnownHostsFile=/home/maximoto/.ssh/known_hosts",
+      "-o", "HostKeyAlgorithms=ssh-ed25519",
+      "-o", "ConnectTimeout=10",
+      "-o", "ConnectionAttempts=1",
+      "-o", "ForwardAgent=no",
+      "-o", "ControlMaster=no"
+    ]
+  },
+  "freshPreflightRequired": true,
+  "invocations": [
+    {
+      "slot": 1,
+      "target": "root@172.105.64.142",
+      "stdinPath": "scripts/friday-r18-staged-promote.py",
+      "remoteCommand": "/usr/bin/python3 -I -S -B - --slot 1 --approved-amendment-sha256=d407ecc69a5113fe0644d49d6d957bd3d7c46039c9f7be659c06eee0c63988a9 --approved-helper-sha256=2563ebc98016f5382f367ea48fac04c3925dfbc4db3fac419a9453a0a4fab919"
+    },
+    {
+      "slot": 2,
+      "target": "root@172.105.95.57",
+      "stdinPath": "scripts/friday-r18-staged-promote.py",
+      "remoteCommand": "/usr/bin/python3 -I -S -B - --slot 2 --approved-amendment-sha256=d407ecc69a5113fe0644d49d6d957bd3d7c46039c9f7be659c06eee0c63988a9 --approved-helper-sha256=2563ebc98016f5382f367ea48fac04c3925dfbc4db3fac419a9453a0a4fab919"
+    },
+    {
+      "slot": 3,
+      "target": "root@172.104.240.217",
+      "stdinPath": "scripts/friday-r18-staged-promote.py",
+      "remoteCommand": "/usr/bin/python3 -I -S -B - --slot 3 --approved-amendment-sha256=d407ecc69a5113fe0644d49d6d957bd3d7c46039c9f7be659c06eee0c63988a9 --approved-helper-sha256=2563ebc98016f5382f367ea48fac04c3925dfbc4db3fac419a9453a0a4fab919"
+    },
+    {
+      "slot": 4,
+      "target": "root@172.104.253.247",
+      "stdinPath": "scripts/friday-r18-staged-promote.py",
+      "remoteCommand": "/usr/bin/python3 -I -S -B - --slot 4 --approved-amendment-sha256=d407ecc69a5113fe0644d49d6d957bd3d7c46039c9f7be659c06eee0c63988a9 --approved-helper-sha256=2563ebc98016f5382f367ea48fac04c3925dfbc4db3fac419a9453a0a4fab919"
+    }
+  ],
+  "barrier": "capture_and_verify_all_four_promotion_complete_records_before_courier_init_or_any_dkg_stage",
+  "failurePolicy": "stop_preserve_no_retry_no_cleanup",
+  "excluded": [
+    "DKG host stage before all-four promotion barrier",
+    "automatic retry or recovery",
+    "staging deletion or overwrite",
+    "service or listener start",
+    "FIPS mesh or Comet start",
+    "mint browser payment or Wednesday mutation"
+  ]
+}

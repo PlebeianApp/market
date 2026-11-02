@@ -1,0 +1,17 @@
+{"at":"2026-10-21T21:46:21Z","action":"start","label":"mint","pid":1116644,"result":""}
+{"at":"2026-10-21T21:46:23Z","action":"start","label":"fault-proxy","pid":1116665,"result":""}
+{"at":"2026-10-21T21:46:23Z","action":"start","label":"local-demo","pid":1116673,"result":""}
+{"at":"2026-10-21T21:46:28Z","action":"start","label":"validator","pid":1116689,"result":""}
+{"at":"2026-10-21T21:46:28Z","action":"start","label":"validator","pid":1116690,"result":""}
+{"at":"2026-10-21T21:46:28Z","action":"start","label":"validator","pid":1116691,"result":""}
+{"at":"2026-10-21T21:46:28Z","action":"start","label":"validator","pid":1116692,"result":""}
+{"at":"2026-10-21T21:46:28Z","action":"start","label":"coordinator:faucet_after_mint_before_persist","pid":1116792,"result":""}
+{"at":"2026-10-21T21:46:28Z","action":"reap","label":"coordinator","pid":1116792,"result":"already-exited-wait-1"}
+{"at":"2026-10-21T21:46:28Z","action":"stop","label":"local-demo","pid":1116673,"result":"signal-TERM-wait-0"}
+{"at":"2026-10-21T21:46:28Z","action":"reap","label":"validator","pid":1116689,"result":"already-exited-wait-127"}
+{"at":"2026-10-21T21:46:28Z","action":"reap","label":"validator","pid":1116690,"result":"already-exited-wait-127"}
+{"at":"2026-10-21T21:46:28Z","action":"reap","label":"validator","pid":1116691,"result":"already-exited-wait-127"}
+{"at":"2026-10-21T21:46:28Z","action":"reap","label":"validator","pid":1116692,"result":"already-exited-wait-127"}
+{"at":"2026-10-21T21:46:29Z","action":"stop","label":"fault-proxy","pid":1116665,"result":"signal-TERM-wait-143"}
+{"at":"2026-10-21T21:46:29Z","action":"stop","label":"mint","pid":1116644,"result":"signal-TERM-wait-143"}
+{"at":"2026-10-21T21:46:29Z","action":"post_scan","result":"all-recorded-owned-pids-absent"}

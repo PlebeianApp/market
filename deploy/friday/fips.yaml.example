@@ -1,0 +1,49 @@
+# TEMPLATE ONLY. Every token is host-specific and must be manifest-pinned.
+#
+# Install the rendered file as `fips.yaml` beside the independently provisioned
+# `fips.key` in the private per-host identity directory. jmcorgan/fips derives
+# the key path from this config location; it has no arbitrary key-path option.
+# The systemd preflight refuses a missing key so `persistent: true` cannot
+# silently generate a new identity during service startup.
+node:
+  identity:
+    persistent: true
+  control:
+    socket_path: "/var/lib/plebeian-auctions-friday/fips/control.sock"
+  rendezvous:
+    nostr:
+      enabled: false
+    lan:
+      enabled: false
+tun:
+  enabled: true
+  name: fips0
+  mtu: 1280
+dns:
+  enabled: false
+transports:
+  udp:
+    bind_addr: "%FRIDAY_FIPS_UNDERLAY_IPV4%:32121"
+    advertise_on_nostr: false
+    public: false
+    accept_connections: true
+    outbound_only: false
+peers:
+  - npub: "%FRIDAY_PEER_1_NPUB%"
+    alias: "%FRIDAY_PEER_1_ALIAS%"
+    addresses:
+      - transport: udp
+        addr: "%FRIDAY_PEER_1_IPV4%:32121"
+    connect_policy: auto_connect
+  - npub: "%FRIDAY_PEER_2_NPUB%"
+    alias: "%FRIDAY_PEER_2_ALIAS%"
+    addresses:
+      - transport: udp
+        addr: "%FRIDAY_PEER_2_IPV4%:32121"
+    connect_policy: auto_connect
+  - npub: "%FRIDAY_PEER_3_NPUB%"
+    alias: "%FRIDAY_PEER_3_ALIAS%"
+    addresses:
+      - transport: udp
+        addr: "%FRIDAY_PEER_3_IPV4%:32121"
+    connect_policy: auto_connect

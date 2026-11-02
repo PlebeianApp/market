@@ -1,0 +1,26 @@
+[Unit]
+Description=Plebeian fake-money POC validator %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=plebeian-poc
+Group=plebeian-poc
+ExecStart=/opt/plebeian-auctions-poc/bin/plebeian-auctions-poc node --home /var/lib/plebeian-auctions-poc/network --slot %i
+Restart=always
+RestartSec=5s
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/plebeian-auctions-poc
+MemoryMax=900M
+TasksMax=256
+LimitNOFILE=65536
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=500
+
+[Install]
+WantedBy=multi-user.target

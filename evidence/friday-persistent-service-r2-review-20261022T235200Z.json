@@ -1,0 +1,60 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_PERSISTENT_SERVICE_R2_REVIEW_V1",
+  "recorded_at": "2026-10-22T23:52:00Z",
+  "source_commit": "203d2d880f002f12d263ccaf93cb52e949a5cef1",
+  "supersedes_source_only": "f1a4a871ba860f9a129315618c85d1518b706f59",
+  "frozen_r5_unchanged": "132f22170e543815988fdbc9612909595b7ca423",
+  "source_sha256": {
+    "cashu-wrapper/ts/demo-friday-coordinator-cli.ts": "c933f129f27991bbd74a30f9ab52714b595fd1af9a170860717fb90e1a58fb19",
+    "cashu-wrapper/ts/demo-friday-coordinator-cli.test.ts": "daf1ab52853ce2ab45ea0f7e3a0daff1317e2f3e5c6218c57578d9c88c73c30a"
+  },
+  "candidate_binaries": {
+    "directory": "live-bin-friday-candidate-r2",
+    "tracked_in_git": false,
+    "plebeian-friday-signer": {
+      "bytes": 99826920,
+      "mode": "0755",
+      "sha256": "f0f6508f9f5e89013bf91d2ffa3bad083834058532887cb1f9aae507a41b85c3"
+    },
+    "plebeian-friday-coordinator": {
+      "bytes": 99321489,
+      "mode": "0755",
+      "sha256": "6e59535bdf5e541aec6752c2c1cf10d070ca2962bec1a85bed7f062b74f86b34"
+    }
+  },
+  "verification": {
+    "typecheck_friday": { "status": "PASS", "exit": 0 },
+    "final_cli_regression": { "status": "PASS", "tests": 2, "failures": 0, "assertions": 10 },
+    "inherited_full_regression": {
+      "source_commit": "f1a4a871ba860f9a129315618c85d1518b706f59",
+      "evidence": "evidence/friday-persistent-service-repair-20261022T234533Z.json",
+      "note": "not rerun after the seven-line property-order-only follow-up"
+    }
+  },
+  "independent_review": {
+    "reviewer_task": "/root/friday_adversarial_review",
+    "verdict": "ACCEPT_SOURCE_PREPARATION_BLOCK_ACTIVATION",
+    "p0": 0,
+    "p1": 0,
+    "closed": [
+      "restart-safe signer enrollment",
+      "deployment-bound database and record schema",
+      "reachable exact recovery after interrupted execution",
+      "removal of public enqueue and complete child identity binding",
+      "bounded child output and timeout wrapper",
+      "exact per-slot DKG paths"
+    ],
+    "activation_blockers": [
+      "terminal executor absent",
+      "authenticated authority-to-queue insertion absent",
+      "browser/API composition absent",
+      "integrated FIPS/payment run absent",
+      "coordinator whole-database stale restore lacks an external monotonic anchor"
+    ],
+    "p2_limits": [
+      "timeout/output behavior lacks a real descendant-overrun process test",
+      "public signer enrollment validation uses stat plus read rather than descriptor-bound O_NOFOLLOW and fsync"
+    ]
+  },
+  "claim": "independently accepted inert source preparation; activation and deploy readiness blocked"
+}

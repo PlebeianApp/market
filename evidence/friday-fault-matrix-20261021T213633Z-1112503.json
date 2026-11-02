@@ -1,0 +1,60 @@
+{
+  "schema": "PlebeianFridayFaultMatrixV1",
+  "completed_at": "2026-10-21T21:36:39.356Z",
+  "mint": {
+    "implementation": "Nutshell 0.19.2",
+    "backend": "FakeWallet",
+    "coco_v2": true
+  },
+  "crash_points": [
+    "faucet-after-mint-before-app-finalize",
+    "payout-after-app-commit-before-coco-prepare",
+    "payout-after-coco-prepare-before-mint",
+    "payout-mint-response-lost",
+    "payout-after-coco-result-before-app-checkpoint",
+    "recipient-after-mint-before-app-paid"
+  ],
+  "balances": {
+    "faucet": 10000,
+    "concurrent_wallet": 3000,
+    "sender": 7500,
+    "recipient": 2500
+  },
+  "concurrent_cross_auction": {
+    "backing": 3000,
+    "requested_each": 2000,
+    "successes": 1,
+    "failures": 1,
+    "reserved": 2000,
+    "spendable": 1000
+  },
+  "conservation": {
+    "sender_recipient_total": 10000,
+    "pending": 0
+  },
+  "operation_records": {
+    "send_rows": 1,
+    "send_state": "pending",
+    "send_input_proofs": [
+      {
+        "state": "spent",
+        "count": 1
+      }
+    ],
+    "send_created_outputs": 12,
+    "send_owner_rows": 1,
+    "receive_rows": 1,
+    "receive_state": "finalized",
+    "receive_outputs": [
+      {
+        "state": "ready",
+        "count": 5,
+        "amount": 2500
+      }
+    ],
+    "receive_owner_rows": 1
+  },
+  "actual_recipient_ownership": true,
+  "duplicate_send_operations": 0,
+  "passed": true
+}

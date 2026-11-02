@@ -1,0 +1,67 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_CURRENT_BUILD_RECEIPT_V1",
+  "status": "BUILT_OFFLINE_TESTED_PENDING_INDEPENDENT_REVIEW_NOT_RUN_ON_HOSTS",
+  "generatedAtUtc": "2026-10-23T17:08:39Z",
+  "sourceCommit": "1dab1a041e494b97d92e55816cfb0b4db15c373e",
+  "sourceTree": "78abffc835dc8ea35bdb2830b660cf4496e4c91e",
+  "artifacts": [
+    {
+      "name": "plebeian-friday-dkg-deployment",
+      "path": "live-bin-friday-candidate-r16/plebeian-friday-dkg-deployment",
+      "sha256": "b4e8099424a9916e08d608723d7cee4792cc21a9cb118307483b3d31aaefaed9",
+      "size": 98559723,
+      "mode": "0755",
+      "target": "bun-linux-x64-baseline-v1.3.11"
+    },
+    {
+      "name": "plebeian-friday-comet-probe",
+      "path": "live-bin-friday-candidate-r16/plebeian-friday-comet-probe",
+      "sha256": "1429f7eace6a983adf9ab250fdac1e1cd6a9698affdd50fd200cb1bbc5d4825f",
+      "size": 98453210,
+      "mode": "0755",
+      "target": "bun-linux-x64-baseline-v1.3.11"
+    },
+    {
+      "name": "plebeian-friday-acceptance-operator",
+      "path": "live-bin-friday-candidate-r16/plebeian-friday-acceptance-operator",
+      "sha256": "f191da6cddf5867145ee1231565e40486c5f3888156c732716de61a45a445690",
+      "size": 98485186,
+      "mode": "0755",
+      "target": "bun-linux-x64-baseline-v1.3.11"
+    }
+  ],
+  "sourceSha256": {
+    "cashu-wrapper/ts/demo-friday-dkg-deployment-tools.ts": "04a564335853dd91b6fe61e18f1d15c569ee841227b659450445c78ee5ec0b37",
+    "cashu-wrapper/ts/demo-friday-dkg-deployment-cli.ts": "7a4b765439d29253b85c02b3034663bb9d3df42e4fa86f30712f29c8b21d5c19",
+    "cashu-wrapper/ts/demo-friday-dkg-deployment-tools.test.ts": "140d66eb0d6403b363c72c2af8979a94b0083c4f0422019be9b724a4291e3a0b",
+    "cashu-wrapper/ts/demo-friday-browser-acceptance-adapters.ts": "5fef6652698207f83eea90569b2b6e0bfa9a5ca022dd199f78939bc724de003e",
+    "cashu-wrapper/ts/demo-friday-browser-acceptance-adapters.test.ts": "e8605bec8dce51aee4becf27d19c3d7a6923af8fb89649e2e286740a75e48b9b",
+    "cashu-wrapper/ts/demo-friday-comet-probe-cli.ts": "a2aed66d02c60f3854aab4bdfed724bba06b7287c30e5627b09bcf3543538680",
+    "cashu-wrapper/ts/demo-friday-acceptance-operator-cli.ts": "ba5787549264c2de66256624ae49f212e0df285827d0d0fee6b7b3abdb0388d6"
+  },
+  "dependencySha256": {
+    "cashu-wrapper/ts/package.json": "c9761283f1eb1074f6ab943c77e83c8a5989b7ef707632b37d599ecfb7b33841",
+    "cashu-wrapper/ts/bun.lock": "2610381f8ad8771443752675059807266f4c716644a1f13550d4c92a9eb0e29b"
+  },
+  "gates": {
+    "composerFocused": "PASS: 10 tests, 37 assertions",
+    "acceptanceFocused": "PASS: 14 tests, 36 assertions",
+    "browserCoco": "PASS: 62 tests, 231 assertions",
+    "fridayTypecheck": "PASS",
+    "diffCheck": "PASS",
+    "compiledInvalidArgumentContracts": "PASS: all three artifacts exit 1 with zero stdout and fixed stderr",
+    "compiledComposerPublicOnlyCanary": "PASS: current binary composed the four signed public enrollments with a synthetic non-secret public coordinator",
+    "compiledCanaryManifestSha256": "8d252e08e9c4b0395a7b9d1f51356a62ea8872f5c5190b9aedd3f6b24223d9de",
+    "compiledCanaryReceiptSha256": "3655410c01ce4ab29879554308c444c2b9c8dd22a56786735e9e07c37910cf33"
+  },
+  "preservedExpectedRefusal": "recover-manifest was invoked after a fully completed canary whose lock had correctly been released; it refused with the fixed error and made no change",
+  "notRun": [
+    "live coordinator identity initialization",
+    "live manifest composition",
+    "DKG rounds or FROST share generation",
+    "Comet, signer, mint, authority, site or browser service startup",
+    "browser-to-operator bridge",
+    "four-host payment acceptance",
+    "validator fault exercise"
+  ]
+}

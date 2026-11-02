@@ -1,0 +1,16 @@
+Friday focused integration unit suite — sandbox process-boundary failure
+Timestamp: 2026-10-22T16:07Z
+Source base: 079374e1d24568bbe6da6743522dee0746106619 plus dirty Friday integration diff
+Command: timeout --signal=TERM --kill-after=10s 6m bun run test:friday:integration
+Exit: 1
+Result: 82 pass, 2 fail, 311 assertions, 14 files, 42.10 seconds
+
+Both failures were in demo-frost-threshold3-process.test.ts. The first child
+process round-one send failed with EPERM (operation not permitted); the second
+process aggregation fixture reported the same sandbox child-process boundary.
+The failure did not assert a protocol mismatch. All four spawned fixture
+children reported SIGTERM during their test cleanup.
+
+Planned retry is limited to this one process-boundary file outside the Codex
+sandbox. It is an ordinary local stdio child-process test, not the privileged
+network-namespace/FIPS lab and not evidence of FIPS transport.

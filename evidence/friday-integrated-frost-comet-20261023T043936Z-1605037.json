@@ -1,0 +1,123 @@
+{
+  "schema": "PlebeianFridayIntegratedFrostCometV1",
+  "completed_at": "2026-10-23T04:40:42.808Z",
+  "source": {
+    "commit": "72afa33570cdfbc6d4e0b90b98d7074380eb781e",
+    "poc_binary_sha256": "2db263c56ac276e4d79fab0ecc9ddc064813b8c5ee0129d4fc300e944c7e46c5",
+    "participant_binary_sha256": "c6f5fdbe9e12436609658b97c814a5989216f6e81f75cdc015193ae6187da393",
+    "inspector_binary_sha256": "bc9beec4685c30937796db656d0751fe9f3bda11272835ff2fbb459f595f1e65"
+  },
+  "value_profile": "fake-money-only",
+  "mint": {
+    "implementation": "Nutshell 0.19.2",
+    "backend": "FakeWallet",
+    "input_fee_ppk": 0
+  },
+  "consensus": {
+    "chain_id": "plebeian-poc-1792730377",
+    "validators": 4,
+    "unavailable_validator": 4,
+    "first_height": 9,
+    "displacement_height": 21,
+    "initial_commit_signatures": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "post_fault_commit_signatures": [
+      3,
+      3,
+      3
+    ]
+  },
+  "admission": {
+    "participant_processes": 4,
+    "unavailable_policy_pid": 1605390,
+    "selected_participants": [
+      1,
+      2,
+      3
+    ],
+    "real_rust_frost": true,
+    "dkg_run_id": "friday-integrated-fc97c78e-2c55-4a3b-95ef-b8c75915d62f",
+    "public_package_sha256": "97bc4e11e8474de37a232b0a18ab164555fe9cbbb401d4ab39f3e6bea5e7caa8"
+  },
+  "outbid_return": {
+    "displaced_bid_id": "deb6192a85644b7eb3285727199670fecce2dc4f2f3f6195a197d95ca6e24c5d",
+    "replacement_bid_id": "d7c47d60c5e8285f95799b4e0924dd1dafb175bab737dbfbb900fe164dad30ff",
+    "amount": 1000,
+    "sigall_participants": [
+      1,
+      2,
+      3
+    ],
+    "finality_commits": [
+      {
+        "height": 21,
+        "block_hash": "3e5cfe98372b6dcca9737f0301d79af26a095e4e16257e9a562d57dace520de7",
+        "app_hash": "8e3a812f5e68cf805243d017c8f62bbb8d6fa137148426641392cfc406a6d6fc"
+      },
+      {
+        "height": 22,
+        "block_hash": "a8d0c46b6bdbce08452442e1c98973190dfd50dcb332c06d81e37ece88b5270a",
+        "app_hash": "0fedc1deaaa91a099c95f66839fad421f15444d7992723fda5c7e46c7c47c7a7"
+      },
+      {
+        "height": 23,
+        "block_hash": "72761c7bec1a67543ae0f57298c48c913148f922162462fc4e07207512f484ad",
+        "app_hash": "faa787c594dece21df05a1059e709e276e31362bcb333ac580f72b77ac31f392"
+      }
+    ],
+    "observed_state": {
+      "height": 26,
+      "app_hash": "3df68be7b9771396586a18c9282208ccff2fdbe0afc450ae4b1ee8c039f951af",
+      "binding_height": 27,
+      "binding_app_hash": "3df68be7b9771396586a18c9282208ccff2fdbe0afc450ae4b1ee8c039f951af"
+    },
+    "terminal_participant_processes": 4,
+    "unavailable_terminal_policy_pid": 1605467,
+    "participant_policy_digest": "e6a57e0e4d6d7e90833785b0bf44ec5c073ce147f6927aab30b993b189b53cbd",
+    "frost_transcript_hash": "d38a0b3ffce5519dbf774d94b5ff31623ab2b61ceae9bcf10613d0602c8ccd5c",
+    "sigall_operation_root": "69e7dae9f1fc0740d48841196d12f700d194dd83985b7e2a2e6b50eaaa66d174",
+    "mint_swap_calls": 1,
+    "dleq_inputs_verified": true,
+    "nut07_input_states": [
+      "SPENT",
+      "SPENT",
+      "SPENT",
+      "SPENT",
+      "SPENT",
+      "SPENT"
+    ],
+    "nut07_exact_input_match": true,
+    "nut07_input_set_digest": "c5d0e08f6bb77e54033676359a7ee7c8a8d63e88fd326562b53d5c3a0099baa5",
+    "nut09_restored_outputs": 6,
+    "recipient_proof_count": 6,
+    "recipient_amount": 1000,
+    "recipient_nut07_states": [
+      "UNSPENT",
+      "UNSPENT",
+      "UNSPENT",
+      "UNSPENT",
+      "UNSPENT",
+      "UNSPENT"
+    ],
+    "recipient_exact_input_match": true,
+    "recipient_proof_set_digest": "7ffce251f940339a2dce8c0647c1567a640575490581d17c6e1315312efe673d",
+    "durable_lifecycle": "recipient_imported"
+  },
+  "transport": {
+    "admission_policy": "separate local processes over stdio",
+    "terminal_policy": "separate local signer processes over stdio",
+    "consensus": "four loopback CometBFT processes",
+    "fips": false
+  },
+  "limitations": [
+    "not FIPS transport",
+    "not production custody",
+    "one local operator",
+    "no real-value endpoint"
+  ],
+  "passed": true
+}

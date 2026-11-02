@@ -1,0 +1,28 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_CANDIDATE_R6_1_BUILD_RECEIPT_V1",
+  "built_at_utc": "2026-10-23T04:43:14Z",
+  "source_commit": "0eb5118",
+  "base_receipt": {
+    "path": "FRIDAY-CANDIDATE-R6-BUILD-RECEIPT.json",
+    "sha256": "188bc6ede34f057604a7511d7ccdfa76f2faf1f1a2a98aa7c626a0e373803dd89"
+  },
+  "change": "The V4 site exposes both browser readiness flags only when POC_FRIDAY_BROWSER_READY=true. The reviewed default remains false. The authority, same-origin proxy and legacy-custody rejection remain independent enforcement boundaries.",
+  "rebuilt_artifact": {
+    "command": "GOCACHE=/tmp/plebeian-friday-go-build-r5 go build -trimpath -mod=readonly -o live-bin-friday-candidate-r5/plebeian-auctions-poc .",
+    "path": "live-bin-friday-candidate-r5/plebeian-auctions-poc",
+    "sha256": "2b57523f6fca7398a95f64d61df6df77762d8f54c8a57588e5bb449f825c3940",
+    "size": 45896344,
+    "mode": "0755"
+  },
+  "unchanged_artifacts": "All Bun, Rust and browser artifacts retain the exact hashes in the base receipt; commits after 363aeae and before this source changed only live-test/evidence files and this Go readiness gate.",
+  "gates": {
+    "go_all_packages": "PASS",
+    "disabled_by_default": "PASS",
+    "explicit_activation_flags_both_true": "PASS",
+    "activation_does_not_restore_wednesday_cashu_routes": "PASS",
+    "exact_current_privileged_fips_run": "NOT_RUN",
+    "deployment": "NOT_RUN"
+  },
+  "preserved_build_attempt": "A fresh-cache Go command yielded no output before its tool wait ended; a read-only process and artifact check found no surviving build and the old artifact hash/mtime remained. It is not claimed. The recorded established-cache command then completed with exit zero and produced the pinned artifact above.",
+  "activation_rule": "Keep POC_FRIDAY_BROWSER_READY=false until the exact installed artifacts pass a reviewed Coco-browser/authority/Comet/FROST/FIPS/mint integration run and deployment approval is granted."
+}

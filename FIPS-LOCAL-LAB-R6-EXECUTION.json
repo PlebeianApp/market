@@ -1,0 +1,86 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_FIPS_LAB_EXECUTION_V6",
+  "approval_ready": false,
+  "reason_not_ready": "A3 post-lock structural-rejection cancellation and actual browser-Coco-over-FIPS acceptance remain unproved; this draft must not execute.",
+  "run_id": "friday-fips-lab-20261023-r6",
+  "run_root": "/tmp/plebeian-friday-fips-lab.20261023-r6",
+  "host": {
+    "hostname": "DESKTOP-P59VRK7",
+    "kernel_release": "6.6.87.2-microsoft-standard-WSL2",
+    "uid": 1000,
+    "gid": 1000,
+    "user": "maximoto"
+  },
+  "limits": {
+    "wall_seconds": 4200,
+    "outer_timeout_seconds": 4800,
+    "cleanup_budget_seconds": 600,
+    "terminal_prepare_deadline_seconds": 1200,
+    "outbid_deadline_seconds": 2100,
+    "startup_seconds": 60,
+    "shutdown_seconds": 15,
+    "max_log_bytes_per_process": 10485760,
+    "child_nproc": 512
+  },
+  "fixed_network": {
+    "namespaces": ["poc-friday-fips-sw", "poc-friday-fips-n1", "poc-friday-fips-n2", "poc-friday-fips-n3", "poc-friday-fips-n4"],
+    "underlay_cidr": "198.18.242.0/29",
+    "underlay_addresses": ["198.18.242.1/29", "198.18.242.2/29", "198.18.242.3/29", "198.18.242.4/29"],
+    "udp_port": 32121,
+    "comet_p2p_port": 26656,
+    "comet_rpc_port": 26657,
+    "signer_rpc_port": 39101,
+    "mint_port": 3338,
+    "site_port": 8080,
+    "external_egress": false,
+    "host_routes": false,
+    "host_firewall_changes": false,
+    "host_file_capabilities": false
+  },
+  "binary_pins": {
+    "/usr/bin/python3.12": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f",
+    "/usr/bin/fips": "7b26e81e2607483d46b716a330c88ee18c881e3adaefc0542909e6f2a9a287f2",
+    "/usr/bin/fipsctl": "15df75d3d9942747c62f690b0f4f5d5a2f9df45c976a96f4799a9574b988fab3",
+    "/usr/bin/ip": "81a95d97c70f3677d1883b9d8fe13b1771ab208d5bca56bc447aaaff0b0480e0",
+    "/usr/sbin/nft": "3f1c21553e62716ef1abfcf31f51ff94eb73ff4234a6653bac754a42f936d1c7",
+    "/usr/bin/setpriv": "62ec0120791f3afcfb689fed52384ec2b0accc6e118a6b9a1d6fcfa7450aaf37",
+    "/usr/bin/prlimit": "17064f67e650d6152a6902b013aab496b54c87587c8eea6f5023aafee6154069",
+    "/usr/bin/ss": "439f93984948302cc298d86367e6a276bb3a21c95f2f8d4a967f163476c6393f",
+    "/usr/bin/env": "886e5fa8be716b03eeda48856e0f04493f2969fc148fb7812594ffac647fa050",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/lab-bin/plebeian-auctions-poc": "2b57523f6fca7398a95f64d61df6df77762d8f54c8a57588e5bb449f825c3940",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/lab-bin/plebeian-friday-frost-dkg": "776fd495f58067ebdc02f4ee9cac8aed559518959849e6f86f05b8dfa7fa03fd",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/lab-bin/plebeian-friday-signer": "d7205533e365ffbd57999884faefe42e1dc04c069bae302625895013a3835127",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/lab-bin/plebeian-friday-integrated-driver-r6": "05e3db686f994df5b7835a451de6e6e954a7e949cd507f663da9c41e5dd5b38a",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/lab-bin/plebeian-friday-terminal-driver-r6": "5235e92ebb0e24d576f76b2f11b5f4218efa536fa16002d536aa79548e8d1125",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/lab-bin/coco-demo-frost-participant-3of4": "5fcef0c0e0518b2c107e5e0a319790ac3ad2e35be2637bb4ecd17f16e9a3b83c",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/lab-bin/coco-demo-frost-public-inspect": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f"
+  },
+  "dependency_pins": {
+    "nutshell_distribution": "cashu",
+    "nutshell_version": "0.19.2",
+    "site_packages_tree_sha256": "5390903ab5cd9b13c2d1476b0e1aa5c28187ca85376b60d3bd02626aba3af64d",
+    "entry_module": "cashu.mint",
+    "nutshell_record_sha256": "fdfead60dab63b5ac42336d6e5d1a8a117d2814fc24a279ba51aba1ba701065c",
+    "nutshell_metadata_sha256": "287e6f8319ab70e62c017c28a876737750d843e8c65ddbb21a692233a6bd1b64"
+  },
+  "source_pins": {
+    "/var/lib/plebeian-friday-fips-r6-reviewed/scripts/friday-fips-lab-r6.py": "6263946ad69bfa394e9599d0d54e9ae411c26c82968d3badaf4186e4ce9942ca",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/scripts/friday-fips-lab-r5.py": "4534e85e5357915892e782212a688b1428473d3dad0c76c68a05437a70379dc7",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/scripts/friday-fips-lab-r3.py": "cc0c0b6b254a38d483b109bd072817be4685cf98d0de83dc338213f7af975dd3",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/scripts/friday-fips-lab-r2.py": "ed90e2ae32148f20007694bd1f9a13de090d80142b6ead9ac19c8fce7bb57468",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/scripts/friday-fips-lab.py": "c7b3a55d00cb3fd27c40530f9a62fce028b8e366e11b4f6ad90467c7ec31d306",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/scripts/friday-fips-capture.py": "bb13334c6091a40363ed2ae1cfa67e831ee98f47dd809a11716f8a4c4de787c6",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/scripts/friday-fips-mint-bootstrap.py": "070b40682dd94d27782de4c2bc37b5f8c277d3e8a3c39b25d433130f10591b85",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/FIPS-LOCAL-LAB-R6-BUILD-RECEIPT.json": "ec2086382b3c6ccbdc7e95716f767cf49e30b8abc9aadf364ba13d0a2201e5cc",
+    "/var/lib/plebeian-friday-fips-r6-reviewed/FIPS-LOCAL-LAB-R6-ACTION-SCOPE.md": "03f56d3368253f91a89a6854f12674106bea6a091f1a3850a4b441329ca6b61f",
+    "reviewed_integration_commit": "0e717fa6c696ac71fa4566b9d91f4b8c3e765b26"
+  },
+  "evidence_result": "/var/lib/plebeian-friday-fips-r6-reviewed/evidence/outcome.json",
+  "claim_boundary": {
+    "backend_fips": true,
+    "browser_coco_v2": false,
+    "live_vps": false,
+    "real_value": false,
+    "requires_separate_same_origin_browser_acceptance": true
+  }
+}

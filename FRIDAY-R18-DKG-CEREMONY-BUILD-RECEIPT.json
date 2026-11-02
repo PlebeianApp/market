@@ -1,0 +1,109 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_R18_DKG_CEREMONY_BUILD_RECEIPT_V1",
+  "status": "REVIEW_BLOCKERS_REPAIRED_BUILT_OFFLINE_TESTED_PENDING_REREVIEW_NOT_RUN_ON_HOSTS",
+  "generatedAtUtc": "2026-10-23T18:04:00Z",
+  "sourceCommit": "144ac30928060f8a72620df6c36d5507249be080",
+  "sourceTree": "210edcedc3921e00a25a23b3b45f25f5ccb97db9",
+  "binding": {
+    "deploymentId": "friday-demo-20261023-r14",
+    "applicationRunId": "friday-demo-20261023-r14-run1",
+    "dkgRunId": "friday-demo-20261023-r14-dkg1",
+    "committeeKeysetId": "friday-demo-frost-keyset-v1",
+    "committeeKeysetVersion": "1",
+    "manifestDigest": "5c91cffa47f0cc90412472b7401b42f02a3416c68a70099357c2cf4cd6f87a87",
+    "manifestPath": "deploy/friday/dkg-ceremony-r18/manifest.json",
+    "manifestSha256": "3c165d655a5a3332fe750a812e499b49c354456c230f175884c19e7e0b1a2985",
+    "digestPinPath": "deploy/friday/dkg-ceremony-r18/owner-approved-manifest-digest.txt",
+    "digestPinSha256": "ba27aae87f25ca1d24482c845c60d9647ff4a36939ad84849f92786ca361c57c"
+  },
+  "artifacts": [
+    {
+      "name": "plebeian-friday-dkg-host",
+      "path": "live-bin-friday-candidate-r18-reviewfix/plebeian-friday-dkg-host",
+      "sha256": "f7b3923f4829acc7a837dc5fa54fe6f332003797dd560e9920bb58ab501baa4c",
+      "size": 98653257,
+      "mode": "0755",
+      "target": "bun-linux-x64-baseline-v1.3.11"
+    },
+    {
+      "name": "plebeian-friday-dkg-courier",
+      "path": "live-bin-friday-candidate-r18-reviewfix/plebeian-friday-dkg-courier",
+      "sha256": "6fae43971d211b5043951bb0ebdb4994407972a3d26698cb6bad0e09c8f6a9d7",
+      "size": 98547576,
+      "mode": "0755",
+      "target": "bun-linux-x64-baseline-v1.3.11"
+    },
+    {
+      "name": "plebeian-friday-dkg-relay",
+      "path": "live-bin-friday-candidate-r18/plebeian-friday-dkg-relay",
+      "sha256": "7bc6df270bc7f7be626503994831d3250e4c6072962f5e9c58f24ebfdbcf6f3b",
+      "size": 98579387,
+      "mode": "0755",
+      "target": "bun-linux-x64-baseline-v1.3.11"
+    },
+    {
+      "name": "coco-demo-frost-participant-3of4",
+      "path": "live-bin-friday-candidate-r15/coco-demo-frost-participant-3of4",
+      "sha256": "ed2014392707a00387570a56708e32dc7f7a50e3ab3acb11fb58672d75c7e578",
+      "size": 2381144,
+      "mode": "0755",
+      "target": "linux-x86_64"
+    },
+    {
+      "name": "coco-demo-frost-public-inspect",
+      "path": "live-bin-friday-candidate-r15/coco-demo-frost-public-inspect",
+      "sha256": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f",
+      "size": 724232,
+      "mode": "0755",
+      "target": "linux-x86_64"
+    }
+  ],
+  "sourceSha256": {
+    "cashu-wrapper/ts/demo-friday-dkg-host-receipt.ts": "c16ad45b33493ee0ef7b18a6e17af678c34e50b2328062a5ca67d6caf56f5609",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-host-cli.ts": "b9d8e2f334c43affea7cb96005283aeb748fd328bd5cfb1a03e09cfacb79c77b",
+    "cashu-wrapper/ts/demo-friday-dkg-courier-controller.ts": "8a69754267c97089c03a1a8cccae55d3449ee0d85caa957e890704b3dcfe4641",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-relay.ts": "8b0315110293ae306b1e8e217696aea11c46f8c3841cb8aa6ba98dd40ddd8d63",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-relay-cli.ts": "98bc3d28bd152eb8b2e5a9f2716ac6baad5e474e8fea6ea849cc040aa6ffd8ab",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-host-cli.test.ts": "2fe40b81a804c5de207586c75c6d71d57972bd2484cc2ff437d67483863c84ce",
+    "cashu-wrapper/ts/demo-friday-dkg-courier-controller.test.ts": "fcd276b0b5b2333733a03135382b97fc1c1c394f9782289bc55788609071663c",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-relay.test.ts": "f345cbd49975f7597951fc4f9b1ff735cba8d48b75b6116833823c0184012e79"
+  },
+  "gates": {
+    "hostAndCourierFocused": "PASS: 12 tests, 45 assertions",
+    "relayFocused": "PASS: 8 tests, 27 assertions",
+    "fridayTypecheck": "PASS",
+    "diffCheck": "PASS",
+    "hostCompiledInvalidArgumentContract": "PASS: exit 1, zero stdout, fixed stderr",
+    "relayCompiledInvalidArgumentContract": "PASS: exit 1, zero stdout, fixed stderr",
+    "courierCompiledInvalidArgumentContract": "PASS: exit 1, zero stdout, fixed stderr",
+    "indeterminateHostLock": "PASS: lock retained, normal replay refused, live-owner recovery refused",
+    "courierBarriers": "PASS: fixed absolute root/relay, create-exclusive claim/output, hash receipt, all-four barrier, second invocation refused",
+    "authenticatedHostOrigin": "PASS: DKG-identity signature binds manifest digest, participant, stage, status and evidence; spoof/wrong-manifest/wrong-stage/duplicate rejected",
+    "participantCliContract": "PASS: exact dkg-round1, dkg-round1-agree, dkg-round2 and dkg-finalize positional shapes observed",
+    "inspectorCliContract": "PASS: exact INPUT OUTPUT positional shape observed",
+    "manifestDigestRegeneration": "PASS"
+  },
+  "preservedRestrictedFailure": "The combined restricted test run passed 16 tests and hit EPERM only when its relay fixture wrote to a local child-process pipe; the relay test then passed 8/8 outside that process restriction.",
+  "freshReadOnlyHostInventory": {
+    "allFourEnrollmentAndPinHashesMatch": true,
+    "allFourPrivateEnrollmentFilesHaveExpectedModesWithoutReadingContents": true,
+    "allFourManifestTransportJournalAndNewRoundDestinationsAbsent": true,
+    "existingEnrollmentExchangeRootPreserved": "PASS: exact service-owned 0700 run root with only participant-SLOT.host-enrollment.json before R18",
+    "allFourFridayProcessesListenersAndInterfacesAbsent": true,
+    "allFourWednesdayValidatorsActiveWithZeroRestarts": true,
+    "fixedRuntimePaths": {
+      "v1": "all absent",
+      "v2": "participant absent, inspector present with accepted ee880c7f... hash, host absent",
+      "v3": "all absent",
+      "v4": "all absent"
+    }
+  },
+  "notRun": [
+    "artifact staging on validators",
+    "pairwise transport derivation or persistence",
+    "DKG round1, agreement, round2 or finalization",
+    "FROST share creation",
+    "public/ciphertext courier movement",
+    "service or listener startup"
+  ]
+}

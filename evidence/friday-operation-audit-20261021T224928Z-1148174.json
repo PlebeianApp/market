@@ -1,0 +1,65 @@
+{
+  "schema": "PlebeianFridayOperationAuditV1",
+  "observed_at": "2026-10-21T22:53:07.352Z",
+  "mint_url": "http://127.0.0.1:3338",
+  "amount": 2500,
+  "send": {
+    "operation_id": "send-payout-process-crash-1792622980150",
+    "rows": 1,
+    "state": "finalized",
+    "input_identity_count": 1,
+    "input_proofs": {
+      "count": 1,
+      "amount": 8192,
+      "states": {
+        "spent": 1
+      },
+      "operation_links_retained": 0,
+      "operation_links_released_after_finalization": 1
+    },
+    "created_outputs": [
+      {
+        "state": "ready",
+        "count": 7,
+        "amount": 5692
+      },
+      {
+        "state": "spent",
+        "count": 5,
+        "amount": 2500
+      }
+    ],
+    "durable_token_present": true,
+    "owner_rows": 1,
+    "duplicate_operation_rows": 0,
+    "mint_input_states": {
+      "SPENT": 1
+    },
+    "nut09_recovery_outputs": 12
+  },
+  "receive": {
+    "operation_id": "receive-payout-process-crash-1792622980150",
+    "rows": 1,
+    "state": "finalized",
+    "created_outputs": [
+      {
+        "state": "ready",
+        "count": 5,
+        "amount": 2500
+      }
+    ],
+    "reconstruction_outputs": 5,
+    "owner_rows": 1,
+    "duplicate_operation_rows": 0,
+    "mint_output_states": {
+      "UNSPENT": 5
+    }
+  },
+  "assertions": {
+    "immutable_identity": true,
+    "inputs_spent_in_coco_and_mint": true,
+    "outputs_linked_and_unspent_at_mint": true,
+    "recipient_owns_exact_amount": true,
+    "no_duplicate_operation_rows": true
+  }
+}

@@ -1,0 +1,5 @@
+# Test-only mint. Do not replace FakeWallet with a real Lightning backend.
+cashu==0.19.2
+# Compatibility bounds required by Nutshell 0.19.2 on Python 3.12.
+marshmallow==3.26.2
+limits==3.14.1

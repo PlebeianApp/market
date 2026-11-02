@@ -1,0 +1,23 @@
+[Unit]
+Description=Plebeian Friday R20 fake-money auctions site/API
+Wants=plebeian-friday-validator.service
+After=plebeian-friday-validator.service
+
+[Service]
+Type=simple
+User=plebeian-friday
+Group=plebeian-friday
+Slice=plebeian-friday.slice
+EnvironmentFile=/etc/plebeian-auctions-friday/friday.env
+ExecStartPre=/usr/bin/python3 -I -S -B /opt/plebeian-auctions-friday/releases/r20-deploy-v1/bin/verify-friday-runtime-target.py --environment /etc/plebeian-auctions-friday/friday.env --application ${FRIDAY_APPLICATION} --service plebeian-friday-site.service
+ExecStart=/opt/plebeian-auctions-friday/releases/r20-deploy-v1/bin/plebeian-auctions-poc serve --home ${FRIDAY_NETWORK_ROOT} --listen 127.0.0.1:${FRIDAY_SITE_PORT}
+Restart=always
+RestartSec=5s
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+MemoryMax=160M
+TasksMax=128

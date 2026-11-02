@@ -1,0 +1,57 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_FIPS_R5_BUILD_RECEIPT_V1",
+  "reused_application_binary_source_commit": "60f62bdd031fbc9f5684517bfea6e80c3968467d",
+  "r5_packet_status": "FINALIZED_INDEPENDENTLY_REVIEWED_AWAITING_FRESH_ACTION_APPROVAL",
+  "reused_binary_receipt": {
+    "path": "FIPS-LOCAL-LAB-R4-BUILD-RECEIPT.json",
+    "sha256": "4aa7d3410e467d187b6d624bdcb64b8695d75a5bf4b36fdee277ea3ca100b0c6"
+  },
+  "reused_binaries": {
+    "lab-bin/plebeian-auctions-poc": "78601e7c6b17ec41fe21023fcf375fb920c5fe160b0fd89389ab37a25af23ed0",
+    "lab-bin/plebeian-friday-frost-dkg-r4": "58e2970313caa3d42e97fe26353ce62ab09b960cc9cacb677e09ad04d1860247",
+    "lab-bin/plebeian-friday-signer": "6e06fc91dbb4202d97ecc04cfa42441b92b8bebfc3411aaaeca07ff9a3a8c95e",
+    "lab-bin/plebeian-friday-integrated-driver": "61bbdf64060ba90e76a977b12aed32e2341c5ad43b4ac195fdc43273fd0341ab",
+    "lab-bin/plebeian-friday-terminal-driver-r4": "841d6ea4d344dbdee6d391362dd0cfdf7f6ed634fe5f4e393e6bb934837fc6a5",
+    "lab-bin/coco-demo-frost-participant-3of4": "715aeb0c390c7f6dd1af26076caaf50afb8aace6cbbaa1ed605d69875bb38d8b",
+    "lab-bin/coco-demo-frost-public-inspect": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f"
+  },
+  "r5_source_inputs": {
+    "scripts/friday-fips-lab-r5.py": "4534e85e5357915892e782212a688b1428473d3dad0c76c68a05437a70379dc7",
+    "scripts/friday-fips-lab-r5-regression.py": "5f46001fe420eda8c67d29fbb95a7df59f3b931af1d76cadc602c907e5979260",
+    "scripts/friday-blue-green-regression.py": "5d17d0f508a3177bd57471e7c05d9db4c88581e8d188dc971726406845cf551a",
+    "FIPS-LOCAL-LAB-R5-ACTION-SCOPE.md": "eacb4c1012cfbbe7e7e10d68c1320a28a362294027792049a4304735c67fe68f"
+  },
+  "deployment_candidate_source_inputs": {
+    "internal/poc/network.go": "d3c81fe18ddf678af2beb53e0e916335aaeaecd01302ceb9e3ba67cc3cd014b7",
+    "internal/poc/network_test.go": "0156a97d873d41922433e4191cbd195e991f5d2e41616ec7b8f48d6d1c28ae15",
+    "binary_status": "NOT_BUILT; R5 lab reuses its separately pinned namespace-isolated V3 binary, while any live Friday V4 binary must be built and reviewed from this later source"
+  },
+  "r5_changes": [
+    "controller-relative phase deadlines preserve the approved auction/payment clocks",
+    "a 600-second outer cleanup window is separate from the 4200-second mutable-work deadline",
+    "a root-only outcome inode is reserved before effects and identity-checked through atomic publication",
+    "fixed predictable /tmp evidence result paths are removed",
+    "handled signals are blocked until outcome and long-lived child identities are registered for cleanup",
+    "Friday V4 deployment source binds Comet P2P to each exact FIPS ULA and rejects wildcard listeners"
+  ],
+  "gates": {
+    "python_compile": "PASS",
+    "r5_unprivileged_regression": "7 passed, 0 failed",
+    "blue_green_template_regression": "4 passed, 0 failed",
+    "go_configurable_network_tests": "PASS: go test -mod=readonly ./...",
+    "json_validation": "PASS",
+    "systemd_template_parse": "PASS with expected sparse-root missing sysinit.target notices",
+    "recipe_final_hash_validation": "PASS: literal recipe pins final controller, receipt, and manifest bytes; its own non-recursive SHA256 is reported with the packet",
+    "independent_review": "ACCEPT FOR FINALIZATION: no P0/P1 at source commit 104b259c6c5aac4b348f1eb3d932102c6d6f649f; final status/hash-only consistency check pending",
+    "privileged_lab_execution": "NOT_RUN",
+    "fips_traversal": "NOT_RUN"
+  },
+  "security_boundary": {
+    "new_binaries_built": false,
+    "new_runtime_credentials_generated": false,
+    "network_used": false,
+    "privileged_actions_performed": false,
+    "live_vps_changes_performed": false,
+    "emergency_refund_authority": "NOT_COMPOSED"
+  }
+}

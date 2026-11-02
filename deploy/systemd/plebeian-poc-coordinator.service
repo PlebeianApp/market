@@ -1,0 +1,28 @@
+[Unit]
+Description=Plebeian fake-money Cashu coordinator (single-key POC)
+After=plebeian-poc-mint.service plebeian-poc-validator@1.service
+Requires=plebeian-poc-mint.service
+
+[Service]
+Type=simple
+User=plebeian-poc
+Group=plebeian-poc
+WorkingDirectory=/opt/plebeian-auctions-poc
+EnvironmentFile=/etc/plebeian-auctions-poc/coordinator.env
+Environment=POC_COORDINATOR_STATE=/var/lib/plebeian-auctions-poc/coordinator/state.enc.json
+ExecStart=/usr/local/bin/bun /opt/plebeian-auctions-poc/dist/poc-coordinator.js
+Restart=always
+RestartSec=5s
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/plebeian-auctions-poc
+MemoryMax=700M
+TasksMax=192
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=300
+
+[Install]
+WantedBy=multi-user.target

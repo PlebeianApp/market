@@ -1,0 +1,11 @@
+Friday integrated fake-money run: preserved failure
+UTC window: 2026-10-22T16:30Z--2026-10-22T16:31Z
+Source: dirty Friday integration candidate after the Nutshell SIG_ALL message fix
+Fresh gate: MemAvailableKiB=4081928; no competing heavy campaign matched
+Command: bounded scripts/friday-integrated-frost-comet.sh, outside the filesystem/network sandbox for loopback listeners
+Result: FAIL, 0 pass / 1 fail / 4 assertions, 57.19 seconds
+Failure: the admission reader exhausted its four-second polling window while Comet height 30 was still the non-canonical tip (`commit 30 is not canonical`).
+No payment effect occurred in this run. The SIG_ALL spend and fault-proxy recovery stage was not reached.
+Cleanup: wrapper reported cleanup complete for owned root /tmp/plebeian-friday-integrated.NJiyEI and exit 1; the owned mint logged normal shutdown.
+Diagnosis: Comet marks the tip's seen commit non-canonical until height+1 carries its canonical commit. The reader polled H, H+1, and H+2 concurrently at 10 Hz, so the shortest H loop could fail during a slow consensus round before the required H+2 commit became canonical.
+Repair prepared after failure: wait for H+2 canonical first with a bounded 12-second window, then read historical H/H+1 and the exact transaction block. This changes no acceptance rule and does not accept a seen/non-canonical commit.

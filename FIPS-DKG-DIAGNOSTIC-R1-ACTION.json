@@ -1,0 +1,32 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_FIPS_DKG_DIAGNOSTIC_ACTION_V1",
+  "one_attempt": true,
+  "maximum_seconds": 360,
+  "staging_root": "/var/lib/plebeian-friday-fips-dkg-r1-reviewed",
+  "run_root": "/tmp/plebeian-friday-fips-lab.20261022-dkg-r1",
+  "manifest_sha256": "4c51744663de1030e90b01868c3d233fba14ef54d4263620ddbeca8a4dd1383c",
+  "controller_sha256": "c9a6712649ace9caf41a4ff20089668e0d64c311e14b1de122686911537eea60",
+  "invocation": [
+    "/usr/bin/timeout",
+    "--signal=TERM",
+    "--kill-after=60s",
+    "300s",
+    "/usr/bin/python3.12",
+    "-I",
+    "-S",
+    "-B",
+    "/var/lib/plebeian-friday-fips-dkg-r1-reviewed/scripts/friday-fips-dkg-diagnostic-r1.py",
+    "--manifest",
+    "/var/lib/plebeian-friday-fips-dkg-r1-reviewed/FIPS-DKG-DIAGNOSTIC-R1-EXECUTION.json",
+    "--expected-manifest-sha256",
+    "4c51744663de1030e90b01868c3d233fba14ef54d4263620ddbeca8a4dd1383c",
+    "--expected-controller-sha256",
+    "c9a6712649ace9caf41a4ff20089668e0d64c311e14b1de122686911537eea60"
+  ],
+  "requires_root": true,
+  "normal_cleanup_target": "/tmp/plebeian-friday-fips-lab.20261022-dkg-r1",
+  "persistent_outputs": [
+    "/var/lib/plebeian-friday-fips-dkg-r1-reviewed",
+    "/var/lib/plebeian-friday-fips-dkg-r1-reviewed/evidence/outcome.json"
+  ]
+}

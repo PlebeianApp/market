@@ -1,0 +1,42 @@
+[Unit]
+Description=Plebeian Friday FIPS mesh R1 acceptance transport
+After=network-online.target
+Wants=network-online.target
+Conflicts=plebeian-friday-fips.service
+ConditionPathExists=/var/lib/plebeian-auctions-friday/fips/identity/fips.key
+ConditionPathExists=/var/lib/plebeian-auctions-friday/fips/identity/fips.pub
+ConditionPathExists=/var/lib/plebeian-auctions-friday/fips/identity/fips.yaml
+
+[Service]
+Type=simple
+User=plebeian-friday
+Group=plebeian-friday
+Slice=plebeian-friday.slice
+UMask=0077
+ExecStartPre=/usr/bin/sha256sum --strict --check /etc/plebeian-auctions-friday/fips-mesh-r1.sha256
+ExecStartPre=/usr/bin/python3 -I -S -B /opt/plebeian-auctions-friday/releases/fips-mesh-20261023-r1/scripts/verify-friday-fips-identity.py --config /var/lib/plebeian-auctions-friday/fips/identity/fips.yaml --key /var/lib/plebeian-auctions-friday/fips/identity/fips.key
+ExecStart=/opt/plebeian-auctions-friday/releases/fips-identity-20261023-r1/bin/fips -c /var/lib/plebeian-auctions-friday/fips/identity/fips.yaml
+Restart=no
+TimeoutStartSec=60s
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+AmbientCapabilities=CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ReadWritePaths=/var/lib/plebeian-auctions-friday/fips
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryMax=160M
+TasksMax=96
+LimitNOFILE=8192
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200
+
+# Deliberately no [Install] section: this acceptance-only unit is started
+# manually under one bounded action approval and is never enabled at boot.

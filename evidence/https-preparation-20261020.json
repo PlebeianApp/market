@@ -1,0 +1,38 @@
+{
+  "type": "plebeian-poc-https-preparation",
+  "observed_at": "2026-10-20T20:50:39Z",
+  "host": {
+    "role": "V1",
+    "ipv4": "172.105.64.142"
+  },
+  "lego": {
+    "version": "5.3.1",
+    "source": "https://github.com/go-acme/lego/releases/tag/v5.3.1",
+    "archive": "lego_v5.3.1_linux_amd64.tar.gz",
+    "archive_sha256": "b3c71b122ee1947eacfe0b809b955647f6377239fe4bfc49f73b1a091ae1252a",
+    "installed_binary_sha256": "36c97b1ed369c2c46d7a4dde0d635d8e742b080c27c36d58933a8029f7811624"
+  },
+  "nginx": {
+    "package_source": "Ubuntu 24.04 noble-updates",
+    "package_version": "1.24.0-2ubuntu7.18",
+    "enabled": false,
+    "active": false
+  },
+  "acme": {
+    "server": "https://acme-v02.api.letsencrypt.org/directory",
+    "profile": "shortlived",
+    "challenge": "tls-alpn-01",
+    "contact": "dieeoaz@gmail.com",
+    "account_created": false,
+    "certificate_created": false,
+    "timer_enabled": false,
+    "timer_active": false,
+    "storage_directory": "/etc/plebeian-auctions-poc/acme",
+    "storage_directory_mode": "0700"
+  },
+  "listeners_unchanged": true,
+  "validator_service_active": true,
+  "firewall_attachment": "pending-owner-provider-action",
+  "dns_changed": false,
+  "notes": "No ACME account, private key, certificate or public HTTPS listener existed at this checkpoint. Existing validator, mint, coordinator and site services remained active."
+}

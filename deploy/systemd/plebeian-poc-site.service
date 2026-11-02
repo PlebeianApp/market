@@ -1,0 +1,25 @@
+[Unit]
+Description=Plebeian fake-money auctions site/API
+After=plebeian-poc-validator@1.service plebeian-poc-coordinator.service
+Requires=plebeian-poc-coordinator.service
+
+[Service]
+Type=simple
+User=plebeian-poc
+Group=plebeian-poc
+Environment=POC_CASHU_COORDINATOR_URL=http://127.0.0.1:3339
+ExecStart=/opt/plebeian-auctions-poc/bin/plebeian-auctions-poc serve --home /var/lib/plebeian-auctions-poc/network --listen 127.0.0.1:8080
+Restart=always
+RestartSec=5s
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+MemoryMax=350M
+TasksMax=128
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=300
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+[Unit]
+Description=Plebeian Friday aggregate fake-money demo resource boundary
+Before=plebeian-friday-fips.service plebeian-friday-validator.service plebeian-friday-signer.service plebeian-friday-mint.service plebeian-friday-coordinator.service plebeian-friday-authority.service plebeian-friday-site.service
+
+[Slice]
+MemoryHigh=2G
+MemoryMax=2304M
+TasksMax=1024

@@ -1,0 +1,19 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_PER_VALIDATOR_DKG_HOST_PIN_V1",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "deploymentId": "friday-demo-20261023-r14",
+  "applicationRunId": "friday-demo-20261023-r14-run1",
+  "dkgRunId": "friday-demo-20261023-r14-dkg1",
+  "committeeKeysetId": "friday-demo-frost-keyset-v1",
+  "committeeKeysetVersion": "1",
+  "participantId": 2,
+  "hostId": "linode-108236985",
+  "underlayIpv4": "172.105.95.57",
+  "fipsNpub": "npub10jac6jktr07h90d4txuer4xpu9taxfq458c0yr0enqcg2l798fps0pzlty",
+  "fipsUla": "fd8d:74d8:4685:355:3df4:3595:f5cd:65c6",
+  "signerEndpoint": "http://[fd8d:74d8:4685:355:3df4:3595:f5cd:65c6]:39101/v1/frost",
+  "participantBinarySha256": "ed2014392707a00387570a56708e32dc7f7a50e3ab3acb11fb58672d75c7e578",
+  "inspectorBinarySha256": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f",
+  "configPath": "/var/lib/plebeian-auctions-friday/frost/keyset-v1/participant.config.json",
+  "stateDirectory": "/var/lib/plebeian-auctions-friday/frost/keyset-v1/state"
+}

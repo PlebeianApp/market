@@ -1,0 +1,75 @@
+{
+  "schema": "PlebeianFridayLiveServiceBuildEvidenceV1",
+  "observed_at": "2026-10-22T23:35:18Z",
+  "source_commit": "4e6e4208925ea2138b37542432f769f6261169fd",
+  "fake_money_only": true,
+  "deployed": false,
+  "service_started": false,
+  "network_executed": false,
+  "persistent_keys_generated": false,
+  "r5_packet_coverage": false,
+  "source_files": {
+    "cashu-wrapper/ts/demo-friday-runtime-config.ts": "d00845c4824a6ad4f671697e94df6d064ad0b695047a2d0e4518e8f3c5f54c22",
+    "cashu-wrapper/ts/demo-friday-coordinator-runtime.ts": "2712687d00a7164f2dcf2a1b681a2ac704ee8db05102f70880cbee951855385a",
+    "cashu-wrapper/ts/demo-friday-coordinator-cli.ts": "f37d27ca0a608d077c0de40351cafd2f098128ca016ae73b507084093f3dfc6c",
+    "cashu-wrapper/ts/demo-fips-signer-cli.ts": "71cb415c21b25108fc9058cc24a2820cf98e4b58e1907308dac5ded3a313406d",
+    "deploy/friday/plebeian-friday-coordinator.service": "32d3c920bd8778e7143f32b54e09932d824b470ec8a93e86036b4c4104e440cb",
+    "deploy/friday/application.json.example": "9ee70bfe4a6d670e3b028e1bb0c4e2845fe4a17e80fa4a9a96eb8a632ab9b602"
+  },
+  "artifacts": {
+    "plebeian-friday-signer": {
+      "sha256": "84f96b2b224365cb416374a617de6488294d2701acfae93760d61c4820e62f7e",
+      "bytes": 99822974,
+      "target": "bun-linux-x64-modern"
+    },
+    "plebeian-friday-coordinator": {
+      "sha256": "595cd57036ff9567c750d8566f1bf14295b7835c0d9226dff5086d8625801e15",
+      "bytes": 99315009,
+      "target": "bun-linux-x64-modern"
+    }
+  },
+  "verification": {
+    "focused_new": {
+      "status": "PASS",
+      "tests": 7,
+      "failures": 0,
+      "assertions": 30
+    },
+    "typescript_friday": {
+      "status": "PASS",
+      "command": "tsc -p tsconfig.friday.json"
+    },
+    "friday_full_restricted_sandbox": {
+      "status": "ENVIRONMENT_BLOCKED",
+      "tests_passed": 137,
+      "tests_failed": 2,
+      "assertions": 492,
+      "reason": "two child-process stdio cases received sandbox EPERM"
+    },
+    "affected_process_file_outside_restricted_sandbox": {
+      "status": "PASS",
+      "tests": 6,
+      "failures": 0,
+      "assertions": 38,
+      "command": "bun test demo-frost-threshold3-process.test.ts"
+    },
+    "standalone_compile": {
+      "status": "PASS",
+      "services": 2
+    }
+  },
+  "closed_boundaries": [
+    "live config cannot select Wednesday state or application ports",
+    "signer uses exact live RPC, mint, state and FIPS ULA bindings",
+    "coordinator globally excludes operation and bundle identity reuse",
+    "coordinator quarantines a restart during possible effects",
+    "mint-unknown remains unavailable until exact recovery and recipient import",
+    "coordinator has no web or remote admin listener"
+  ],
+  "blocking_gaps": [
+    "concrete terminal executor is not implemented for the persistent service",
+    "browser admission is not connected to the durable coordinator queue",
+    "emergency unilateral refund lacks a client-held export/import path",
+    "this newer source needs its own integrated FIPS/payment run and independent review"
+  ]
+}

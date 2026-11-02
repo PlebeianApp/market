@@ -1,0 +1,93 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_CANDIDATE_R13_BUILD_RECEIPT_V1",
+  "generated_at_utc": "2026-10-23T14:20:29Z",
+  "artifact_source_commit": "3ca1b48e8db5a960d2def7e71ec15464042ab794",
+  "artifact_source_tree": "4f4eed13c0b243c02a32021d69afd77395fd9b60",
+  "executable_code_commit": "9cacf094ea508316fe5f34b8847314413bfa9370",
+  "executable_code_tree": "4b71d54c18de7721643f966cbc0809486974f6d0",
+  "status": "BUILT_OFFLINE_TESTED_STATIC_SOURCE_REVIEW_ACCEPTED_LIVE_FIPS_COMET_FROST_COCO_BROWSER_ACCEPTANCE_NOT_RUN_NOT_DEPLOYED",
+  "scope": "fake-money Friday candidate with per-host non-central DKG enrollment, public/ciphertext-only ceremony relay, authenticated V2 result consumers, seedless public-authority Comet and recovery-only controls",
+  "lockfiles": {
+    "go.mod": "19d643a94778aca6f1acc7fcca813b76127eb292fdbbc2a57aa6d27f71546818",
+    "go.sum": "7af3f193325fa8aea77ae23cf980b9464bf97fcb6ffe8e8d642607eba04fcf08",
+    "cashu-wrapper/ts/package.json": "73f10489c83f9eff732451799bced7a6b8e68c4b01356a8ef30500260709944e",
+    "cashu-wrapper/ts/bun.lock": "2610381f8ad8771443752675059807266f4c716644a1f13550d4c92a9eb0e29b",
+    "cashu-wrapper/frost-participant-3of4/Cargo.toml": "1a3930e8b9f1c8c6ecd826e397c591ab20744e92ce3a2e036bdf1d8f887dfd28",
+    "cashu-wrapper/frost-participant-3of4/Cargo.lock": "f7c5fe9fc706653c86a5cb84c785bf9da445a92c7824a822b837702afaa998dc",
+    "cashu-wrapper/frost-public-inspect/Cargo.toml": "4124afd3096f582b2f263e6c0619878f0257b6897bfd98032373df7f44cb3f36",
+    "cashu-wrapper/frost-public-inspect/Cargo.lock": "73fdab70dfc75725eff334328f351f1eef64f2fbe3e79453749bc43f06876b29"
+  },
+  "artifacts": {
+    "live-bin-friday-candidate-r13/plebeian-auctions-poc": "5e318330a3c9f38b0f3a84214090cf4444240db7a9d887ef37a18debbb8f1bd8",
+    "live-bin-friday-candidate-r13/plebeian-friday-authority": "11944c83d1f7f5b7a1cd2a4457a3237a46dc8f68bb507c52ccf3fac5a04dbe60",
+    "live-bin-friday-candidate-r13/plebeian-friday-coordinator": "86b9ef8cdb4907b9132c2d948552f65380a473dc80253c023f0feae184cd04c8",
+    "live-bin-friday-candidate-r13/plebeian-friday-terminal-executor": "661ba93f7ac17554a7fea133ff01387982773f40e3c6f74f677b162db0f55524",
+    "live-bin-friday-candidate-r13/plebeian-friday-signer": "bd960202405404ba32a569945a00b9356bd5a3e3a1154763e4ec7bf98ce30ca3",
+    "live-bin-friday-candidate-r13/plebeian-friday-dkg-enrollment-init": "9285f15d527b0f8f438db6d273ce9b1db6a08f223d20e9304fa2fb509436419e",
+    "live-bin-friday-candidate-r13/plebeian-friday-dkg-host": "b79503399651c355423967e5e0dbb27d452f4d804559498bf9775c536382b410",
+    "live-bin-friday-candidate-r13/plebeian-friday-dkg-plan": "845a0ffd7c25cbbeb2822a50c273596591faf20867be845f2b8495b806e43ac7",
+    "live-bin-friday-candidate-r13/plebeian-friday-dkg-relay": "7bc6df270bc7f7be626503994831d3250e4c6072962f5e9c58f24ebfdbcf6f3b",
+    "live-bin-friday-candidate-r13/coco-demo-frost-participant-3of4": "ed2014392707a00387570a56708e32dc7f7a50e3ab3acb11fb58672d75c7e578",
+    "live-bin-friday-candidate-r13/coco-demo-frost-public-inspect": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f",
+    "live-bin-friday-candidate-r13/fips": "7b26e81e2607483d46b716a330c88ee18c881e3adaefc0542909e6f2a9a287f2",
+    "live-bin-friday-candidate-r13/fipsctl": "15df75d3d9942747c62f690b0f4f5d5a2f9df45c976a96f4799a9574b988fab3",
+    "live-bin-friday-candidate-r13/friday-browser.js": "6f36a9fee8efb6839befe17149bec955f318c528117045f06e87a6e2b17e99c8"
+  },
+  "artifact_sizes_and_modes": {
+    "coco-demo-frost-participant-3of4": {"size": 2381144, "mode": "0755"},
+    "coco-demo-frost-public-inspect": {"size": 724232, "mode": "0755"},
+    "fips": {"size": 18921048, "mode": "0755"},
+    "fipsctl": {"size": 1888632, "mode": "0755"},
+    "friday-browser.js": {"size": 1685609, "mode": "0644"},
+    "plebeian-auctions-poc": {"size": 46267016, "mode": "0755"},
+    "plebeian-friday-authority": {"size": 99508578, "mode": "0755"},
+    "plebeian-friday-coordinator": {"size": 98491821, "mode": "0755"},
+    "plebeian-friday-dkg-enrollment-init": {"size": 98561558, "mode": "0755"},
+    "plebeian-friday-dkg-host": {"size": 98649033, "mode": "0755"},
+    "plebeian-friday-dkg-plan": {"size": 98456974, "mode": "0755"},
+    "plebeian-friday-dkg-relay": {"size": 98579387, "mode": "0755"},
+    "plebeian-friday-signer": {"size": 99107659, "mode": "0755"},
+    "plebeian-friday-terminal-executor": {"size": 99018579, "mode": "0755"}
+  },
+  "build_provenance": {
+    "go_vcs_revision": "3ca1b48e8db5a960d2def7e71ec15464042ab794",
+    "go_vcs_modified": false,
+    "go_build": "fresh local no-hardlinks clone; -trimpath -mod=readonly -buildvcs=true; GOAMD64=v1",
+    "discarded_go_build": "one working-checkout build reported vcs.modified=true and was replaced before this receipt",
+    "bun_target": "bun-linux-x64-baseline-v1.3.11",
+    "browser_build": "bun browser bundle; byte-identical to committed internal/poc/static/friday-browser.js",
+    "rust_participant": "offline release rebuild from exact current source; the only change since R12 in this crate is a fixed-vector assertion in the test module",
+    "rust_inspector": "offline release rebuild/copy; byte-identical to the reviewed R12 artifact",
+    "fips": "byte-identical reviewed jmcorgan/fips 0.5.2 revision 53a3ec4b2fbaceb7009dd4fbe6974b011e452ae5 artifacts from R12",
+    "centralized_dkg_excluded": "the former central plebeian-friday-frost-dkg and lab drivers are deliberately absent; owner rejected centralized provisioning"
+  },
+  "gates": {
+    "typescript_typecheck": "PASS",
+    "per_validator_dkg_offline": "all 46 unique functional cases pass; restricted runner had one child-pipe EPERM and the affected relay file passed 8/8 in the ordinary runner",
+    "signer_authority_terminal_coordinator": "15 passed, 0 failed, 75 assertions",
+    "go_all_packages": "PASS",
+    "rust_participant": "21 passed, 0 failed",
+    "rust_public_inspector": "0 tests, compile PASS with one pre-existing dead-code warning",
+    "runtime_verifier": "Python compile and pure manifest-pin checks PASS",
+    "a1_per_host_source_review": "FREEZE_WITH_MINOR_NOTES at 700c31318284e4709e9dd6e73766a602b47f1786",
+    "go_v2_interop_review": "FREEZE_WITH_MINOR_NOTES at e668cad38ea4994303c662eaa386ec6cbdc57fd9",
+    "live_fips_identity_generation": "NOT_RUN",
+    "live_per_host_dkg": "NOT_RUN",
+    "exact_current_fips_comet_frost_coco_browser_journey": "NOT_RUN",
+    "live_vps_deployment": "NOT_RUN"
+  },
+  "reviewed_source_hashes": {
+    "per_validator_dkg_v2_typescript": "26f525e86cefaa14efa7beb61f97a514cbde929986927f316b74287dac0b7b9b",
+    "current_v1_helper": "cafaa994e35c512613d9a258cc9d92f77a0165ac3d8a01db23a39dff6eb5b14c",
+    "cross_language_golden_fixture": "d5be5327801695aadbb731d202f1ec4aa3d2be9030db75f68d4f55534122facf"
+  },
+  "limits": [
+    "No live FIPS, Comet, signer, authority, mint or browser acceptance has exercised these exact artifacts.",
+    "No FIPS, Comet, DKG, FROST, coordinator or mint runtime identity has been generated for R13.",
+    "Per-host enrollment recovers only when the recorded owner is dead and the complete staged or final output verifies exactly; incomplete, anonymous, torn or conflicting state remains locked for manual inspection.",
+    "The relay transports only public messages and recipient-specific ciphertext; it is not itself sender-authenticating beyond the recipient AEAD and fixed context validation.",
+    "Selected-signer loss during an in-flight FundingAbort remains fail-stop until that signer returns; there is no mid-session subset rollover.",
+    "Emergency unilateral timeout refund and own raises remain disabled.",
+    "Fake sats only; no FIPS 140 or real-value claim."
+  ]
+}

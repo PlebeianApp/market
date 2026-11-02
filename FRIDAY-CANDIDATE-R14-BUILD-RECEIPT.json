@@ -1,0 +1,81 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_CANDIDATE_BUILD_RECEIPT_V1",
+  "status": "BUILT_OFFLINE_TESTED_LIVE_DKG_COMET_FROST_COCO_BROWSER_ACCEPTANCE_NOT_RUN_NOT_DEPLOYED",
+  "generated_at_utc": "2026-10-23T16:01:09Z",
+  "artifact_source_commit": "92ac5f9da93ee8790385e5a5a7541cc62be1ec2e",
+  "artifact_source_tree": "2a0684937f939efcbd31725203d8b6360e99e1a9",
+  "scope": {
+    "value_profile": "FAKE_MONEY_ONLY",
+    "artifact_root": "live-bin-friday-candidate-r14",
+    "centralized_dkg_excluded": true,
+    "production_and_wednesday_excluded": true
+  },
+  "artifacts": {
+    "live-bin-friday-candidate-r14/plebeian-auctions-poc": "a86d41265e99f8efdc01d64af60ea1c9f3fb154bef71ab7d0fabb0eed9b92cda",
+    "live-bin-friday-candidate-r14/plebeian-friday-authority": "11944c83d1f7f5b7a1cd2a4457a3237a46dc8f68bb507c52ccf3fac5a04dbe60",
+    "live-bin-friday-candidate-r14/plebeian-friday-coordinator": "86b9ef8cdb4907b9132c2d948552f65380a473dc80253c023f0feae184cd04c8",
+    "live-bin-friday-candidate-r14/plebeian-friday-terminal-executor": "661ba93f7ac17554a7fea133ff01387982773f40e3c6f74f677b162db0f55524",
+    "live-bin-friday-candidate-r14/plebeian-friday-signer": "4175855663a50207356c4789f97d8c2f7557b2bdcc1bc7132f7b828bcf4f77ce",
+    "live-bin-friday-candidate-r14/plebeian-friday-dkg-enrollment-init": "9285f15d527b0f8f438db6d273ce9b1db6a08f223d20e9304fa2fb509436419e",
+    "live-bin-friday-candidate-r14/plebeian-friday-dkg-host": "b79503399651c355423967e5e0dbb27d452f4d804559498bf9775c536382b410",
+    "live-bin-friday-candidate-r14/plebeian-friday-dkg-plan": "845a0ffd7c25cbbeb2822a50c273596591faf20867be845f2b8495b806e43ac7",
+    "live-bin-friday-candidate-r14/plebeian-friday-dkg-relay": "7bc6df270bc7f7be626503994831d3250e4c6072962f5e9c58f24ebfdbcf6f3b",
+    "live-bin-friday-candidate-r14/coco-demo-frost-participant-3of4": "ed2014392707a00387570a56708e32dc7f7a50e3ab3acb11fb58672d75c7e578",
+    "live-bin-friday-candidate-r14/coco-demo-frost-public-inspect": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f",
+    "live-bin-friday-candidate-r14/fips": "7b26e81e2607483d46b716a330c88ee18c881e3adaefc0542909e6f2a9a287f2",
+    "live-bin-friday-candidate-r14/fipsctl": "15df75d3d9942747c62f690b0f4f5d5a2f9df45c976a96f4799a9574b988fab3",
+    "live-bin-friday-candidate-r14/friday-browser.js": "6f36a9fee8efb6839befe17149bec955f318c528117045f06e87a6e2b17e99c8"
+  },
+  "artifact_sizes_and_modes": {
+    "plebeian-auctions-poc": {"size": 46267016, "mode": "0755"},
+    "plebeian-friday-authority": {"size": 99508578, "mode": "0755"},
+    "plebeian-friday-coordinator": {"size": 98491821, "mode": "0755"},
+    "plebeian-friday-terminal-executor": {"size": 99018579, "mode": "0755"},
+    "plebeian-friday-signer": {"size": 99114755, "mode": "0755"},
+    "plebeian-friday-dkg-enrollment-init": {"size": 98561558, "mode": "0755"},
+    "plebeian-friday-dkg-host": {"size": 98649033, "mode": "0755"},
+    "plebeian-friday-dkg-plan": {"size": 98456974, "mode": "0755"},
+    "plebeian-friday-dkg-relay": {"size": 98579387, "mode": "0755"},
+    "coco-demo-frost-participant-3of4": {"size": 2381144, "mode": "0755"},
+    "coco-demo-frost-public-inspect": {"size": 724232, "mode": "0755"},
+    "fips": {"size": 18921048, "mode": "0755"},
+    "fipsctl": {"size": 1888632, "mode": "0755"},
+    "friday-browser.js": {"size": 1685609, "mode": "0644"}
+  },
+  "build_provenance": {
+    "go": "go1.23.1 linux/amd64; clean no-hardlinks local clone; -trimpath -mod=readonly -buildvcs=true; GOAMD64=v1; vcs.modified=false",
+    "bun": "1.3.11 bun-linux-x64-baseline",
+    "rust_and_fips": "byte-identical carry-forward of independently reviewed R13/R12 artifacts; corresponding source is unchanged",
+    "browser": "byte-identical copy of committed internal/poc/static/friday-browser.js"
+  },
+  "gates": {
+    "typescript_typecheck": "PASS",
+    "friday_offline_suite": "262 pass, 0 fail, 1021 assertions",
+    "dkg_diagnostic_suite": "45 pass plus one sandbox child-pipe EPERM; the affected relay file passed 8/8, 27 assertions outside that restrictive sandbox",
+    "go_all_packages": "PASS",
+    "fips_service_unit_targeted_regression": "PASS",
+    "full_blue_green_regression": "NOT_PASSING: one pre-existing stale FRIDAY_DKG_MANIFEST_DIGEST fixture fails before the new unit assertions; no live effect"
+  },
+  "reviewed_source_hashes": {
+    "cashu-wrapper/ts/demo-fips-signer-cli.ts": "bab94312cc96616c7f97db83a26f6d4685f337fc5414ad2dd02b9a4c937a9670",
+    "cashu-wrapper/ts/demo-friday-participant-binary-pin.ts": "d31a5272c8e5e30fc2da0709b6817b18b253b8858794cbc7e3529d5abca80f17",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-enrollment-init.ts": "0fef6d382def2452037f52b5f9f79df3a0f097de03e5c35cb31a68e22915b039",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-host-cli.ts": "57b82b0fef8fc396635fbc3a82732dc37dade451d653f729f04c2eea52d3d6c0",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-bootstrap-v2.ts": "26f525e86cefaa14efa7beb61f97a514cbde929986927f316b74287dac0b7b9b",
+    "cashu-wrapper/ts/demo-friday-per-validator-dkg-relay.ts": "8b0315110293ae306b1e8e217696aea11c46f8c3841cb8aa6ba98dd40ddd8d63",
+    "deploy/friday/plebeian-friday-fips.service": "d450037af17b89ba0ff5136fee0b2c95d1c93ab92d37530f95260b169f8f8d11"
+  },
+  "lockfiles": {
+    "go.mod": "19d643a94778aca6f1acc7fcca813b76127eb292fdbbc2a57aa6d27f71546818",
+    "go.sum": "7af3f193325fa8aea77ae23cf980b9464bf97fcb6ffe8e8d642607eba04fcf08",
+    "cashu-wrapper/ts/package.json": "5809399f17cabb350b7bbaaef81e6bab222b57f3e6716bc2dba0ee68f03d0183",
+    "cashu-wrapper/ts/bun.lock": "2610381f8ad8771443752675059807266f4c716644a1f13550d4c92a9eb0e29b"
+  },
+  "live_gates_not_run": [
+    "per-host DKG enrollment and ceremony",
+    "Comet public assembly and four-validator BFT",
+    "four-host FROST signer service",
+    "Coco v2 browser funding/refund/winner journey",
+    "public activation"
+  ]
+}

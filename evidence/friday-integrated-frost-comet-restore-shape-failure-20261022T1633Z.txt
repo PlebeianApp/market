@@ -1,0 +1,11 @@
+Friday integrated fake-money run: preserved failure
+UTC window: 2026-10-22T16:32Z--2026-10-22T16:33Z
+Source: dirty Friday integration candidate after Nutshell SIG_ALL and canonical-commit wait repairs
+Fresh gate: MemAvailableKiB=4108892; no competing heavy campaign matched
+Command: bounded scripts/friday-integrated-frost-comet.sh, outside the filesystem/network sandbox for loopback listeners
+Result: FAIL, 0 pass / 1 fail / 9 assertions, 61.02 seconds
+Failure: NUT-09 recovery response did not pass the harness's JSON.stringify equality check for the requested outputs.
+Observed boundary: the real SIG_ALL swap was accepted upstream; its response was deliberately lost; the exact inputs were confirmed SPENT before restore. No second swap was attempted and no recipient proof was imported.
+Cleanup: wrapper reported cleanup complete for owned root /tmp/plebeian-friday-integrated.ZdB5K5 and exit 1; the owned mint logged normal shutdown.
+Diagnosis: Nutshell 0.19.2 serializes its BlindedMessage response model with optional `C_: null`, while the exact NUT-09 request objects contain only amount/id/B_. The mint ledger returns outputs in request order by exact B_ lookup.
+Repair prepared after failure: compare the exact ordered amount/id/B_ fields, permit only the known optional null C_ response field, require an exact output/signature count, and retain recipient-side DLEQ/unblinding verification. No alternate output or partial recovery is accepted.

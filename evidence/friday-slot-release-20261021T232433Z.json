@@ -1,0 +1,31 @@
+{
+  "schema": "PlebeianFridayTestSlotReleaseV1",
+  "observed_at": "2026-10-21T23:24:33Z",
+  "host_visible_mem_available_mib": 3510,
+  "process_classes_with_no_match": [
+    "bun",
+    "tsc",
+    "mint",
+    "go",
+    "cargo",
+    "rustc",
+    "python",
+    "python3"
+  ],
+  "current_campaign_roots_absent": [
+    "/tmp/plebeian-friday-mint-down.uFKQeG",
+    "/tmp/plebeian-friday-mint-down.aThIXw",
+    "/tmp/plebeian-friday-mint-down.gwsSsS",
+    "/tmp/plebeian-friday-mint-down.H7Rxhi",
+    "/tmp/plebeian-friday-ui.WJrepQ"
+  ],
+  "historical_roots_preserved": [
+    "/tmp/plebeian-friday-mint.60Dkoc",
+    "/tmp/plebeian-friday-mint.BbgYun",
+    "/tmp/plebeian-friday-mint.I9jNdr",
+    "/tmp/plebeian-friday-mint.RMozBA",
+    "/tmp/plebeian-friday-mint.V0yHr1"
+  ],
+  "scope": "Exact process names and exact roots only; not a host-wide descendant-replacement proof.",
+  "released": true
+}

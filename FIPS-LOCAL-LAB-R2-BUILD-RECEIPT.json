@@ -1,0 +1,112 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_FIPS_R2_BUILD_RECEIPT_V1",
+  "built_at_utc": "2026-10-22T19:24:08Z",
+  "source_commit": "96c81d8e23602fc9126e63cc6e05ce1f87a56ebc",
+  "tracked_source_clean_before_build": true,
+  "build_script": {
+    "path": "scripts/friday-fips-r2-build.sh",
+    "sha256": "a36ed4f0cbb95968377cd094007589ed82eef14c037d8efafe091de8dcb0d56d",
+    "exit_code": 0,
+    "network_install_or_update": false,
+    "note": "Go used GOPROXY=off and Cargo used --locked --offline/CARGO_NET_OFFLINE=true; Bun only typechecked/bundled already-installed lockfile dependencies. The first pre-build attempt failed before compilation because GOSUMDB=off forbade cached Go toolchain authentication; no output from that attempt is claimed. The six ignored lab-bin outputs were overwritten by the subsequent successful build."
+  },
+  "toolchain": {
+    "go": {
+      "version": "go version go1.23.1 linux/amd64",
+      "resolved_path": "/usr/lib/go-1.22/bin/go",
+      "sha256": "38379bebce720e1abb72fa3232d3c7b07a4e71dd1e98fa5fcc6f9a56dd084a06"
+    },
+    "bun": {
+      "version": "1.3.11",
+      "path": "/home/maximoto/.bun/bin/bun",
+      "sha256": "6d5bb405b1d037a2a466b92757de7e47e4369930fa94bd42f8ff44ba49de6c57"
+    },
+    "cargo": {
+      "version": "cargo 1.86.0 (adf9b6ad1 2025-02-28)",
+      "path": "/home/maximoto/.rustup/toolchains/1.86.0-x86_64-unknown-linux-gnu/bin/cargo",
+      "sha256": "e0f7d6c8bec403352efe5567371126d439a2642ad5164dc36f41a54f48da4eab"
+    },
+    "rustc": {
+      "version": "rustc 1.86.0 (05f9846f8 2025-03-31)",
+      "path": "/home/maximoto/.rustup/toolchains/1.86.0-x86_64-unknown-linux-gnu/bin/rustc",
+      "sha256": "daf6e73fb92c938dc287347e01c35f29da80616100a0ac5c7484c5c78ab2426a"
+    },
+    "python": {
+      "version": "Python 3.12.3",
+      "path": "/usr/bin/python3.12",
+      "sha256": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f"
+    }
+  },
+  "lockfiles": {
+    "go.mod": "19d643a94778aca6f1acc7fcca813b76127eb292fdbbc2a57aa6d27f71546818",
+    "go.sum": "7af3f193325fa8aea77ae23cf980b9464bf97fcb6ffe8e8d642607eba04fcf08",
+    "cashu-wrapper/ts/bun.lock": "2610381f8ad8771443752675059807266f4c716644a1f13550d4c92a9eb0e29b",
+    "cashu-wrapper/ts/package.json": "5fb3c6be55d80878466e17b07be2421ebfd845c1fe5fe79250c36af51770fed2",
+    "cashu-wrapper/frost-participant-3of4/Cargo.lock": "f7c5fe9fc706653c86a5cb84c785bf9da445a92c7824a822b837702afaa998dc",
+    "cashu-wrapper/frost-participant-3of4/Cargo.toml": "1a3930e8b9f1c8c6ecd826e397c591ab20744e92ce3a2e036bdf1d8f887dfd28",
+    "cashu-wrapper/frost-public-inspect/Cargo.lock": "73fdab70dfc75725eff334328f351f1eef64f2fbe3e79453749bc43f06876b29",
+    "cashu-wrapper/frost-public-inspect/Cargo.toml": "4124afd3096f582b2f263e6c0619878f0257b6897bfd98032373df7f44cb3f36"
+  },
+  "outputs": {
+    "coco-demo-frost-participant-3of4": {
+      "sha256": "715aeb0c390c7f6dd1af26076caaf50afb8aace6cbbaa1ed605d69875bb38d8b",
+      "size": 1965608,
+      "mode": "0755",
+      "type": "ELF x86-64 PIE, dynamically linked"
+    },
+    "coco-demo-frost-public-inspect": {
+      "sha256": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f",
+      "size": 724232,
+      "mode": "0755",
+      "type": "ELF x86-64 PIE, dynamically linked"
+    },
+    "plebeian-auctions-poc": {
+      "sha256": "78601e7c6b17ec41fe21023fcf375fb920c5fe160b0fd89389ab37a25af23ed0",
+      "size": 44192192,
+      "mode": "0755",
+      "type": "ELF x86-64, dynamically linked"
+    },
+    "plebeian-friday-frost-dkg": {
+      "sha256": "2dc6ea0daf368e33c2a2f03acab54814c2ce611c3d87b4a22b64959c816e7d21",
+      "size": 99373614,
+      "mode": "0755",
+      "type": "Bun-compiled ELF x86-64"
+    },
+    "plebeian-friday-integrated-driver": {
+      "sha256": "93dc2ba24f9397882584d1d177df11669fda27ce46251341eb2159cbe6f1164c",
+      "size": 99901307,
+      "mode": "0755",
+      "type": "Bun-compiled ELF x86-64"
+    },
+    "plebeian-friday-signer": {
+      "sha256": "6e06fc91dbb4202d97ecc04cfa42441b92b8bebfc3411aaaeca07ff9a3a8c95e",
+      "size": 99816395,
+      "mode": "0755",
+      "type": "Bun-compiled ELF x86-64"
+    }
+  },
+  "source_entrypoints": {
+    "scripts/friday-fips-lab-r2.py": "ed90e2ae32148f20007694bd1f9a13de090d80142b6ead9ac19c8fce7bb57468",
+    "scripts/friday-fips-lab.py": "c7b3a55d00cb3fd27c40530f9a62fce028b8e366e11b4f6ad90467c7ec31d306",
+    "scripts/friday-fips-capture.py": "bb13334c6091a40363ed2ae1cfa67e831ee98f47dd809a11716f8a4c4de787c6",
+    "scripts/friday-fips-mint-bootstrap.py": "070b40682dd94d27782de4c2bc37b5f8c277d3e8a3c39b25d433130f10591b85"
+  },
+  "tests_in_build": {
+    "go": "PASS",
+    "rust_participant": "17 passed, 0 failed",
+    "rust_public_inspector": "0 tests, build PASS",
+    "typescript": "typecheck PASS",
+    "python_entrypoints": "py_compile PASS"
+  },
+  "post_build_validation": {
+    "typescript_focused": "102 passed, 0 failed, 383 assertions across 17 files on exact source commit",
+    "sandbox_attempt": "100 passed, 2 failed only because sandbox denied child stdio write with EPERM",
+    "sandbox_diagnostic": "the affected six-test process-adapter file passed 6/6 outside the restrictive sandbox before the complete 102/102 rerun"
+  },
+  "security_boundary": {
+    "private_keys_or_bearer_proofs_embedded": false,
+    "runtime_credentials_generated": false,
+    "privileged_network_actions_performed": false,
+    "live_vps_changes_performed": false
+  }
+}

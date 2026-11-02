@@ -1,0 +1,72 @@
+{
+  "schema": "PlebeianFridayBrowserAuthorityEvidenceV1",
+  "observed_at": "2026-10-23T00:42:32Z",
+  "source_commit": "8cf1f5feceac0ad44eb114ff36604808928dcdae",
+  "scope": "post-R5 fail-closed browser funding authorization and fixed authority library preparation",
+  "files": {
+    "funding_authorization_sha256": "79cb81a2f3e9b3b26deea5b972ac61ca564eb2cac1a57f263e25aead05164f84",
+    "authority_service_sha256": "a0df403b6060b2b625a0a2f26b5b17a1e2c81afcc1322d4cf7d4149662a5fb57",
+    "browser_signer_source_sha256": "bd7345970dbe5d6452ea1f459a9e3ff16c341bd3232902d292f1c497997b0d7f",
+    "served_browser_bundle_sha256": "ac828c850f2ed729b2a19a687d55baa3d4660080d64c5ab633a3d6b5e9b4927d",
+    "integrated_test_plan_sha256": "505a0232b5ebf6f3060cdcfc75a950cf76c7a5d5518519c182397c996d42882c"
+  },
+  "checks": [
+    {
+      "name": "Friday TypeScript typecheck",
+      "command": "./node_modules/.bin/tsc -p tsconfig.friday.json",
+      "result": "PASS"
+    },
+    {
+      "name": "new browser authorization, authority API, and payment signer",
+      "command": "bun test demo-friday-browser-funding-authorization.test.ts demo-friday-authority-service.test.ts poc-demo-browser-signer.test.ts",
+      "result": "PASS",
+      "tests": 9,
+      "assertions": 30
+    },
+    {
+      "name": "authority/rollback regression set",
+      "command": "bun test demo-friday-authorized-terminal-queue.test.ts demo-friday-coordinator-rollback-anchor.test.ts demo-friday-browser-funding-authorization.test.ts demo-friday-authority-service.test.ts poc-demo-browser-signer.test.ts",
+      "result": "PASS",
+      "tests": 15,
+      "assertions": 43
+    },
+    {
+      "name": "browser bundle",
+      "command": "bun build poc-demo-browser-signer.ts --target=browser --minify --outfile=../../internal/poc/static/demo-signer.js",
+      "result": "PASS"
+    }
+  ],
+  "independent_review": {
+    "verdict": "NO_P0_BLOCK_ACTIVATION",
+    "accepted": [
+      "NIP-07 identity is separate from payment and refund keys",
+      "payment and refund key proofs bind the exact funding intent",
+      "bidder return signature is verified against the exact declared Cashu SIG_ALL digest",
+      "FIPS ULA mint binding, same-origin checking, quarantine response, and bounded request body are fail closed",
+      "funding endpoint performs no reservation, mint call, queue mutation, or payment"
+    ],
+    "activation_blockers": [
+      "the exact prepared return package is not submitted, recomputed, or related to the declared bundle digest",
+      "browser exact SIG_ALL construction exposes bearer input secrets and changes the prior server-held custody boundary",
+      "terminal source and health ports remain synthetic abstractions with no fixed-config CLI, systemd caller, or drain loop",
+      "durable event replay consumption and the versioned Go/Rust V4 receipt are not implemented or integrated"
+    ]
+  },
+  "runtime": {
+    "listener_started": false,
+    "persistent_keys_generated": false,
+    "mint_started": false,
+    "comet_started": false,
+    "fips_started": false,
+    "vps_or_network_changed": false,
+    "funding_effects_enabled": false,
+    "owned_processes_remaining": 0,
+    "mem_available_mib_after_checks": 3887
+  },
+  "boundaries": [
+    "This source is newer than and not covered by frozen R5 evidence.",
+    "It is accepted only as inert fail-closed preparation, not runnable deployment readiness.",
+    "The Wednesday fallback, VPSs, sealed R4.4.5, credentials, firewall, DNS, and real-value endpoints were untouched.",
+    "The three pre-existing untracked historical binary directories were preserved and were not added to this checkpoint."
+  ]
+}

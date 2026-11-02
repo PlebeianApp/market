@@ -1,0 +1,56 @@
+{
+  "schema": "PlebeianFridayProcessCrashAcceptanceV1",
+  "run": "36f2b72b-617b-4bb5-ac02-c9083c27cf8e",
+  "started_at": "2026-10-21T22:49:38.766Z",
+  "completed_at": "2026-10-21T22:53:07.264Z",
+  "auction_id": "process-crash-1792622980150",
+  "actors": {
+    "seller": "e3b55dafc969d31cc22203bf345161022bae215ac1209cabae9cf1a8b605349f",
+    "bidder": "6fa2704f44fdcd8d162be2effd2600995f73586d7d7342681a70fce8af322293"
+  },
+  "faucet": {
+    "event_id": "da5a3b6f9bfbb9bf8b78f03894f91683d3fb0bfc7d6120db59b6e55f13abaf24",
+    "grant_total": 10000
+  },
+  "operation_ids": {
+    "send": "send-payout-process-crash-1792622980150",
+    "receive": "receive-payout-process-crash-1792622980150"
+  },
+  "balances": {
+    "seller": 2500,
+    "bidder": 7500
+  },
+  "paid_rows": 1,
+  "conservation": {
+    "issued": 10000,
+    "walletBacking": 10000,
+    "walletSpendable": 10000,
+    "operationLocked": 0,
+    "spendable": 10000,
+    "reserved": 0,
+    "inFlight": 0,
+    "unknown": 0,
+    "incomingPending": 0,
+    "fundingPending": 0,
+    "accountedTotal": 10000,
+    "observationsExact": true,
+    "conserved": true,
+    "actual_wallet_backing": 10000,
+    "actual_wallet_spendable": 10000,
+    "actual_wallet_reserved": 0,
+    "fees": {
+      "input_fee_ppk": 0,
+      "required": 0
+    },
+    "observation": "coordinator SQLite balances plus encrypted funding/payment journals"
+  },
+  "process_boundaries": [
+    "faucet_after_mint_before_persist",
+    "payment_after_intent",
+    "payment_after_send_prepare",
+    "mint_swap_completed_before_local_response",
+    "payment_after_send_result",
+    "payment_after_receive_result"
+  ],
+  "passed": true
+}

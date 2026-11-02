@@ -1,0 +1,43 @@
+{
+  "schema": "PlebeianFridayIntegratedFrostCometProvenanceV1",
+  "result_path": "evidence/friday-integrated-frost-comet-20261023T043936Z-1605037.json",
+  "result_sha256": "c134a5c1b38f9d342c15f16f6020ee3c735dc6e012bc3d3460688d803e7b9a12",
+  "reported_head_commit_at_run": "72afa33570cdfbc6d4e0b90b98d7074380eb781e",
+  "executed_test_file": "cashu-wrapper/ts/demo-integrated-frost-comet.live.test.ts",
+  "executed_test_file_sha256": "608958ebd1fbf43aa2ab43b6a9c3404cfc93552094eb80de01467035e74373a8",
+  "executed_test_file_committed_as": "ea86d3c",
+  "provenance_note": "The successful run used the tracked 72afa335 tree plus one not-yet-committed live-harness fixture correction that supplied the seller Coco payment public key required by the already-tracked threshold-auction model. The exact executed test bytes were committed unchanged immediately after the run as ea86d3c. The result's source.commit field names only the tracked HEAD observed by the wrapper, so this companion record supplies the complete executed-source identity without altering the original result.",
+  "attempts": [
+    {
+      "outcome": "FAIL_BEFORE_TEST",
+      "boundary": "restrictive sandbox",
+      "reason": "Nutshell process started but its loopback readiness probe timed out",
+      "effects": "no test assertion, minting, or key provisioning reached; owned mint and throwaway root cleaned"
+    },
+    {
+      "outcome": "FAIL_AT_AUCTION_CREATE",
+      "boundary": "ordinary local runner",
+      "reason": "live fixture omitted seller_coco_payment_public_key required by threshold auction validation",
+      "effects": "transaction rejected before bid funding; owned services and throwaway root cleaned"
+    },
+    {
+      "outcome": "PASS",
+      "boundary": "ordinary local runner",
+      "duration_seconds": 66.52,
+      "assertions": 18,
+      "cleanup": "PASS"
+    }
+  ],
+  "claim_boundary": {
+    "real_nutshell_fakewallet": true,
+    "real_four_node_comet": true,
+    "one_validator_unavailable": true,
+    "real_rust_frost_threshold_three": true,
+    "real_mint_spend_and_nut09_recovery": true,
+    "recipient_import_and_unspent_proofs": true,
+    "fips_transport": false,
+    "browser_coco_v2_journey": false,
+    "live_vps": false,
+    "real_value": false
+  }
+}

@@ -1,0 +1,30 @@
+[Unit]
+Description=Plebeian Friday fake-money Comet validator
+Requires=plebeian-friday-fips.service
+After=plebeian-friday-fips.service
+
+[Service]
+Type=simple
+User=plebeian-friday
+Group=plebeian-friday
+Slice=plebeian-friday.slice
+EnvironmentFile=/etc/plebeian-auctions-friday/friday.env
+ExecStartPre=/usr/bin/python3 -I -S -B /opt/plebeian-auctions-friday/bin/verify-friday-runtime-target.py --environment /etc/plebeian-auctions-friday/friday.env --application ${FRIDAY_APPLICATION} --service plebeian-friday-validator.service
+ExecStart=/opt/plebeian-auctions-friday/bin/plebeian-auctions-poc node --home ${FRIDAY_NETWORK_ROOT} --slot ${FRIDAY_SLOT}
+Restart=always
+RestartSec=5s
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/plebeian-auctions-friday
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=384M
+TasksMax=256
+LimitNOFILE=65536
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=500
+
+[Install]
+WantedBy=multi-user.target

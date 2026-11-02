@@ -1,0 +1,82 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_CANDIDATE_R8_BUILD_RECEIPT_V1",
+  "artifact_source_commit": "0a6796dba29454b0f2657e932cd3a59a80df0943",
+  "artifact_source_tree": "69a11315836a5ca76ffbca904377543915aadb09",
+  "deployment_template_commit": "c9d7bb294e7113b60e7b857f2cf6d2b45321c416",
+  "status": "BUILT_AND_REGRESSION_TESTED_NOT_INTEGRATION_RUN_NOT_DEPLOYED",
+  "scope": "fake-money Friday BFT/Coco-v2/FROST/FIPS candidate with restart-safe FundingAbortV1",
+  "lockfiles": {
+    "go.mod": "19d643a94778aca6f1acc7fcca813b76127eb292fdbbc2a57aa6d27f71546818",
+    "go.sum": "7af3f193325fa8aea77ae23cf980b9464bf97fcb6ffe8e8d642607eba04fcf08",
+    "cashu-wrapper/ts/package.json": "1130b361fd2f60f67cb12accc5fbb5fe0f788bc876f4df59002840854dc7a2ca",
+    "cashu-wrapper/ts/bun.lock": "2610381f8ad8771443752675059807266f4c716644a1f13550d4c92a9eb0e29b",
+    "cashu-wrapper/frost-participant-3of4/Cargo.toml": "1a3930e8b9f1c8c6ecd826e397c591ab20744e92ce3a2e036bdf1d8f887dfd28",
+    "cashu-wrapper/frost-participant-3of4/Cargo.lock": "f7c5fe9fc706653c86a5cb84c785bf9da445a92c7824a822b837702afaa998dc",
+    "cashu-wrapper/frost-public-inspect/Cargo.toml": "4124afd3096f582b2f263e6c0619878f0257b6897bfd98032373df7f44cb3f36",
+    "cashu-wrapper/frost-public-inspect/Cargo.lock": "73fdab70dfc75725eff334328f351f1eef64f2fbe3e79453749bc43f06876b29"
+  },
+  "toolchains": {
+    "go": "go version go1.23.1 linux/amd64",
+    "bun": "1.3.11; bun-linux-x64-baseline",
+    "cargo": "cargo 1.86.0 (adf9b6ad1 2025-02-28)",
+    "rustc": "rustc 1.86.0 (05f9846f8 2025-03-31)"
+  },
+  "artifacts": {
+    "live-bin-friday-candidate-r8/plebeian-auctions-poc": "70c3da329c5c339609a61e72558f0fd1cc6307fb5865ec930f346cf506520459",
+    "live-bin-friday-candidate-r8/plebeian-friday-authority": "c0f5b9d7ef23aac831fe9d94556ee0ec510555c9c94e72efcd0c74bfbf4d8ab6",
+    "live-bin-friday-candidate-r8/plebeian-friday-coordinator": "f713780ccd7474cd5e7eb457833546527fcb64b482a94a248c327a495798fc76",
+    "live-bin-friday-candidate-r8/plebeian-friday-terminal-executor": "0f94c3f845e45e0d7b745511731bfae97422c93b356eb6e8fb8a333e97946a50",
+    "live-bin-friday-candidate-r8/plebeian-friday-signer": "d9e159a20fef599deee3c45bd41b75aeeeab532289e66dc604c5ffd979c4b451",
+    "live-bin-friday-candidate-r8/plebeian-friday-frost-dkg": "776fd495f58067ebdc02f4ee9cac8aed559518959849e6f86f05b8dfa7fa03fd",
+    "live-bin-friday-candidate-r8/plebeian-friday-integrated-driver-r8": "34ed074f202ee90beb1bceb80300a267d2f8a7573c4e2651af30aae6b769c373",
+    "live-bin-friday-candidate-r8/plebeian-friday-terminal-driver-r8": "dd6da33b3c882ff49fea9c4a86ba3b1bc5d097a4e751467e7a4071ec1a4643f2",
+    "live-bin-friday-candidate-r8/coco-demo-frost-participant-3of4": "a96aaa3cc884d446834bdcdccd97403456f1743577b002ec8b9d335dfcbbf52b",
+    "live-bin-friday-candidate-r8/coco-demo-frost-public-inspect": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f",
+    "live-bin-friday-candidate-r8/fips": "7b26e81e2607483d46b716a330c88ee18c881e3adaefc0542909e6f2a9a287f2",
+    "live-bin-friday-candidate-r8/fipsctl": "15df75d3d9942747c62f690b0f4f5d5a2f9df45c976a96f4799a9574b988fab3",
+    "live-bin-friday-candidate-r8/friday-browser.js": "19ba72d0f6bc46febf0df1ce82a8868f496464d8c97b3bea64f31c7c676e0e49"
+  },
+  "build_provenance": {
+    "go_vcs_revision": "0a6796dba29454b0f2657e932cd3a59a80df0943",
+    "go_vcs_modified": false,
+    "go_build_environment": "clean local clone; -trimpath -mod=readonly; GOAMD64=v1",
+    "bun_target": "bun-linux-x64-baseline-v1.3.11",
+    "rust_profile": "release; --locked --offline",
+    "fips_source": "/usr/bin/fips and /usr/bin/fipsctl; hashes match SOURCE-PROVENANCE.md"
+  },
+  "bundle_equivalence": {
+    "internal/poc/static/friday-browser.js": "19ba72d0f6bc46febf0df1ce82a8868f496464d8c97b3bea64f31c7c676e0e49",
+    "live-bin-friday-candidate-r8/friday-browser.js": "19ba72d0f6bc46febf0df1ce82a8868f496464d8c97b3bea64f31c7c676e0e49",
+    "exact_match": true
+  },
+  "gates": {
+    "typescript_typecheck": "PASS",
+    "funding_abort_restart_and_anchor": "6 passed, 0 failed, 17 assertions",
+    "full_friday_restricted_runner": "234 passed, 2 sandbox OS-child EPERM failures, 923 assertions",
+    "affected_os_child_file_normal_runner": "6 passed, 0 failed, 38 assertions",
+    "go_all_packages": "PASS",
+    "rust_participant": "21 passed, 0 failed",
+    "rust_public_inspector": "0 tests; test/build PASS",
+    "exact_current_privileged_fips_integration": "NOT_RUN",
+    "exact_current_trusted_https_browser_coco_journey": "NOT_RUN",
+    "live_vps_deployment": "NOT_RUN"
+  },
+  "implemented_boundaries": {
+    "bft": "four-validator Comet contract with 3-of-4 finality",
+    "funding": "Coco v2 exact prepared pool and two-step Nostr/browser authorization",
+    "signing": "separate 3-of-4 FROST admission, FundingAbort and terminal SIG_ALL domains",
+    "cancellation": "validator-confirmed FundingAbortV1 tombstone, independently anchored resumable signing session, exact Comet finality, separate terminal FROST return and Coco acknowledgement",
+    "networking": "fixed jmcorgan/fips ULA signer and validator endpoints; no direct-TCP claim",
+    "public_identity": "proposed distinct V2 origin https://172.105.95.57; Wednesday V1 origin is excluded",
+    "value": "fake sats only; no real-value support"
+  },
+  "limitations": {
+    "integration_evidence": "No exact-current R8 FIPS/trusted-HTTPS browser/mint run exists; older results do not cover this source and artifact set.",
+    "activation": "Browser funding and Friday public routing must remain disabled until exact-current reviewed acceptance passes.",
+    "selected_signer_failure": "A selected three-member FundingAbort FROST session fails closed if one selected signer becomes unavailable mid-session; participant four is not substituted into that transcript.",
+    "emergency_unilateral_refund": "NOT_COMPOSED; FundingAbortV1 is validator-confirmed cooperative cancellation, not a unilateral emergency timeout.",
+    "own_raise": "DISABLED pending full-pool and stable-key continuity.",
+    "quote_before_operation_id": "A mint quote lost before the durable operation identity is known remains an explicit unsupported recovery gap.",
+    "deployment": "No persistent keys generated, services started, ports opened, VPS accessed, firewall changed or files deployed by this receipt."
+  }
+}

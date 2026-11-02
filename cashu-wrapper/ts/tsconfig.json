@@ -1,0 +1,21 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"strict": true,
+		"noEmit": true,
+		"allowImportingTsExtensions": true,
+		"skipLibCheck": true,
+		"esModuleInterop": true,
+		"verbatimModuleSyntax": true,
+		"isolatedModules": true,
+		"forceConsistentCasingInFileNames": true,
+		"noImplicitOverride": true,
+		"noFallthroughCasesInSwitch": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true
+	},
+	"include": ["**/*.ts"]
+}

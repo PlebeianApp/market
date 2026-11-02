@@ -1,0 +1,76 @@
+{
+  "schema": "PlebeianFridayIntegratedFrostCometV1",
+  "completed_at": "2026-10-22T16:35:25.193Z",
+  "value_profile": "fake-money-only",
+  "mint": {
+    "implementation": "Nutshell 0.19.2",
+    "backend": "FakeWallet",
+    "input_fee_ppk": 0
+  },
+  "consensus": {
+    "chain_id": "plebeian-poc-1792686866",
+    "validators": 4,
+    "unavailable_validator": 4,
+    "first_height": 11,
+    "displacement_height": 23,
+    "initial_commit_signatures": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "post_fault_commit_signatures": [
+      3,
+      3,
+      3
+    ]
+  },
+  "admission": {
+    "participant_processes": 4,
+    "unavailable_policy_pid": 1333212,
+    "selected_participants": [
+      1,
+      2,
+      3
+    ],
+    "real_rust_frost": true,
+    "dkg_run_id": "friday-integrated-b7247f9b-0373-4cbb-bea0-19b57ba4c79b",
+    "public_package_sha256": "2d679ef5f18b44c75c917ab7aedd3facb7592782f5d474111bfa965c95ba4bf5"
+  },
+  "outbid_return": {
+    "displaced_bid_id": "f6802de7f17a8b49eb3fec2e6b019795140b3de511bcd54770aaca043d03ae68",
+    "replacement_bid_id": "fea9444b3bc58f73f3a7fbad3a0a25f5fe04a371df3556ed6e2a5be54dd1b138",
+    "amount": 1000,
+    "sigall_participants": [
+      1,
+      2,
+      3
+    ],
+    "sigall_operation_root": "976b75d8cbb8c5836ac5b9af5d7061af805a87faa516800e3e9f0841e1f3b4d3",
+    "mint_swap_calls": 1,
+    "nut07_input_states": [
+      "SPENT",
+      "SPENT",
+      "SPENT",
+      "SPENT",
+      "SPENT",
+      "SPENT"
+    ],
+    "nut09_restored_outputs": 6,
+    "recipient_proof_count": 6,
+    "recipient_amount": 1000,
+    "durable_lifecycle": "recipient_imported"
+  },
+  "transport": {
+    "admission_policy": "separate local processes over stdio",
+    "consensus": "four loopback CometBFT processes",
+    "fips": false
+  },
+  "limitations": [
+    "not FIPS transport",
+    "not production custody",
+    "one local operator",
+    "no real-value endpoint"
+  ],
+  "passed": true
+}

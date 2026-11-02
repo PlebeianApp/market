@@ -1,0 +1,83 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_R8_LIVE_ARTIFACT_MANIFEST_V1",
+  "approval_ready": false,
+  "reason_not_ready": "Exact-current R8 FIPS plus trusted-HTTPS browser/Coco acceptance, fresh four-host inventory, V2 certificate and firewall approval have not completed.",
+  "artifact_source_commit": "0a6796dba29454b0f2657e932cd3a59a80df0943",
+  "artifact_source_tree": "69a11315836a5ca76ffbca904377543915aadb09",
+  "deployment_template_commit": "c9d7bb294e7113b60e7b857f2cf6d2b45321c416",
+  "build_receipt_sha256": "c49b103be1d83569e478b3e73f07fd88f11c595c0a8433ade947edd9f5ef2c56",
+  "proposed_public_origin": "https://172.105.95.57",
+  "proposed_application_host_slot": 2,
+  "canonical_origin_status": "PROPOSED_NOT_AUTHORIZED_OR_ACTIVATED",
+  "targets": [
+    {"slot": 1, "linode_id": 108175009, "ipv4": "172.105.64.142", "roles": ["fips", "validator", "signer"], "preserve": ["all Wednesday services", "Wednesday HTTPS origin"]},
+    {"slot": 2, "linode_id": 108236985, "ipv4": "172.105.95.57", "roles": ["fips", "validator", "signer", "mint", "coordinator", "authority", "site", "https_proxy"]},
+    {"slot": 3, "linode_id": 108237290, "ipv4": "172.104.240.217", "roles": ["fips", "validator", "signer"]},
+    {"slot": 4, "linode_id": 108237424, "ipv4": "172.104.253.247", "roles": ["fips", "validator", "signer", "designated_fault_target"]}
+  ],
+  "excluded_targets": ["192.46.234.233", "all production hosts", "all Wednesday paths, identities, state and services"],
+  "unresolved_host_bindings": {
+    "fips_ulas": "fresh fake-only FIPS identities not generated",
+    "ssh_host_key_fingerprints": "fresh read-only inventory not run",
+    "application_json_sha256": "not rendered until ULAs, DKG and deployment identity exist",
+    "per_host_config_sha256": "not rendered",
+    "v2_certificate": "not issued; no key paths or certificate metadata exist"
+  },
+  "artifacts": {
+    "plebeian-auctions-poc": "70c3da329c5c339609a61e72558f0fd1cc6307fb5865ec930f346cf506520459",
+    "plebeian-friday-authority": "c0f5b9d7ef23aac831fe9d94556ee0ec510555c9c94e72efcd0c74bfbf4d8ab6",
+    "plebeian-friday-coordinator": "f713780ccd7474cd5e7eb457833546527fcb64b482a94a248c327a495798fc76",
+    "plebeian-friday-terminal-executor": "0f94c3f845e45e0d7b745511731bfae97422c93b356eb6e8fb8a333e97946a50",
+    "plebeian-friday-signer": "d9e159a20fef599deee3c45bd41b75aeeeab532289e66dc604c5ffd979c4b451",
+    "plebeian-friday-frost-dkg": "776fd495f58067ebdc02f4ee9cac8aed559518959849e6f86f05b8dfa7fa03fd",
+    "plebeian-friday-integrated-driver-r8": "34ed074f202ee90beb1bceb80300a267d2f8a7573c4e2651af30aae6b769c373",
+    "plebeian-friday-terminal-driver-r8": "dd6da33b3c882ff49fea9c4a86ba3b1bc5d097a4e751467e7a4071ec1a4643f2",
+    "coco-demo-frost-participant-3of4": "a96aaa3cc884d446834bdcdccd97403456f1743577b002ec8b9d335dfcbbf52b",
+    "coco-demo-frost-public-inspect": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f",
+    "fips": "7b26e81e2607483d46b716a330c88ee18c881e3adaefc0542909e6f2a9a287f2",
+    "fipsctl": "15df75d3d9942747c62f690b0f4f5d5a2f9df45c976a96f4799a9574b988fab3",
+    "friday-browser.js": "19ba72d0f6bc46febf0df1ce82a8868f496464d8c97b3bea64f31c7c676e0e49"
+  },
+  "templates": {
+    "deploy/friday/README.md": "1c294179cecd65fe6e85d0d04bf47409041272eae27f07c957fdea2705138ca5",
+    "deploy/friday/STATUS-RUNBOOK.md": "ce68ed9fd1e898bf3050e4d1660284cdf97ace433e5bb54bb01b5842c3ff168f",
+    "deploy/friday/application.json.example": "a8f96365d5941ad2457c867f8acefbc91da99cf59e032af43f7ee5bd0e5b8bc0",
+    "deploy/friday/authority.json.example": "5e6182af8e58be433dd532a0fc2766f4b5e8e3abbe5b0a40a6bbf1d2c58dab93",
+    "deploy/friday/fips.yaml.example": "867a8afc82442a6acab93785ff73887aeeb6438159cc9b4fdd0b9e29da134532",
+    "deploy/friday/friday.env.example": "3e190039e0f93873ef9e8d1657da21b870d589c263b0ef53f51a1e117925a566",
+    "deploy/friday/nginx-friday-locations.conf.example": "435fbdf0c315ff8290ad055124fdba041521cf83162076a95dfde09b152a07c2",
+    "deploy/friday/nginx-friday-v2-server.conf.example": "f9dc32c0b84fc28f9227c6c2d8295b138902278fe4df265a6e4febeefee6e579",
+    "deploy/friday/plebeian-friday-authority.service": "1361ba19dc0836f23084cfc4b4af3681d23f55cb85a5f219166b13bf881c648e",
+    "deploy/friday/plebeian-friday-coordinator.service": "59f30583e98d7091fe7b195af1c70bf8ce590b8d1388b85d051fadb39c880130",
+    "deploy/friday/plebeian-friday-fips.service": "06017257dfda1d40dcd1afe3c39a6fead72071114b144a1d7ebb81069eea0951",
+    "deploy/friday/plebeian-friday-mint.service": "7b01ec17c926fed74da7c3c204c713c7861dec6b52392135e8ed6720e2a9af99",
+    "deploy/friday/plebeian-friday-signer.service": "f76cd818482460f34a09b695840a453146776dbb22f7a9dbc37972b1b4cba134",
+    "deploy/friday/plebeian-friday-site.service": "42de4a66cb2df07fdca495ebba62d4392d91a399c4576fac26c28268c7704004",
+    "deploy/friday/plebeian-friday-validator.service": "dec73e2994afd5c413c7b1f8e9c8b80ad13bb4a16ea37c03a694e11f765fc3ed"
+  },
+  "fixed_paths": {
+    "binary_root": "/opt/plebeian-auctions-friday/bin",
+    "config_root": "/etc/plebeian-auctions-friday",
+    "state_root": "/var/lib/plebeian-auctions-friday",
+    "anchor_root": "/var/lib/plebeian-auctions-friday-anchor"
+  },
+  "fixed_ports": {
+    "fips_underlay_udp": 32121,
+    "comet_p2p_fips_tcp": 27656,
+    "comet_rpc_loopback_tcp": 27657,
+    "signer_fips_tcp": 39101,
+    "mint_fips_tcp": 3438,
+    "site_loopback_tcp": 8180,
+    "authority_loopback_tcp": 8181,
+    "public_https_v2_tcp": 443
+  },
+  "activation_gates": {
+    "browser_ready_default": false,
+    "exact_current_fips_acceptance": "NOT_RUN",
+    "exact_current_https_browser_coco_acceptance": "NOT_RUN",
+    "fresh_host_and_provider_firewall_inventory": "NOT_RUN",
+    "fresh_fake_only_identity_generation": "NOT_RUN",
+    "v2_firewall_and_ip_certificate_approval": "PENDING",
+    "deployment": "NOT_RUN"
+  }
+}

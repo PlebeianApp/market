@@ -1,0 +1,164 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_R10_LIVE_ARTIFACT_MANIFEST_V1",
+  "generated_at_utc": "2026-10-23T08:53:48Z",
+  "approval_ready": false,
+  "reason_not_ready": "Exact-current R10 trusted-HTTPS browser/Coco/FIPS acceptance, fresh four-host and provider-firewall inventory, distinct V2 certificate, real-mint NUT-12/DLEQ canary, rendered per-host configuration and independent final review have not completed.",
+  "artifact_source_commit": "72ddbd7f08e2a283a37ea1b54c7cc924f71f0a00",
+  "artifact_source_tree": "1c20022e2533c249549415d498b5f79f6d3c6404",
+  "build_receipt_sha256": "a58db1af27a5693df2365753c55dbcf74b64cc245684cea2fd08d6e1927b711f",
+  "next_action_sha256": "852c9c6956da07bef33eaeb96e4d4f5f0156e4a10e2d8eb2da1144eb1fc1d38e",
+  "proposed_public_origin": "https://172.105.95.57",
+  "proposed_application_host_slot": 2,
+  "canonical_origin_status": "PROPOSED_SOURCE_COMPATIBLE_NOT_INVENTORIED_NOT_AUTHORIZED_NOT_ACTIVATED",
+  "targets": [
+    {
+      "slot": 1,
+      "linode_id": 108175009,
+      "ipv4": "172.105.64.142",
+      "recorded_host_ed25519_sha256": "SHA256:gPo3YN+P9EUShH80R80nizQy6QFG0WtU75EFthvhydc",
+      "roles": ["fips", "validator", "signer"],
+      "preserve": ["all Wednesday services", "Wednesday HTTPS origin", "Wednesday mint and recovery identity"],
+      "freshness": "recorded_not_freshly_inventoried"
+    },
+    {
+      "slot": 2,
+      "linode_id": 108236985,
+      "ipv4": "172.105.95.57",
+      "recorded_host_ed25519_sha256": "SHA256:2BgLKY4VmAFj0lpEr3EdD5Rtl1x/7fcJ6/F2j6/wVS8",
+      "roles": ["fips", "validator", "signer", "mint", "coordinator", "authority", "site", "https_proxy"],
+      "freshness": "recorded_not_freshly_inventoried"
+    },
+    {
+      "slot": 3,
+      "linode_id": 108237290,
+      "ipv4": "172.104.240.217",
+      "recorded_host_ed25519_sha256": "SHA256:dXtbz59mA2TYzrC3Y7rVUJ4XlxQfD8z1mee07JvBVjY",
+      "roles": ["fips", "validator", "signer"],
+      "freshness": "recorded_not_freshly_inventoried"
+    },
+    {
+      "slot": 4,
+      "linode_id": 108237424,
+      "ipv4": "172.104.253.247",
+      "recorded_host_ed25519_sha256": "SHA256:DSKpmtS0Iv5PJgqZbsuTndS9MPlazWdYMmtz2nbtcTk",
+      "roles": ["fips", "validator", "signer", "designated_fault_target"],
+      "freshness": "recorded_not_freshly_inventoried"
+    }
+  ],
+  "excluded_targets": [
+    "192.46.234.233",
+    "all production hosts",
+    "all Wednesday paths, identities, state, services, mint and HTTPS origin"
+  ],
+  "unresolved_live_bindings": {
+    "ssh_agent": "owner must unlock the existing bounded socket and verify the recorded key fingerprint",
+    "ssh_host_keys": "recorded fingerprints require local pinned-known-host verification before connection",
+    "provider_firewalls": "fresh attachment and complete rule inventory not run",
+    "host_services_and_paths": "fresh three-way metadata-only inventory not run",
+    "python_and_cashu_runtime": "executable, package provenance, mint unit, env-file path and database paths not freshly inventoried",
+    "fips_ulas": "fresh fake-only FIPS identities not generated",
+    "dkg_and_roster": "fresh fake-only Friday DKG not run",
+    "application_json_sha256": "not rendered until inventory, ULAs, DKG, mint and deployment identity exist",
+    "per_host_config_sha256": "not rendered",
+    "v2_certificate": "not issued; certificate metadata and root-only key paths do not exist",
+    "v2_nginx_precedence": "not inventoried or rendered",
+    "fresh_store_gate": "server databases, independent anchors and browser origin stores not yet proven empty",
+    "real_mint_dleq_canary": "NOT_RUN",
+    "recovery_only_live_canary": "NOT_RUN"
+  },
+  "artifacts": {
+    "plebeian-auctions-poc": "ccefb0a4d139304707969cba379bd4adcfda91e3e1996d0b102004f15e39411b",
+    "plebeian-friday-authority": "85b0e7ac6d8a5d18c6008c34dc3db04027c1cd20c94e8e4763d81b2f558c3995",
+    "plebeian-friday-coordinator": "f713780ccd7474cd5e7eb457833546527fcb64b482a94a248c327a495798fc76",
+    "plebeian-friday-terminal-executor": "0f94c3f845e45e0d7b745511731bfae97422c93b356eb6e8fb8a333e97946a50",
+    "plebeian-friday-signer": "dc666fa8c3130a668c07e3b3ce039bb178a96b9b6be2136b1aa3ee2aea1b788b",
+    "plebeian-friday-frost-dkg": "776fd495f58067ebdc02f4ee9cac8aed559518959849e6f86f05b8dfa7fa03fd",
+    "plebeian-friday-integrated-driver-r10": "7795e3b4920c14bd3ce8bd7bba82d2b0f945410a462467fb477285dd06ddf640",
+    "plebeian-friday-terminal-driver-r10": "5294dfc9c335d76429c79bfab865e47a2183a5cb2881652782efcab4a26a7a8d",
+    "coco-demo-frost-participant-3of4": "a96aaa3cc884d446834bdcdccd97403456f1743577b002ec8b9d335dfcbbf52b",
+    "coco-demo-frost-public-inspect": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f",
+    "fips": "7b26e81e2607483d46b716a330c88ee18c881e3adaefc0542909e6f2a9a287f2",
+    "fipsctl": "15df75d3d9942747c62f690b0f4f5d5a2f9df45c976a96f4799a9574b988fab3",
+    "friday-browser.js": "61c95d91d164fdecc46dceb18075d8ce822e9064e491e56f353e2d25b644140f"
+  },
+  "templates": {
+    "deploy/friday/README.md": "0bf85341e067e287cd9a17c149bbf8b045bd669a020229cd5d0b327a756354ed",
+    "deploy/friday/STATUS-RUNBOOK.md": "4008c162d6ae66532dfc261b78f8832ed1cfed3eeb1dc6f1bf3d6b621bde1ebd",
+    "deploy/friday/application.json.example": "a8f96365d5941ad2457c867f8acefbc91da99cf59e032af43f7ee5bd0e5b8bc0",
+    "deploy/friday/authority.json.example": "5e6182af8e58be433dd532a0fc2766f4b5e8e3abbe5b0a40a6bbf1d2c58dab93",
+    "deploy/friday/fips.yaml.example": "867a8afc82442a6acab93785ff73887aeeb6438159cc9b4fdd0b9e29da134532",
+    "deploy/friday/friday.env.example": "112d4bd435b07febb98eb02a40ae1f1f5ba81e49fa799f3b01216f59130fd65d",
+    "deploy/friday/nginx-friday-locations.conf.example": "435fbdf0c315ff8290ad055124fdba041521cf83162076a95dfde09b152a07c2",
+    "deploy/friday/nginx-friday-v2-server.conf.example": "f9dc32c0b84fc28f9227c6c2d8295b138902278fe4df265a6e4febeefee6e579",
+    "deploy/friday/plebeian-friday-authority.service": "1361ba19dc0836f23084cfc4b4af3681d23f55cb85a5f219166b13bf881c648e",
+    "deploy/friday/plebeian-friday-coordinator.service": "59f30583e98d7091fe7b195af1c70bf8ce590b8d1388b85d051fadb39c880130",
+    "deploy/friday/plebeian-friday-fips.service": "06017257dfda1d40dcd1afe3c39a6fead72071114b144a1d7ebb81069eea0951",
+    "deploy/friday/plebeian-friday-mint.service": "7b01ec17c926fed74da7c3c204c713c7861dec6b52392135e8ed6720e2a9af99",
+    "deploy/friday/plebeian-friday-signer.service": "f76cd818482460f34a09b695840a453146776dbb22f7a9dbc37972b1b4cba134",
+    "deploy/friday/plebeian-friday-site.service": "42de4a66cb2df07fdca495ebba62d4392d91a399c4576fac26c28268c7704004",
+    "deploy/friday/plebeian-friday-validator.service": "dec73e2994afd5c413c7b1f8e9c8b80ad13bb4a16ea37c03a694e11f765fc3ed"
+  },
+  "fixed_paths": {
+    "binary_root": "/opt/plebeian-auctions-friday/bin",
+    "config_root": "/etc/plebeian-auctions-friday",
+    "state_root": "/var/lib/plebeian-auctions-friday",
+    "anchor_root": "/var/lib/plebeian-auctions-friday-anchor"
+  },
+  "proposed_ports": {
+    "fips_underlay_udp": 32121,
+    "comet_p2p_fips_tcp": 27656,
+    "comet_rpc_loopback_tcp": 27657,
+    "signer_fips_tcp": 39101,
+    "mint_fips_tcp": 3438,
+    "site_loopback_tcp": 8180,
+    "authority_loopback_tcp": 8181,
+    "public_https_v2_tcp": 443
+  },
+  "security_invariants": {
+    "provider_inbound_default": "DROP",
+    "provider_outbound_default": "ACCEPT",
+    "ssh": "TCP22 only from 71.234.107.170/32",
+    "wednesday_p2p": "TCP26656 only among the four validator IPv4 /32 addresses",
+    "friday_fips": "UDP32121 only among the four validator IPv4 /32 addresses",
+    "friday_https": "TCP443 public IPv4 on V2 only",
+    "forbidden_public_ports": [80, 27656, 27657, 3438, 39101, 8180, 8181],
+    "ipv6_ingress": "none",
+    "admin_controller": "none"
+  },
+  "activation_gates": {
+    "browser_ready_default": false,
+    "recovery_only_default": false,
+    "exact_current_r10_fips_acceptance": "NOT_RUN",
+    "exact_current_trusted_https_browser_coco_acceptance": "NOT_RUN",
+    "fresh_host_and_provider_firewall_inventory": "NOT_RUN",
+    "fresh_server_and_browser_store_gate": "NOT_RUN",
+    "real_mint_nut12_dleq_canary": "NOT_RUN",
+    "fresh_fake_only_identity_generation": "NOT_RUN",
+    "rendered_per_host_configs": "NOT_CREATED",
+    "v2_firewall_and_ip_certificate_approval": "PENDING",
+    "persistent_key_placement_approval": "PENDING",
+    "independent_r10_review": "PENDING",
+    "deployment": "NOT_RUN"
+  },
+  "rollback": {
+    "before_funding": "disable/stop only Friday routes and units; preserve Wednesday",
+    "after_any_funding_or_uncertain_operation": "enable POC_FRIDAY_RECOVERY_ONLY=true for both Friday site and authority; disable new mutations while retaining the distinct Friday TLS origin, original mint/keysets, state, status/recovery, FundingAbort, terminal read/import/ack and pre-issued seller-plan recovery until all operations are terminal",
+    "forbidden": [
+      "repoint Friday origin to Wednesday",
+      "start a replacement mint or keyset",
+      "delete or silently migrate Friday state, anchors, browser stores or keys",
+      "blindly retry an uncertain operation",
+      "rely on a browser-ready flag without server-side recovery enforcement"
+    ]
+  },
+  "limitations": {
+    "emergency_unilateral_refund": "not composed",
+    "own_raise": "disabled pending full-pool stable-key continuity",
+    "quote_before_operation_id": "unsupported recovery gap",
+    "post_swap_invalid_dleq": "durable unavailable operation; no fabricated automatic compensation",
+    "post_claim_selected_signer_loss": "fail-closed without signer substitution",
+    "compliance": "jmcorgan/fips transport only; no FIPS 140 claim",
+    "operator_model": "one operator",
+    "funds": "fake sats only"
+  }
+}

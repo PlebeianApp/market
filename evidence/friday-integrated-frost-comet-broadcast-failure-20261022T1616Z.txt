@@ -1,0 +1,19 @@
+Friday unified FROST/Comet/Cashu harness — first Comet broadcast failure
+Timestamp: 2026-10-22T16:16Z
+Source base: 079374e1d24568bbe6da6743522dee0746106619 plus dirty Friday integration diff
+Command: timeout --signal=TERM --kill-after=20s 9m ./scripts/friday-integrated-frost-comet.sh
+Exit: 1
+Result: 0 pass, 1 fail, 1 assertion, 14.00 seconds
+
+The run completed independent policy validation and real three-participant
+admission signing. Broadcasting the signed bid returned HTTP 500:
+
+  DEMO_COMET_BID_CONSENSUS: broadcast RPC returned HTTP 500
+
+The adapter did not retain the response body, so the exact application error is
+unknown in this preserved attempt. No bid commit, displacement, SIG_ALL spend,
+NUT-09 recovery, or recipient import occurred. The next retry must first expose
+a bounded sanitized error body rather than speculate.
+
+The wrapper stopped all owned processes and removed
+/tmp/plebeian-friday-integrated.FKY0h6.

@@ -1,0 +1,3 @@
+{"at":"2026-10-21T22:10:18Z","action":"start","label":"mint","pid":166,"result":""}
+{"at":"2026-10-21T22:11:14Z","action":"stop","label":"mint","pid":166,"result":"signal-KILL-wait-137"}
+{"at":"2026-10-21T22:11:14Z","action":"post_scan","result":"all-recorded-owned-pids-absent"}

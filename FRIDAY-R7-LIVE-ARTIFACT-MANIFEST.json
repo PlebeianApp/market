@@ -1,0 +1,66 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_R7_LIVE_ARTIFACT_MANIFEST_V1",
+  "approval_ready": false,
+  "reason_not_ready": "Exact-current R7 FIPS/browser acceptance and fresh four-host inventory have not run; this manifest is an inert review input.",
+  "artifact_source_commit": "9622506dcf14c8fd96fed6037515de6b8dc41d94",
+  "deployment_template_commit": "9fbfff20feade12a45b5e92e031e7032b6125862",
+  "build_receipt_sha256": "cea173a655f92dab02bd6641ae0b6daefcd623ad5803a0ba680d5ddf8f492c8b",
+  "targets": [
+    {"slot": 1, "linode_id": 108175009, "ipv4": "172.105.64.142", "roles": ["fips", "validator", "signer", "mint", "coordinator", "authority", "site", "https_proxy"]},
+    {"slot": 2, "linode_id": 108236985, "ipv4": "172.105.95.57", "roles": ["fips", "validator", "signer"]},
+    {"slot": 3, "linode_id": 108237290, "ipv4": "172.104.240.217", "roles": ["fips", "validator", "signer"]},
+    {"slot": 4, "linode_id": 108237424, "ipv4": "172.104.253.247", "roles": ["fips", "validator", "signer", "designated_fault_target"]}
+  ],
+  "excluded_targets": ["192.46.234.233", "all production hosts", "all Wednesday paths, identities, state and services"],
+  "artifacts": {
+    "plebeian-auctions-poc": "e3c0dad4fd96a620e4675c5833c506082bc4a728f21d0eb8e3f3ff68672fbca4",
+    "plebeian-friday-authority": "7142c827fbb87aedfdeb9209dde30c8095d1b0e91d266d8f36db4cc0a6355da6",
+    "plebeian-friday-coordinator": "8eb132d4add27eae242fe2a8804b18b2fdd576e994fdaea0136edb449e47b51b",
+    "plebeian-friday-terminal-executor": "6a43286c067ee17cf7eee664458d208f02b2c9471a44a7d7325a4bd8f534a4f3",
+    "plebeian-friday-signer": "62e52a07684c6d639dbc4838dcd082ca69c1fc3ed76d3e3b0579d9e6fb6b6a79",
+    "plebeian-friday-frost-dkg": "776fd495f58067ebdc02f4ee9cac8aed559518959849e6f86f05b8dfa7fa03fd",
+    "coco-demo-frost-participant-3of4": "a96aaa3cc884d446834bdcdccd97403456f1743577b002ec8b9d335dfcbbf52b",
+    "coco-demo-frost-public-inspect": "ee880c7f376a8d8b2ba6b1dde6388f64b0de36c0857371f656ebabe055d18b0f",
+    "fips": "7b26e81e2607483d46b716a330c88ee18c881e3adaefc0542909e6f2a9a287f2",
+    "fipsctl": "15df75d3d9942747c62f690b0f4f5d5a2f9df45c976a96f4799a9574b988fab3",
+    "friday-browser.js": "5c525a5f4d7a9168e57f6bfebb2f3cc3e7dbba875ae2a5c1c9de7c317c675f91"
+  },
+  "templates": {
+    "deploy/friday/application.json.example": "cf537740c192a1a78ce68cd5668dbf54305329f0c012d3bbd93bea23159e70af",
+    "deploy/friday/authority.json.example": "dd95cd3e7a9af44757569126a557212848911aedf17ab4d1d88f8e277146bc76",
+    "deploy/friday/fips.yaml.example": "867a8afc82442a6acab93785ff73887aeeb6438159cc9b4fdd0b9e29da134532",
+    "deploy/friday/friday.env.example": "3e190039e0f93873ef9e8d1657da21b870d589c263b0ef53f51a1e117925a566",
+    "deploy/friday/nginx-friday-locations.conf.example": "dce50f6c8ea5cf44423dbbb3d8f573a4edeecc092bf8cbed76f10792e19343a7",
+    "deploy/friday/plebeian-friday-fips.service": "06017257dfda1d40dcd1afe3c39a6fead72071114b144a1d7ebb81069eea0951",
+    "deploy/friday/plebeian-friday-validator.service": "dec73e2994afd5c413c7b1f8e9c8b80ad13bb4a16ea37c03a694e11f765fc3ed",
+    "deploy/friday/plebeian-friday-signer.service": "f76cd818482460f34a09b695840a453146776dbb22f7a9dbc37972b1b4cba134",
+    "deploy/friday/plebeian-friday-mint.service": "7b01ec17c926fed74da7c3c204c713c7861dec6b52392135e8ed6720e2a9af99",
+    "deploy/friday/plebeian-friday-coordinator.service": "59f30583e98d7091fe7b195af1c70bf8ce590b8d1388b85d051fadb39c880130",
+    "deploy/friday/plebeian-friday-authority.service": "1361ba19dc0836f23084cfc4b4af3681d23f55cb85a5f219166b13bf881c648e",
+    "deploy/friday/plebeian-friday-site.service": "42de4a66cb2df07fdca495ebba62d4392d91a399c4576fac26c28268c7704004"
+  },
+  "fixed_paths": {
+    "binary_root": "/opt/plebeian-auctions-friday/bin",
+    "config_root": "/etc/plebeian-auctions-friday",
+    "state_root": "/var/lib/plebeian-auctions-friday",
+    "anchor_root": "/var/lib/plebeian-auctions-friday-anchor"
+  },
+  "fixed_ports": {
+    "fips_underlay_udp": 32121,
+    "comet_p2p_fips_tcp": 27656,
+    "comet_rpc_loopback_tcp": 27657,
+    "signer_fips_tcp": 39101,
+    "mint_fips_tcp": 3438,
+    "site_loopback_tcp": 8180,
+    "authority_loopback_tcp": 8181,
+    "public_https_v1_tcp": 443
+  },
+  "activation_gates": {
+    "browser_ready_default": false,
+    "exact_current_fips_acceptance": "NOT_RUN",
+    "exact_current_https_browser_coco_acceptance": "NOT_RUN",
+    "fresh_host_and_firewall_inventory": "NOT_RUN",
+    "fresh_fake_only_identity_generation": "NOT_RUN",
+    "deployment": "NOT_RUN"
+  }
+}

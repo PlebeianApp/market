@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f8e9f2">
+  <title>Plebeian Auctions — R20 Fake-Sats Prototype</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to auctions</a>
+  <header class="site-header">
+    <a class="wordmark" href="#main" aria-label="Plebeian Auctions home">Plebeian</a>
+    <nav aria-label="Primary navigation"><a href="#market">Auctions</a><a href="#sell">Sell</a><a href="#evidence">Evidence</a></nav>
+    <div class="identity"><div class="identity-actions"><button id="login" class="button button-secondary" type="button">Connect Nostr</button><button id="demo-login" class="button button-primary" type="button">Use demo identity</button></div><code id="actor">Not connected</code></div>
+  </header>
+  <aside class="prototype-bar" aria-label="Prototype limitations"><strong>R20 threshold prototype</strong><span>Worthless fake sats only</span><span>3-of-4 FROST admission</span><span>Participant-local policy over FIPS transport</span><span>One operator · not production or federal FIPS compliance</span></aside>
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy"><p class="eyebrow">THRESHOLD AUCTIONS, MADE LEGIBLE</p><h1 id="hero-title">Know where every fake sat stands.</h1><p class="hero-intro">Follow Nostr-signed auctions through a bidder-owned Coco wallet, threshold-funded bids, certified outbid returns, deterministic close, and seller payout.</p><a class="button button-hero" href="#market">Browse committed auctions</a></div>
+      <div class="hero-art" aria-hidden="true"><div class="hero-token token-one">3/4</div><div class="hero-token token-two">₿</div><div class="hero-card"><span>R20 fake-money flow</span><strong>Fund → Bid → Close</strong><small>Consensus and mint settlement stay visibly distinct.</small></div></div>
+    </section>
+    <section class="summary" aria-label="Connected wallet balances">
+      <article><span>Spendable now</span><strong id="spendable">—</strong><small>fake sats</small></article>
+      <article><span>Reserved / locked</span><strong id="locked">—</strong><small>fake sats</small></article>
+      <article><span>Pending / unresolved</span><strong id="refundable">—</strong><small>not spendable</small></article>
+      <article class="summary-action"><span>Test wallet funding</span><label class="funding-input" for="faucet-amount"><span>Amount</span><div><input id="faucet-amount" type="number" min="1" max="9007199254740991" step="1" inputmode="numeric" required aria-describedby="faucet-help"><b>fake sats</b></div></label><button id="faucet" class="button button-primary" type="button" disabled>Add test funds</button><small id="faucet-help">Connect a signer. The reviewed runtime policy sets the maximum.</small></article>
+    </section>
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+    <section class="workflow" aria-labelledby="workflow-title"><div class="workflow-heading"><p class="eyebrow">R20 WORKFLOW</p><h2 id="workflow-title">From browser-owned funds to a terminal branch</h2></div><ol>
+      <li><span>1</span><div><strong>Fund a Coco wallet</strong><small>The entered amount is checked against runtime policy; the resulting-balance limit is a browser-wallet advisory, not a public mint identity control.</small></div></li>
+      <li><span>2</span><div><strong>Create or choose</strong><small>A Nostr event becomes UI state only after consensus commits it.</small></div></li>
+      <li><span>3</span><div><strong>Authorize a funded bid</strong><small>Bidder and 3-of-4 committee authorize one exact NUT-11 proof pool.</small></div></li>
+      <li><span>4</span><div><strong>Outbid return or win</strong><small>The browser automatically imports certified terminal returns when available.</small></div></li>
+      <li><span>5</span><div><strong>Seller payout</strong><small>The seller services its actor-scoped plan and imports the winning amount into its browser-owned Coco key.</small></div></li>
+    </ol></section>
+    <section id="market" class="panel market-panel" aria-labelledby="market-title">
+      <div class="section-title market-title-row"><div><p class="eyebrow">COMMITTED MARKET</p><h2 id="market-title">Auctions</h2><p id="market-meta" class="section-subtitle">Loading consensus state…</p></div><button id="refresh" class="button button-secondary" type="button">Refresh state</button></div>
+      <label class="search-field" for="auction-search"><span>Search committed auctions</span><input id="auction-search" type="search" placeholder="Title or seller key" autocomplete="off"></label>
+      <div id="auctions" class="auctions" aria-busy="true"><div class="empty-state loading-state"><strong>Loading auctions</strong><span>Reading committed state from the application API.</span></div></div>
+    </section>
+    <div class="workspace-grid">
+      <section id="sell" class="panel sell-panel" aria-labelledby="sell-title"><p class="eyebrow">SELL</p><h2 id="sell-title">Create an auction</h2><p class="section-subtitle">The seller signs a Nostr event and commits its browser-owned Coco payout key.</p><form id="create-form">
+        <label>Title <span class="field-help">Required · up to 120 characters</span><input id="title" maxlength="120" required></label>
+        <label>Description <span class="field-help">Optional · up to 2,000 characters</span><textarea id="description" maxlength="2000" rows="3"></textarea></label>
+        <label>Optional HTTPS image <input id="image" type="url" maxlength="512" placeholder="https://…"></label>
+        <div class="form-row"><label>Duration (seconds) <span class="field-help">Required · 3–3,600</span><input id="duration" type="number" min="3" max="3600" inputmode="numeric" required></label><label>Starting bid <span class="field-help">Required · fake sats</span><input id="starting" type="number" min="1" inputmode="numeric" required></label></div>
+        <div class="form-row"><label>Minimum increment <span class="field-help">Required · fake sats</span><input id="increment" type="number" min="1" inputmode="numeric" required></label><label>Reserve <span class="field-help">Optional · blank or 0 means none</span><input id="reserve" type="number" min="0" inputmode="numeric"></label></div>
+        <button id="create-submit" class="button button-primary" type="submit">Sign and create auction</button>
+      </form></section>
+      <section class="panel wallet-panel" aria-labelledby="wallet-title"><p class="eyebrow">BROWSER-OWNED COCO WALLET</p><h2 id="wallet-title">Payments & returns</h2><p id="wallet-status" class="section-subtitle">Connect an identity to read its threshold wallet state. Bearer proofs and private keys never enter the DOM.</p><p id="seller-approval-status" class="field-help" role="status" aria-live="polite">Seller approvals are off. Opt in separately on an auction, or use the manual button.</p><p class="fine-print">Requires this connected tab. Each plan can prompt your signer. Stop prevents further submissions but cannot revoke a plan already submitted or dismiss an extension prompt.</p><button id="stop-seller-approvals" class="button button-secondary" type="button" disabled>Stop all seller approvals</button><button id="disconnect" class="button button-secondary" type="button" disabled>Disconnect identity</button><button id="process-payments" class="button button-secondary" type="button" disabled>Service seller plans & import returns</button><div id="notes" aria-live="polite"><div class="empty-state"><strong>Connect an identity</strong><span>Wallet operations are scoped to the exact Nostr actor and deployment.</span></div></div></section>
+    </div>
+    <section id="evidence" class="panel evidence-panel" aria-labelledby="evidence-title"><div class="section-title"><div><p class="eyebrow">VALIDATOR EVIDENCE</p><h2 id="evidence-title">Canonical commit observations</h2><p id="validator-summary" class="section-subtitle">Loading validator evidence…</p></div></div><div id="validators" class="validators" aria-live="polite" aria-busy="true"><div class="empty-state loading-state"><strong>Loading validators</strong><span>Reading canonical commit observations.</span></div></div><p class="fine-print">A commit signature proves that validator signed that CometBFT commit. It does not reveal bearer proofs or imply production readiness.</p></section>
+    <section id="deployment-disclosure" class="disclosure" aria-labelledby="trust-title"><p class="eyebrow">TRUST MODEL</p><h2 id="trust-title">What this prototype proves—and what it does not</h2><div class="disclosure-grid"><div><strong>R20 path</strong><p>Real Nostr actors, browser-owned Coco keys, 3-of-4 FROST admission, FIPS transport evidence, deterministic consensus close, outbid return, and seller payout imports.</p></div><div><strong>Boundaries</strong><p>Fake sats only. One operator controls four machines. Browser funding limits are advisory; mint-wide and ingress limits are separate runtime controls. No federal FIPS or production claim.</p></div></div></section>
+  </main>
+  <footer><span>Plebeian Auctions · R20 progress prototype</span><span>Fake sats have no redeemable value.</span></footer>
+  <script src="/ui-helpers.js" defer></script><script src="/friday-browser.js" defer></script><script src="/demo-signer.js" defer></script><script src="/app.js" defer></script>
+</body>
+</html>

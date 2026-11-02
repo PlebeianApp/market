@@ -1,0 +1,26 @@
+Friday unified FROST/Comet/Cashu harness — SIG_ALL witness rejection
+Timestamp: 2026-10-22T16:26Z
+Source base: 079374e1d24568bbe6da6743522dee0746106619 plus dirty Friday integration diff
+Command: timeout --signal=TERM --kill-after=20s 9m ./scripts/friday-integrated-frost-comet.sh
+Exit: 1
+Result: 0 pass, 1 fail, 9 assertions, 64.67 seconds
+
+This run completed:
+- two real zero-fee Nutshell/FakeWallet NUT-11 proof pools;
+- participant policy quorum with participant 4 genuinely unavailable;
+- first and replacement bids committed through real local Comet;
+- validator 4 offline with three-signature continuation;
+- certified displacement and durable authority/FROST-root binding;
+- real three-participant SIG_ALL FROST aggregation.
+
+Nutshell refused the final swap witness:
+
+  CashuError: signature threshold not met. 0 < 2.
+
+The NUT-07 assertion then correctly refused to claim committed-response loss
+because the exact inputs remained unspent. No NUT-09 recovery or recipient
+import occurred. The manual witness submission must be aligned with the
+already-tested concrete mint adapter; the threshold must not be weakened.
+
+The wrapper stopped all owned processes and removed
+/tmp/plebeian-friday-integrated.gv4QmQ.

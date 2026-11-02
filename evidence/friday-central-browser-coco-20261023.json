@@ -1,0 +1,83 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_CENTRAL_BROWSER_COCO_EVIDENCE_V1",
+  "recorded_at": "2026-10-23T03:03:34Z",
+  "branch": "poc/friday-tier1-2026-10-23",
+  "source_commits": {
+    "full_restricted_suite": "ce920f6",
+    "seller_plan_and_ack_contract": "7fd5991",
+    "coco_threshold_resume": "6bcaa59",
+    "threshold_seller_key_requirement": "69184e1",
+    "participant_seller_binding": "e7e51327eaafdacdfe45ba9f8260fe07468fe07c"
+  },
+  "checks": [
+    {
+      "name": "full_restricted_friday_suite",
+      "command": "bun run test:friday",
+      "source": "ce920f6",
+      "passed": 190,
+      "failed": 2,
+      "assertions": 669,
+      "failure_scope": "two OS-child FROST process cases rejected by the restricted runner with EPERM"
+    },
+    {
+      "name": "browser_coco_contract",
+      "command": "bun run test:friday:browser",
+      "source": "6bcaa59",
+      "passed": 23,
+      "failed": 0,
+      "assertions": 89
+    },
+    {
+      "name": "coco_threshold_resume",
+      "command": "bun run test:friday:coco-threshold",
+      "source": "6bcaa59",
+      "passed": 10,
+      "failed": 0,
+      "assertions": 35
+    },
+    {
+      "name": "friday_typecheck",
+      "command": "bun run typecheck:friday",
+      "source": "6bcaa59",
+      "result": "PASS"
+    },
+    {
+      "name": "go_all",
+      "command": "GOCACHE=/tmp/plebeian-go-cache go test ./...",
+      "source": "69184e1",
+      "result": "PASS"
+    },
+    {
+      "name": "participant_seller_binding",
+      "command": "bun test demo-integrated-admission-policy.test.ts demo-comet-displacement-verifier.test.ts",
+      "source": "e7e51327eaafdacdfe45ba9f8260fe07468fe07c",
+      "passed": 9,
+      "failed": 0,
+      "assertions": 26
+    },
+    {
+      "name": "friday_typecheck_after_participant_binding",
+      "command": "bun run typecheck:friday",
+      "source": "e7e51327eaafdacdfe45ba9f8260fe07468fe07c",
+      "result": "PASS"
+    }
+  ],
+  "activation": {
+    "status": "BLOCKED",
+    "reasons": [
+      "the shipped page does not construct DemoFridayBrowserExactEnvelopeBuilderPort",
+      "the shipped page does not construct createDemoFridayBrowserCocoClient",
+      "no live seller-plan registration service/store supplies the mandatory seller Coco payment key",
+      "no seller-browser winner import and recipient-ack composition exists",
+      "no exact-current browser-to-Comet-to-FROST-to-FIPS-to-mint run exists",
+      "the reviewed privileged FIPS packet predates this source and was not executed"
+    ]
+  },
+  "mutations": {
+    "live_vps": false,
+    "network_or_firewall": false,
+    "persistent_keys": false,
+    "deployment": false,
+    "public_funding_enabled": false
+  }
+}

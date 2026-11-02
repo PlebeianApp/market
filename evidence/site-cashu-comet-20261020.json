@@ -1,0 +1,152 @@
+{
+  "schema": "PlebeianAuctionsPOCSiteEvidenceV1",
+  "run": "4f053431-a931-4955-a6ad-47573ee1db88",
+  "started_at": "2026-10-20T18:15:25.416Z",
+  "completed_at": "2026-10-20T18:15:51.454Z",
+  "auction_id": "site-1792520126289",
+  "mint": {
+    "implementation": "Nutshell 0.19.2",
+    "backend": "FakeWallet",
+    "coco_v2": true,
+    "nut_11": true
+  },
+  "actors": {
+    "seller": "967e77a562f949c7d0920ebc49860aee484ebbabeabe51406f8c5fcdd543c71f",
+    "loser": "1e165bf4c43cfe65cbfced909d54c7ddbd46b259ed4c03dec473f4aa87eaa98c",
+    "winner": "fd34268c39b6986e364e5627ac77ae5f09186af70c0da36d71a387bfd591f1f2"
+  },
+  "balances": {
+    "seller": 180,
+    "loser": 10000,
+    "winner": 9820
+  },
+  "cashu": {
+    "losing_token_sha256": "23b8b202519968f1c193da8fee56d3f3d9b5a7b40ebb359d6290b651d98e0271",
+    "winning_token_sha256": "8f8f646cbcbbc95da32cf9a758ce074a1752b592000a14f2105e0ef2881f56d1",
+    "locktime": 1792520148,
+    "early_refund_http_status": 409,
+    "settlement_state": "finalized"
+  },
+  "consensus": {
+    "create_height": 148,
+    "bid_a_height": 149,
+    "bid_b_height": 150,
+    "close_height": 159,
+    "invalid_assertion_http_status": 422,
+    "winner": "fd34268c39b6986e364e5627ac77ae5f09186af70c0da36d71a387bfd591f1f2",
+    "winning_token_sha256": "8f8f646cbcbbc95da32cf9a758ce074a1752b592000a14f2105e0ef2881f56d1",
+    "validators_before_offline": [
+      {
+        "slot": 1,
+        "moniker": "poc-validator-1",
+        "online": true,
+        "node_id": "745c8f44d87ba7eb92d51a3afbe8e19476591759",
+        "validator_address": "47E5593508F2E0996FB0790EA125E4C9B66716E0",
+        "voting_power": 1,
+        "peers": 3,
+        "height": 150,
+        "block_hash": "E5F4D7FB9381C6AD64342A215744C514D4C58B4E3174B9E8EDEBFD16D1260E87",
+        "app_hash": "D1C016A1AC1D20888C4C9DF4E9E155C862DD4B04F7CB94CAD91F2ADAA0AD7DFC",
+        "canonical_commit_height": 149,
+        "commit_signatures": 4
+      },
+      {
+        "slot": 2,
+        "moniker": "poc-validator-2",
+        "online": true,
+        "node_id": "f8f37cf1f044480fd70f2c3cddfb524f61e21361",
+        "validator_address": "DE05EFBF956D26377206BFFC7D3C7D352332F2C5",
+        "voting_power": 1,
+        "peers": 3,
+        "height": 150,
+        "block_hash": "E5F4D7FB9381C6AD64342A215744C514D4C58B4E3174B9E8EDEBFD16D1260E87",
+        "app_hash": "D1C016A1AC1D20888C4C9DF4E9E155C862DD4B04F7CB94CAD91F2ADAA0AD7DFC",
+        "canonical_commit_height": 149,
+        "commit_signatures": 4
+      },
+      {
+        "slot": 3,
+        "moniker": "poc-validator-3",
+        "online": true,
+        "node_id": "74c333ada7f7dd97c30726a9db3f4ef0e431ca42",
+        "validator_address": "8851A6B3BFD1898202C4786ED2ADC800BC470978",
+        "voting_power": 1,
+        "peers": 3,
+        "height": 150,
+        "block_hash": "E5F4D7FB9381C6AD64342A215744C514D4C58B4E3174B9E8EDEBFD16D1260E87",
+        "app_hash": "D1C016A1AC1D20888C4C9DF4E9E155C862DD4B04F7CB94CAD91F2ADAA0AD7DFC",
+        "canonical_commit_height": 149,
+        "commit_signatures": 4
+      },
+      {
+        "slot": 4,
+        "moniker": "poc-validator-4",
+        "online": true,
+        "node_id": "499a47061126a69187cf5352e28f1e0e9bbb3261",
+        "validator_address": "24F3872862AE9DB6FC92E3251DEF74BAF456BE07",
+        "voting_power": 1,
+        "peers": 3,
+        "height": 150,
+        "block_hash": "E5F4D7FB9381C6AD64342A215744C514D4C58B4E3174B9E8EDEBFD16D1260E87",
+        "app_hash": "D1C016A1AC1D20888C4C9DF4E9E155C862DD4B04F7CB94CAD91F2ADAA0AD7DFC",
+        "canonical_commit_height": 149,
+        "commit_signatures": 4
+      }
+    ],
+    "validators_after_offline": [
+      {
+        "slot": 1,
+        "moniker": "poc-validator-1",
+        "online": true,
+        "node_id": "745c8f44d87ba7eb92d51a3afbe8e19476591759",
+        "validator_address": "47E5593508F2E0996FB0790EA125E4C9B66716E0",
+        "voting_power": 1,
+        "peers": 2,
+        "height": 164,
+        "block_hash": "73E81EB746074E781A7036487E678C3F15A1F8963C29633668FC320D1AC21512",
+        "app_hash": "AE4A645E9BD6F759625ADD6CDF6D73789292528D7FA1AC5CE893E1A80C075997",
+        "canonical_commit_height": 163,
+        "commit_signatures": 3
+      },
+      {
+        "slot": 2,
+        "moniker": "poc-validator-2",
+        "online": true,
+        "node_id": "f8f37cf1f044480fd70f2c3cddfb524f61e21361",
+        "validator_address": "DE05EFBF956D26377206BFFC7D3C7D352332F2C5",
+        "voting_power": 1,
+        "peers": 2,
+        "height": 164,
+        "block_hash": "73E81EB746074E781A7036487E678C3F15A1F8963C29633668FC320D1AC21512",
+        "app_hash": "AE4A645E9BD6F759625ADD6CDF6D73789292528D7FA1AC5CE893E1A80C075997",
+        "canonical_commit_height": 163,
+        "commit_signatures": 3
+      },
+      {
+        "slot": 3,
+        "moniker": "poc-validator-3",
+        "online": true,
+        "node_id": "74c333ada7f7dd97c30726a9db3f4ef0e431ca42",
+        "validator_address": "8851A6B3BFD1898202C4786ED2ADC800BC470978",
+        "voting_power": 1,
+        "peers": 2,
+        "height": 164,
+        "block_hash": "73E81EB746074E781A7036487E678C3F15A1F8963C29633668FC320D1AC21512",
+        "app_hash": "AE4A645E9BD6F759625ADD6CDF6D73789292528D7FA1AC5CE893E1A80C075997",
+        "canonical_commit_height": 163,
+        "commit_signatures": 3
+      },
+      {
+        "slot": 4,
+        "moniker": "poc-validator-4",
+        "online": false,
+        "error": "post failed: Post \"http://127.0.0.1:28957\": dial tcp 127.0.0.1:28957: connect: connection refused"
+      }
+    ]
+  },
+  "trust_boundary": "validators verify one coordinator signature over public lock facts; they do not independently verify Cashu bearer proofs",
+  "shortcuts": [
+    "single in-memory application-level coordinator and committee key; NOT FROST or threshold custody"
+  ],
+  "passed": true
+}

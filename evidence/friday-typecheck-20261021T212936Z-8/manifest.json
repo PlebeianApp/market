@@ -1,0 +1,16 @@
+{
+  "schema": "PlebeianFridayTypecheckDeltaV1",
+  "baseline": "bb9a7678dbf5dec46b7cca5851d02bb1e3dfe13b",
+  "candidate": "working-tree-after-2803b48",
+  "candidate_diff_sha256": "2e682b7d869c7d83efae2c5315a3238a30010e68fd555376385fb5a7b9478b64",
+  "no_install": true,
+  "commands": {
+    "broad": "node_modules/.bin/tsc --noEmit --pretty false -p tsconfig.json",
+    "focused": "node_modules/.bin/tsc --pretty false -p tsconfig.friday.json"
+  },
+  "results": {
+    "baseline_broad": { "exit": 2, "sha256": "c7e3ada77cc55d53729ee9654faecf3f50a59747d2990d6a9325ec89eb50cc1d" },
+    "candidate_broad": { "exit": 2, "sha256": "58e17fb6c9dabfe0816dcef874c55ee1380887b726fafb2b63cd660aaf0760a3" },
+    "candidate_friday": { "exit": 0, "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_LIVE_APPLICATION_V3",
+  "deployment_id": "friday-demo-20261023-r20",
+  "run_id": "friday-demo-20261023-r20-run1",
+  "application_host_slot": %FRIDAY_APPLICATION_HOST_SLOT%,
+  "fips_ulas": ["%FRIDAY_V1_ULA%", "%FRIDAY_V2_ULA%", "%FRIDAY_V3_ULA%", "%FRIDAY_V4_ULA%"],
+  "comet_p2p_port": 27656,
+  "comet_rpc_port": 27657,
+  "signer_rpc_port": 39101,
+  "mint_port": 3438,
+  "cashu_mint_url": "%FRIDAY_PUBLIC_ORIGIN%",
+  "site_port": 8180,
+  "network_root": "/var/lib/plebeian-auctions-friday/network-r20",
+  "dkg_root": "/var/lib/plebeian-auctions-friday/frost-v2/keyset-v2",
+  "coordinator_root": "/var/lib/plebeian-auctions-friday/coordinator-v2",
+  "coordinator_rpc_identity_path": "/var/lib/plebeian-auctions-friday/coordinator-v2/coordinator-rpc-identity.key"
+}

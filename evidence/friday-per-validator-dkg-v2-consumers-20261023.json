@@ -1,0 +1,98 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_PER_VALIDATOR_DKG_V2_CONSUMER_EVIDENCE_V1",
+  "observed_at_utc": "2026-10-23T14:12:01Z",
+  "source_commit": "9cacf094ea508316fe5f34b8847314413bfa9370",
+  "source_tree": "4b71d54c18de7721643f966cbc0809486974f6d0",
+  "toolchain": {
+    "bun": "1.3.11",
+    "go": "go1.23.1 linux/amd64"
+  },
+  "scope": {
+    "value_profile": "fake_money_only",
+    "components": [
+      "per-host DKG enrollment and crash recovery",
+      "public/ciphertext-only DKG relay",
+      "authenticated TypeScript and Go V2 result verification",
+      "signer, authority, terminal-executor and coordinator manifest-pin consumers"
+    ],
+    "excluded": [
+      "live identity generation",
+      "live FIPS, Comet, FROST, mint or HTTP service startup",
+      "remote deployment or firewall mutation",
+      "real funds"
+    ]
+  },
+  "checks": [
+    {
+      "command": "bun run typecheck:friday",
+      "result": "pass"
+    },
+    {
+      "command": "bun run test:friday:dkg-diagnostic",
+      "result": "45 pass, 1 sandbox infrastructure failure",
+      "detail": "The only failure was EPERM writing to a spawned local relay CLI stdin pipe; the same eight-case relay file passed in the ordinary runner. Across both runs all 46 unique functional cases passed. Counts are not added across overlapping runs."
+    },
+    {
+      "command": "bun test demo-friday-per-validator-dkg-relay.test.ts",
+      "result": "8 pass, 0 fail, 27 assertions",
+      "runner": "ordinary local runner outside restrictive child-pipe sandbox"
+    },
+    {
+      "command": "bun test demo-friday-signer-dkg-v2.test.ts demo-friday-coordinator-cli.test.ts demo-friday-authority-cli.test.ts demo-friday-terminal-executor-cli.test.ts",
+      "result": "15 pass, 0 fail, 75 assertions"
+    },
+    {
+      "command": "GOCACHE=/tmp/plebeian-go-cache-friday go test ./... -count=1",
+      "result": "pass",
+      "detail": "An earlier attempt stopped before compilation because the sandbox denied the default home build cache; no code or runtime state changed."
+    },
+    {
+      "command": "python3 -m py_compile deploy/friday/verify-friday-runtime-target.py plus pure manifest-pin checks",
+      "result": "pass"
+    }
+  ],
+  "temporary_builds": {
+    "target": "bun-linux-x64-baseline-v1.3.11",
+    "release_staged": false,
+    "artifacts": [
+      {
+        "name": "plebeian-friday-signer",
+        "sha256": "305ee35a97b100ee8a3706ee97a88be64f88d8f934a38e1ea7a928519af983dd",
+        "size": 99107667
+      },
+      {
+        "name": "plebeian-friday-authority",
+        "sha256": "464a5d4c0e3a1fa7d51dac8a68d5451d0b2e41c4a733afd4b669cecee8d4bf89",
+        "size": 99508586
+      },
+      {
+        "name": "plebeian-friday-terminal-executor",
+        "sha256": "e48b14f5c3a71b92f32c928d6cd59535aed559c87e60ac850a2bdb6802c905a7",
+        "size": 99018587
+      },
+      {
+        "name": "plebeian-friday-coordinator",
+        "sha256": "742a9e1a900d236eb7ec291d9df6c10fa8c2a912c4a21cfff8968fa21050ab61",
+        "size": 98491829
+      }
+    ]
+  },
+  "security_properties_exercised_offline": [
+    "independently supplied exact manifest digest pin",
+    "all-four authenticated V2 final attestations",
+    "cross-language canonical digest compatibility",
+    "fixed host-local participant config and state paths",
+    "authenticated common public-package bytes",
+    "V1 result rejection at live consumers",
+    "child executor receives only the validated manifest pin",
+    "secret-free bounded relay DTOs and recipient-only ciphertext"
+  ],
+  "remaining_runtime_gates": [
+    "independent final review of this exact source commit and evidence",
+    "rendered owner-approved per-host manifests and pins",
+    "separate per-host identity enrollment and DKG ceremony under a new exact action approval",
+    "fresh release staging from reviewed artifacts",
+    "live FIPS, Comet 3-of-4, FROST 3-of-4, Coco v2 and browser end-to-end acceptance",
+    "public activation approval after acceptance evidence review"
+  ]
+}

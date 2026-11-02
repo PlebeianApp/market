@@ -1,0 +1,197 @@
+{
+  "schema": "PlebeianFridayMintDownCloseV2",
+  "run": "5fe1c5a3-2dce-47c5-bdc6-1f8cc6970ad6",
+  "started_at": "2026-10-21T23:17:03.307Z",
+  "completed_at": "2026-10-21T23:20:39.612Z",
+  "fault_mode": "stalled",
+  "actors": {
+    "seller": "5373c4fd62796feb59a91e359b425e7f54d6515dde37019702f9903643fecdba",
+    "bidder": "2812295f44767e26c368f702ab401eb02993064c9de082d6db90727f1b95865e"
+  },
+  "operation_ids": {
+    "send": "send-payout-mint-down-1792624623804",
+    "receive": "receive-payout-mint-down-1792624623804"
+  },
+  "auction": {
+    "id": "mint-down-1792624623804",
+    "winner": "2812295f44767e26c368f702ab401eb02993064c9de082d6db90727f1b95865e",
+    "amount": 2500,
+    "closed_while_mint_down": true
+  },
+  "outage_observation": {
+    "seller_spendable": 0,
+    "seller_backing": 0,
+    "payment_statuses": [
+      "unknown"
+    ],
+    "longest_status_ms": 1288,
+    "conservation": {
+      "issued": 10000,
+      "walletBacking": 10000,
+      "walletSpendable": 1808,
+      "operationLocked": 5692,
+      "spendable": 1808,
+      "reserved": 0,
+      "inFlight": 0,
+      "unknown": 2500,
+      "incomingPending": 0,
+      "fundingPending": 0,
+      "accountedTotal": 10000,
+      "observationsExact": true,
+      "conserved": true,
+      "actual_wallet_backing": 10000,
+      "actual_wallet_spendable": 1808,
+      "actual_wallet_reserved": 8192,
+      "fees": {
+        "input_fee_ppk": 0,
+        "required": 0
+      },
+      "observation": "coordinator SQLite balances plus encrypted funding/payment journals"
+    }
+  },
+  "recovery": {
+    "seller_spendable": 2500,
+    "bidder_spendable": 7500,
+    "paid_rows": 1,
+    "zero_pending": true
+  },
+  "conservation": {
+    "issued": 10000,
+    "walletBacking": 10000,
+    "walletSpendable": 10000,
+    "operationLocked": 0,
+    "spendable": 10000,
+    "reserved": 0,
+    "inFlight": 0,
+    "unknown": 0,
+    "incomingPending": 0,
+    "fundingPending": 0,
+    "accountedTotal": 10000,
+    "observationsExact": true,
+    "conserved": true,
+    "actual_wallet_backing": 10000,
+    "actual_wallet_spendable": 10000,
+    "actual_wallet_reserved": 0,
+    "fees": {
+      "input_fee_ppk": 0,
+      "required": 0
+    },
+    "observation": "coordinator SQLite balances plus encrypted funding/payment journals"
+  },
+  "validators_before": [
+    {
+      "slot": 1,
+      "moniker": "poc-validator-1",
+      "online": true,
+      "node_id": "bca9f4c742e5e1a516abbc3f2cc2ffabf8f366b2",
+      "validator_address": "D8F8A382AAD1BBFB3A28ECB17F11408202E76A9D",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 4,
+      "block_hash": "CE4DD70DD88DB08C770D7B2FF83B9FF2938C8A5CA020709D97D4358A772B5C85",
+      "app_hash": "D1C904AE738E6601D3C5749C19DF35BF775D3A9D8CC8B31EA1F2173DA9D44464",
+      "canonical_commit_height": 3,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 2,
+      "moniker": "poc-validator-2",
+      "online": true,
+      "node_id": "4eab6a36a399951ffee406748ab3f2d788a82f62",
+      "validator_address": "915E6CA37CE03EE6F32FAB3A02398908E9B07551",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 3,
+      "block_hash": "09FCA8E0A2665C5EC0AE33C014FE053DB58C8D04FAFBCE769BC4B58C7FF75C7A",
+      "app_hash": "2B5011767A1731BC80F7E0C6355437CE1DA13D63078AB0B7CE2E5CBD0DE44F0D",
+      "canonical_commit_height": 2,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 3,
+      "moniker": "poc-validator-3",
+      "online": true,
+      "node_id": "05677fec386185971820eb717e5bbd4247ae56c6",
+      "validator_address": "E67EED0A613C74F45B84848FA73288E05ACDA08F",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 3,
+      "block_hash": "09FCA8E0A2665C5EC0AE33C014FE053DB58C8D04FAFBCE769BC4B58C7FF75C7A",
+      "app_hash": "2B5011767A1731BC80F7E0C6355437CE1DA13D63078AB0B7CE2E5CBD0DE44F0D",
+      "canonical_commit_height": 2,
+      "commit_signatures": 4
+    },
+    {
+      "slot": 4,
+      "moniker": "poc-validator-4",
+      "online": true,
+      "node_id": "8c00ff3aa38935dddb08b37817118e288d1c6164",
+      "validator_address": "03593DB89B416F0D53BE86E65BB19CC7692C7EFF",
+      "voting_power": 1,
+      "peers": 3,
+      "height": 3,
+      "block_hash": "09FCA8E0A2665C5EC0AE33C014FE053DB58C8D04FAFBCE769BC4B58C7FF75C7A",
+      "app_hash": "2B5011767A1731BC80F7E0C6355437CE1DA13D63078AB0B7CE2E5CBD0DE44F0D",
+      "canonical_commit_height": 2,
+      "commit_signatures": 4
+    }
+  ],
+  "validators_after": [
+    {
+      "slot": 1,
+      "moniker": "poc-validator-1",
+      "online": true,
+      "node_id": "bca9f4c742e5e1a516abbc3f2cc2ffabf8f366b2",
+      "validator_address": "D8F8A382AAD1BBFB3A28ECB17F11408202E76A9D",
+      "voting_power": 1,
+      "peers": 2,
+      "height": 92,
+      "block_hash": "36B35F0ED56E429583B2C40397C5C0BFBC00269598D93735506DA919000ECD7A",
+      "app_hash": "9E4E2BB8E774471B0A2E37780D4D0DA9B2B82290FCC8005E9135C8E0AE9BA5D7",
+      "canonical_commit_height": 91,
+      "commit_signatures": 3
+    },
+    {
+      "slot": 2,
+      "moniker": "poc-validator-2",
+      "online": true,
+      "node_id": "4eab6a36a399951ffee406748ab3f2d788a82f62",
+      "validator_address": "915E6CA37CE03EE6F32FAB3A02398908E9B07551",
+      "voting_power": 1,
+      "peers": 2,
+      "height": 92,
+      "block_hash": "36B35F0ED56E429583B2C40397C5C0BFBC00269598D93735506DA919000ECD7A",
+      "app_hash": "9E4E2BB8E774471B0A2E37780D4D0DA9B2B82290FCC8005E9135C8E0AE9BA5D7",
+      "canonical_commit_height": 91,
+      "commit_signatures": 3
+    },
+    {
+      "slot": 3,
+      "moniker": "poc-validator-3",
+      "online": true,
+      "node_id": "05677fec386185971820eb717e5bbd4247ae56c6",
+      "validator_address": "E67EED0A613C74F45B84848FA73288E05ACDA08F",
+      "voting_power": 1,
+      "peers": 2,
+      "height": 92,
+      "block_hash": "36B35F0ED56E429583B2C40397C5C0BFBC00269598D93735506DA919000ECD7A",
+      "app_hash": "9E4E2BB8E774471B0A2E37780D4D0DA9B2B82290FCC8005E9135C8E0AE9BA5D7",
+      "canonical_commit_height": 91,
+      "commit_signatures": 3
+    },
+    {
+      "slot": 4,
+      "moniker": "poc-validator-4",
+      "online": false,
+      "error": "post failed: Post \"http://127.0.0.1:28957\": dial tcp 127.0.0.1:28957: connect: connection refused"
+    }
+  ],
+  "mint": {
+    "implementation": "Nutshell 0.19.2",
+    "backend": "FakeWallet",
+    "restarted_same_database_and_seed": false,
+    "stalled_response_released": true
+  },
+  "trust_boundary": "custodial server-held proofs; coordinator-trusted reservation attestations; shared committee key is not FROST; not FIPS",
+  "passed": true
+}
