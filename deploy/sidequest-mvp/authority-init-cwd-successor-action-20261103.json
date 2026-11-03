@@ -1,0 +1,63 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_INIT_CWD_SUCCESSOR_ACTION_V1",
+  "status": "APPROVED_NOT_EXECUTED",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "host": {"role": "APP", "ipv4": "139.162.161.233"},
+  "preservedStoppedAttempts": [
+    {
+      "directory": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-authority-init-v1",
+      "actionSha256": "57167f5e81f07094c996246e58c629966bfd8a9166e27edf56c566e4454da6f6",
+      "stoppedSha256": "b4daf712198b244d6e076385ae1ad3bae5a400e6d02411f27291b11924d3fa63"
+    },
+    {
+      "directory": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-authority-init-successor-v1",
+      "actionSha256": "c5533ed4d80006fd630ad0f820340d7c733f4c683bfe3d4d1207d35011138ac1",
+      "stoppedSha256": "9590f433947931b9d0bc6e8cc4b97424e21ec66828aa69762576c7b595ed483b"
+    }
+  ],
+  "publicPackage": {
+    "path": "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3/exchange/friday-demo-20261030-separated-v1-dkg1/participant-1.public.json",
+    "bytes": 301,
+    "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+    "requiredMetadata": {"uid": 0, "gid": 988, "mode": "0640"}
+  },
+  "authorityInitialization": {
+    "command": [
+      "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/plebeian-friday-authority",
+      "init-state",
+      "--application",
+      "/etc/plebeian-auctions-friday/application.json"
+    ],
+    "workingDirectory": "/var/lib/plebeian-auctions-friday/coordinator-v3/runtime",
+    "runAs": {"user": "plebeian-friday", "uid": 999, "group": "plebeian-friday-public", "gid": 988},
+    "stderrCaptureMaximumBytes": 8192,
+    "attemptCount": 1
+  },
+  "preconditions": {
+    "applicationSha256": "253427ca537fb143022d48f4539e939cf01f729cbf444368d9faea75c6badeee",
+    "environmentSha256": "797f56d4115de50d827cbf6c4c7c5c7be56ba5b0145d19beaa9236f65949016a",
+    "authorityBinarySha256": "af51ff40ddafa496169cb15731c1ab8cf2b3b569f707dfd7f69719c9d294755d",
+    "bothStoppedAttemptsUnchanged": true,
+    "publicPackageExact": true,
+    "allEighteenDatabaseTargetsAbsent": true,
+    "independentAnchorRootEmpty": true,
+    "auctionServicesInactive": true
+  },
+  "postconditions": {
+    "allEighteenTargetsRegularSingleLinkServiceOwned0600": true,
+    "allEighteenSqliteQuickChecks": "ok",
+    "coordinatorReplayBroadcastAndSellerPlanRevisions": 0,
+    "servicesUnchanged": true,
+    "receiptCreateOnce": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-authority-init-cwd-successor-v1/ACTUAL.json"
+  },
+  "failurePolicy": "PRESERVE_PARTIAL_STATE_CAPTURE_BOUNDED_STDERR_WRITE_STOPPED_RECEIPT_NO_RETRY_NO_DELETE_NO_RESET",
+  "excludedEffects": [
+    "no service start, stop, restart, enable or disable",
+    "no persistent credential generation",
+    "no private key, validator share or FROST secret access",
+    "no payments or funding",
+    "no package, DKG, validator or mint state mutation",
+    "no retry of either stopped attempt",
+    "no automatic retry, rollback, deletion, truncation or migration"
+  ]
+}
