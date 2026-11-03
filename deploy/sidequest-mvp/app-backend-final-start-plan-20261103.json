@@ -1,0 +1,46 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_APP_BACKEND_FINAL_START_PLAN_V1",
+  "status": "READY_FOR_EXACT_APPROVAL_NOT_EXECUTED",
+  "preparedAtUtc": "2026-11-03T23:53:07Z",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "preconditions": {
+    "publicAuthorityConfigInstalledExact": true,
+    "coordinatorR2PatchAndUnitInstalledExact": true,
+    "fourPublicSignerEnrollmentsInstalledExact": true,
+    "coordinator": "inactive-dead-NRestarts-0",
+    "authority": "inactive-dead-NRestarts-0",
+    "site": "inactive-dead",
+    "observerMintFips": "active-unchanged",
+    "queueRevision": 0,
+    "queuedOperations": 0,
+    "signerAnchorRows": 0,
+    "listeners8180or8181": false,
+    "preservedStoppedReceiptSha256": "7ae1290bd73f9131ad71e78f021ea264db9751a44ef173775e5b8768386c719d"
+  },
+  "causeOfPriorStop": "The authority reached active-running and opened its exact 127.0.0.1:8181 listener. The controller then rejected systemd's fresh-activation NRestarts reset from historical 2 to current 0 and stopped both services. No application error was logged.",
+  "continuation": [
+    "Recheck the exact public config, coordinator R2 release/unit, all four public enrollment files, preserved STOPPED receipt, inactive coordinator/authority/site, active observer/mint/FIPS, empty queue, zero signer anchors and absent 8180/8181/80/443 listeners.",
+    "Run the R2 coordinator guard and authority role guard.",
+    "Start the coordinator once and require active-running with NRestarts=0.",
+    "Start the authority once and require active-running on exactly 127.0.0.1:8181 with NRestarts=0 and no counter increase.",
+    "Collect bounded authority status samples and require readiness warm then ready, two increasing committed heights, mode normal, funding enabled_two_step_nip07, exact chain/mint pins and four epoch-1 signer health anchors.",
+    "Require the queue to remain revision 0 with zero operations and site/nginx/80/443 to remain off."
+  ],
+  "remoteFileInstallation": false,
+  "securityAndFinancialEffects": {
+    "authenticatedRpcIdentityHealthSignatures": true,
+    "signerHealthAnchorsPersisted": true,
+    "frostThresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "secretShareOrPrivateKeyCopied": false,
+    "realFundsInScope": false
+  },
+  "failurePolicy": "Stop only coordinator/authority services started by this activation, preserve every file, receipt, database and anchor record, and make no retry, reset, deletion or rollback.",
+  "exactApprovalRequest": "The four public enrollment records are installed and the authority itself reached running, but my controller stopped it because it misread systemd's restart-counter reset as a failure. Both backend services are safely stopped and no payment or threshold signature occurred. May I start the coordinator and authority once more with the corrected acceptance check and complete the signed health checks? The website and HTTPS remain off.",
+  "notAuthorized": [
+    "Starting coordinator or authority again",
+    "Resetting or deleting preserved receipts or database state",
+    "Starting the site, nginx or HTTPS",
+    "Sending a FROST signing, funding, auction, settlement or payment request"
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_PUBLIC_ENROLLMENT_CONTROLLER_STOPPED_ACTUAL_V1",
+  "status": "FOUR_PUBLIC_ENROLLMENTS_INSTALLED_AUTHORITY_REACHED_RUNNING_CONTROLLER_COUNTER_ASSUMPTION_STOPPED_BOTH_NO_RETRY",
+  "completedAtUtc": "2026-11-03T23:53:07Z",
+  "planSha256": "632a26e45a2056680d4c14d89d9583de23f7bd7262ea7d845381eca85f7e1160",
+  "controller": {
+    "path": "/tmp/run_authority_public_enrollment_continuation.py",
+    "sha256": "102117db4c31a2720578ed70daf05ea84f4ba944564ba779ad1e0cf8d96d00ed"
+  },
+  "publicEnrollmentInstall": {
+    "status": "complete-create-once",
+    "directories": {
+      "pattern": "/var/lib/plebeian-auctions-friday/frost-v3/node-{1..4}",
+      "uid": 0,
+      "gid": 988,
+      "mode": "0750"
+    },
+    "files": [
+      {
+        "participantId": 1,
+        "path": "/var/lib/plebeian-auctions-friday/frost-v3/node-1/signer-enrollment-public.json",
+        "bytes": 1177,
+        "sha256": "6b14c1d08b0b6b5fdd5a0f329bb1e41d12268b3f81fb377b5ee2f3bed30afac0"
+      },
+      {
+        "participantId": 2,
+        "path": "/var/lib/plebeian-auctions-friday/frost-v3/node-2/signer-enrollment-public.json",
+        "bytes": 1177,
+        "sha256": "cb1af8e9ba10abaf07a6435aeed2f19750aeadecdbbb8409b53bdc860c195f20"
+      },
+      {
+        "participantId": 3,
+        "path": "/var/lib/plebeian-auctions-friday/frost-v3/node-3/signer-enrollment-public.json",
+        "bytes": 1177,
+        "sha256": "7ceec17fec76c98d519660ac6c12a3f3bcfd7429d054c31b7fe75dd718128b0a"
+      },
+      {
+        "participantId": 4,
+        "path": "/var/lib/plebeian-auctions-friday/frost-v3/node-4/signer-enrollment-public.json",
+        "bytes": 1177,
+        "sha256": "594164835652085bcbcaefadb3af897869aa8562b759ac2d7854df0f55703f2e"
+      }
+    ],
+    "allFiles": {
+      "uid": 0,
+      "gid": 988,
+      "mode": "0640",
+      "links": 1,
+      "secretShareOrPrivateKeyCopied": false
+    }
+  },
+  "startup": {
+    "coordinatorGuard": "SIDEQUEST_COORDINATOR_R2_TARGET=PASS",
+    "authorityGuard": "SIDEQUEST_ROLE_TARGET=PASS",
+    "coordinatorReachedRunning": true,
+    "authorityReachedRunning": true,
+    "authorityLoopbackListenerObserved": true,
+    "authorityJournalApplicationError": false,
+    "controllerStoppedBothServices": true
+  },
+  "controllerFailure": {
+    "expectedAuthorityNRestarts": 2,
+    "observedAuthorityNRestarts": 0,
+    "cause": "systemd reset NRestarts to zero for the fresh manual activation; the controller incorrectly treated the reset as service drift after already observing active-running and the exact loopback listener",
+    "classification": "controller acceptance bug, not authority process startup failure",
+    "outcomeCertain": true,
+    "automaticOrManualRetryPerformed": false
+  },
+  "settledState": {
+    "coordinator": "inactive-dead-NRestarts-0",
+    "authority": "inactive-dead-NRestarts-0",
+    "site": "inactive-dead",
+    "observerMintFips": "active-unchanged",
+    "listeners8180or8181": false,
+    "queueRevision": 0,
+    "queuedOperations": 0,
+    "coordinatorDatabaseQuickCheck": "ok",
+    "signerAnchorRows": 0
+  },
+  "effects": {
+    "signedHealthChecksCompleted": false,
+    "frostThresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "siteNginxHttpsFirewallOrExternalExposureChanged": false
+  },
+  "remoteReceipts": {
+    "actionSha256": "8d3fa81eab23613eb6f958a4ef193835d151fc3b0972537f117f6b7e6711ec3d",
+    "stoppedSha256": "7ae1290bd73f9131ad71e78f021ea264db9751a44ef173775e5b8768386c719d"
+  },
+  "reconciliation": {
+    "path": "/tmp/reconcile_authority_public_enrollment_stop.py",
+    "sha256": "ddd0778b63c7147e7767ce632cf200b2864c4ce5ef23d87a9f856503549e8ddc",
+    "remoteMutation": false
+  },
+  "nextStep": "Use a separately approved activation-only continuation that accepts NRestarts=0 as the fresh-activation baseline, starts coordinator and authority once, and completes the bounded signed health/readiness checks."
+}
