@@ -1,0 +1,76 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_INIT_CWD_SUCCESS_RECONCILIATION_V1",
+  "status": "AUTHORITY_EMPTY_STATE_INITIALIZED_RECEIPT_FORMATTER_STOPPED_SERVICES_NOT_STARTED",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "host": {"role": "APP", "ipv4": "139.162.161.233"},
+  "action": {
+    "path": "deploy/sidequest-mvp/authority-init-cwd-successor-action-20261103.json",
+    "bytes": 3061,
+    "sha256": "e39b47e8fd4d7b9b9ae5807eedf7170a140743938c940bd7bb0059b8f9e3de53"
+  },
+  "controller": {
+    "path": "deploy/sidequest-mvp/run-authority-init-cwd-successor.py",
+    "sha256": "db8d2190b274e9ab4d9c6fb74951f6396e0dc85241b587f1786a664dcadaadd2"
+  },
+  "initializer": {
+    "workingDirectory": "/var/lib/plebeian-auctions-friday/coordinator-v3/runtime",
+    "exit": 0,
+    "stdoutBytes": 0,
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderrBytes": 0,
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "attemptCount": 1,
+    "retried": false
+  },
+  "databaseVerification": {
+    "runtimeDatabaseCount": 13,
+    "independentAnchorDatabaseCount": 5,
+    "totalDatabaseCount": 18,
+    "allRegularSingleLinkServiceOwned0600": true,
+    "sqliteQuickCheckOkCount": 18,
+    "deploymentId": "friday-demo-20261030-separated-v1",
+    "zeroRevisionChecks": [
+      "coordinator",
+      "coordinatorAnchor",
+      "fundingReplayAnchor",
+      "fundingBroadcastAnchor",
+      "sellerPlan",
+      "sellerPlanAnchor"
+    ]
+  },
+  "publicPackage": {
+    "path": "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3/exchange/friday-demo-20261030-separated-v1-dkg1/participant-1.public.json",
+    "bytes": 301,
+    "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+    "uid": 0,
+    "gid": 988,
+    "mode": "0640"
+  },
+  "remoteReceipt": {
+    "path": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-authority-init-cwd-successor-v1/STOPPED.json",
+    "bytes": 6671,
+    "sha256": "b34d9e579c13760fdce633aa6729013fb5fcee04a95b0027f04152b67ba2f84d",
+    "uid": 0,
+    "gid": 0,
+    "mode": "0600",
+    "category": "RUNTIME_PRE_ENTRIES",
+    "qualification": "The initializer and all substantive postconditions succeeded. The controller stopped while constructing its final ACTUAL evidence because it incorrectly reapplied the pre-init identity-pair-only assertion after the runtime directory correctly gained 13 databases. The STOPPED receipt is preserved and not rewritten."
+  },
+  "serviceState": {
+    "activeUnchanged": ["plebeian-friday-fips.service", "plebeian-friday-mint.service"],
+    "inactiveUnchanged": [
+      "plebeian-friday-observer.service",
+      "plebeian-friday-site.service",
+      "plebeian-friday-authority.service",
+      "plebeian-friday-coordinator.service"
+    ],
+    "servicesStartedStoppedEnabledDisabledOrRestarted": false
+  },
+  "excludedEffectsConfirmed": {
+    "credentialsCreated": false,
+    "privateKeyShareOrSecretAccessed": false,
+    "paymentsPerformed": false,
+    "automaticRetryRollbackDeletionOrReset": false
+  },
+  "deploymentMeaning": "APP authority empty state is initialized and ready for the separately approved service activation sequence; the MVP is not live yet."
+}
