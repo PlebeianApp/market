@@ -1,0 +1,74 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_OBSERVER_ACTIVATION_ACTUAL_V1",
+  "status": "OBSERVER_ACTIVE_CAUGHT_UP_TWO_INCREASING_HEIGHTS",
+  "completedAtUtc": "2026-11-03T22:27:58Z",
+  "sourceCommitBeforeAction": "34aee319ad5775ad259b7e084b04e25b7b7029c2",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "controller": {
+    "path": "/tmp/run_sidequest_observer_activation.py",
+    "sha256": "fd6c8fda9d65c45d5a74f3d55ea93fc895bed5caf4c42f60ab4edd3c04a5a929",
+    "attemptCount": 1,
+    "retried": false
+  },
+  "validatorPrerequisite": {
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "observedHeight": 343,
+    "catchingUp": false,
+    "fourValidatorCommitHeight": 342,
+    "fourValidatorCommitBlockIdHash": "B9BB558F85307044FF20AF8FAA8BA597ACDA8FC5AADCD90494385E883B5583E0",
+    "signatureCount": 4
+  },
+  "preconditions": {
+    "observerGuard": "SIDEQUEST_LEGACY_NODE_TARGET=PASS",
+    "observerInitiallyInactive": true,
+    "observerInitialRestartCount": 0,
+    "forbiddenValidatorSigningFilesAbsent": true,
+    "rpcListenerInitiallyAbsent": true,
+    "fipsActive": true,
+    "mintActive": true,
+    "coordinatorAuthorityAndSiteInactive": true
+  },
+  "observer": {
+    "host": "APP",
+    "ipv4": "139.162.161.233",
+    "nodeId": "71ad3719c811aaadcf58c3cf49dd2f75d2391835",
+    "service": "active-running",
+    "restartCount": 0,
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "samples": [
+      {
+        "height": 417,
+        "blockHash": "09B8207D4FD0061473D07EEED7C399E55405A8CFF05FB308E13AFF0AE96B965A",
+        "catchingUp": false
+      },
+      {
+        "height": 418,
+        "blockHash": "BED499FC3AC88C57307FD4F7B6E7031BACD93C8E680882535F63AA3A93B2526E",
+        "catchingUp": false
+      }
+    ],
+    "heightAdvanced": true,
+    "votingOrValidatorKeyUsed": false
+  },
+  "appServicesAfter": {
+    "active": [
+      "plebeian-friday-fips.service",
+      "plebeian-friday-mint.service",
+      "plebeian-friday-observer.service"
+    ],
+    "inactive": [
+      "plebeian-friday-coordinator.service",
+      "plebeian-friday-authority.service",
+      "plebeian-friday-site.service"
+    ]
+  },
+  "effects": {
+    "observerServiceStarted": true,
+    "coordinatorAuthorityOrSiteStarted": false,
+    "configurationChanged": false,
+    "firewallHttpsNginxOrExternalExposureChanged": false,
+    "paymentsPerformed": false,
+    "privateKeyContentsOrHashesRead": false
+  },
+  "nextStep": "Under separate exact approval, start V1-V4 fail-stop FROST signer services, leaving APP coordinator, authority, site and external exposure unchanged."
+}
