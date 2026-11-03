@@ -1,0 +1,95 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_COORDINATOR_EXECUTOR_PATH_REPAIR_PLAN_V1",
+  "status": "READY_FOR_EXACT_APPROVAL_NOT_EXECUTED",
+  "preparedAtUtc": "2026-11-03T23:24:26Z",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "cause": "The installed coordinator rejects the exact successor terminal-executor path emitted by the activation renderer. It exits during argument validation before acquiring its process lease or opening the coordinator databases.",
+  "sourceRepair": {
+    "constant": "SEPARATED_SUCCESSOR_EXECUTOR_BINARY=/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/plebeian-friday-terminal-executor",
+    "policy": "Admit only the existing exact separated predecessor path or the exact sidequest successor path; traversal, near-name, alternate-release and double-slash paths remain rejected.",
+    "files": [
+      "cashu-wrapper/ts/demo-friday-separated-constants.ts",
+      "cashu-wrapper/ts/demo-friday-coordinator-cli.ts",
+      "cashu-wrapper/ts/demo-friday-coordinator-cli.test.ts"
+    ]
+  },
+  "tests": {
+    "bun": {
+      "command": "bun test demo-friday-coordinator-cli.test.ts demo-friday-r20-path-contract.test.ts demo-friday-separated-service.test.ts",
+      "result": "20 passed, 0 failed"
+    },
+    "typescript": {
+      "command": "bunx tsc -p tsconfig.friday.json --noEmit",
+      "result": "exit 0"
+    },
+    "compiledSmoke": "The rebuilt binary accepts the exact successor executor argument and proceeds to application loading; an isolated local invocation stopped only because the fixed /etc application path is intentionally absent.",
+    "guardFixture": "SIDEQUEST_COORDINATOR_R2_TARGET=PASS",
+    "systemdSyntax": "systemd-analyze verify completed with only the expected pre-install missing-binary warning"
+  },
+  "patchRelease": {
+    "root": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-coordinator-r2",
+    "createOnce": true,
+    "artifacts": [
+      {
+        "source": "dist/sidequest/plebeian-friday-coordinator-r2",
+        "destination": "bin/plebeian-friday-coordinator",
+        "bytes": 98656234,
+        "sha256": "f3a60bfe025c2fcee2438442a2c466fb985322f955c62310a790cecce9f24ce0",
+        "mode": "0755"
+      },
+      {
+        "source": "deploy/sidequest-mvp/verify-sidequest-coordinator-r2.py",
+        "destination": "bin/verify-friday-separated-target.py",
+        "bytes": 4131,
+        "sha256": "b02b081841d5c321259dbd4b095faa0c97ba5a3b06e34bf5abce7003dc93c355",
+        "mode": "0755"
+      },
+      {
+        "source": "deploy/friday/separated/verify-friday-separated-target.py",
+        "destination": "bin/verify-friday-separated-base.py",
+        "bytes": 14659,
+        "sha256": "36bc33672b1cd2bef0961c7a7df160686cb2674e62242784303a64d652515f1d",
+        "mode": "0755"
+      },
+      {
+        "source": "deploy/friday/verify-friday-runtime-target.py",
+        "destination": "bin/verify-friday-runtime-target.py",
+        "bytes": 24764,
+        "sha256": "d5c7031676fa3e5dc15a5da5c11a8d20c44e5f5e53242b3407df90b1c026b206",
+        "mode": "0755"
+      }
+    ],
+    "preserves": [
+      "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4",
+      "/opt/plebeian-auctions-friday/releases/separated-deploy-v1"
+    ]
+  },
+  "unitReplacement": {
+    "source": "deploy/sidequest-mvp/plebeian-friday-coordinator-r2.service",
+    "bytes": 1631,
+    "sha256": "5e135b74ecad0f49ae801870c015a5b3ab4c09558401b8ee30472f1553a05076",
+    "currentSha256": "10c1bb4e8b126f7be4893f3543aa4e3402f5c24830c600f6a70c0a8fd4399fa5",
+    "retained": "/etc/systemd/system/.plebeian-friday-coordinator.pre-r2.service",
+    "incoming": "/etc/systemd/system/.plebeian-friday-coordinator.r2.incoming.service",
+    "destination": "/etc/systemd/system/plebeian-friday-coordinator.service",
+    "mode": "0644",
+    "reloadSystemd": true
+  },
+  "continuation": [
+    "Recheck the installed activation configuration, preserved STOPPED receipt, inactive coordinator/authority/site, empty revision-0 queue and absent 8180/8181 listeners.",
+    "Install the patch release and replacement coordinator unit create-once; preserve the current unit; daemon-reload without starting any service.",
+    "Run the exact R2 coordinator guard as plebeian-friday.",
+    "Perform one new coordinator start. Require active-running, zero restarts and the separated runtime lease.",
+    "Perform the first authority start and bounded two-sample readiness verification from the original activation plan.",
+    "Require four signer epoch-1 process anchors, no queued operation, no FROST threshold signature, no payment and no site/nginx/HTTPS listener."
+  ],
+  "failurePolicy": "Stop only coordinator/authority services started by the continuation, preserve the patch release, units, configuration, databases and receipts, and make no retry, reset, deletion or rollback.",
+  "exactApprovalRequest": "The activation configuration is installed, but coordinator startup stopped before opening its databases because its exact path allowlist did not include the already installed successor terminal executor. I have rebuilt and tested a coordinator that admits only that exact successor path. May I install it as a new create-once patch release, replace and retain only the inactive coordinator unit, reload systemd, and make one new coordinator start followed by the first authority start and the previously approved loopback readiness checks? This will not overwrite either existing release, request a FROST threshold signature, move fake sats, start the website, or expose HTTPS.",
+  "notAuthorized": [
+    "Installing the patch release or coordinator unit",
+    "Starting coordinator or authority again",
+    "Modifying or deleting the preserved stopped action",
+    "Starting site, nginx or HTTPS",
+    "Sending any signing, funding, auction, settlement or payment request"
+  ]
+}

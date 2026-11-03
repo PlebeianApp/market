@@ -1,0 +1,61 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_APP_BACKEND_ACTIVATION_STOPPED_ACTUAL_V1",
+  "status": "ACTIVATION_CONFIG_INSTALLED_COORDINATOR_FIRST_START_FAILED_AUTHORITY_NOT_STARTED_NO_RETRY",
+  "completedAtUtc": "2026-11-03T23:24:26Z",
+  "planSha256": "07ca25c841096da30b088bc9fe092c321faaa66dee001ef553ac9ed68073c013",
+  "controller": {
+    "path": "/tmp/run_app_backend_activation.py",
+    "sha256": "605cce6f33d8fd4fb1853b1deb5acaf51b039c7b1cc7b767cba2ad6683946fdb"
+  },
+  "remoteAction": {
+    "startedAtUtc": "2026-11-03T23:19:03Z",
+    "stoppedAtUtc": "2026-11-03T23:19:10Z",
+    "actionReceiptSha256": "17d9edd0d69fa8c395296cf6765a8fb91c9eee0b4758eeae331aca53f9eebde0",
+    "stoppedReceiptSha256": "92d9e649b6dd5afb2ed2af2e45bcea4b7be80abf6e86a30a559efbe171644c9f",
+    "automaticRetryOccurred": false,
+    "manualRetryOccurred": false
+  },
+  "configuration": {
+    "installed": {
+      "environment": {"bytes": 2281, "sha256": "0f01031a9ad89cb55bcdd401acb0860a03a3c7b4015bd876ff6fd9c6d2ce538f"},
+      "runtimeBindings": {"bytes": 2942, "sha256": "26092151896aa424614b8a8c7afe619e2d14bed8cbfbf6ce2fbf425cafe98594"}
+    },
+    "retained": {
+      "environment": {"bytes": 2283, "sha256": "797f56d4115de50d827cbf6c4c7c5c7be56ba5b0145d19beaa9236f65949016a"},
+      "runtimeBindings": {"bytes": 2943, "sha256": "86a5c6920ce64793006c33481685f4c4bfe8e621e2cda4b580645aa4f0c51526"}
+    },
+    "allFilesRootPublicGroup0640SingleLink": true
+  },
+  "coordinatorAttempt": {
+    "preStartGuard": "SIDEQUEST_ROLE_TARGET=PASS",
+    "mainExitStatus": 1,
+    "restartPolicy": "on-failure",
+    "restartCount": 0,
+    "autoRestartWasPendingThenStopped": true,
+    "preservedJournalError": "DEMO_FRIDAY_COORDINATOR_CLI: executor must be a canonical Friday binary path",
+    "cause": "The activation renderer and installed environment correctly select /opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/plebeian-friday-terminal-executor, but the installed coordinator binary's exact path allowlist accepts only predecessor, R20 or generic legacy executor paths."
+  },
+  "postStop": {
+    "coordinator": "inactive-dead-exit-status-1-zero-restarts",
+    "authority": "inactive-never-started",
+    "site": "inactive-never-started",
+    "observerMintFips": "active-unchanged",
+    "loopback8180or8181Listener": false,
+    "coordinatorQueueRevision": 0,
+    "queuedOperations": 0,
+    "coordinatorDatabaseQuickCheck": "ok"
+  },
+  "effects": {
+    "authenticatedSignerHealthSignatureRequested": false,
+    "frostThresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "authorityOrSiteListenerCreated": false,
+    "firewallNginxHttpsOrExternalExposureChanged": false
+  },
+  "reconciliation": {
+    "controller": "/tmp/reconcile_app_backend_stop.py",
+    "controllerSha256": "8c95310d277e176d74db9681d2e8a066bde8a833e951fd3927d8fbb9f1c95919",
+    "remoteMutation": false
+  },
+  "nextStep": "Install a create-once coordinator R2 patch release whose exact path contract admits the already installed successor terminal executor, replace only the inactive coordinator unit, then perform one separately approved continuation start."
+}

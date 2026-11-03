@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { isSeparatedApplication } from './demo-friday-runtime-config'
-import { SEPARATED_EXECUTOR_BINARY } from './demo-friday-separated-constants'
+import { SEPARATED_EXECUTOR_BINARY, SEPARATED_SUCCESSOR_EXECUTOR_BINARY } from './demo-friday-separated-constants'
 import { loadSeparatedServiceBinding } from './demo-friday-separated-service'
 /**
  * Persistent, non-networked Friday terminal worker.
@@ -92,7 +92,8 @@ export interface DemoFridayExecutorIdentityV2 {
 function executable(value: string): string {
 	const legacy = value.startsWith('/opt/plebeian-auctions-friday/bin/')
 	const r20 = value === DEMO_FRIDAY_R20_TERMINAL_EXECUTOR_BINARY
-	if ((!legacy && !r20 && value !== SEPARATED_EXECUTOR_BINARY) || resolve(value) !== value || value.endsWith('/') || value.includes('//')) {
+	const separated = value === SEPARATED_EXECUTOR_BINARY || value === SEPARATED_SUCCESSOR_EXECUTOR_BINARY
+	if ((!legacy && !r20 && !separated) || resolve(value) !== value || value.endsWith('/') || value.includes('//')) {
 		throw new Error('DEMO_FRIDAY_COORDINATOR_CLI: executor must be a canonical Friday binary path')
 	}
 	return value
@@ -266,7 +267,7 @@ async function openRuntime(args: ServeArgs | InitAnchorArgs) {
 	if (isSeparatedApplication(application)) {
 	 if (application.role !== 'APPLICATION') throw new Error('SEPARATED_COORDINATOR: app role required')
 	 await loadSeparatedServiceBinding({application})
- if(args.mode==='serve' && args.executor!==SEPARATED_EXECUTOR_BINARY) throw new Error('SEPARATED_COORDINATOR: exact successor executor required')
+ if(args.mode==='serve' && args.executor!==SEPARATED_EXECUTOR_BINARY && args.executor!==SEPARATED_SUCCESSOR_EXECUTOR_BINARY) throw new Error('SEPARATED_COORDINATOR: exact approved executor required')
 	}
 	if (application.schema === 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V3') {
 		await loadDemoFridayR20ServiceBinding({ application, pins: demoFridayR20ServicePins() })

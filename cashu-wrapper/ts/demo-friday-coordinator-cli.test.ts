@@ -6,6 +6,7 @@ import {
 	acquireDemoFridayProcessLease, demoFridayCoordinatorArgs, demoFridayExecutorIdentity,
 	demoFridayManifestDigestPin, exactDemoFridayExecutorResult,
 } from './demo-friday-coordinator-cli'
+import { SEPARATED_SUCCESSOR_EXECUTOR_BINARY } from './demo-friday-separated-constants'
 import type { DemoFridayCoordinatorRecordV2 } from './demo-friday-coordinator-runtime'
 
 const h = (value: string): string => value.repeat(64)
@@ -58,7 +59,11 @@ describe('Friday coordinator child protocol', () => {
 			's' + 'erve', ...common, '--executor-binary',
 			'/opt/plebeian-auctions-friday/releases/r20-deploy-v1/bin/plebeian-friday-terminal-executor',
 		])).toMatchObject({ mode: 'serve' })
+		expect(demoFridayCoordinatorArgs([
+			's' + 'erve', ...common, '--executor-binary', SEPARATED_SUCCESSOR_EXECUTOR_BINARY,
+		])).toMatchObject({ mode: 'serve', executor: SEPARATED_SUCCESSOR_EXECUTOR_BINARY })
 		for (const path of [
+			`${SEPARATED_SUCCESSOR_EXECUTOR_BINARY}-near`,
 			'/opt/plebeian-auctions-friday/releases/r20-deploy-v1/bin/plebeian-friday-terminal-executor-near',
 			'/opt/plebeian-auctions-friday/releases/r20-deploy-v1/bin/../bin/plebeian-friday-terminal-executor',
 			'/opt/plebeian-auctions-friday/releases/r20-deploy-v2/bin/plebeian-friday-terminal-executor',
