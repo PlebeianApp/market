@@ -1,0 +1,143 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_FIVE_HOST_ACTIVATION_READINESS_ACTUAL_V1",
+  "status": "VALIDATOR_COHORT_READY_APP_BACKEND_READY_AFTER_SCOPED_ACTIVATION_CONFIG_SERVICES_NOT_STARTED",
+  "completedAtUtc": "2026-11-03T21:26:53Z",
+  "sourceCommit": "ac25678b378d8b70a3549e6213ec535f7d07eadb",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "method": {
+    "kind": "PINNED_ROOT_SSH_READ_ONLY_PLUS_LOCAL_DETERMINISTIC_RENDER",
+    "preflightScriptSha256": "db0a47a3bf97531ef8273fb6d28d7e445537f4c4af22142f21f3e4d7d9310f21",
+    "firstPassQualification": "The first pass stopped after APP when the checker used an incorrect public-genesis path on V1. It made no remote change. The corrected second pass completed on APP and V1-V4.",
+    "remoteMutation": false,
+    "privateKeyContentsOrHashesRead": false,
+    "paymentsPerformed": false
+  },
+  "sharedPublicPins": {
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "genesisSha256": "8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea",
+    "launchSealSha256": "a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c"
+  },
+  "app": {
+    "ipv4": "139.162.161.233",
+    "services": {
+      "active": [
+        "plebeian-friday-fips.service",
+        "plebeian-friday-mint.service"
+      ],
+      "inactive": [
+        "plebeian-friday-observer.service",
+        "plebeian-friday-coordinator.service",
+        "plebeian-friday-authority.service",
+        "plebeian-friday-site.service"
+      ],
+      "allNRestartsZero": true,
+      "systemdVerifyExit": 0
+    },
+    "installedUnits": {
+      "plebeian-friday-observer.service": "83dd4211a10a5e108152fc234e87963b53a786413a5a7f18682dcf4174002c1a",
+      "plebeian-friday-coordinator.service": "10c1bb4e8b126f7be4893f3543aa4e3402f5c24830c600f6a70c0a8fd4399fa5",
+      "plebeian-friday-authority.service": "657cfe6a205d500d93117943d3d7aec9c52e0617e599cd11e8d5ad30297c19b7",
+      "plebeian-friday-site.service": "dffaa560f8b79beff1f76553b3d2c1cb4e041b82dac403da01c6aab8a95f22fc"
+    },
+    "guards": {
+      "observer": "SIDEQUEST_LEGACY_NODE_TARGET=PASS",
+      "coordinator": "SIDEQUEST_ROLE_TARGET=PASS",
+      "authority": "SIDEQUEST_ROLE_TARGET=PASS",
+      "siteRole": "SIDEQUEST_ROLE_TARGET=PASS",
+      "siteActivation": "SIDEQUEST_RUNTIME=STOPPED:BINDINGS_NOT_READY"
+    },
+    "authorityState": {
+      "runtimeDatabaseCount": 13,
+      "independentAnchorDatabaseCount": 5,
+      "sqliteQuickCheckOkCount": 18,
+      "allServiceOwnedMode0600": true,
+      "allExpectedRevisionsZero": true
+    },
+    "currentConfiguration": {
+      "application": {
+        "bytes": 1000,
+        "sha256": "253427ca537fb143022d48f4539e939cf01f729cbf444368d9faea75c6badeee"
+      },
+      "environment": {
+        "bytes": 2283,
+        "sha256": "797f56d4115de50d827cbf6c4c7c5c7be56ba5b0145d19beaa9236f65949016a",
+        "browserReady": false,
+        "closeTrigger": false,
+        "recoveryOnly": false
+      },
+      "runtimeBindings": {
+        "bytes": 2943,
+        "sha256": "86a5c6920ce64793006c33481685f4c4bfe8e621e2cda4b580645aa4f0c51526",
+        "status": "READY_FOR_INACTIVE_INSTALL",
+        "serviceActivationApproved": false,
+        "serviceActivationAuthorized": false
+      }
+    },
+    "activationRender": {
+      "status": "READY_FIXTURE_NOT_INSTALLED",
+      "applicationUnchanged": true,
+      "environment": {
+        "bytes": 2281,
+        "sha256": "0f01031a9ad89cb55bcdd401acb0860a03a3c7b4015bd876ff6fd9c6d2ce538f",
+        "onlySemanticChanges": [
+          "POC_FRIDAY_BROWSER_READY=true",
+          "POC_FRIDAY_R20_CLOSE_TRIGGER=true"
+        ]
+      },
+      "runtimeBindings": {
+        "bytes": 2942,
+        "sha256": "26092151896aa424614b8a8c7afe619e2d14bed8cbfbf6ce2fbf425cafe98594",
+        "status": "READY_FOR_SCOPED_ACTIVATION"
+      },
+      "remoteMutation": false
+    },
+    "listenersAbsent": [
+      "127.0.0.1:27657",
+      "127.0.0.1:8180",
+      "127.0.0.1:8181",
+      "0.0.0.0:80",
+      "0.0.0.0:443"
+    ],
+    "externalWeb": {
+      "nginx": "inactive-disabled",
+      "httpOrHttpsListenerPresent": false,
+      "letsencryptLiveEntriesPresent": false
+    }
+  },
+  "validators": {
+    "roles": [
+      "V1",
+      "V2",
+      "V3",
+      "V4"
+    ],
+    "fipsActiveAll": true,
+    "validatorInactiveAll": true,
+    "signerInactiveAll": true,
+    "allNRestartsZero": true,
+    "systemdVerifyExitAll": 0,
+    "validatorGuardAll": "SIDEQUEST_LEGACY_NODE_TARGET=PASS",
+    "signerGuardAll": "SIDEQUEST_ROLE_TARGET=PASS",
+    "validatorUnitSha256": "ff37b56e05c9325c7c92d821a0d73e3b9fcb153c54fcb58482c50e83351e3961",
+    "signerUnitSha256": "d79d99abfd381e8886660a75d2b60cabd7f7f484f8373b36df95cc36e097e744",
+    "targetListenersAbsentAll": true,
+    "privateValidatorStateMetadata": {
+      "allServiceOwnedMode0600": true,
+      "allHeight": "0",
+      "allRound": 0,
+      "allStep": 0,
+      "contentsOrHashesRead": false
+    }
+  },
+  "conclusion": {
+    "validatorStartBlockers": [],
+    "appBackendStartBlockersAfterValidatorAndSignerReadiness": [
+      "Install the predecessor-pinned APP activation environment and public runtime bindings under explicit activation authority."
+    ],
+    "fiveUserRemoteBrowserBlockers": [
+      "No active HTTP/HTTPS reverse proxy or listener exists.",
+      "No verified HTTPS certificate is installed.",
+      "Five real NIP-07 test identities and an end-to-end fake-sat rehearsal have not yet run."
+    ]
+  }
+}

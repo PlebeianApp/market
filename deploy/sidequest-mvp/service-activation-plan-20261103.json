@@ -1,0 +1,147 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_SERVICE_ACTIVATION_PLAN_V1",
+  "status": "READY_FOR_EXACT_ACTION_APPROVAL_NOT_EXECUTED",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "chainId": "plebeian-auctions-mvp-20261102",
+  "principles": [
+    "Start the consensus cohort before any threshold signer or APP auction process.",
+    "Require advancing, pinned consensus before enabling any application operation.",
+    "Keep the site loopback-only; HTTPS and external exposure remain a separate action.",
+    "Never reset or copy Comet signing state, validator keys, FROST shares, coordinator identity, or initialized databases.",
+    "Stop and reconcile on unexpected state; never delete state or blindly retry."
+  ],
+  "phases": [
+    {
+      "phase": 1,
+      "name": "validator-consensus",
+      "targets": [
+        "V1 172.105.64.142",
+        "V2 172.105.95.57",
+        "V3 172.104.240.217",
+        "V4 172.104.253.247"
+      ],
+      "preconditions": [
+        "FIPS active; validator and signer inactive with zero restarts and no pending jobs.",
+        "Genesis SHA-256 8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea and launch seal SHA-256 a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c.",
+        "Validator guard passes and priv_validator_state metadata is fresh at height 0/round 0/step 0."
+      ],
+      "mutation": "Run systemctl start plebeian-friday-validator.service on V1-V4 under one exact approval.",
+      "acceptance": [
+        "All four units remain active without a restart loop.",
+        "Loopback Comet /status reports chain plebeian-auctions-mvp-20261102 and an advancing height on all four hosts.",
+        "Loopback /net_info reports the expected authenticated peer mesh.",
+        "A commit at a common positive height contains all four expected validator signatures."
+      ],
+      "securityEffect": "Each validator begins using its existing local Comet voting key. priv_validator_state and chain data advance irreversibly and must never be rolled back. P2P remains on the FIPS ULA and RPC remains loopback-only.",
+      "failurePolicy": "Stop only the validator units started by this action if the approved failure cleanup is exercised; preserve all data and signing state and report before any retry."
+    },
+    {
+      "phase": 2,
+      "name": "app-observer",
+      "targets": [
+        "APP 139.162.161.233"
+      ],
+      "preconditions": [
+        "Phase 1 has a pinned advancing four-validator commit.",
+        "Observer guard passes and the observer contains no validator signing files."
+      ],
+      "mutation": "Run systemctl start plebeian-friday-observer.service on APP.",
+      "acceptance": [
+        "Observer remains active without a restart loop.",
+        "Loopback /status is not catching up and observes two successive increasing heights matching the validator chain."
+      ],
+      "securityEffect": "The observer uses its existing non-voting Comet P2P key and writes only its observer data leaf. It cannot sign validator votes."
+    },
+    {
+      "phase": 3,
+      "name": "threshold-signers",
+      "targets": [
+        "V1",
+        "V2",
+        "V3",
+        "V4"
+      ],
+      "preconditions": [
+        "Phases 1 and 2 are accepted.",
+        "Signer guards pass, validators remain active, and no signer RPC listener exists before start."
+      ],
+      "mutation": "Run systemctl start plebeian-friday-signer.service on V1-V4.",
+      "acceptance": [
+        "All four signer units remain active; Restart=no preserves fail-stop behavior.",
+        "The APP authority's authenticated challenge-bound /v1/health collection later observes at least three, preferably all four, exact enrolled participants."
+      ],
+      "securityEffect": "Each signer begins using its existing local FROST share and durable journal. Shares remain on their hosts. Port 39101 is reachable only on the FIPS ULA and health is authenticated; it is not a public readiness endpoint."
+    },
+    {
+      "phase": 4,
+      "name": "app-scoped-activation-config",
+      "targets": [
+        "APP"
+      ],
+      "preconditions": [
+        "Explicit service-activation authority.",
+        "Current friday.env SHA-256 797f56d4115de50d827cbf6c4c7c5c7be56ba5b0145d19beaa9236f65949016a.",
+        "Current sidequest-runtime-bindings.json SHA-256 86a5c6920ce64793006c33481685f4c4bfe8e621e2cda4b580645aa4f0c51526.",
+        "application.json remains byte-identical at SHA-256 253427ca537fb143022d48f4539e939cf01f729cbf444368d9faea75c6badeee."
+      ],
+      "mutation": "Atomically retain and replace only APP friday.env and sidequest-runtime-bindings.json with the deterministic activation render.",
+      "outputs": {
+        "friday.env": "0f01031a9ad89cb55bcdd401acb0860a03a3c7b4015bd876ff6fd9c6d2ce538f",
+        "sidequest-runtime-bindings.json": "26092151896aa424614b8a8c7afe619e2d14bed8cbfbf6ce2fbf425cafe98594"
+      },
+      "onlyEnvironmentSemanticChanges": [
+        "POC_FRIDAY_BROWSER_READY=false to true",
+        "POC_FRIDAY_R20_CLOSE_TRIGGER=false to true"
+      ],
+      "securityEffect": "New auction operations and the close trigger become eligible only after authority and site processes start and their composite checks pass. This does not expose a network listener by itself."
+    },
+    {
+      "phase": 5,
+      "name": "app-auction-services-loopback",
+      "targets": [
+        "APP"
+      ],
+      "preconditions": [
+        "Phases 1-4 accepted; mint and FIPS remain active; all 18 initialized databases still pass SQLite quick_check."
+      ],
+      "mutation": "Start coordinator, then authority, then site. Do not enable units persistently yet.",
+      "acceptance": [
+        "Coordinator and authority remain active without restart loops and the authority binds only 127.0.0.1:8181.",
+        "Two authority /api/friday/status samples at least one second apart observe increasing heights, a matching live mint, at least three authenticated signers, mode normal, funding enabled_two_step_nip07, and newOperationsReady=true.",
+        "Site pre-start guards pass, site binds only 127.0.0.1:8180, /api/config reports both browser threshold readiness flags true, and /test-mint reaches the pinned fake-sat mint without redirect or content-encoding drift."
+      ],
+      "securityEffect": "Coordinator and authority begin writing the initialized SQLite stores and can authorize fake-sat threshold operations. The site remains unavailable to remote team browsers because it is loopback-only."
+    },
+    {
+      "phase": 6,
+      "name": "separate-https-exposure-and-five-user-rehearsal",
+      "targets": [
+        "APP and five Plebeian test users"
+      ],
+      "preconditions": [
+        "Loopback acceptance in phase 5 succeeds.",
+        "A separately approved and verified HTTPS certificate and reverse-proxy configuration are available."
+      ],
+      "mutation": "Under separate approval, install/activate HTTPS proxying to loopback site and run the five-user NIP-07 fake-sat auction rehearsal.",
+      "acceptance": [
+        "Five distinct NIP-07 identities log in and each receives exactly 10000 fake sats.",
+        "A test auction admits bids, returns the losing bidder's locked value, and settles 180 fake sats to the seller with the expected winner balance.",
+        "One validator outage/rejoin, interrupted or repeated actions, and restart recovery behave as specified without real funds."
+      ],
+      "currentBlocker": "nginx is inactive and disabled; no port 80/443 listener or Let's Encrypt live entry exists. HTTPS/external exposure is not authorized by this plan."
+    }
+  ],
+  "shortestSafeNextAction": {
+    "phase": 1,
+    "ready": true,
+    "blockers": [],
+    "exactApprovalRequest": "May I start the V1-V4 validator services and verify that the pinned chain advances with a four-validator commit? This will use their existing Comet voting keys and permanently advance their signing-state files. It will not start FROST signers or APP auction services, change configuration, firewalls or HTTPS, expose the site, or make payments. If acceptance fails, I will stop only the validator units started by this action, preserve all data and signing state, and report before any retry."
+  },
+  "notAuthorizedByThisPlan": [
+    "Any service start, stop, enable, disable or restart",
+    "Any remote configuration write",
+    "Any firewall, nginx, certificate or external exposure change",
+    "Any payment or five-user acceptance action",
+    "Any private key or FROST share export, hash, copy or reset"
+  ]
+}
