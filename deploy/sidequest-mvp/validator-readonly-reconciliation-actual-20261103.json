@@ -1,0 +1,123 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_VALIDATOR_READONLY_RECONCILIATION_ACTUAL_V1",
+  "completedAtUtc": "2026-11-03T07:59:05Z",
+  "status": "FOUR_PINNED_VALIDATORS_MATCH_READY_FOR_SEPARATE_STAGING_FINALIZATION_APPROVAL",
+  "priorBlockedRecord": {
+    "path": "deploy/sidequest-mvp/validator-readonly-reconciliation-blocked-20261103.json",
+    "sha256": "0c49cfe18a0d0d193d8926739c05ffe5da226c7e458a34d283ecf34017caeb9c",
+    "preserved": true,
+    "remoteCommandsStarted": 0
+  },
+  "sshIdentity": {
+    "agentSocket": "/tmp/ssh-1UGv8p0CgFNJ/agent.263905",
+    "agentFingerprint": "SHA256:IGu9dXOSXw4JoPmwNjAgDRI2AY+zJil/haJGjKRYt34",
+    "expectedPublicKeySha256": "968181db57a2eb2351404b239185f5f6a81771a52eb328ee75b52a0697c7e909",
+    "exactSingleAgentKeyVerified": true,
+    "strictPinnedHostKeys": true,
+    "passwordAuthentication": false,
+    "keyboardInteractiveAuthentication": false,
+    "agentForwarding": false
+  },
+  "probe": {
+    "localPath": "/tmp/plebeian-validator-readonly-probe.py",
+    "bytes": 4445,
+    "sha256": "3bef9baee428a543f783be2be7fd6798896ec53c7289a8ab0d38e88e1da1c9af",
+    "transport": "EXECUTED_FROM_SSH_STDIN_NO_REMOTE_FILE_CREATED",
+    "privateKeyContentsReadOrHashed": false,
+    "remoteWrites": false,
+    "finalizerInvoked": false,
+    "serviceChanges": false
+  },
+  "commonExpected": {
+    "binaryPath": "/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc",
+    "binaryBytes": 46580232,
+    "binaryMode": "0755",
+    "binaryUid": 0,
+    "binaryGid": 0,
+    "binaryLinks": 1,
+    "binarySha256": "8f501da6c7b054d3b33f98f4be52c0299655fc52756af70cd59cbc5740afd7c4",
+    "networkRoot": "/var/lib/plebeian-auctions-friday/network-separated",
+    "networkRootMode": "0700",
+    "networkRootUid": 0,
+    "networkRootGid": 0,
+    "stagingParent": "/var/lib/plebeian-auctions-friday/separated-inputs",
+    "stagingParentMode": "0750",
+    "stagingParentUid": 0,
+    "stagingParentGid": 988,
+    "stagingRoot": "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "stagingRootAbsent": true,
+    "validatorFinalAckAbsent": true,
+    "validatorService": {"loadState": "loaded", "activeState": "inactive", "subState": "dead"},
+    "privateFilePolicy": {"type": "regular", "mode": "0600", "uid": 0, "gid": 0, "links": 1},
+    "signingState": {"keys": ["height", "round", "step"], "height": "0", "round": 0, "step": 0, "signatureEmpty": true, "signbytesEmpty": true}
+  },
+  "hosts": [
+    {
+      "role": "V1",
+      "slot": 1,
+      "ipv4": "172.105.64.142",
+      "hostFingerprint": "SHA256:PmTHYQMvAsBjXGPwO/bSQ2PfmMZz2inTf/1r+vqJKyc",
+      "process": {"exitCode": 0, "stderrEmpty": true, "settled": true},
+      "rootEntries": ["validator-1", "validator-public.json"],
+      "otherSlotDirectoriesPresent": [],
+      "descriptor": {"bytes": 1128, "mode": "0600", "uid": 0, "gid": 0, "links": 1, "sha256": "8f8d511a2c65d22c5898f04c1742fad553a3c086980afabab4a4161e0dc836eb", "hostId": "linode-108175009", "descriptorDigest": "31b8d660d9d3818b973aae27337dd9838f2fbdfdc99e852a663e456f2259d1df", "nodeId": "bf7c5257f1494b599ee9b3bddab0920e99ccd2db", "validatorAddress": "F2FEA8935978AF365AF37F9D4EF3CBFAE9A531DA"},
+      "privateMetadataOnly": {"nodeKeyBytes": 168, "validatorKeyBytes": 345, "signingStateBytes": 46, "matchesCommonPolicy": true},
+      "result": "PASS"
+    },
+    {
+      "role": "V2",
+      "slot": 2,
+      "ipv4": "172.105.95.57",
+      "hostFingerprint": "SHA256:UgWRsu8Fw9jfbKAfSol8RP9iCL9+tG3pWuPOD/COIiY",
+      "process": {"exitCode": 0, "stderrEmpty": true, "settled": true},
+      "rootEntries": ["validator-2", "validator-public.json"],
+      "otherSlotDirectoriesPresent": [],
+      "descriptor": {"bytes": 1126, "mode": "0600", "uid": 0, "gid": 0, "links": 1, "sha256": "17ed5ee9d3df3d5b0136506b57d163b3a207023d7dc00dc36152ada2409cc1f9", "hostId": "linode-108236985", "descriptorDigest": "b62db3e56a94e10231e355890f4850aea20923476bb5f6ca36cadf84fe4439ce", "nodeId": "59e64741f815f69e5f05ae993d6adc5e8e2926b0", "validatorAddress": "3983A3511A3403978B2ED1B0D4E320F7D73F8655"},
+      "privateMetadataOnly": {"nodeKeyBytes": 168, "validatorKeyBytes": 345, "signingStateBytes": 46, "matchesCommonPolicy": true},
+      "result": "PASS"
+    },
+    {
+      "role": "V3",
+      "slot": 3,
+      "ipv4": "172.104.240.217",
+      "hostFingerprint": "SHA256:ONrQy7sbuBhUKT53VWwN4bcJ0vUKC0t/8SWWMLxZkzc",
+      "process": {"exitCode": 0, "stderrEmpty": true, "settled": true},
+      "rootEntries": ["validator-3", "validator-public.json"],
+      "otherSlotDirectoriesPresent": [],
+      "descriptor": {"bytes": 1128, "mode": "0600", "uid": 0, "gid": 0, "links": 1, "sha256": "70e0e289e345e77f9862d552c0b863309f757345ac893e58c853ff8578ea68cb", "hostId": "linode-108237290", "descriptorDigest": "c4353fd306391e33b36a8b6b7b9292c0365619dfa03eaf4a3d0c032b976f2f15", "nodeId": "e890c1016298472255243b981f249d5f4a500cff", "validatorAddress": "F2B6DF0C5E1ED036E50AAC10312E557502E37726"},
+      "privateMetadataOnly": {"nodeKeyBytes": 168, "validatorKeyBytes": 345, "signingStateBytes": 46, "matchesCommonPolicy": true},
+      "result": "PASS"
+    },
+    {
+      "role": "V4",
+      "slot": 4,
+      "ipv4": "172.104.253.247",
+      "hostFingerprint": "SHA256:DkDePjfGjDDlmiuJcT7mUiqE/a7YMUVgafnwFbxKMPY",
+      "process": {"exitCode": 0, "stderrEmpty": true, "settled": true},
+      "rootEntries": ["validator-4", "validator-public.json"],
+      "otherSlotDirectoriesPresent": [],
+      "descriptor": {"bytes": 1128, "mode": "0600", "uid": 0, "gid": 0, "links": 1, "sha256": "afdb477edfad96428d5f4e46a5646494ac4d553305d9001f5d53a0b9bb95c079", "hostId": "linode-108237424", "descriptorDigest": "3c2b40323ecdfc9e82897d624b88e3d254700c35aa803c1b291c973640ede80e", "nodeId": "18978772e14bd444ab84114d75d6db9313bff2e3", "validatorAddress": "F7F47F1B733CFA53F98368C8587B9FD116D5376F"},
+      "privateMetadataOnly": {"nodeKeyBytes": 168, "validatorKeyBytes": 345, "signingStateBytes": 46, "matchesCommonPolicy": true},
+      "result": "PASS"
+    }
+  ],
+  "summary": {
+    "hostsContacted": ["V1", "V2", "V3", "V4"],
+    "allExpectedBinaryHashesMatch": true,
+    "allExpectedPublicDescriptorsMatch": true,
+    "allRootsContainOnlyLocalSlot": true,
+    "allStagingRootsAbsent": true,
+    "allFinalAcknowledgementsAbsent": true,
+    "allPrivateMetadataMatches": true,
+    "allSigningStatesFresh": true,
+    "allValidatorServicesInactive": true,
+    "unexpectedState": false,
+    "outcomeUncertain": false,
+    "remoteWrites": false,
+    "uploads": false,
+    "privateKeyContentsReadOrHashed": false,
+    "finalizerInvoked": false,
+    "serviceChanges": false
+  },
+  "nextAuthority": "A_SEPARATE_EXPLICIT_STAGING_AND_FINALIZATION_APPROVAL_IS_REQUIRED"
+}
