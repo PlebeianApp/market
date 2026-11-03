@@ -1,0 +1,77 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_SIGNER_PUBLIC_PACKAGE_REPAIR_ACTUAL_V1",
+  "status": "ACCEPTED_PUBLIC_PACKAGE_INSTALLED_ALL_FOUR_SIGNERS_NOT_STARTED",
+  "completedAtUtc": "2026-11-03T22:52:47Z",
+  "sourceCommitBeforeAction": "b09267a9cbd061cace65b3e8339110f53b691416",
+  "planSha256": "f875fb76728a237e27a39e99879ac9ee83cefa6fd9b833a0bc2fc2f9756b1813",
+  "controller": {
+    "path": "/tmp/repair_one_signer_public_package.py",
+    "sha256": "41bacda92c18f5140426c96ca4a57810cb44986c36994345f518a67e75d01b33"
+  },
+  "acceptedSource": {
+    "runtimeBindingSha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a",
+    "field": "result.publicKeyPackageHex",
+    "bytes": 301,
+    "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5"
+  },
+  "targets": [
+    {
+      "role": "V1",
+      "bytes": 301,
+      "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+      "uid": 999,
+      "gid": 988,
+      "mode": "0600",
+      "links": 1
+    },
+    {
+      "role": "V2",
+      "bytes": 301,
+      "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+      "uid": 999,
+      "gid": 988,
+      "mode": "0600",
+      "links": 1
+    },
+    {
+      "role": "V3",
+      "bytes": 301,
+      "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+      "uid": 999,
+      "gid": 988,
+      "mode": "0600",
+      "links": 1
+    },
+    {
+      "role": "V4",
+      "bytes": 301,
+      "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+      "uid": 999,
+      "gid": 988,
+      "mode": "0600",
+      "links": 1
+    }
+  ],
+  "v1HistoricalWrapper": {
+    "preservedPath": "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3/exchange/friday-demo-20261030-separated-v1-dkg1/participant-1.dkg-public-envelope-3da508db9274.json",
+    "bytes": 966,
+    "sha256": "3da508db92746874730898bf097ed8043ae1b946801289b66cb971228a77f01d",
+    "uid": 999,
+    "gid": 988,
+    "mode": "0600",
+    "links": 1
+  },
+  "servicesAfter": {
+    "V1Signer": "failed-preserved-no-retry",
+    "V2V4Signers": "inactive-not-started",
+    "validatorsAndFips": "active-unchanged"
+  },
+  "effects": {
+    "privateKeyOrShareContentsOrHashesRead": false,
+    "dkgRepeatedOrModified": false,
+    "signerStarted": false,
+    "signingOrPaymentRequestSent": false,
+    "firewallHttpsOrExternalExposureChanged": false
+  },
+  "newBlocker": "All four signer auxiliary roots lack terminal-enrollment-permit.json. The signer consumes this deterministic public permit during first epoch initialization; starting without it would create partial safety stores and then fail closed."
+}

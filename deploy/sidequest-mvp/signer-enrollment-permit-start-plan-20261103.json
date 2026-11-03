@@ -1,0 +1,66 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_SIGNER_ENROLLMENT_PERMIT_START_PLAN_V1",
+  "status": "READY_FOR_EXACT_APPROVAL_NOT_EXECUTED",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "cause": "The production signer requires a create-once public first-enrollment permit in each signer auxiliary root. The DKG CLI defines and normally writes it, but no such file exists anywhere under the four validator state roots.",
+  "publicBinding": {
+    "schema": "COCO_DEMO_DISPOSITION_ENROLLMENT_PERMIT_V1",
+    "dkgRunId": "friday-demo-20261030-separated-v1-dkg1",
+    "publicKeyPackageSha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+    "signerRosterDigest": "c1aca1467fa1485dadfb7260024adf31f23e2d0912c99569292ee920d6d1eea1",
+    "source": "Accepted separated runtime binding; participant_id is the fixed local slot."
+  },
+  "permits": [
+    {
+      "role": "V1",
+      "participantId": 1,
+      "path": "/var/lib/plebeian-auctions-friday/separated/node-1/terminal-enrollment-permit.json",
+      "bytes": 335,
+      "sha256": "01eeab533d0d65f6612d4bb062132e191c73215ea220de4942fa62bb9f3c22ed"
+    },
+    {
+      "role": "V2",
+      "participantId": 2,
+      "path": "/var/lib/plebeian-auctions-friday/separated/node-2/terminal-enrollment-permit.json",
+      "bytes": 335,
+      "sha256": "1bffae28f16533aa292e45ffabf0980683266955171d8e6f2e4cc08b6a71df8a"
+    },
+    {
+      "role": "V3",
+      "participantId": 3,
+      "path": "/var/lib/plebeian-auctions-friday/separated/node-3/terminal-enrollment-permit.json",
+      "bytes": 335,
+      "sha256": "b4a5a0adbadd675cab30d5a359f82e64fb0f2582e7c1273c355790cc9a7d2028"
+    },
+    {
+      "role": "V4",
+      "participantId": 4,
+      "path": "/var/lib/plebeian-auctions-friday/separated/node-4/terminal-enrollment-permit.json",
+      "bytes": 335,
+      "sha256": "bed2a642b71bff3e1e9394cba75fd0bf2f45797a56f375fe9d705c8c8fe15ae3"
+    }
+  ],
+  "action": [
+    "For one host at a time, recheck the accepted package, empty signer auxiliary root, dependency services and absent listener.",
+    "Create the exact permit once as the service account, mode 0600, fsync it and its directory, and verify its public hash.",
+    "Immediately perform the one authorized signer start. The signer validates and consumes the permit while atomically initializing epoch-1 safety stores.",
+    "Require the signer to remain active under Restart=no, listen only on its exact FIPS ULA:39101, and reject a request lacking the reviewed transport marker before any signing handler.",
+    "Stop the sequence on the first failure; preserve all permit, store and service state without retry, reset or deletion."
+  ],
+  "securityEffect": "The permit authorizes the one-time creation of each signer's epoch-1 safety anchors. It is public and contains no share or key, but it is security-sensitive because the signer consumes and deletes it at successful initialization.",
+  "preconditions": {
+    "acceptedPublicPackageInstalledAllFour": true,
+    "V1Signer": "failed with no durable signer outputs",
+    "V2V4Signers": "inactive and never started",
+    "signerAuxiliaryRootsEmptyAllFour": true,
+    "permitAbsentAllFour": true
+  },
+  "failurePolicy": "No automatic retry. If a permit is consumed or any safety store appears before failure, preserve the exact state for a separately reviewed recovery decision.",
+  "exactApprovalRequest": "The accepted public package is now installed on all four validators, with V1's older wrapper preserved. A final first-start prerequisite is missing: each signer needs a deterministic 335-byte public enrollment permit that it consumes while creating epoch-1 safety anchors. May I create each exact permit once and immediately perform the one V1 retry and first V2-V4 starts? The permits contain no secrets; no signing or payment request will be sent. I will stop and preserve state on the first failure without retry or deletion.",
+  "notAuthorized": [
+    "Creating any enrollment permit",
+    "Retrying V1 or starting V2-V4 signers",
+    "Sending any authenticated health, signing or payment request",
+    "Starting APP auction services or changing external exposure"
+  ]
+}
