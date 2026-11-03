@@ -1,0 +1,137 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_VALIDATOR_ACTIVATION_ACTUAL_V1",
+  "status": "FOUR_VALIDATORS_ACTIVE_PINNED_CHAIN_ADVANCING_FOUR_SIGNATURE_COMMIT",
+  "completedAtUtc": "2026-11-03T22:22:48Z",
+  "sourceCommitBeforeAction": "ef5af0592f1f2e53be882e430e0d26854268dc1a",
+  "plan": {
+    "path": "deploy/sidequest-mvp/service-activation-plan-20261103.json",
+    "sha256": "d0539b7d80d771fcec24df074c9642a764d7ab414370af4a82565674f8d19e4f"
+  },
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "chain": {
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "genesisSha256": "8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea",
+    "launchSealSha256": "a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c"
+  },
+  "execution": {
+    "initialControllerSha256": "80a5a077180b0bb78ef1e60682dd5ab8f21b01ac188d6d9895f302ea762c8e2d",
+    "initialAttempt": "STOPPED_BEFORE_REMOTE_MUTATION",
+    "initialStopReason": "The controller manually invoked the validator guard as root instead of the unit's plebeian-friday:plebeian-friday-public service identity. V1 refused the preflight; no validator was started.",
+    "correctedControllerSha256": "1b8e3ce11a1af179429ffd39f521f97d1a42379bb50774f79b174419099c92eb",
+    "correctedInvocation": "EXECUTED_ONCE_AFTER_CONFIRMED_NO_MUTATION",
+    "controllerReceiptTransport": "The long-running local tool channel returned no final stdout. No start was retried. The resulting remote state was independently reconciled read-only.",
+    "uncertaintyResolved": true
+  },
+  "validators": [
+    {
+      "role": "V1",
+      "ipv4": "172.105.64.142",
+      "nodeId": "bf7c5257f1494b599ee9b3bddab0920e99ccd2db",
+      "validatorAddress": "F2FEA8935978AF365AF37F9D4EF3CBFAE9A531DA",
+      "service": "active-running",
+      "restartCount": 0,
+      "signerService": "inactive-dead",
+      "reconciliationSigningState": {
+        "height": "117",
+        "round": 0,
+        "step": 3
+      },
+      "reconciliationRpcHeight": 119,
+      "catchingUp": false,
+      "peerCount": 3
+    },
+    {
+      "role": "V2",
+      "ipv4": "172.105.95.57",
+      "nodeId": "59e64741f815f69e5f05ae993d6adc5e8e2926b0",
+      "validatorAddress": "3983A3511A3403978B2ED1B0D4E320F7D73F8655",
+      "service": "active-running",
+      "restartCount": 0,
+      "signerService": "inactive-dead",
+      "reconciliationSigningState": {
+        "height": "117",
+        "round": 0,
+        "step": 3
+      },
+      "reconciliationRpcHeight": 118,
+      "catchingUp": false,
+      "peerCount": 3
+    },
+    {
+      "role": "V3",
+      "ipv4": "172.104.240.217",
+      "nodeId": "e890c1016298472255243b981f249d5f4a500cff",
+      "validatorAddress": "F2B6DF0C5E1ED036E50AAC10312E557502E37726",
+      "service": "active-running",
+      "restartCount": 0,
+      "signerService": "inactive-dead",
+      "reconciliationSigningState": {
+        "height": "119",
+        "round": 0,
+        "step": 3
+      },
+      "reconciliationRpcHeight": 120,
+      "catchingUp": false,
+      "peerCount": 3
+    },
+    {
+      "role": "V4",
+      "ipv4": "172.104.253.247",
+      "nodeId": "18978772e14bd444ab84114d75d6db9313bff2e3",
+      "validatorAddress": "F7F47F1B733CFA53F98368C8587B9FD116D5376F",
+      "service": "active-running",
+      "restartCount": 0,
+      "signerService": "inactive-dead",
+      "reconciliationSigningState": {
+        "height": "118",
+        "round": 0,
+        "step": 3
+      },
+      "reconciliationRpcHeight": 119,
+      "catchingUp": false,
+      "peerCount": 3
+    }
+  ],
+  "peerMesh": {
+    "complete": true,
+    "peerCountPerValidator": 3,
+    "nodeIds": [
+      "18978772e14bd444ab84114d75d6db9313bff2e3",
+      "59e64741f815f69e5f05ae993d6adc5e8e2926b0",
+      "bf7c5257f1494b599ee9b3bddab0920e99ccd2db",
+      "e890c1016298472255243b981f249d5f4a500cff"
+    ]
+  },
+  "fourValidatorCommit": {
+    "height": 117,
+    "blockIdHash": "B23A45F4F046FB535525B72E7055D66B301CFBAB66A5DDF2F631D44E98E284A4",
+    "signatureCount": 4,
+    "validatorAddresses": [
+      "3983A3511A3403978B2ED1B0D4E320F7D73F8655",
+      "F2B6DF0C5E1ED036E50AAC10312E557502E37726",
+      "F2FEA8935978AF365AF37F9D4EF3CBFAE9A531DA",
+      "F7F47F1B733CFA53F98368C8587B9FD116D5376F"
+    ]
+  },
+  "progressProbe": {
+    "host": "V1",
+    "firstHeight": 143,
+    "firstBlockHash": "447CEF7817F0A11698D322DE1614DF1ECED11CC92D81D4A30754D7B5D049EBDC",
+    "laterHeight": 145,
+    "laterBlockHash": "B1FC162402BA9F3FA08D91A25DFDF4485BD823DB7C6DCDF14352FF3D51610659",
+    "advanced": true
+  },
+  "effects": {
+    "validatorServicesStarted": true,
+    "cometVotingKeysUsedOnTheirExistingHosts": true,
+    "validatorSigningStateAdvanced": true,
+    "frostSignersStarted": false,
+    "appObserverOrAuctionServicesStarted": false,
+    "configurationChanged": false,
+    "firewallHttpsNginxOrExternalExposureChanged": false,
+    "paymentsPerformed": false,
+    "privateKeyContentsOrHashesRead": false,
+    "cleanupPerformedOrRequired": false
+  },
+  "nextStep": "Under separate exact approval, start the APP non-voting observer and verify it catches up to two successive increasing heights on this pinned chain."
+}
