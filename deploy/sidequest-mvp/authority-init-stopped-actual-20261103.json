@@ -1,0 +1,94 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_INIT_STOPPED_ACTUAL_V1",
+  "status": "STOPPED_BEFORE_DATABASE_CREATION_PRESERVE_STATE_NO_RETRY",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "host": {
+    "role": "APP",
+    "ipv4": "139.162.161.233"
+  },
+  "approvedAction": {
+    "path": "deploy/sidequest-mvp/authority-init-action-20261103.json",
+    "sha256": "57167f5e81f07094c996246e58c629966bfd8a9166e27edf56c566e4454da6f6"
+  },
+  "controller": {
+    "path": "deploy/sidequest-mvp/run-authority-init.py",
+    "sha256": "a78f455408a085655372b90f09f57a2694ced0b8105b5214de3974d833226b14"
+  },
+  "execution": {
+    "freshPreflight": "PASS",
+    "executeAttemptCount": 1,
+    "authorityBinaryExit": 1,
+    "stdoutBytes": 0,
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderrSha256": "fcc630b0993769699b5c1fc3fe28526a326231fd277ac509b84704013d662f66",
+    "automaticRetryPerformed": false,
+    "databaseTargetsCreated": 0,
+    "serviceStateChanged": false,
+    "credentialsCreated": false,
+    "paymentsPerformed": false,
+    "privateKeyContentsOrHashesRead": false
+  },
+  "reconciledState": {
+    "allThirteenRuntimeDatabaseTargetsAbsent": true,
+    "allFiveIndependentAnchorTargetsAbsent": true,
+    "runtimeEntriesMetadataOnly": [
+      {
+        "name": "coordinator-rpc-identity.key",
+        "bytes": 65,
+        "uid": 999,
+        "gid": 988,
+        "mode": "0600"
+      },
+      {
+        "name": "coordinator-rpc-identity.public.json",
+        "bytes": 488,
+        "uid": 999,
+        "gid": 988,
+        "mode": "0600"
+      }
+    ],
+    "independentAnchorRootEmpty": true,
+    "auctionServicesRemainInactive": true,
+    "fipsAndMintRemainActive": true
+  },
+  "remoteReceipts": {
+    "action": {
+      "path": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-authority-init-v1/ACTION.json",
+      "bytes": 2611,
+      "sha256": "57167f5e81f07094c996246e58c629966bfd8a9166e27edf56c566e4454da6f6",
+      "uid": 0,
+      "gid": 0,
+      "mode": "0600"
+    },
+    "stopped": {
+      "path": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-authority-init-v1/STOPPED.json",
+      "bytes": 1978,
+      "sha256": "b4daf712198b244d6e076385ae1ad3bae5a400e6d02411f27291b11924d3fa63",
+      "uid": 0,
+      "gid": 0,
+      "mode": "0600"
+    }
+  },
+  "requiredPublicInputDiagnostic": {
+    "status": "REQUIRED_INPUT_MISSING_GUARANTEED_PRE_INIT_BLOCKER_EXACT_STDERR_NOT_RETAINED",
+    "requiredPath": "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3/exchange/friday-demo-20261030-separated-v1-dkg1/participant-1.public.json",
+    "requiredAncestorPath": "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3",
+    "requiredAncestorObservedAbsent": true,
+    "bytes": 301,
+    "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+    "dkgRunId": "friday-demo-20261030-separated-v1-dkg1",
+    "privacyClassification": "PUBLIC_FROST_KEY_PACKAGE_NOT_A_VALIDATOR_SHARE_OR_PRIVATE_KEY",
+    "acceptedSource": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/post-dkg-genesis-prerequisites-r1/separated-runtime-binding.json",
+      "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a",
+      "materialization": "hex-decode result.publicKeyPackageHex"
+    },
+    "qualification": "The application source requires this exact public package before init-state. Its absence is therefore a necessary blocker. Because stderr content was intentionally not retained, this record does not claim it was the only cause of exit 1."
+  },
+  "continuation": {
+    "priorActionDirectoryMustRemainImmutable": true,
+    "priorActionMustNotBeRetried": true,
+    "successorRequiresNewCreateOnceActionDirectory": true,
+    "additionalAuthorityRequired": "Install the exact accepted public FROST package and its public-group directory hierarchy on APP, then execute one new create-once authority-init successor action."
+  }
+}
