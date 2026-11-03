@@ -266,6 +266,33 @@ and validators hash is
 This is a local public artifact, not installation, finalization, launch-seal,
 observer, service or live-consensus acceptance.
 
+## Resume checkpoint: validator finalization and APP observer
+
+`validator-finalization-stage-plan.json` is the command-ready, non-executing
+checkpoint for the next owner session. It pins all 51,325 bytes of the nine-file
+public bundle, the four accepted host identities/descriptors and the already
+installed R4 finalizer at
+`/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc`
+(SHA-256 `8f501da6c7b054d3b33f98f4be52c0299655fc52756af70cd59cbc5740afd7c4`).
+No new validator release is required for this step.
+
+After the actual bundle review is accepted, the next grant can be limited to a
+read-only state check, creation of one digest-named public staging directory on
+V1-V4, and exactly one `finalize-friday-comet-validator` invocation per slot.
+That command validates the existing local keys and fresh height-zero signing
+state, installs only exact public files, and creates one public signed
+`validator-final-ack.json`. It does not replace/export keys, change ownership,
+touch DKG/FROST shares, or operate services. Byte-identical files from an
+interrupted finalization are preserved; conflicting files or an existing ack
+stop the action. There is no automatic retry or cleanup.
+
+APP observer initialization is deliberately outside that grant. It requires a
+fresh absent APP network root and creates a new non-voting P2P transport key in
+addition to the public bundle and observer receipt. Its exact `init-observer`
+argv and effects are pinned in the same plan, but need a separate owner grant
+after APP root/binary reconciliation. Launch-seal installation, UID999
+ownership handoff and service activation remain later, separate actions.
+
 ## Validator-4 rejoin control
 
 The source now provides `validator-4-online` in

@@ -1,0 +1,183 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_VALIDATOR_FINALIZATION_STAGE_PLAN_V1",
+  "status": "PREPARATION_ONLY_EXECUTION_DISABLED",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "purpose": "STAGE_ONE_EXACT_PUBLIC_GENESIS_BUNDLE_AND_CREATE_ONE_VALIDATOR_FINAL_ACK_PER_VOTER",
+  "bundle": {
+    "localRoot": "/home/maximoto/Documents/Codex/2026-11-02/task/plebeian-mvp-r4/dist/sidequest/genesis-assembly-r1",
+    "remoteRoot": "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "semanticBundleDigest": "830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "totalBytes": 51325,
+    "stagingDirectoryMode": "0700",
+    "stagingFileMode": "0600",
+    "files": [
+      {"name": "comet-genesis-bundle.json", "bytes": 2741, "sha256": "e2ec78c285ca98233bef227379acaf9ef2d6f46c543140289803e9d2b954d383"},
+      {"name": "deployment-anchor.json", "bytes": 2411, "sha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb"},
+      {"name": "frost-final-public.json", "bytes": 17321, "sha256": "f16c7bf8eebf7ce29878f9e2a34c21c8974ad3bdef3372c364657dc7ee061877"},
+      {"name": "funding-abort-bootstrap.json", "bytes": 442, "sha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf"},
+      {"name": "genesis.json", "bytes": 1876, "sha256": "8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea"},
+      {"name": "network-facts.json", "bytes": 417, "sha256": "0dd62cc5270f9e007851ed5c892a7386e2cdf620f8b7e1958fe84019ebe594a5"},
+      {"name": "network.json", "bytes": 3716, "sha256": "0fe06ef2c15fd7f0ecd5eed32ac26111f32357c9139ab6c083e88f5ff29b0203"},
+      {"name": "separated-runtime-binding.json", "bytes": 17716, "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a"},
+      {"name": "validator-roster.json", "bytes": 4685, "sha256": "e9d68caccf10cc9d1642f736aff87836127c9f5554d21d74d4ec4c6e1f40d22e"}
+    ]
+  },
+  "installedFinalizer": {
+    "path": "/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc",
+    "bytes": 46580232,
+    "mode": "0755",
+    "sha256": "8f501da6c7b054d3b33f98f4be52c0299655fc52756af70cd59cbc5740afd7c4",
+    "sourcePins": {
+      "internal/poc/friday_comet_init.go": "77e3a14664a329197e9ba70c3f6ad6037113bd4e36fdb6c4fe2a852f54ffe30f",
+      "internal/poc/runtime.go": "0da1d5ac30bd9eb332f449d54db1e0451aa12e4c3450ba109f0ebb74d44878c5"
+    },
+    "alreadyInstalledByAcceptedRelease": true,
+    "newReleaseInstallRequiredForThisStep": false
+  },
+  "validators": [
+    {
+      "role": "V1",
+      "slot": 1,
+      "hostId": "linode-108175009",
+      "ipv4": "172.105.64.142",
+      "hostFingerprint": "SHA256:PmTHYQMvAsBjXGPwO/bSQ2PfmMZz2inTf/1r+vqJKyc",
+      "knownHostsFile": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-4/remaining-fifteen-fips-probes-r2-socket/known-hosts/V1", "bytes": 96, "sha256": "2c02b18dce28d3efc5923417cd81aa8d3bf5816ee132ea3958e4c8e9be8cb93c"},
+      "localRoot": "/var/lib/plebeian-auctions-friday/network-separated",
+      "nativeDescriptor": {"bytes": 1128, "sha256": "8f8d511a2c65d22c5898f04c1742fad553a3c086980afabab4a4161e0dc836eb"},
+      "finalizeArgv": ["/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc", "finalize-friday-comet-validator", "--home", "/var/lib/plebeian-auctions-friday/network-separated", "--bundle", "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf", "--slot", "1"]
+    },
+    {
+      "role": "V2",
+      "slot": 2,
+      "hostId": "linode-108236985",
+      "ipv4": "172.105.95.57",
+      "hostFingerprint": "SHA256:UgWRsu8Fw9jfbKAfSol8RP9iCL9+tG3pWuPOD/COIiY",
+      "knownHostsFile": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-4/remaining-fifteen-fips-probes-r2-socket/known-hosts/V2", "bytes": 95, "sha256": "bdd69b89887b8bbfc4d7b32f0100ded8d0ea4ba9ec9ba54fbdb70925c80bf963"},
+      "localRoot": "/var/lib/plebeian-auctions-friday/network-separated",
+      "nativeDescriptor": {"bytes": 1126, "sha256": "17ed5ee9d3df3d5b0136506b57d163b3a207023d7dc00dc36152ada2409cc1f9"},
+      "finalizeArgv": ["/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc", "finalize-friday-comet-validator", "--home", "/var/lib/plebeian-auctions-friday/network-separated", "--bundle", "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf", "--slot", "2"]
+    },
+    {
+      "role": "V3",
+      "slot": 3,
+      "hostId": "linode-108237290",
+      "ipv4": "172.104.240.217",
+      "hostFingerprint": "SHA256:ONrQy7sbuBhUKT53VWwN4bcJ0vUKC0t/8SWWMLxZkzc",
+      "knownHostsFile": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-4/remaining-fifteen-fips-probes-r2-socket/known-hosts/V3", "bytes": 97, "sha256": "bc671e31f609abff503df12c6a7afc140ba74a9a814a4832c7189b3d9aa4eb5d"},
+      "localRoot": "/var/lib/plebeian-auctions-friday/network-separated",
+      "nativeDescriptor": {"bytes": 1128, "sha256": "70e0e289e345e77f9862d552c0b863309f757345ac893e58c853ff8578ea68cb"},
+      "finalizeArgv": ["/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc", "finalize-friday-comet-validator", "--home", "/var/lib/plebeian-auctions-friday/network-separated", "--bundle", "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf", "--slot", "3"]
+    },
+    {
+      "role": "V4",
+      "slot": 4,
+      "hostId": "linode-108237424",
+      "ipv4": "172.104.253.247",
+      "hostFingerprint": "SHA256:DkDePjfGjDDlmiuJcT7mUiqE/a7YMUVgafnwFbxKMPY",
+      "knownHostsFile": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-4/remaining-fifteen-fips-probes-r2-socket/known-hosts/V4", "bytes": 97, "sha256": "59f614c0f35f8158f052aa430c789daf7055983eb61aac1d4828b674add213c3"},
+      "localRoot": "/var/lib/plebeian-auctions-friday/network-separated",
+      "nativeDescriptor": {"bytes": 1128, "sha256": "afdb477edfad96428d5f4e46a5646494ac4d553305d9001f5d53a0b9bb95c079"},
+      "finalizeArgv": ["/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc", "finalize-friday-comet-validator", "--home", "/var/lib/plebeian-auctions-friday/network-separated", "--bundle", "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf", "--slot", "4"]
+    }
+  ],
+  "requiredReadOnlyPreflight": {
+    "bundleReviewAccepted": false,
+    "perHost": [
+      "host key and exact installed binary hash still match accepted pins",
+      "staging root is absent; parent separated-inputs directory is real, root-owned and not a symlink",
+      "local network root is real, root-owned and contains only the accepted local slot",
+      "validator-public.json parses to the accepted descriptor and local slot",
+      "node_key.json and priv_validator_key.json exist as one-link root-owned 0600 regular files",
+      "priv_validator_state.json exists as one-link root-owned 0600 regular file and remains fresh at height0 round0 step0 with empty signature/signbytes",
+      "validator-final-ack.json is absent",
+      "no validator, observer, authority, coordinator, site or mint service is running because of this action"
+    ],
+    "privateCapturePolicy": "METADATA_AND_BOOLEAN_FRESH_STATE_FIELDS_ONLY_NO_PRIVATE_BYTES_HASHES_OR_EXPORT",
+    "failurePolicy": "STOP_BEFORE_MUTATION_ON_ANY_DIFFERENCE"
+  },
+  "finalizerEffects": {
+    "reads": [
+      "nine staged public bundle files",
+      "local public validator descriptor",
+      "local Comet P2P and voting private keys for exact consistency checks",
+      "local fresh validator signing state"
+    ],
+    "writes": [
+      "nine exact public bundle files into each validator local root",
+      "one validator-final-ack.json signed by that host's existing Comet voting key"
+    ],
+    "doesNot": [
+      "create, replace, export or hash any validator private key",
+      "read or change DKG/FROST shares",
+      "change file ownership or existing private-file permissions",
+      "delete or reset predecessor or partial state",
+      "start, stop, enable or restart services",
+      "perform a payment or touch real funds"
+    ],
+    "installedPublicModes": {"genesis.json": "0644", "comet-genesis-bundle.json": "0644", "allOtherBundleFiles": "0600", "validator-final-ack.json": "0644"}
+  },
+  "partialStateBehavior": {
+    "staging": "A fresh digest-named staging directory is required. Any pre-existing path is reconciled read-only; it is never overwritten, deleted or reused without exact byte and metadata acceptance.",
+    "finalization": "The native finalizer accepts byte-identical public files left by an interrupted call, rejects any conflicting file, and refuses any existing validator-final-ack.json. No automatic retry is authorized.",
+    "mixedHosts": "A failure after another host succeeds leaves the successful host finalized and all other state preserved. Stop, collect only public output plus permitted metadata, and obtain a new exact action after reconciliation.",
+    "rollback": "No rollback deletion is defined. The predecessor release and all DKG/FROST state remain untouched."
+  },
+  "ownerApprovalScopeRequired": {
+    "validatorAction": [
+      "use the four pinned SSH host identities and existing owner-approved SSH credential",
+      "perform the stated read-only preflight on V1 through V4",
+      "create the one digest-named staging directory per host and install only the nine pinned public files",
+      "run exactly one listed finalization argv per host",
+      "capture only validator-final-ack.json, stdout and non-secret file metadata"
+    ],
+    "explicitlyExcluded": [
+      "permission or ownership handoff to service UID999",
+      "launch-seal creation or installation",
+      "service activation or firewall mutation",
+      "APP observer initialization",
+      "private key, DKG share, wallet proof, token or authentication-database export",
+      "retry, cleanup, deletion, reset or rollback"
+    ]
+  },
+  "appObserverSeparateScope": {
+    "role": "APP_NONVOTING_OBSERVER",
+    "hostId": "linode-109290386",
+    "ipv4": "139.162.161.233",
+    "localRoot": "/var/lib/plebeian-auctions-friday/network-separated",
+    "stagedBundleRoot": "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "expectedBundleDigest": "830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "ownerApprovalPublicKey": "3210f99b78ecd0150b6a0efcaffc6f3b532f4e5a3d68f977e77a3b8d10febade",
+    "fipsP2PListen": "tcp://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:27656",
+    "argv": ["/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc", "init-observer", "--home", "/var/lib/plebeian-auctions-friday/network-separated", "--bundle", "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf", "--expected-bundle-digest", "830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf", "--owner-approval-public-key", "3210f99b78ecd0150b6a0efcaffc6f3b532f4e5a3d68f977e77a3b8d10febade", "--fips-p2p-listen", "tcp://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:27656"],
+    "effects": [
+      "requires the local root to be absent",
+      "copies only the nine public bundle files into a new root",
+      "creates observer/config and observer/data directories",
+      "generates one new non-voting Comet P2P transport private key",
+      "writes one public observer.json receipt and proves the new identity is not in the four-validator roster"
+    ],
+    "doesNot": [
+      "create or read a validator signing key",
+      "read DKG/FROST private material",
+      "create a fifth voter",
+      "start the observer or any other service"
+    ],
+    "failurePolicy": "PRESERVE_ANY_PARTIAL_ROOT_AND_STOP_NO_AUTOMATIC_RETRY_OR_DELETION",
+    "approvalState": "SEPARATE_EXACT_OWNER_GRANT_REQUIRED_AFTER_READ_ONLY_ROOT_AND_BINARY_RECONCILIATION"
+  },
+  "subsequentGates": [
+    "accept all four public validator-final-ack.json outputs",
+    "create one public comet-launch.json from the four accepted acknowledgements",
+    "install that exact public launch seal on V1 through V4",
+    "perform an independently scoped least-privilege ownership handoff for validator runtime files",
+    "accept the APP observer receipt and pin its SHA-256",
+    "render and install final runtime configuration and only then request service activation"
+  ],
+  "execution": {
+    "sshUsed": false,
+    "filesUploaded": false,
+    "privateKeysRead": false,
+    "servicesChanged": false,
+    "remoteMutation": false
+  }
+}
