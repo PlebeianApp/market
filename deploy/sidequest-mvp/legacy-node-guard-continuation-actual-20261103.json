@@ -1,0 +1,111 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_LEGACY_NODE_GUARD_CONTINUATION_ACTUAL_V1",
+  "status": "FIVE_HOST_INACTIVE_ADOPTION_COMPLETE_SERVICES_NOT_STARTED",
+  "recordedAtUtc": "2026-11-03T16:58:34Z",
+  "plan": {
+    "path": "deploy/sidequest-mvp/legacy-node-guard-continuation-plan-20261103.json",
+    "sha256": "55123962caca294cdf5c9bd2ddb5981df9695974b113da3f6e424bb0a96d6d91"
+  },
+  "controller": {
+    "path": "deploy/sidequest-mvp/run-legacy-node-guard-continuation.py",
+    "sha256": "5e79332c019f6e90ecd5e9c9024095e5cdbd8e5a0078c6a8c044ed70d66f14dc",
+    "commit": "62313eedb1777bcb2220dfc02570e2ed4c5cbe0e"
+  },
+  "execution": {
+    "allFiveGuardPreflightsPassedBeforeMutation": true,
+    "allFourValidatorBasePreflightsPassedBeforeMutation": true,
+    "hostOrder": ["APP", "V1", "V2", "V3", "V4"],
+    "completedHosts": ["APP", "V1", "V2", "V3", "V4"],
+    "failure": null,
+    "automaticRetryRollbackDeletionOrReset": false
+  },
+  "guardRelease": {
+    "path": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-legacy-node-guard-v1",
+    "installedOnAllFiveHosts": true,
+    "wrapperSha256": "bee753683d967c6fba332b71660a6c195f70dc0148b91e7a0104564a7f0acec6",
+    "baseGuardSha256": "36bc33672b1cd2bef0961c7a7df160686cb2674e62242784303a64d652515f1d",
+    "runtimeGuardSha256": "d5c7031676fa3e5dc15a5da5c11a8d20c44e5f5e53242b3407df90b1c026b206"
+  },
+  "hosts": {
+    "APP": {
+      "guardReceipt": {
+        "path": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-legacy-node-guard-v1/ACTUAL.json",
+        "bytes": 3018,
+        "sha256": "2551f741c491e294ef2839ce47792f4bc7e4fa9e60fc618d43e3a8c7c2112b95",
+        "status": "APP_GUARD_CONTINUATION_COMPLETE"
+      },
+      "observerUnitSha256": "83dd4211a10a5e108152fc234e87963b53a786413a5a7f18682dcf4174002c1a",
+      "guards": {
+        "observer": "SIDEQUEST_LEGACY_NODE_TARGET=PASS",
+        "site": "SIDEQUEST_ROLE_TARGET=PASS",
+        "authority": "SIDEQUEST_ROLE_TARGET=PASS",
+        "coordinator": "SIDEQUEST_ROLE_TARGET=PASS"
+      },
+      "services": {
+        "fips": "active/running",
+        "mint": "active/running",
+        "observer": "inactive/dead",
+        "site": "inactive/dead",
+        "authority": "inactive/dead",
+        "coordinator": "inactive/dead"
+      }
+    },
+    "V1": {
+      "guardReceiptSha256": "90cf09505e482855b14ee03a1f1683ea8f3e19f33ef794cb963e9dba7d2178a3",
+      "adoptionReceiptSha256": "89e99351854554d01bb6408b71b59d5dd806b77521cea373b502fbd0b1d3ba90",
+      "validatorGuard": "SIDEQUEST_LEGACY_NODE_TARGET=PASS",
+      "signerGuard": "SIDEQUEST_ROLE_TARGET=PASS",
+      "validatorUnitSha256": "ff37b56e05c9325c7c92d821a0d73e3b9fcb153c54fcb58482c50e83351e3961",
+      "services": {"fips": "active/running", "validator": "inactive/dead", "signer": "inactive/dead"}
+    },
+    "V2": {
+      "guardReceiptSha256": "f1fd10da2ef3f8a71e64ba098fa024115aa6bf0658b85a8d38c12fb9d9522e60",
+      "adoptionReceiptSha256": "d1423678631abbe89671fd73355740c7f68822013f655b9835400fccd03d841b",
+      "validatorGuard": "SIDEQUEST_LEGACY_NODE_TARGET=PASS",
+      "signerGuard": "SIDEQUEST_ROLE_TARGET=PASS",
+      "validatorUnitSha256": "ff37b56e05c9325c7c92d821a0d73e3b9fcb153c54fcb58482c50e83351e3961",
+      "services": {"fips": "active/running", "validator": "inactive/dead", "signer": "inactive/dead"}
+    },
+    "V3": {
+      "guardReceiptSha256": "c7057be1f633e46673c18d4b396ade5396332478c54379676db04ad4e1a5a5c0",
+      "adoptionReceiptSha256": "4ac90b0819f8a3a590cc854d00db6ad203c2b9d7a726dd8a365c0a4ed3c1caa5",
+      "validatorGuard": "SIDEQUEST_LEGACY_NODE_TARGET=PASS",
+      "signerGuard": "SIDEQUEST_ROLE_TARGET=PASS",
+      "validatorUnitSha256": "ff37b56e05c9325c7c92d821a0d73e3b9fcb153c54fcb58482c50e83351e3961",
+      "services": {"fips": "active/running", "validator": "inactive/dead", "signer": "inactive/dead"}
+    },
+    "V4": {
+      "guardReceiptSha256": "666952fe45c853ab5a742adaadc11031f4c73626e7497c48eb5ad79ebc3e4e0d",
+      "adoptionReceiptSha256": "69a23f97a5d4ec6ebd2766ba3101e6cf0c2e770753cde881f8d6aa729def0ed4",
+      "validatorGuard": "SIDEQUEST_LEGACY_NODE_TARGET=PASS",
+      "signerGuard": "SIDEQUEST_ROLE_TARGET=PASS",
+      "validatorUnitSha256": "ff37b56e05c9325c7c92d821a0d73e3b9fcb153c54fcb58482c50e83351e3961",
+      "services": {"fips": "active/running", "validator": "inactive/dead", "signer": "inactive/dead"}
+    }
+  },
+  "sharedValidatorAdoptionReceipt": {
+    "path": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-inactive-adoption-b991b64a/ACTUAL.json",
+    "status": "INACTIVE_ADOPTION_COMPLETE_SERVICES_NOT_STARTED",
+    "previousApprovedPlanSha256": "b991b64a706ff771572111af71d93550aee20ec6f9545893e7733fc3891d5888"
+  },
+  "securityBoundary": {
+    "servicesStartedStoppedRestartedEnabledOrDisabled": false,
+    "authorityStateInitialized": false,
+    "credentialsCreated": false,
+    "privateKeyContentsOrHashesRead": false,
+    "paymentsPerformed": false,
+    "firewallHttpsDnsOrNginxChanged": false,
+    "predecessorCometBinaryModifiedOrDeleted": false,
+    "dkgOrFrostStateModified": false
+  },
+  "readiness": {
+    "inactiveInstallationComplete": true,
+    "mvpLive": false,
+    "nextRequiredActions": [
+      "initialize APP authority state under a separate exact approval",
+      "render and install activation-ready flags under a separate exact approval",
+      "start validators, signers, observer, coordinator, authority and site in a controlled order under a separate exact approval",
+      "verify chain progress, five-user login, fake-sat funding, bidding, outbid refund and settlement"
+    ]
+  }
+}
