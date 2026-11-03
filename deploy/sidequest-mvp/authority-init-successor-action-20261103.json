@@ -1,0 +1,100 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_INIT_SUCCESSOR_ACTION_V1",
+  "status": "APPROVED_NOT_EXECUTED",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "host": {
+    "role": "APP",
+    "ipv4": "139.162.161.233"
+  },
+  "preservedFailedAttempt": {
+    "directory": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-authority-init-v1",
+    "actionSha256": "57167f5e81f07094c996246e58c629966bfd8a9166e27edf56c566e4454da6f6",
+    "stoppedSha256": "b4daf712198b244d6e076385ae1ad3bae5a400e6d02411f27291b11924d3fa63",
+    "mustRemainUnchanged": true
+  },
+  "publicPackage": {
+    "acceptedRuntimeBinding": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/post-dkg-genesis-prerequisites-r1/separated-runtime-binding.json",
+      "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a",
+      "field": "result.publicKeyPackageHex"
+    },
+    "destination": "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3/exchange/friday-demo-20261030-separated-v1-dkg1/participant-1.public.json",
+    "bytes": 301,
+    "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+    "classification": "PUBLIC_FROST_KEY_PACKAGE_NOT_A_VALIDATOR_SHARE_OR_PRIVATE_KEY",
+    "install": "CREATE_ONCE_ROOT_PUBLIC_GROUP_0640",
+    "directoryHierarchy": {
+      "paths": [
+        "/var/lib/plebeian-auctions-friday/frost-v3",
+        "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3",
+        "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3/exchange",
+        "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3/exchange/friday-demo-20261030-separated-v1-dkg1"
+      ],
+      "install": "CREATE_ONCE_ROOT_PUBLIC_GROUP_0750"
+    }
+  },
+  "authorityInitialization": {
+    "command": [
+      "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/plebeian-friday-authority",
+      "init-state",
+      "--application",
+      "/etc/plebeian-auctions-friday/application.json"
+    ],
+    "runAs": {
+      "user": "plebeian-friday",
+      "uid": 999,
+      "group": "plebeian-friday-public",
+      "gid": 988
+    },
+    "runtimeTargets": [
+      "terminal.sqlite3",
+      "operations.sqlite3",
+      "authority.sqlite3",
+      "private.sqlite3",
+      "recovery.sqlite3",
+      "signer-anchor.sqlite3",
+      "funding-replay.sqlite3",
+      "funding-broadcast.sqlite3",
+      "funding-abort.sqlite3",
+      "funding-abort-sessions.sqlite3",
+      "admission-sessions.sqlite3",
+      "terminal-exchange.sqlite3",
+      "seller-plan.sqlite3"
+    ],
+    "anchorTargets": [
+      "coordinator.sqlite3",
+      "funding-replay.sqlite3",
+      "funding-broadcast.sqlite3",
+      "funding-abort.sqlite3",
+      "seller-plan.sqlite3"
+    ]
+  },
+  "preconditions": {
+    "applicationSha256": "253427ca537fb143022d48f4539e939cf01f729cbf444368d9faea75c6badeee",
+    "environmentSha256": "797f56d4115de50d827cbf6c4c7c5c7be56ba5b0145d19beaa9236f65949016a",
+    "authorityBinarySha256": "af51ff40ddafa496169cb15731c1ab8cf2b3b569f707dfd7f69719c9d294755d",
+    "allPublicPackageTargetsAbsent": true,
+    "allEighteenDatabaseTargetsAbsent": true,
+    "independentAnchorRootEmpty": true,
+    "auctionServicesInactive": true
+  },
+  "postconditions": {
+    "publicPackageExactDigestAndMetadata": true,
+    "allEighteenTargetsRegularSingleLinkServiceOwned0600": true,
+    "allEighteenSqliteQuickChecks": "ok",
+    "coordinatorReplayBroadcastAndSellerPlanRevisions": 0,
+    "servicesUnchanged": true,
+    "receiptCreateOnce": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-authority-init-successor-v1/ACTUAL.json"
+  },
+  "failurePolicy": "PRESERVE_PARTIAL_STATE_WRITE_STOPPED_RECEIPT_NO_RETRY_NO_DELETE_NO_RESET",
+  "excludedEffects": [
+    "no service start, stop, restart, enable or disable",
+    "no persistent credential generation",
+    "no private key, validator share or FROST secret access",
+    "no payments or funding",
+    "no DKG, validator or mint state mutation",
+    "no firewall, HTTPS, DNS or nginx change",
+    "no retry of the failed v1 attempt",
+    "no automatic retry, rollback, deletion, truncation or migration"
+  ]
+}
