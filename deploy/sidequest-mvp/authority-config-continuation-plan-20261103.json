@@ -1,0 +1,56 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_CONFIG_CONTINUATION_PLAN_V1",
+  "status": "READY_FOR_EXACT_APPROVAL_NOT_EXECUTED",
+  "preparedAtUtc": "2026-11-03T23:34:35Z",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "cause": "The authority's source-complete entrypoint requires the public fixed-path authority.json before opening any database or collecting signer health. The inactive-install renderer omitted this file, and the pre-start role guard did not detect its absence.",
+  "publicConfig": {
+    "source": "deploy/sidequest-mvp/authority.json",
+    "destination": "/etc/plebeian-auctions-friday/authority.json",
+    "bytes": 363,
+    "sha256": "9cf014030b9ed39f30631d4c2435f21cf63b115036dfc9f0ac818cec16f7cc26",
+    "mode": "0640",
+    "uid": 0,
+    "gid": 988,
+    "createOnce": true,
+    "fields": {
+      "schema": "PLEBEIAN_FRIDAY_AUTHORITY_CONFIG_V1",
+      "public_origin": "https://139.162.161.233",
+      "network_facts_sha256": "0dd62cc5270f9e007851ed5c892a7386e2cdf620f8b7e1958fe84019ebe594a5",
+      "dkg_result_sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a",
+      "participant_binary_sha256": "4cdf8730370e001b07d50ffa19589f1959fa3a50672fe7c19e4112e9b07c1e6a"
+    },
+    "provenance": {
+      "networkFacts": "/var/lib/plebeian-auctions-friday/network-separated/network-facts.json",
+      "runtimeBinding": "/var/lib/plebeian-auctions-friday/separated-inputs/runtime-binding.json",
+      "participantBinary": "/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/coco-demo-frost-participant-3of4",
+      "allThreeRemoteHashesReadOnlyVerified": true
+    },
+    "containsSecret": false
+  },
+  "continuation": [
+    "Recheck both preserved stopped actions, installed activation configuration and R2 patch/unit, inactive coordinator/authority/site, empty revision-0 queue, zero signer anchors and absent 8180/8181 listeners.",
+    "Create authority.json once as root:public-group 0640; fsync and verify exact bytes and hash.",
+    "Run the R2 coordinator guard and authority role guard.",
+    "Make one new coordinator start and require active-running with NRestarts=0.",
+    "Make one new authority start. Its preserved restart counter baseline is 1; require no increase beyond 1 and no further automatic restart.",
+    "Collect bounded authority status samples until readiness is warm and then ready, requiring advancing committed height, all four epoch-1 signer anchors, mode normal and funding enabled_two_step_nip07.",
+    "Require the queue to remain revision 0 with zero operations, authority to listen only on 127.0.0.1:8181, and site/nginx/80/443 to remain off."
+  ],
+  "cryptographicAndFinancialEffects": {
+    "authenticatedRpcIdentityHealthSignatures": true,
+    "signerHealthAnchorsPersisted": true,
+    "frostThresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "realFundsInScope": false
+  },
+  "failurePolicy": "Stop only coordinator/authority services started by this continuation, preserve the new public config and every existing receipt, database and patch artifact, and make no retry, reset, deletion or rollback.",
+  "exactApprovalRequest": "The corrected coordinator installed and started successfully, but authority startup stopped because its required public authority.json was never installed. No signer health request or payment occurred. May I install the exact 363-byte public config and make one new coordinator and authority start, then run the signed loopback health checks? The file contains no secrets; the website and HTTPS remain off, and no FROST threshold signature or payment will be requested.",
+  "notAuthorized": [
+    "Installing authority.json",
+    "Starting coordinator or authority again",
+    "Resetting the preserved authority restart counter or deleting stopped evidence",
+    "Starting the site, nginx or HTTPS",
+    "Sending a FROST signing, funding, auction, settlement or payment request"
+  ]
+}

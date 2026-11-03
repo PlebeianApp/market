@@ -1,0 +1,66 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_COORDINATOR_R2_AUTHORITY_STOPPED_ACTUAL_V1",
+  "status": "COORDINATOR_R2_INSTALLED_AND_STARTED_AUTHORITY_CONFIG_MISSING_BOTH_SERVICES_STOPPED_NO_RETRY",
+  "completedAtUtc": "2026-11-03T23:34:35Z",
+  "planSha256": "167560956e1cd0a383c98eae8d3d75bfacdca0311782b540d6d4be2bf1d80d39",
+  "controller": {
+    "path": "/tmp/run_coordinator_r2_repair.py",
+    "sha256": "9560f080ee85f4aea796e296b98d0f20d7d000e770ed3f3d15df2873aacb6f19"
+  },
+  "patchInstall": {
+    "status": "complete-create-once",
+    "root": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-coordinator-r2",
+    "coordinatorSha256": "f3a60bfe025c2fcee2438442a2c466fb985322f955c62310a790cecce9f24ce0",
+    "targetGuardSha256": "b02b081841d5c321259dbd4b095faa0c97ba5a3b06e34bf5abce7003dc93c355",
+    "baseGuardSha256": "36bc33672b1cd2bef0961c7a7df160686cb2674e62242784303a64d652515f1d",
+    "runtimeGuardSha256": "d5c7031676fa3e5dc15a5da5c11a8d20c44e5f5e53242b3407df90b1c026b206",
+    "allRootOwned0755SingleLink": true
+  },
+  "unitInstall": {
+    "installedSha256": "5e135b74ecad0f49ae801870c015a5b3ab4c09558401b8ee30472f1553a05076",
+    "retainedSha256": "10c1bb4e8b126f7be4893f3543aa4e3402f5c24830c600f6a70c0a8fd4399fa5",
+    "daemonReloadCompleted": true
+  },
+  "coordinator": {
+    "r2Guard": "SIDEQUEST_COORDINATOR_R2_TARGET=PASS",
+    "newStartSucceeded": true,
+    "restartCount": 0,
+    "stoppedOnlyBecauseAuthorityAcceptanceFailed": true,
+    "finalState": "inactive-dead"
+  },
+  "authority": {
+    "preStartGuard": "SIDEQUEST_ROLE_TARGET=PASS",
+    "initialStartExit": 1,
+    "systemdAutomaticRestartCount": 1,
+    "error": "ENOENT: no such file or directory, open /etc/plebeian-auctions-friday/authority.json",
+    "secondProcessWasActiveWhenControllerDetectedRestart": true,
+    "controllerStoppedService": true,
+    "finalState": "inactive-dead",
+    "authorityConfigAbsentConfirmed": true
+  },
+  "postStop": {
+    "site": "inactive-never-started",
+    "observerMintFips": "active-unchanged",
+    "loopback8180or8181Listener": false,
+    "coordinatorQueueRevision": 0,
+    "queuedOperations": 0,
+    "coordinatorDatabaseQuickCheck": "ok",
+    "signerAnchorRows": 0
+  },
+  "effects": {
+    "authenticatedSignerHealthSignatureRequested": false,
+    "frostThresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "siteNginxHttpsFirewallOrExternalExposureChanged": false
+  },
+  "remoteReceipts": {
+    "actionSha256": "c4682539a9da3988624a2f0af363915a588bda6ced498598e87be828bddbfe4b",
+    "stoppedSha256": "99e61367d694f09715e6fa9b105af9f40134d591fef4311e39001472394afa08"
+  },
+  "reconciliation": {
+    "path": "/tmp/reconcile_coordinator_r2_stop.py",
+    "sha256": "93c5eb17c6a373de08beac004e66d744b01f44391b134284f2eca98ec6b3aa02",
+    "remoteMutation": false
+  },
+  "nextStep": "Install the exact 363-byte public authority.json create-once, then make one separately approved coordinator start and one authority start while treating the preserved authority NRestarts=1 as the baseline and rejecting any increase."
+}
