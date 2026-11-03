@@ -179,6 +179,18 @@
     "mintOnlyAcceptanceSha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da",
     "privateProofTransferRequired": false
   },
+  "localPublicAssembly": {
+    "status": "COMPLETED_NOT_INSTALLED_NOT_ACTIVATED_REQUIRES_PUBLIC_REVIEW",
+    "recordPath": "deploy/sidequest-mvp/genesis-assembly-actual-r1.json",
+    "outputRoot": "/home/maximoto/Documents/Codex/2026-11-02/task/plebeian-mvp-r4/dist/sidequest/genesis-assembly-r1",
+    "bundleDigest": "830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "genesisFileSha256": "8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea",
+    "validatorsHash": "d1936c5e5e9d09d0a96107031ae144068dcc2ad3f1d071e7f8fe871a8aaff773",
+    "networkFactsSha256": "0dd62cc5270f9e007851ed5c892a7386e2cdf620f8b7e1958fe84019ebe594a5",
+    "acceptedForRemoteInstall": false,
+    "remoteMutation": false,
+    "privateStateRead": false
+  },
   "pendingActionScope": {
     "acceptedAuthorityOutputRoot": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output",
     "deploymentAnchorSigningApprovedAndCompleted": true,
@@ -193,7 +205,13 @@
     "deploymentAnchorSha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb",
     "fundingAbortBootstrapSha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf",
     "authorityRenderReceiptSha256": "ca250b51b7dc17f51cca678e11be8180bd047a28d2675e012af70ee70506f0c2",
-    "networkFactsAndGenesisBundle": null,
+    "networkFactsAndGenesisBundle": {
+      "status": "LOCAL_PUBLIC_ASSEMBLY_COMPLETED_REQUIRES_REVIEW",
+      "bundleDigest": "830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+      "genesisFileSha256": "8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea",
+      "networkFactsSha256": "0dd62cc5270f9e007851ed5c892a7386e2cdf620f8b7e1958fe84019ebe594a5",
+      "validatorsHash": "d1936c5e5e9d09d0a96107031ae144068dcc2ad3f1d071e7f8fe871a8aaff773"
+    },
     "browserAndHealthPins": null,
     "observerReceiptAndNodeId": null
   },

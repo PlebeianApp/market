@@ -4,6 +4,7 @@
 import hashlib
 import json
 from pathlib import Path
+import stat
 
 
 ROOT = Path(__file__).resolve().parent
@@ -274,6 +275,36 @@ def main() -> None:
         config["boundPaymentEvidence"]["conformanceFipsServerUrl"],
     }
     assert config["boundPaymentEvidence"]["conformanceFipsServerUrl"] == payment_projection["testMintUrl"]
+    assembly_record = load_json(ROOT / "genesis-assembly-actual-r1.json")
+    assert assembly_record["schema"] == "PLEBEIAN_SIDEQUEST_GENESIS_ASSEMBLY_ACTUAL_R1"
+    assert assembly_record["status"] == "LOCAL_PUBLIC_ASSEMBLY_COMPLETED_NOT_INSTALLED_NOT_ACTIVATED_REQUIRES_PUBLIC_REVIEW"
+    output_root = Path(assembly_record["outputRoot"])
+    assert output_root.is_dir()
+    assert len(assembly_record["outputFiles"]) == 9
+    for record in assembly_record["outputFiles"]:
+        path = output_root / record["name"]
+        metadata = path.stat()
+        assert stat.S_ISREG(metadata.st_mode)
+        assert metadata.st_size == record["bytes"]
+        assert f"{stat.S_IMODE(metadata.st_mode):04o}" == record["mode"]
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == record["sha256"]
+    assembly_receipt = load_json(output_root / "comet-genesis-bundle.json")
+    assert assembly_receipt["bundle_digest"] == assembly_record["receipt"]["bundleDigest"]
+    assert assembly_receipt["genesis_file_sha256"] == assembly_record["receipt"]["genesisFileSha256"]
+    assert assembly_receipt["validators_hash"] == assembly_record["receipt"]["validatorsHash"]
+    assert assembly_receipt["network_facts_sha256"] == assembly_record["receipt"]["networkFactsSha256"]
+    assert config["localPublicAssembly"] == {
+        "status": "COMPLETED_NOT_INSTALLED_NOT_ACTIVATED_REQUIRES_PUBLIC_REVIEW",
+        "recordPath": "deploy/sidequest-mvp/genesis-assembly-actual-r1.json",
+        "outputRoot": str(output_root),
+        "bundleDigest": assembly_receipt["bundle_digest"],
+        "genesisFileSha256": assembly_receipt["genesis_file_sha256"],
+        "validatorsHash": assembly_receipt["validators_hash"],
+        "networkFactsSha256": assembly_receipt["network_facts_sha256"],
+        "acceptedForRemoteInstall": False,
+        "remoteMutation": False,
+        "privateStateRead": False,
+    }
     assert config["pendingActionScope"] == {
         "acceptedAuthorityOutputRoot": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output",
         "deploymentAnchorSigningApprovedAndCompleted": True,
@@ -288,7 +319,13 @@ def main() -> None:
         "deploymentAnchorSha256": accepted["signedDeploymentAnchor"]["sha256"],
         "fundingAbortBootstrapSha256": accepted["signedFundingAbortBootstrap"]["sha256"],
         "authorityRenderReceiptSha256": accepted["authorityRenderReceipt"]["sha256"],
-        "networkFactsAndGenesisBundle": None,
+        "networkFactsAndGenesisBundle": {
+            "status": "LOCAL_PUBLIC_ASSEMBLY_COMPLETED_REQUIRES_REVIEW",
+            "bundleDigest": assembly_receipt["bundle_digest"],
+            "genesisFileSha256": assembly_receipt["genesis_file_sha256"],
+            "networkFactsSha256": assembly_receipt["network_facts_sha256"],
+            "validatorsHash": assembly_receipt["validators_hash"],
+        },
         "browserAndHealthPins": None,
         "observerReceiptAndNodeId": None,
     }

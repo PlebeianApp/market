@@ -13,6 +13,17 @@
     { "path": "dist/sidequest/plebeian-friday-signer", "bytes": 98923995, "mode": "0755", "sha256": "00c448e172c13b1a9862cd97bf79608e879739c0cc44aba74019bc3df66739d9" },
     { "path": "dist/sidequest/plebeian-friday-acceptance-operator", "bytes": 98477330, "mode": "0755", "sha256": "99db455714398434a9e3719236c3f05c0356d5e945b926aa31e3951e31d1b25d" }
   ],
+  "publicOutputArtifacts": [
+    {"path": "dist/sidequest/genesis-assembly-r1/comet-genesis-bundle.json", "bytes": 2741, "mode": "0644", "sha256": "e2ec78c285ca98233bef227379acaf9ef2d6f46c543140289803e9d2b954d383"},
+    {"path": "dist/sidequest/genesis-assembly-r1/deployment-anchor.json", "bytes": 2411, "mode": "0644", "sha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb"},
+    {"path": "dist/sidequest/genesis-assembly-r1/frost-final-public.json", "bytes": 17321, "mode": "0644", "sha256": "f16c7bf8eebf7ce29878f9e2a34c21c8974ad3bdef3372c364657dc7ee061877"},
+    {"path": "dist/sidequest/genesis-assembly-r1/funding-abort-bootstrap.json", "bytes": 442, "mode": "0644", "sha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf"},
+    {"path": "dist/sidequest/genesis-assembly-r1/genesis.json", "bytes": 1876, "mode": "0644", "sha256": "8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea"},
+    {"path": "dist/sidequest/genesis-assembly-r1/network-facts.json", "bytes": 417, "mode": "0600", "sha256": "0dd62cc5270f9e007851ed5c892a7386e2cdf620f8b7e1958fe84019ebe594a5"},
+    {"path": "dist/sidequest/genesis-assembly-r1/network.json", "bytes": 3716, "mode": "0600", "sha256": "0fe06ef2c15fd7f0ecd5eed32ac26111f32357c9139ab6c083e88f5ff29b0203"},
+    {"path": "dist/sidequest/genesis-assembly-r1/separated-runtime-binding.json", "bytes": 17716, "mode": "0644", "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a"},
+    {"path": "dist/sidequest/genesis-assembly-r1/validator-roster.json", "bytes": 4685, "mode": "0644", "sha256": "e9d68caccf10cc9d1642f736aff87836127c9f5554d21d74d4ec4c6e1f40d22e"}
+  ],
   "sourcePins": [
     { "path": "cashu-wrapper/ts/coco-rail.ts", "sha256": "9d7eba6abef659ae98165c6d5aaa9a517e2121263f3e47613e72aafaaf72fc2b" },
     { "path": "cashu-wrapper/ts/demo-friday-acceptance-operator-cli.ts", "sha256": "d7eb58e30169a63227df5917ad676859bd0f93ac342b990d2000fe4cfc3c5fb8" },
@@ -30,14 +41,16 @@
     { "path": "deploy/sidequest-mvp/successor-install-manifest.json", "sha256": "a47ec9d1fb484b91545446367f7a2689959ccb849855b27303c80a4ba41ee23a" },
     { "path": "deploy/sidequest-mvp/test_successor_release.py", "sha256": "324b56b050005f418ac7750d413fa51b3d6c0a4e02252ebb38354d5e1312fe10" },
     { "path": "deploy/sidequest-mvp/genesis-content-decision.json", "sha256": "afd2d2e0a9eda3c9a7100d82bad37380486acd71731e9ca03eb62f0dfd868371" },
-    { "path": "deploy/sidequest-mvp/runtime-adoption-plan.json", "sha256": "79c15ee30850b6b2f9a35646cb46131c432f95c5286945871b0bc7709c4c5f2e" },
+    { "path": "deploy/sidequest-mvp/runtime-adoption-plan.json", "sha256": "bd52cbaeeb5676242bf0c91f5a05413458a4e01669f6217050df9c7f1d7b73a9" },
     { "path": "deploy/sidequest-mvp/owner-decisions.template.json", "sha256": "5f8297aa31bdf9cade9e0e54936f78579d485f8d694103d4ae3cbef725fb6e0e" },
     { "path": "deploy/sidequest-mvp/render-runtime-config.py", "sha256": "7508caa350b1b0bfc3ff1a1cb6e01f24db482c932cb6093592d14245a832244d" },
     { "path": "deploy/sidequest-mvp/test_runtime_adoption.py", "sha256": "c271bd2a9434395f4ee1f66d2616b742a0a4bf081a31c6f47f5a8c29f738dd33" },
-    { "path": "deploy/sidequest-mvp/deployment-inputs.json", "sha256": "25885b0677cb1858ebbbd3d27a884a2f8faab17ae5dbd7fcaa3147930e893b7c" },
-    { "path": "deploy/sidequest-mvp/verify-public-inputs.py", "sha256": "326b835444ad04427646ab03f67853ac66c150d9c01289939b1323a51fe1f3be" },
-    { "path": "deploy/sidequest-mvp/genesis-assembly-plan.json", "sha256": "bc1cea9bcb5bc36c1e81bcd32aeb65d6a4d6c8215de45a84ba45025eca42f744" },
-    { "path": "deploy/sidequest-mvp/prepare-genesis-assembly.py", "sha256": "076007404e470fc3a704f7c8b011c9fc62718568ad9e2023f01937b9d9a0ec35" },
-    { "path": "deploy/sidequest-mvp/test_genesis_assembly_preparation.py", "sha256": "0e91907b1542db4671fc96d197516fd8e3a17d20a2b555c5d9fdb77a3e344ef2" }
+    { "path": "deploy/sidequest-mvp/deployment-inputs.json", "sha256": "f0091e7a753bfb0c2f7b4b2b0f14fbf33452db6e06c44004dba9911fd574d1c5" },
+    { "path": "deploy/sidequest-mvp/verify-public-inputs.py", "sha256": "ecef55bf2f30db09de38ba03d3feae602f672b1243db2675614e68fb9c81cb89" },
+    { "path": "deploy/sidequest-mvp/genesis-assembly-plan.json", "sha256": "993fce3d59a589961b948e8cde9aa54dc8e11bddba54f28ec757e931bcb67294" },
+    { "path": "deploy/sidequest-mvp/prepare-genesis-assembly.py", "sha256": "b37d6467472550a2d4141846e0e132615b40c1dc2ca0f55cfc94c148589188bc" },
+    { "path": "deploy/sidequest-mvp/test_genesis_assembly_preparation.py", "sha256": "44d3a5c2d7dc27b38cfc1e274a47882a7ae3ee065e3cbfc2da718d73fcbe96a4" },
+    { "path": "deploy/sidequest-mvp/genesis-assembly-actual-r1.json", "sha256": "a7ef5fde029d5b861ad40a22fe823e1eeb58e4b74c9c8c09dd28b305b86d95ed" },
+    { "path": "deploy/sidequest-mvp/verify-artifacts.py", "sha256": "24f40fc2cd78aa587b8913c7776a2027b590fe3b889bf8a4f5bc3f523395f889" }
   ]
 }

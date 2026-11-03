@@ -17,7 +17,10 @@
     "fundingAbortBootstrap": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/funding-abort-bootstrap.json", "bytes": 442, "sha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf"},
     "separatedRuntimeBinding": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/post-dkg-genesis-prerequisites-r1/separated-runtime-binding.json", "bytes": 17716, "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a"},
     "publicAnchorReconciliation": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-anchor-public-reconcile-r1/ACTUAL-RECONCILIATION.json", "bytes": 3677, "sha256": "f454abb91fce96e381d4c61db20b72770ecfcd5527c4ddbb0680a15edae04aaf"},
-    "publicAnchorReconciliationReview": {"path": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-anchor-public-reconcile-r1-independent-review-20261102/INDEPENDENT-REVIEW.md", "bytes": 6631, "sha256": "1ce5295130e9b358826b9d2f69a737c6895e97ecde284745348093dc1e6c9718"}
+    "publicAnchorReconciliationReview": {"path": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-anchor-public-reconcile-r1-independent-review-20261102/INDEPENDENT-REVIEW.md", "bytes": 6631, "sha256": "1ce5295130e9b358826b9d2f69a737c6895e97ecde284745348093dc1e6c9718"},
+    "validatorDescriptorFinal": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/comet-validator-init-controls-r2-state-reconciled/evidence/final.json", "bytes": 434, "sha256": "b9d3ab68cdbac8cca8ae3eeffa7df8141bfe6c72526255991424f5f37762645c"},
+    "validatorDescriptorReview": {"path": "/home/maximoto/Documents/Codex/2026-10-30/task/comet-validator-init-r2-actual-public-review-20261103/INDEPENDENT-REVIEW.md", "bytes": 8566, "sha256": "8cfa01ca5a75fab9b4c267620cf50db4ab4e2db256caa87d56d2202e350c5b48"},
+    "validatorDescriptorHandoff": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/comet-r2-public-descriptor-genesis-handoff-20261103/HANDOFF.json", "bytes": 14069, "sha256": "8475fb80c799aeaabe04dac3628dc7947a928f4332f546ed86686d11d5f9d693"}
   },
   "assemblyInputs": {
     "chainId": "plebeian-auctions-mvp-20261102",
@@ -55,16 +58,16 @@
     "consumerImplementation": "internal/poc/friday_comet_init.go:publicDescriptors",
     "consumerStrictUnknownFieldRejection": true,
     "consumerCryptographicValidation": "SOLE_GO_ASSEMBLER_ONLY",
-    "collectionState": "PUBLIC_DESCRIPTORS_NOT_COLLECTED_LOCALLY_REMOTE_HOST_STATE_NOT_RECONCILED",
-    "remoteCredentialStateClaim": "UNKNOWN_NO_CLAIM",
+    "collectionState": "FOUR_ACCEPTED_PUBLIC_DESCRIPTORS_COLLECTED",
+    "remoteCredentialStateClaim": "PUBLIC_OUTPUTS_ACCEPTED_PRIVATE_STATE_NOT_READ_OR_RECONCILED",
     "collectedLocalState": "COLLECTED_PUBLIC_ONLY",
     "collectedRemoteState": "PUBLIC_DESCRIPTOR_PRESENT_PRIVATE_STATE_NOT_READ"
   },
   "validatorDescriptors": [
-    {"slot": 1, "hostId": "linode-108175009", "fipsUla": "fdad:d221:cb5f:1d78:1125:b3f6:1a8f:44f8", "p2pExternal": "tcp://[fdad:d221:cb5f:1d78:1125:b3f6:1a8f:44f8]:27656", "path": null, "bytes": null, "sha256": null, "localCollectionState": "NOT_COLLECTED", "remoteGenerationState": "NOT_RECONCILED_NO_CLAIM"},
-    {"slot": 2, "hostId": "linode-108236985", "fipsUla": "fdd5:9c40:b25b:2ded:d43:fe2d:11c5:4703", "p2pExternal": "tcp://[fdd5:9c40:b25b:2ded:d43:fe2d:11c5:4703]:27656", "path": null, "bytes": null, "sha256": null, "localCollectionState": "NOT_COLLECTED", "remoteGenerationState": "NOT_RECONCILED_NO_CLAIM"},
-    {"slot": 3, "hostId": "linode-108237290", "fipsUla": "fd16:51a0:bc17:19bc:8a04:2076:e388:74a3", "p2pExternal": "tcp://[fd16:51a0:bc17:19bc:8a04:2076:e388:74a3]:27656", "path": null, "bytes": null, "sha256": null, "localCollectionState": "NOT_COLLECTED", "remoteGenerationState": "NOT_RECONCILED_NO_CLAIM"},
-    {"slot": 4, "hostId": "linode-108237424", "fipsUla": "fdbd:1deb:a2b0:9e60:dcb1:10df:90d7:5776", "p2pExternal": "tcp://[fdbd:1deb:a2b0:9e60:dcb1:10df:90d7:5776]:27656", "path": null, "bytes": null, "sha256": null, "localCollectionState": "NOT_COLLECTED", "remoteGenerationState": "NOT_RECONCILED_NO_CLAIM"}
+    {"slot": 1, "hostId": "linode-108175009", "fipsUla": "fdad:d221:cb5f:1d78:1125:b3f6:1a8f:44f8", "p2pExternal": "tcp://[fdad:d221:cb5f:1d78:1125:b3f6:1a8f:44f8]:27656", "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/comet-validator-init-controls-r2-state-reconciled/evidence/validator-1.public.json", "bytes": 1038, "sha256": "28c58bbf2042b6bba522b5f39a9017cc6ba4efd66535676161da81e1fc814b45", "localCollectionState": "COLLECTED_PUBLIC_ONLY", "remoteGenerationState": "PUBLIC_DESCRIPTOR_PRESENT_PRIVATE_STATE_NOT_READ"},
+    {"slot": 2, "hostId": "linode-108236985", "fipsUla": "fdd5:9c40:b25b:2ded:d43:fe2d:11c5:4703", "p2pExternal": "tcp://[fdd5:9c40:b25b:2ded:d43:fe2d:11c5:4703]:27656", "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/comet-validator-init-controls-r2-state-reconciled/evidence/validator-2.public.json", "bytes": 1036, "sha256": "9c43a77318afa2e6b711aee999d13ceeded4ed19ac372e36023098b4516bd699", "localCollectionState": "COLLECTED_PUBLIC_ONLY", "remoteGenerationState": "PUBLIC_DESCRIPTOR_PRESENT_PRIVATE_STATE_NOT_READ"},
+    {"slot": 3, "hostId": "linode-108237290", "fipsUla": "fd16:51a0:bc17:19bc:8a04:2076:e388:74a3", "p2pExternal": "tcp://[fd16:51a0:bc17:19bc:8a04:2076:e388:74a3]:27656", "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/comet-validator-init-controls-r2-state-reconciled/evidence/validator-3.public.json", "bytes": 1038, "sha256": "af9c9be7a7927b653915bd0bc0098082817af77ddcaba265998f9aceef8351c7", "localCollectionState": "COLLECTED_PUBLIC_ONLY", "remoteGenerationState": "PUBLIC_DESCRIPTOR_PRESENT_PRIVATE_STATE_NOT_READ"},
+    {"slot": 4, "hostId": "linode-108237424", "fipsUla": "fdbd:1deb:a2b0:9e60:dcb1:10df:90d7:5776", "p2pExternal": "tcp://[fdbd:1deb:a2b0:9e60:dcb1:10df:90d7:5776]:27656", "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/comet-validator-init-controls-r2-state-reconciled/evidence/validator-4.public.json", "bytes": 1038, "sha256": "61c358f0f2818424960bcfce6ee5cccd72be3109ebc406045cca2f5e086ae271", "localCollectionState": "COLLECTED_PUBLIC_ONLY", "remoteGenerationState": "PUBLIC_DESCRIPTOR_PRESENT_PRIVATE_STATE_NOT_READ"}
   ],
   "boundaries": {
     "generatesValidatorKeys": false,

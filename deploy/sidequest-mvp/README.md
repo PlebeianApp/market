@@ -39,14 +39,12 @@ site/authority/coordinator and V1-V4 signers. It performs no service or network
 action.
 
 The fifth command validates the genuine accepted signed anchor and corrected
-public reconciliation, pins the actual Go assembler binary, and proves that
-preparation stops without creating an output root when the four public
-validator descriptors are absent. It also invokes the actual assembler's
-argument gate and confirms that an incomplete command fails before writing.
-It also sends structurally complete, deliberately non-cryptographic public
-fixtures to the actual Go consumer and proves that its signature/address gate
-rejects them before creating the bundle root.
-No validator key, private descriptor state or genesis bundle is created.
+public reconciliation, the exact accepted descriptor handoff and all four
+signed public descriptors. It pins the actual Go assembler binary, renders its
+sole invocation, reproduces the genuine public assembly in a temporary root,
+and rejects any descriptor substitution against the accepted handoff.
+No validator key or private descriptor state is created or read; test bundles
+are public-only and confined to temporary roots.
 
 ## Immutable APP release boundary
 
@@ -240,22 +238,33 @@ python3 -I -S -B deploy/sidequest-mvp/prepare-genesis-assembly.py \
   --bundle-root /tmp/plebeian-sidequest-genuine-assembly-uncreated
 ```
 
-It currently returns `BLOCKED_MISSING_PUBLIC_ASSEMBLY_INPUTS` for exactly the
-four slot-bound public validator descriptors. This means only that the public
-files have not been collected into this workspace; remote validator-key and
-credential state has not been reconciled and no claim is made that it is
-absent. The existing source of a descriptor is
+It now returns `READY_FOR_SOLE_ASSEMBLER_VALIDATION_NOT_EXECUTED` with the four
+accepted slot-bound public descriptors. Their independent acceptance is
+SHA-256 `8cfa01ca5a75fab9b4c267620cf50db4ab4e2db256caa87d56d2202e350c5b48`,
+and the exact public handoff is SHA-256
+`8475fb80c799aeaabe04dac3628dc7947a928f4332f546ed86686d11d5f9d693`.
+The existing source of each descriptor is
 `InitFridayCometValidator`, exposed as `init-friday-comet-validator` with a
 fresh absolute per-host home, the accepted anchor, pinned owner public key and
 that host's slot. Its sole export is `validator-public.json` mode 0644.
 `node_key.json`, `priv_validator_key.json` and
 `priv_validator_state.json` remain beneath the private per-slot home and must
 never be exported.
-The preparation check never initializes validators, reads private state or
-executes the assembler. Once all four public files are recorded with exact
-byte counts and hashes, it renders the sole assembler argv; the Go assembler
-remains responsible for descriptor signatures, distinct roster membership and
-all genesis semantics.
+The preparation check never initializes validators or reads private state. It
+renders but does not itself execute the assembler; the Go assembler remains
+responsible for descriptor signatures, distinct roster membership and all
+genesis semantics.
+
+The real public assembly completed locally at
+`dist/sidequest/genesis-assembly-r1`. Its exact inventory and verification are
+recorded in `genesis-assembly-actual-r1.json`. Bundle digest is
+`830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf`,
+genesis file SHA-256 is
+`8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea`,
+and validators hash is
+`d1936c5e5e9d09d0a96107031ae144068dcc2ad3f1d071e7f8fe871a8aaff773`.
+This is a local public artifact, not installation, finalization, launch-seal,
+observer, service or live-consensus acceptance.
 
 ## Validator-4 rejoin control
 

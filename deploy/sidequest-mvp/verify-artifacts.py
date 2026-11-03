@@ -30,6 +30,13 @@ def main() -> None:
         assert metadata.st_size == record["bytes"], f"byte count changed: {path}"
         assert f"{stat.S_IMODE(metadata.st_mode):04o}" == record["mode"], f"mode changed: {path}"
         assert digest(path) == record["sha256"], f"SHA-256 changed: {path}"
+    for record in manifest["publicOutputArtifacts"]:
+        path = ROOT / record["path"]
+        metadata = path.stat()
+        assert stat.S_ISREG(metadata.st_mode), f"not a regular file: {path}"
+        assert metadata.st_size == record["bytes"], f"byte count changed: {path}"
+        assert f"{stat.S_IMODE(metadata.st_mode):04o}" == record["mode"], f"mode changed: {path}"
+        assert digest(path) == record["sha256"], f"SHA-256 changed: {path}"
     for record in manifest["sourcePins"]:
         path = ROOT / record["path"]
         assert digest(path) == record["sha256"], f"source SHA-256 changed: {path}"

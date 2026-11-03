@@ -105,8 +105,8 @@ def main() -> int:
         "consumerImplementation": "internal/poc/friday_comet_init.go:publicDescriptors",
         "consumerStrictUnknownFieldRejection": True,
         "consumerCryptographicValidation": "SOLE_GO_ASSEMBLER_ONLY",
-        "collectionState": "PUBLIC_DESCRIPTORS_NOT_COLLECTED_LOCALLY_REMOTE_HOST_STATE_NOT_RECONCILED",
-        "remoteCredentialStateClaim": "UNKNOWN_NO_CLAIM",
+        "collectionState": "FOUR_ACCEPTED_PUBLIC_DESCRIPTORS_COLLECTED",
+        "remoteCredentialStateClaim": "PUBLIC_OUTPUTS_ACCEPTED_PRIVATE_STATE_NOT_READ_OR_RECONCILED",
         "collectedLocalState": "COLLECTED_PUBLIC_ONLY",
         "collectedRemoteState": "PUBLIC_DESCRIPTOR_PRESENT_PRIVATE_STATE_NOT_READ",
     }, "DESCRIPTOR_CONTRACT")
@@ -119,7 +119,9 @@ def main() -> int:
     funding = sources["fundingAbortBootstrap"]
     runtime = sources["separatedRuntimeBinding"]
     reconciliation = sources["publicAnchorReconciliation"]
-    require(all(value is not None for value in (anchor, dkg, funding, runtime, reconciliation)), "PUBLIC_JSON_SOURCE")
+    descriptor_final = sources["validatorDescriptorFinal"]
+    descriptor_handoff = sources["validatorDescriptorHandoff"]
+    require(all(value is not None for value in (anchor, dkg, funding, runtime, reconciliation, descriptor_final, descriptor_handoff)), "PUBLIC_JSON_SOURCE")
     assembly = plan["assemblyInputs"]
     anchor_sha256 = plan["acceptedPublicInputs"]["deploymentAnchor"]["sha256"]
     require(dkg == runtime["result"], "DKG_RUNTIME_BINDING")
@@ -137,6 +139,38 @@ def main() -> int:
     require(reconciliation["newSignatureOrRendererRun"] is False and reconciliation["privateSeedReadOrStat"] is False, "RECONCILIATION_PRIVATE_SCOPE")
     require(reconciliation["genesisOrRemoteOrActivation"] is False, "RECONCILIATION_EXECUTION_SCOPE")
     require(reconciliation["publicResult"]["deploymentAnchorSha256"] == anchor_sha256, "RECONCILIATION_ANCHOR")
+    require(descriptor_final == {
+        "actionSha256": "85a092c341832ea7185f5ed261767fb71b7d23c27a5f170836e17d376d09cd0f",
+        "anchorSha256": anchor_sha256,
+        "genesisAssembled": False,
+        "ownershipHandoffPerformed": False,
+        "privateContentsExported": False,
+        "retry": False,
+        "roles": ["V1", "V2", "V3", "V4"],
+        "schema": "COMET_INIT_FINAL_V1",
+        "servicesStarted": False,
+        "status": "FOUR_COMET_PUBLIC_DESCRIPTORS_VERIFIED_REQUIRES_INDEPENDENT_REVIEW",
+    }, "DESCRIPTOR_FINAL")
+    require(plan["acceptedPublicInputs"]["validatorDescriptorReview"]["sha256"] == "8cfa01ca5a75fab9b4c267620cf50db4ab4e2db256caa87d56d2202e350c5b48", "DESCRIPTOR_REVIEW")
+    require(descriptor_handoff["schema"] == "COMET_R2_PUBLIC_DESCRIPTOR_SINGLE_ASSEMBLER_HANDOFF_V1", "DESCRIPTOR_HANDOFF_SCHEMA")
+    require(descriptor_handoff["remoteOrPrivateActionExecuted"] is False, "DESCRIPTOR_HANDOFF_SCOPE")
+    require(descriptor_handoff["frozenContent"] == {
+        "cashuMintIdentity": assembly["cashuMintUrl"],
+        "chainId": assembly["chainId"],
+        "exactSigningMessageBytes": 2077,
+        "exactSigningMessageSha256": "757b4855ed30d05d474636f60ecfa4e8388ef841ba27b39fb83c127e4f0c4d6b",
+        "fakeFundingAdvisoryMaxResultingBalance": assembly["fakeFundingMaxResultingBalance"],
+        "fakeFundingMaxPerRequest": assembly["fakeFundingMaxPerRequest"],
+        "genesisTimeUtc": assembly["genesisTimeUtc"],
+        "legacyGoIdentityNamespaceTestMintUrl": assembly["testMintUrl"],
+        "mintFipsTransportOrigin": "http://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:3438",
+        "ownerPublicKey": assembly["ownerApprovalPublicKey"],
+    }, "DESCRIPTOR_HANDOFF_FROZEN_CONTENT")
+    handoff_descriptors = descriptor_handoff["validatorDescriptors"]
+    require(len(handoff_descriptors) == len(plan["validatorDescriptors"]) == 4, "DESCRIPTOR_HANDOFF_COUNT")
+    for planned, handed in zip(plan["validatorDescriptors"], handoff_descriptors):
+        require((planned["slot"], planned["path"], planned["bytes"], planned["sha256"]) ==
+                (handed["slot"], handed["path"], handed["bytes"], handed["sha256"]), "DESCRIPTOR_HANDOFF_RECORD")
 
     assembler = plan["soleAssembler"]
     repo = Path(__file__).resolve().parents[2]

@@ -1,0 +1,82 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_GENESIS_ASSEMBLY_ACTUAL_R1",
+  "status": "LOCAL_PUBLIC_ASSEMBLY_COMPLETED_NOT_INSTALLED_NOT_ACTIVATED_REQUIRES_PUBLIC_REVIEW",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "outputRoot": "/home/maximoto/Documents/Codex/2026-11-02/task/plebeian-mvp-r4/dist/sidequest/genesis-assembly-r1",
+  "assembler": {
+    "implementation": "internal/poc/friday_comet_init.go:AssembleFridayCometGenesis",
+    "binary": "/home/maximoto/Documents/Codex/2026-11-02/task/plebeian-mvp-r4/dist/sidequest/plebeian-auctions-mvp",
+    "bytes": 46588440,
+    "sha256": "ab92ff6d0552f8de88208636cdad77dff3863ee8ef325eb04352e635e93e20c5",
+    "exitCode": 0
+  },
+  "acceptedDescriptorReview": {
+    "path": "/home/maximoto/Documents/Codex/2026-10-30/task/comet-validator-init-r2-actual-public-review-20261103/INDEPENDENT-REVIEW.md",
+    "bytes": 8566,
+    "sha256": "8cfa01ca5a75fab9b4c267620cf50db4ab4e2db256caa87d56d2202e350c5b48"
+  },
+  "descriptorHandoff": {
+    "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/comet-r2-public-descriptor-genesis-handoff-20261103/HANDOFF.json",
+    "bytes": 14069,
+    "sha256": "8475fb80c799aeaabe04dac3628dc7947a928f4332f546ed86686d11d5f9d693",
+    "historicalStatus": "ACTUAL_PUBLIC_INPUTS_LOCATED_PENDING_INDEPENDENT_INIT_RECEIPT_ACCEPTANCE",
+    "acceptanceSuppliedSeparately": true
+  },
+  "descriptorInputs": [
+    {"slot": 1, "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/comet-validator-init-controls-r2-state-reconciled/evidence/validator-1.public.json", "bytes": 1038, "sha256": "28c58bbf2042b6bba522b5f39a9017cc6ba4efd66535676161da81e1fc814b45"},
+    {"slot": 2, "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/comet-validator-init-controls-r2-state-reconciled/evidence/validator-2.public.json", "bytes": 1036, "sha256": "9c43a77318afa2e6b711aee999d13ceeded4ed19ac372e36023098b4516bd699"},
+    {"slot": 3, "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/comet-validator-init-controls-r2-state-reconciled/evidence/validator-3.public.json", "bytes": 1038, "sha256": "af9c9be7a7927b653915bd0bc0098082817af77ddcaba265998f9aceef8351c7"},
+    {"slot": 4, "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/comet-validator-init-controls-r2-state-reconciled/evidence/validator-4.public.json", "bytes": 1038, "sha256": "61c358f0f2818424960bcfce6ee5cccd72be3109ebc406045cca2f5e086ae271"}
+  ],
+  "frozenBindings": {
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "genesisTimeUtc": "2026-11-02T18:35:21Z",
+    "deploymentAnchorSha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb",
+    "authenticatedDkgResultSha256": "f16c7bf8eebf7ce29878f9e2a34c21c8974ad3bdef3372c364657dc7ee061877",
+    "fundingAbortBootstrapSha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf",
+    "separatedRuntimeBindingSha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a",
+    "mintProjectionSha256": "f671be3673fed9f074cd142640e38bc7c2fb98002881164895477e1f4d9523da",
+    "testMintUrl": "http://127.0.0.1:8180/test-mint",
+    "cashuMintUrl": "https://139.162.161.233",
+    "fakeFundingMaxPerRequest": 10000,
+    "fakeFundingMaxResultingBalance": 50000
+  },
+  "receipt": {
+    "fileSha256": "e2ec78c285ca98233bef227379acaf9ef2d6f46c543140289803e9d2b954d383",
+    "bundleDigest": "830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "genesisSha256": "c2bb4df3a19b543e270017322ea2bae37b54ae640c7964fc89ef79c77a17cc76",
+    "genesisFileSha256": "8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea",
+    "validatorsHash": "d1936c5e5e9d09d0a96107031ae144068dcc2ad3f1d071e7f8fe871a8aaff773",
+    "validatorRosterSha256": "e9d68caccf10cc9d1642f736aff87836127c9f5554d21d74d4ec4c6e1f40d22e",
+    "networkManifestSha256": "0fe06ef2c15fd7f0ecd5eed32ac26111f32357c9139ab6c083e88f5ff29b0203",
+    "networkFactsSha256": "0dd62cc5270f9e007851ed5c892a7386e2cdf620f8b7e1958fe84019ebe594a5"
+  },
+  "outputFiles": [
+    {"name": "comet-genesis-bundle.json", "bytes": 2741, "mode": "0644", "sha256": "e2ec78c285ca98233bef227379acaf9ef2d6f46c543140289803e9d2b954d383"},
+    {"name": "deployment-anchor.json", "bytes": 2411, "mode": "0644", "sha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb"},
+    {"name": "frost-final-public.json", "bytes": 17321, "mode": "0644", "sha256": "f16c7bf8eebf7ce29878f9e2a34c21c8974ad3bdef3372c364657dc7ee061877"},
+    {"name": "funding-abort-bootstrap.json", "bytes": 442, "mode": "0644", "sha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf"},
+    {"name": "genesis.json", "bytes": 1876, "mode": "0644", "sha256": "8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea"},
+    {"name": "network-facts.json", "bytes": 417, "mode": "0600", "sha256": "0dd62cc5270f9e007851ed5c892a7386e2cdf620f8b7e1958fe84019ebe594a5"},
+    {"name": "network.json", "bytes": 3716, "mode": "0600", "sha256": "0fe06ef2c15fd7f0ecd5eed32ac26111f32357c9139ab6c083e88f5ff29b0203"},
+    {"name": "separated-runtime-binding.json", "bytes": 17716, "mode": "0644", "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a"},
+    {"name": "validator-roster.json", "bytes": 4685, "mode": "0644", "sha256": "e9d68caccf10cc9d1642f736aff87836127c9f5554d21d74d4ec4c6e1f40d22e"}
+  ],
+  "verification": {
+    "networkFactsRecomputedByProductionBinary": true,
+    "copiedAnchorDkgBootstrapAndRuntimeByteIdentical": true,
+    "genuineAssemblyReproducedInTemporaryRoot": true,
+    "focusedGoAssemblyAndBindingTestsPassed": true,
+    "remoteMutation": false,
+    "privateStateRead": false,
+    "serviceMutation": false,
+    "networkSecurityMutation": false
+  },
+  "nextSteps": [
+    "independently review this exact public bundle inventory and receipt",
+    "stage the accepted public bundle for each validator and run host-local finalization without exporting private keys",
+    "collect four exact public finalization acknowledgements and create the launch seal",
+    "install the accepted four-ack seal on each validator, then initialize and accept the APP observer",
+    "bind accepted bundle, observer, browser and health hashes into runtime configuration before separately authorized installation and activation"
+  ]
+}

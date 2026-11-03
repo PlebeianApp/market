@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise genuine public-input preparation without keys or assembly execution."""
+"""Exercise genuine public-only assembly preparation and deterministic output."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ BINARY = ROOT / "dist/sidequest/plebeian-auctions-mvp"
 
 
 class GenesisAssemblyPreparation(unittest.TestCase):
-    def test_genuine_inputs_stop_before_private_descriptor_ceremony(self) -> None:
+    def test_genuine_inputs_render_exact_sole_assembler_argv(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sidequest-genesis-prep-", dir="/tmp") as temporary:
             bundle = Path(temporary) / "uncreated-bundle"
             completed = subprocess.run([
@@ -29,12 +29,10 @@ class GenesisAssemblyPreparation(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
             result = json.loads(completed.stdout)
             self.assertEqual(result["acceptedAnchorSha256"], "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb")
-            self.assertEqual(result["status"], "BLOCKED_MISSING_PUBLIC_ASSEMBLY_INPUTS")
-            self.assertEqual(result["missing"], [
-                f"validatorDescriptors[{slot}] public descriptor not collected locally; remote state not reconciled"
-                for slot in range(1, 5)
-            ])
-            self.assertIsNone(result["argv"])
+            self.assertEqual(result["status"], "READY_FOR_SOLE_ASSEMBLER_VALIDATION_NOT_EXECUTED")
+            self.assertEqual(result["missing"], [])
+            self.assertIsNotNone(result["argv"])
+            self.assertEqual(result["argv"].count("--validator-public"), 4)
             self.assertFalse(result["assemblerExecuted"])
             self.assertFalse(result["privateExecution"])
             self.assertFalse(result["remoteMutation"])
@@ -44,12 +42,23 @@ class GenesisAssemblyPreparation(unittest.TestCase):
             self.assertEqual(version.returncode, 0, version.stdout + version.stderr)
             self.assertEqual(json.loads(version.stdout)["value_profile"], "FAKE_MONEY_ONLY")
 
-            refused = subprocess.run([
-                str(BINARY), "assemble-friday-comet", "--bundle", str(bundle),
+            assembled = subprocess.run(result["argv"], check=False, capture_output=True, text=True)
+            self.assertEqual(assembled.returncode, 0, assembled.stdout + assembled.stderr)
+            receipt = json.loads(assembled.stdout)
+            self.assertEqual(receipt["bundle_digest"], "830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf")
+            self.assertEqual(receipt["genesis_file_sha256"], "8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea")
+            self.assertEqual(receipt["network_facts_sha256"], "0dd62cc5270f9e007851ed5c892a7386e2cdf620f8b7e1958fe84019ebe594a5")
+            self.assertEqual({path.name for path in bundle.iterdir()}, {
+                "genesis.json", "network.json", "network-facts.json", "validator-roster.json",
+                "deployment-anchor.json", "frost-final-public.json", "funding-abort-bootstrap.json",
+                "separated-runtime-binding.json", "comet-genesis-bundle.json",
+            })
+
+            facts = subprocess.run([
+                str(BINARY), "network-facts", "--home", str(bundle),
             ], check=False, capture_output=True, text=True)
-            self.assertNotEqual(refused.returncode, 0)
-            self.assertIn("requires --bundle, four --validator-public paths", refused.stderr)
-            self.assertFalse(bundle.exists())
+            self.assertEqual(facts.returncode, 0, facts.stdout + facts.stderr)
+            self.assertEqual(json.loads(facts.stdout)["validators_hash"], receipt["validators_hash"])
 
     def test_public_source_drift_stops(self) -> None:
         plan = json.loads(PLAN.read_text(encoding="utf-8"))
@@ -64,7 +73,7 @@ class GenesisAssemblyPreparation(unittest.TestCase):
             result = json.loads(stopped.stdout)
             self.assertTrue(result["category"].startswith("SOURCE_SHA256:"))
 
-    def test_public_shape_reaches_only_the_go_cryptographic_gate(self) -> None:
+    def test_descriptor_substitution_stops_at_accepted_handoff(self) -> None:
         plan = json.loads(PLAN.read_text(encoding="utf-8"))
         anchor_sha256 = plan["acceptedPublicInputs"]["deploymentAnchor"]["sha256"]
         with tempfile.TemporaryDirectory(prefix="sidequest-genesis-public-", dir="/tmp") as temporary:
@@ -107,16 +116,9 @@ class GenesisAssemblyPreparation(unittest.TestCase):
                 "python3", "-I", "-S", "-B", str(PREPARE), "--plan", str(plan_path),
                 "--bundle-root", str(bundle),
             ], check=False, capture_output=True, text=True)
-            self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+            self.assertNotEqual(prepared.returncode, 0)
             result = json.loads(prepared.stdout)
-            self.assertEqual(result["status"], "READY_FOR_SOLE_ASSEMBLER_VALIDATION_NOT_EXECUTED")
-            self.assertEqual(result["missing"], [])
-            self.assertEqual(result["descriptorCryptographicValidation"], "DEFERRED_TO_SOLE_GO_ASSEMBLER")
-            self.assertFalse(result["assemblerExecuted"])
-            self.assertFalse(bundle.exists())
-
-            refused = subprocess.run(result["argv"], check=False, capture_output=True, text=True)
-            self.assertNotEqual(refused.returncode, 0)
+            self.assertEqual(result["category"], "DESCRIPTOR_HANDOFF_RECORD")
             self.assertFalse(bundle.exists())
 
 
