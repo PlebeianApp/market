@@ -1,0 +1,66 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_APP_OBSERVER_ACTION_V1",
+  "status": "PENDING_EXACT_ACTION_TIME_CONFIRMATION_NOT_EXECUTED",
+  "target": {
+    "role": "APP",
+    "ipv4": "139.162.161.233",
+    "linodeId": 109290386,
+    "sshUser": "root",
+    "hostFingerprint": "SHA256:vwneIrYnA381zb6bYV+WBrydo4zrv+hzNIwkrL7WN7g",
+    "knownHostsSha256": "8894056c53a52d1b8c8ebc4941830530edebf9fd2b8a41e4baab7215a4c16dd7"
+  },
+  "installedInitializer": {
+    "path": "/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc",
+    "bytes": 46580232,
+    "sha256": "8f501da6c7b054d3b33f98f4be52c0299655fc52756af70cd59cbc5740afd7c4"
+  },
+  "publicBundle": {
+    "sourceRoot": "dist/sidequest/genesis-assembly-r1",
+    "stagingRoot": "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "bundleDigest": "830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "files": [
+      {"name": "comet-genesis-bundle.json", "bytes": 2741, "sha256": "e2ec78c285ca98233bef227379acaf9ef2d6f46c543140289803e9d2b954d383"},
+      {"name": "deployment-anchor.json", "bytes": 2411, "sha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb"},
+      {"name": "frost-final-public.json", "bytes": 17321, "sha256": "f16c7bf8eebf7ce29878f9e2a34c21c8974ad3bdef3372c364657dc7ee061877"},
+      {"name": "funding-abort-bootstrap.json", "bytes": 442, "sha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf"},
+      {"name": "genesis.json", "bytes": 1876, "sha256": "8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea"},
+      {"name": "network-facts.json", "bytes": 417, "sha256": "0dd62cc5270f9e007851ed5c892a7386e2cdf620f8b7e1958fe84019ebe594a5"},
+      {"name": "network.json", "bytes": 3716, "sha256": "0fe06ef2c15fd7f0ecd5eed32ac26111f32357c9139ab6c083e88f5ff29b0203"},
+      {"name": "separated-runtime-binding.json", "bytes": 17716, "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a"},
+      {"name": "validator-roster.json", "bytes": 4685, "sha256": "e9d68caccf10cc9d1642f736aff87836127c9f5554d21d74d4ec4c6e1f40d22e"}
+    ]
+  },
+  "observer": {
+    "home": "/var/lib/plebeian-auctions-friday/network-separated",
+    "ownerApprovalPublicKey": "3210f99b78ecd0150b6a0efcaffc6f3b532f4e5a3d68f977e77a3b8d10febade",
+    "fipsP2pListen": "tcp://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:27656",
+    "generatedCredential": "ONE_NONVOTING_COMET_P2P_TRANSPORT_PRIVATE_KEY",
+    "validatorOrFrostKeyGenerated": false
+  },
+  "requiredPreconditions": {
+    "stagingRootAbsent": true,
+    "observerHomeAbsent": true,
+    "observerServiceInactive": true,
+    "siteAuthorityCoordinatorInactive": true,
+    "fipsServiceActive": true,
+    "appParticipantStateAbsent": true
+  },
+  "effects": {
+    "publicStagingDirectoryCreated": true,
+    "publicStagingFilesCreated": 9,
+    "observerHomeCreated": true,
+    "persistentNonvotingP2pKeyGenerated": true,
+    "publicObserverReceiptCreated": true,
+    "servicesStartedStoppedOrReloaded": false,
+    "successorReleaseOrRuntimeConfigInstalled": false,
+    "ownershipHandoffPerformed": false,
+    "firewallOrHttpsChanged": false,
+    "paymentPerformed": false,
+    "dkgRepeated": false
+  },
+  "failurePolicy": "STOP_PRESERVE_PARTIAL_STATE_NO_AUTOMATIC_RETRY_OR_DELETION",
+  "authorization": {
+    "actionTimeConfirmationReceived": false,
+    "serviceActivationAuthorized": false
+  }
+}
