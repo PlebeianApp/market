@@ -1,0 +1,119 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_SIGNER_ACTIVATION_READINESS_V1",
+  "status": "FOUR_SIGNERS_READY_FOR_CLEAN_FIRST_START_NOT_AUTHORIZED_OR_EXECUTED",
+  "completedAtUtc": "2026-11-03T22:31:30Z",
+  "sourceCommit": "935a9eda4c6f6d5258c4e78bf1bc7dab4c2f0345",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "readOnlyChecker": {
+    "path": "/tmp/check_sidequest_signer_readiness.py",
+    "sha256": "08fee0e5438299f37b16133df6f7fec985a806d566c0da570a3f6a6a2d3a0c66",
+    "remoteMutation": false,
+    "privateContentsOrHashesRead": false
+  },
+  "serviceContract": {
+    "unitSha256": "d79d99abfd381e8886660a75d2b60cabd7f7f484f8373b36df95cc36e097e744",
+    "user": "plebeian-friday",
+    "group": "plebeian-friday-public",
+    "requires": [
+      "plebeian-friday-fips.service",
+      "plebeian-friday-validator.service"
+    ],
+    "restartPolicy": "no",
+    "noNewPrivileges": true,
+    "protectSystem": "strict",
+    "readWritePath": "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3"
+  },
+  "hosts": [
+    {
+      "role": "V1",
+      "slot": 1,
+      "fipsUla": "fdad:d221:cb5f:1d78:1125:b3f6:1a8f:44f8",
+      "port": 39101
+    },
+    {
+      "role": "V2",
+      "slot": 2,
+      "fipsUla": "fdd5:9c40:b25b:2ded:d43:fe2d:11c5:4703",
+      "port": 39101
+    },
+    {
+      "role": "V3",
+      "slot": 3,
+      "fipsUla": "fd16:51a0:bc17:19bc:8a04:2076:e388:74a3",
+      "port": 39101
+    },
+    {
+      "role": "V4",
+      "slot": 4,
+      "fipsUla": "fdbd:1deb:a2b0:9e60:dcb1:10df:90d7:5776",
+      "port": 39101
+    }
+  ],
+  "freshPreconditions": {
+    "fipsActiveAll": true,
+    "validatorActiveAll": true,
+    "signerInactiveAll": true,
+    "validatorAndSignerRestartCountsZeroAll": true,
+    "signerGuardAll": "SIDEQUEST_ROLE_TARGET=PASS",
+    "signerListenerAbsentAll": true,
+    "signerAuxiliaryNodeDirectoryEmptyAll": true,
+    "startupOutputsAbsentAll": [
+      "terminal-proof-use.sqlite3",
+      "signer-safety-anchor.sqlite3",
+      "admission-safety.sqlite3",
+      "signer-rpc.sqlite3",
+      "signer-enrollment-public.json",
+      "signer-service-v2.lock",
+      "signer-service-v2.quarantine"
+    ],
+    "privateKeysetMetadata": {
+      "identitySigningKey": "service-owned regular single-link 0600, 65 bytes",
+      "kexPrivateKey": "service-owned regular single-link 0600, 65 bytes",
+      "signerRpcIdentityKey": "service-owned regular single-link 0600, 65 bytes",
+      "transportSecrets": "service-owned regular single-link 0600, 1064 bytes",
+      "participantStateDirectory": "service-owned directory 0700",
+      "contentsOrHashesRead": false
+    }
+  },
+  "firstStartEffects": {
+    "privateAccess": "The signer process reads its existing local RPC identity and gains access to its local participant/FROST state. No private material is exported.",
+    "durableWrites": [
+      "Create and initialize the signer RPC journal with restartEpoch 1 and a new journal generation.",
+      "Create the signed public enrollment bound to restartEpoch 1.",
+      "Create or initialize signer safety, admission, terminal proof-use and disposition metadata stores.",
+      "Create an in-process lease while the signer is running."
+    ],
+    "thresholdSigning": "Startup performs no auction, admission, abort or terminal signing request. The participant binary is invoked only by a later authenticated operation.",
+    "networkListener": "Each service binds HTTP only to its exact FIPS IPv6 ULA on port 39101. It does not bind public IPv4, wildcard, or loopback.",
+    "routes": [
+      "POST /v1/frost",
+      "POST /v1/admission",
+      "POST /v1/funding-abort",
+      "POST /v1/health"
+    ],
+    "transportAndAuthentication": "The listener is reachable through the existing five-host FIPS overlay. Requests require the reviewed transport marker, and service handlers authenticate the pinned coordinator and signed envelopes. No firewall or route change is part of activation."
+  },
+  "verificationPlan": [
+    "Recheck the same fresh preconditions immediately before each host start.",
+    "Run systemctl start plebeian-friday-signer.service once per host, sequentially; never retry automatically.",
+    "Require active-running, Restart=no, NRestarts=0 and an exact [FIPS ULA]:39101 listener after each start.",
+    "Require public listener absence on the underlay IPv4 and no change to validator, FIPS or APP services.",
+    "Use a bounded unauthenticated negative request to confirm the HTTP boundary rejects missing transport/authentication data without initiating signing.",
+    "Defer positive authenticated /v1/health verification until APP authority startup, where the coordinator secret stays local and the authority records each process instance and restart epoch."
+  ],
+  "risks": [
+    "First start creates durable epoch-1 journals and enrollment. A failed start after those writes is not a clean first-start state.",
+    "A blind retry would increment restartEpoch and can conflict with the create-once epoch-1 enrollment; therefore no automatic retry, reset or deletion is permitted.",
+    "Starting fewer than three healthy signers leaves threshold operations unavailable; three are sufficient but four are required for the planned full demo readiness check.",
+    "A running signer has access to its local secret state even though no signing request is sent during activation."
+  ],
+  "blockers": [],
+  "exactApprovalRequest": "May I start the four fail-stop FROST signer services once and verify each exact FIPS-only listener plus a non-signing rejection check? Startup creates first-use signer journals and public enrollments at restart epoch 1 and gives each process access to its existing local secret state, but no secret leaves its server and I will send no signing or payment request. The services bind only their FIPS ULAs on port 39101, not public IPv4. If any start fails, I will preserve the exact partial state, make no retry or deletion, and report before further action.",
+  "notAuthorized": [
+    "Starting any signer",
+    "Sending an authenticated health or signing request",
+    "Starting APP coordinator, authority or site",
+    "Changing firewall, HTTPS, nginx or external exposure",
+    "Making any payment"
+  ]
+}
