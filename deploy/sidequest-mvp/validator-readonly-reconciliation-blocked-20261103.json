@@ -1,0 +1,53 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_VALIDATOR_READONLY_RECONCILIATION_RESULT_V1",
+  "completedAtUtc": "2026-11-03T07:54:17Z",
+  "status": "BLOCKED_BEFORE_REMOTE_NO_SSH_AGENT",
+  "authorizedScope": "FOUR_PINNED_ROOT_SSH_READONLY_RECONCILIATIONS_ONLY",
+  "plannedChecks": [
+    "installed binary hash",
+    "public validator descriptor",
+    "root and target path metadata",
+    "absence of digest-named staging directory and validator final acknowledgement",
+    "private key file metadata only without contents or hashes",
+    "fresh height-zero validator signing-state fields",
+    "validator service inactivity"
+  ],
+  "localIdentityCheck": {
+    "sshAuthSock": "ABSENT",
+    "command": "ssh-add -l",
+    "exitCode": 2,
+    "stderr": "Could not open a connection to your authentication agent.",
+    "expectedOwnerPublicKey": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/direct-r2-host-replacement-command-r2/attempt/agent-public.pub",
+      "bytes": 81,
+      "mode": "0600",
+      "sha256": "968181db57a2eb2351404b239185f5f6a81771a52eb328ee75b52a0697c7e909"
+    },
+    "expectedKeyComparedToAgent": false
+  },
+  "knownHosts": [
+    {"role": "V1", "ipv4": "172.105.64.142", "path": "/home/maximoto/Documents/Codex/2026-10-28/task-4/remaining-fifteen-fips-probes-r2-socket/known-hosts/V1", "bytes": 96, "mode": "0600", "sha256": "2c02b18dce28d3efc5923417cd81aa8d3bf5816ee132ea3958e4c8e9be8cb93c", "locallyVerified": true},
+    {"role": "V2", "ipv4": "172.105.95.57", "path": "/home/maximoto/Documents/Codex/2026-10-28/task-4/remaining-fifteen-fips-probes-r2-socket/known-hosts/V2", "bytes": 95, "mode": "0600", "sha256": "bdd69b89887b8bbfc4d7b32f0100ded8d0ea4ba9ec9ba54fbdb70925c80bf963", "locallyVerified": true},
+    {"role": "V3", "ipv4": "172.104.240.217", "path": "/home/maximoto/Documents/Codex/2026-10-28/task-4/remaining-fifteen-fips-probes-r2-socket/known-hosts/V3", "bytes": 97, "mode": "0600", "sha256": "bc671e31f609abff503df12c6a7afc140ba74a9a814a4832c7189b3d9aa4eb5d", "locallyVerified": true},
+    {"role": "V4", "ipv4": "172.104.253.247", "path": "/home/maximoto/Documents/Codex/2026-10-28/task-4/remaining-fifteen-fips-probes-r2-socket/known-hosts/V4", "bytes": 97, "mode": "0600", "sha256": "59f614c0f35f8158f052aa430c789daf7055983eb61aac1d4828b674add213c3", "locallyVerified": true}
+  ],
+  "remoteOutcome": {
+    "sshCommandsStarted": 0,
+    "hostsContacted": [],
+    "remoteStateObserved": false,
+    "outcomeUncertain": false,
+    "uploads": false,
+    "writes": false,
+    "privateKeyContentsReadOrHashed": false,
+    "finalizerInvoked": false,
+    "servicesChanged": false,
+    "retryAttempted": false
+  },
+  "blocker": {
+    "action": "RUN_FOUR_PINNED_ROOT_SSH_READONLY_RECONCILIATIONS",
+    "targets": ["V1", "V2", "V3", "V4"],
+    "reason": "The current process has no SSH_AUTH_SOCK and ssh-add cannot connect to an authentication agent.",
+    "disposition": "STOPPED_WITHOUT_CONTACTING_ANY_HOST_OR_TRYING_STALE_OR_ALTERNATE_CREDENTIALS",
+    "requiredNextInput": "Restore or reconnect the expected owner SSH agent, verify its offered public-key fingerprint against the accepted public key, then issue a fresh execution turn."
+  }
+}
