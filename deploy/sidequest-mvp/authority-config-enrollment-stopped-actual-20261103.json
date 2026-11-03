@@ -1,0 +1,72 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_CONFIG_ENROLLMENT_STOPPED_ACTUAL_V1",
+  "status": "PUBLIC_CONFIG_INSTALLED_COORDINATOR_R2_STARTED_AUTHORITY_MISSING_PUBLIC_ENROLLMENTS_BOTH_STOPPED_NO_RETRY",
+  "completedAtUtc": "2026-11-03T23:47:11Z",
+  "planSha256": "d60c2060346abcf0b894cec587d12d119bf7d4b5976325ffa3a1cba98cf797d4",
+  "controller": {
+    "path": "/tmp/run_authority_config_continuation.py",
+    "sha256": "640e152a5a659c9a71a5aac3f4b6bccc185e416da659c9c667cc50954df4c210"
+  },
+  "publicConfigInstall": {
+    "path": "/etc/plebeian-auctions-friday/authority.json",
+    "status": "complete-create-once",
+    "bytes": 363,
+    "sha256": "9cf014030b9ed39f30631d4c2435f21cf63b115036dfc9f0ac818cec16f7cc26",
+    "uid": 0,
+    "gid": 988,
+    "mode": "0640",
+    "links": 1
+  },
+  "coordinator": {
+    "r2Guard": "SIDEQUEST_COORDINATOR_R2_TARGET=PASS",
+    "newStartSucceeded": true,
+    "restartCount": 0,
+    "stoppedOnlyBecauseAuthorityAcceptanceFailed": true,
+    "finalState": "inactive-dead"
+  },
+  "authority": {
+    "preStartGuard": "SIDEQUEST_ROLE_TARGET=PASS",
+    "processStartAttempted": true,
+    "automaticRestartCountBaseline": 1,
+    "automaticRestartCountObserved": 2,
+    "error": "ENOENT: no such file or directory, open /var/lib/plebeian-auctions-friday/frost-v3/node-1/signer-enrollment-public.json",
+    "controllerStoppedService": true,
+    "finalState": "inactive-dead"
+  },
+  "diagnosis": {
+    "authoritySource": "cashu-wrapper/ts/demo-friday-authority-cli.ts",
+    "productionParticipantLoader": "cashu-wrapper/ts/demo-fips-r4-terminal-cli.ts:createDemoFridayTerminalParticipants",
+    "expectedRoot": "/var/lib/plebeian-auctions-friday/frost-v3",
+    "expectedPattern": "node-{1..4}/signer-enrollment-public.json",
+    "actualValidatorPattern": "/var/lib/plebeian-auctions-friday/separated/node-{slot}/signer-enrollment-public.json",
+    "classification": "signed public signer enrollment metadata required by the authority; not a secret share, participant private key, credential, proof, token, wallet seed or authentication database"
+  },
+  "postStop": {
+    "coordinator": "inactive-dead-zero-restarts",
+    "authority": "inactive-dead-preserved-restart-count-2",
+    "site": "inactive-never-started",
+    "observerMintFips": "active-unchanged",
+    "loopback8180or8181Listener": false,
+    "coordinatorQueueRevision": 0,
+    "queuedOperations": 0,
+    "coordinatorDatabaseQuickCheck": "ok",
+    "signerAnchorRows": 0
+  },
+  "effects": {
+    "authenticatedSignerHealthSignatureRequested": false,
+    "frostThresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "siteNginxHttpsFirewallOrExternalExposureChanged": false,
+    "secretShareOrPrivateKeyAccessed": false
+  },
+  "remoteReceipts": {
+    "actionSha256": "ac4bd16c7817af8cb563b1aa586d5c3bac87c56cb68bd2c99cf791e181b14e39",
+    "stoppedSha256": "06551815ec07b400562d6f3c96315f69297c26568c8ee815a56447be04cb88e3"
+  },
+  "reconciliation": {
+    "path": "/tmp/reconcile_authority_config_stop.py",
+    "sha256": "53633c292b34b3dd3db5fbc6257317a79ff0df2dc32969cefa7f1d792a76531b",
+    "remoteMutation": false
+  },
+  "nextStep": "Install the four exact signed public enrollment records create-once under APP's authority-visible frost-v3/node-{slot} paths, then make one separately approved coordinator start and one authority start using NRestarts=2 as the authority baseline."
+}

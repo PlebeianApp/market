@@ -1,0 +1,122 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_PUBLIC_ENROLLMENT_CONTINUATION_PLAN_V1",
+  "status": "READY_FOR_EXACT_APPROVAL_NOT_EXECUTED",
+  "preparedAtUtc": "2026-11-03T23:47:11Z",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "cause": "The authority's production participant loader verifies four signed public signer-enrollment records from APP-local frost-v3/node-{slot} paths. The signer starts created these records only on V1-V4, and the inactive APP adoption omitted the public mirror.",
+  "acceptedDkg": {
+    "path": "/home/maximoto/Documents/Codex/2026-10-28/task-2/dkg-attest-controls-r1/evidence/authenticated-dkg-result.json",
+    "sha256": "f16c7bf8eebf7ce29878f9e2a34c21c8974ad3bdef3372c364657dc7ee061877",
+    "publicKeyPackageSha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+    "signerRosterDigest": "c1aca1467fa1485dadfb7260024adf31f23e2d0912c99569292ee920d6d1eea1"
+  },
+  "publicEnrollmentCollection": {
+    "method": "read-only pinned-root SSH from each validator",
+    "controller": "/tmp/read_public_enrollments.py",
+    "controllerSha256": "932f71d979b93c84867f6568a22d0da712c849408640e1f37bc54871522a6b14",
+    "allSourceFiles": {
+      "bytes": 1177,
+      "uid": 999,
+      "gid": 988,
+      "mode": "0600",
+      "links": 1,
+      "schema": "COCO_DEMO_FIPS_SIGNER_ENROLLMENT_V1",
+      "restartEpoch": 1
+    },
+    "containsSecret": false,
+    "excludedTopLevelFieldClasses": ["private", "secret", "share", "proof", "token", "wallet", "seed"]
+  },
+  "records": [
+    {
+      "participantId": 1,
+      "sourceHost": "V1",
+      "sourcePath": "/var/lib/plebeian-auctions-friday/separated/node-1/signer-enrollment-public.json",
+      "localSource": "deploy/sidequest-mvp/public-signer-enrollments/signer-1.json",
+      "destination": "/var/lib/plebeian-auctions-friday/frost-v3/node-1/signer-enrollment-public.json",
+      "sha256": "6b14c1d08b0b6b5fdd5a0f329bb1e41d12268b3f81fb377b5ee2f3bed30afac0",
+      "digest": "f9e9af661a9d436a685809144433520370c387b2e6c4b1f740f8e996a237198e",
+      "signerIdentity": "7bbd6fefa289786174bfe6aaedd28b82dd53b22e36bc2ab6ad8bd874c7d30b63"
+    },
+    {
+      "participantId": 2,
+      "sourceHost": "V2",
+      "sourcePath": "/var/lib/plebeian-auctions-friday/separated/node-2/signer-enrollment-public.json",
+      "localSource": "deploy/sidequest-mvp/public-signer-enrollments/signer-2.json",
+      "destination": "/var/lib/plebeian-auctions-friday/frost-v3/node-2/signer-enrollment-public.json",
+      "sha256": "cb1af8e9ba10abaf07a6435aeed2f19750aeadecdbbb8409b53bdc860c195f20",
+      "digest": "e89cbd0d8dfadeeabf4b663562b6a36233be345eb46b164d7b988125c25a6f87",
+      "signerIdentity": "595a24ce72978be91ae993c96d28bfc12d6ccb94212599ff69f7d1371f9a6a91"
+    },
+    {
+      "participantId": 3,
+      "sourceHost": "V3",
+      "sourcePath": "/var/lib/plebeian-auctions-friday/separated/node-3/signer-enrollment-public.json",
+      "localSource": "deploy/sidequest-mvp/public-signer-enrollments/signer-3.json",
+      "destination": "/var/lib/plebeian-auctions-friday/frost-v3/node-3/signer-enrollment-public.json",
+      "sha256": "7ceec17fec76c98d519660ac6c12a3f3bcfd7429d054c31b7fe75dd718128b0a",
+      "digest": "4e689aafb58e54199677700ef690a34637a4dd27c5bd865030f1f5c7f010a94d",
+      "signerIdentity": "298da713895db65b5b860a11307a78ae8a3057daa7d938af60ca13e439a31b42"
+    },
+    {
+      "participantId": 4,
+      "sourceHost": "V4",
+      "sourcePath": "/var/lib/plebeian-auctions-friday/separated/node-4/signer-enrollment-public.json",
+      "localSource": "deploy/sidequest-mvp/public-signer-enrollments/signer-4.json",
+      "destination": "/var/lib/plebeian-auctions-friday/frost-v3/node-4/signer-enrollment-public.json",
+      "sha256": "594164835652085bcbcaefadb3af897869aa8562b759ac2d7854df0f55703f2e",
+      "digest": "6fc724f71b696edb48c8711266c2ec3390aa4f64df9cdc1e796e61f07e90e0f7",
+      "signerIdentity": "bfa05c77a3f23666e3b586a8edca5e50aa6717c309132ed2f9bee93ac7fc3956"
+    }
+  ],
+  "localValidation": {
+    "exactBytesMatchReadOnlySources": true,
+    "allFourSha256Match": true,
+    "allFourEnrollmentDigestsMatchProductionAlgorithm": true,
+    "allFourSchnorrSignaturesValid": true,
+    "allBindingsMatchAcceptedDkgParticipantIdSignerIdentityVerifyingShareStateDirectoryKeysetVersionRunPackageAndRoster": true,
+    "networkRequestMade": false,
+    "thresholdSignatureRequested": false
+  },
+  "freshAppPrecheck": {
+    "controller": "/tmp/precheck_public_enrollment_mirror.py",
+    "controllerSha256": "355a619c9076f101054d72afcc7de0a1897cbd88ed9e976d846dc34dc89cc7a9",
+    "frostV3Root": "root:public-group 0750",
+    "allFourDestinationDirectoriesAbsent": true,
+    "allFourDestinationFilesAbsent": true,
+    "coordinator": "inactive-dead-NRestarts-0",
+    "authority": "inactive-dead-NRestarts-2",
+    "site": "inactive-dead",
+    "observerMintFips": "active-unchanged",
+    "queueRevision": 0,
+    "queuedOperations": 0,
+    "signerAnchorRows": 0,
+    "listeners8180or8181": false
+  },
+  "continuation": [
+    "Recheck the preserved STOPPED receipt, exact installed authority config and coordinator R2 patch/unit, inactive coordinator/authority/site, authority NRestarts=2, empty revision-0 queue, zero signer anchors, absent 8180/8181 listeners and all four absent mirror targets.",
+    "Create only frost-v3/node-{1..4} as root:public-group 0750 and install the four exact public enrollment files create-once as root:public-group 0640; fsync and verify bytes and hashes.",
+    "Run the R2 coordinator guard and authority role guard.",
+    "Make one new coordinator start and require active-running with NRestarts=0.",
+    "Make one new authority start using NRestarts=2 as the baseline; require no increase beyond 2 and no automatic restart.",
+    "Collect bounded authority status samples until readiness is warm and then ready, requiring advancing committed height, all four epoch-1 signer anchors, mode normal and funding enabled_two_step_nip07.",
+    "Require the queue to remain revision 0 with zero operations, authority to listen only on 127.0.0.1:8181, and site/nginx/80/443 to remain off."
+  ],
+  "securityAndFinancialEffects": {
+    "copiesPublicSignedMetadataOnly": true,
+    "secretShareParticipantPrivateKeyCredentialOrAuthenticationDatabaseCopied": false,
+    "authenticatedRpcIdentityHealthSignatures": true,
+    "signerHealthAnchorsPersisted": true,
+    "frostThresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "realFundsInScope": false
+  },
+  "failurePolicy": "Stop only coordinator/authority services started by this continuation, preserve the four public mirror files and every existing receipt/database/artifact, and make no retry, reset, deletion or rollback.",
+  "exactApprovalRequest": "The authority stopped because APP is missing the four signed public signer-enrollment records created on V1-V4. I verified their exact hashes, DKG bindings and signatures; they contain no secret shares or private keys. May I install those four public records create-once on APP and make one new coordinator and authority start, then run the signed health checks? The website and HTTPS remain off, and no threshold signature or payment will be requested.",
+  "notAuthorized": [
+    "Creating the four APP public enrollment mirror directories or files",
+    "Starting coordinator or authority again",
+    "Resetting the preserved authority restart counter or deleting stopped evidence",
+    "Starting the site, nginx or HTTPS",
+    "Sending a FROST signing, funding, auction, settlement or payment request"
+  ]
+}
