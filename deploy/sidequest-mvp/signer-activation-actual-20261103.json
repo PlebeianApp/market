@@ -1,0 +1,102 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_SIGNER_ACTIVATION_ACTUAL_V1",
+  "status": "FOUR_SIGNERS_ACTIVE_EPOCH1_FIPS_ONLY_NO_SIGNING_REQUEST",
+  "completedAtUtc": "2026-11-03T23:01:29Z",
+  "sourceCommitBeforeAction": "eb055aff0cda4b80688ca57ca3afb2a32ddf2ff0",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "planSha256": "8878a7aec3d02d51f4c86a44aa966fcf97732dbabbb90e6af2764cd3596a3632",
+  "publicPackageRepairEvidenceSha256": "10cca7656791009d019998142772c1b468951040e4260498af9fa0b2c1027444",
+  "controller": {
+    "path": "/tmp/permit_and_start_one_sidequest_signer.py",
+    "sha256": "0ee6952d6e86ae371d1b6a93471703a97b8477ea09793c6ede5b9b693285929f"
+  },
+  "acceptedPublicPackage": {
+    "bytes": 301,
+    "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+    "installedAllFour": true
+  },
+  "hosts": [
+    {
+      "role": "V1",
+      "participantId": 1,
+      "permitSha256": "01eeab533d0d65f6612d4bb062132e191c73215ea220de4942fa62bb9f3c22ed",
+      "permitConsumed": true,
+      "service": "active-running",
+      "restartPolicy": "no",
+      "restartCount": 0,
+      "restartEpoch": 1,
+      "listener": "[fdad:d221:cb5f:1d78:1125:b3f6:1a8f:44f8]:39101",
+      "ipv4ListenerPresent": false,
+      "localMissingTransportProbe": 403
+    },
+    {
+      "role": "V2",
+      "participantId": 2,
+      "permitSha256": "1bffae28f16533aa292e45ffabf0980683266955171d8e6f2e4cc08b6a71df8a",
+      "permitConsumed": true,
+      "service": "active-running",
+      "restartPolicy": "no",
+      "restartCount": 0,
+      "restartEpoch": 1,
+      "listener": "[fdd5:9c40:b25b:2ded:d43:fe2d:11c5:4703]:39101",
+      "ipv4ListenerPresent": false,
+      "localMissingTransportProbe": 403
+    },
+    {
+      "role": "V3",
+      "participantId": 3,
+      "permitSha256": "b4a5a0adbadd675cab30d5a359f82e64fb0f2582e7c1273c355790cc9a7d2028",
+      "permitConsumed": true,
+      "service": "active-running",
+      "restartPolicy": "no",
+      "restartCount": 0,
+      "restartEpoch": 1,
+      "listener": "[fd16:51a0:bc17:19bc:8a04:2076:e388:74a3]:39101",
+      "ipv4ListenerPresent": false,
+      "localMissingTransportProbe": 403
+    },
+    {
+      "role": "V4",
+      "participantId": 4,
+      "permitSha256": "bed2a642b71bff3e1e9394cba75fd0bf2f45797a56f375fe9d705c8c8fe15ae3",
+      "permitConsumed": true,
+      "service": "active-running",
+      "restartPolicy": "no",
+      "restartCount": 0,
+      "restartEpoch": 1,
+      "listener": "[fdbd:1deb:a2b0:9e60:dcb1:10df:90d7:5776]:39101",
+      "ipv4ListenerPresent": false,
+      "localMissingTransportProbe": 403
+    }
+  ],
+  "firstStartOutputs": {
+    "publicEnrollment": "present-restart-epoch-1",
+    "durableSafetyStores": "present-service-owned-mode-0600",
+    "runtimeLock": "present-while-active"
+  },
+  "appPrivateMeshProbe": {
+    "controllerPath": "/tmp/check_app_to_signers.py",
+    "controllerSha256": "8c53704e3fb13b974a999a1636030898aefe40bd73cb98d47004f2b2334df71b",
+    "source": "APP",
+    "request": "POST {} with content-type only; no reviewed FIPS transport marker and no authenticated or signing envelope",
+    "results": {
+      "V1": {"status": 403, "body": "{\"error\":\"missing reviewed FIPS plaintext probe\"}"},
+      "V2": {"status": 403, "body": "{\"error\":\"missing reviewed FIPS plaintext probe\"}"},
+      "V3": {"status": 403, "body": "{\"error\":\"missing reviewed FIPS plaintext probe\"}"},
+      "V4": {"status": 403, "body": "{\"error\":\"missing reviewed FIPS plaintext probe\"}"}
+    },
+    "meaning": "APP reaches all four exact FIPS-only listeners, and every listener rejects the request at the transport boundary before an authenticated health or signing handler."
+  },
+  "effects": {
+    "secretShareOrPrivateKeyContentsOrHashesRead": false,
+    "signingRequestSent": false,
+    "paymentRequestSent": false,
+    "dkgRepeatedOrModified": false,
+    "validatorOrFipsServicesChanged": false,
+    "appAuctionServicesChanged": false,
+    "firewallHttpsOrExternalExposureChanged": false
+  },
+  "preservedHistory": "The earlier V1 package-mismatch start and its failed receipt remain preserved. It was not retried blindly. The subsequent accepted package repair and deterministic public permit enabled this separately approved V1 start.",
+  "nonActionIncident": "An earlier APP mesh-check command failed at Python parsing because of local quoting. It sent no network request and changed no state. The recorded probe used the corrected bounded controller.",
+  "nextStep": "Under separate approval, install the exact activation-ready APP environment and binding files, then start coordinator and authority and verify composite readiness using authenticated signer health without requesting a threshold signature or payment."
+}
