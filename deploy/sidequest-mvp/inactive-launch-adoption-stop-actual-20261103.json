@@ -1,0 +1,94 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_INACTIVE_ADOPTION_STOP_ACTUAL_V1",
+  "status": "STOPPED_FAIL_CLOSED_APP_PARTIAL_V1_THROUGH_V4_UNTOUCHED",
+  "recordedAtUtc": "2026-11-03T16:31:53Z",
+  "approvedPlanSha256": "b991b64a706ff771572111af71d93550aee20ec6f9545893e7733fc3891d5888",
+  "controller": {
+    "path": "deploy/sidequest-mvp/run-inactive-launch-adoption.py",
+    "bytesSha256": "37a61150b3d2f0f662d7e913dab390eedd59dae3d4606e447505a40595aa118e",
+    "commit": "5fa2822457fea69ab37cfc1c59419641b000bcd3"
+  },
+  "execution": {
+    "allFiveReadOnlyPreflightsPassedBeforeMutation": true,
+    "hostOrder": ["APP", "V1", "V2", "V3", "V4"],
+    "stoppedOnFirstFailure": true,
+    "automaticRetryAttempted": false,
+    "rollbackDeletionOrResetAttempted": false,
+    "failure": {
+      "role": "APP",
+      "phase": "finalize",
+      "category": "GUARD_FAILED:plebeian-friday:fixed path differs: FRIDAY_TERMINAL_EXECUTOR_BIN",
+      "cause": "The unchanged predecessor observer unit and guard require the predecessor terminal-executor path while the newly installed shared environment correctly pins the successor terminal-executor path.",
+      "correspondingValidatorRisk": "The unchanged predecessor validator guard has the same shared-environment path incompatibility, so validator mutation was not started."
+    }
+  },
+  "app": {
+    "partialStateConfirmedReadOnly": true,
+    "stage": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-inactive-adoption-b991b64a",
+    "journalSha256": "d8653e72c0332cbbe63389522c407b147ddef80755c292f2d7081651ed2e0f66",
+    "actualReceiptExists": false,
+    "journalEvents": [
+      "PREFLIGHT_RECHECK_PASS",
+      "RELEASE_PUBLISHED",
+      "CONFIG_INSTALLED",
+      "UNITS_INSTALLED",
+      "OWNERSHIP_HANDOFF_COMPLETE"
+    ],
+    "successorRelease": {
+      "path": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4",
+      "exists": true,
+      "allEightReleaseFilesMatchApprovedBytesAndSha256": true
+    },
+    "installedConfiguration": {
+      "applicationJsonSha256": "253427ca537fb143022d48f4539e939cf01f729cbf444368d9faea75c6badeee",
+      "fridayEnvSha256": "797f56d4115de50d827cbf6c4c7c5c7be56ba5b0145d19beaa9236f65949016a",
+      "browserPinsSha256": "df6e8ea5ad73397558393acfeac4313d6e0c810baa65eb85b749297ea3bc9fab",
+      "healthPinsSha256": "b6d28b268b732006d12cf52c529486e1377ab38ba51f3f570b0a0b56e9f19012",
+      "runtimeBindingsSha256": "86a5c6920ce64793006c33481685f4c4bfe8e621e2cda4b580645aa4f0c51526",
+      "fixedRuntimeBindingSha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a",
+      "predecessorApplicationRetainedSha256": "5be47091f66f95a861848f1e062d393d5c3d4fa5f07483e9b161ea508f89299a",
+      "predecessorEnvironmentRetainedSha256": "ee51da5392e9479878bea4f3db0a44dcf282b90c3dc1f95779dbf45680ef5ce9"
+    },
+    "installedListedUnits": {
+      "plebeian-friday-site.service": "dffaa560f8b79beff1f76553b3d2c1cb4e041b82dac403da01c6aab8a95f22fc",
+      "plebeian-friday-authority.service": "657cfe6a205d500d93117943d3d7aec9c52e0617e599cd11e8d5ad30297c19b7",
+      "plebeian-friday-coordinator.service": "10c1bb4e8b126f7be4893f3543aa4e3402f5c24830c600f6a70c0a8fd4399fa5"
+    },
+    "unreachedSuccessorGuardsCheckedReadOnlyAfterStop": {
+      "plebeian-friday-site.service": "PASS",
+      "plebeian-friday-authority.service": "PASS",
+      "plebeian-friday-coordinator.service": "PASS"
+    },
+    "ownershipHandoffMatchesApprovedPlan": true,
+    "daemonReloadReturnedSuccessBeforeGuardFailure": true,
+    "services": {
+      "plebeian-friday-fips.service": "active/running (pre-existing and unchanged)",
+      "plebeian-friday-mint.service": "active/running (pre-existing and unchanged)",
+      "plebeian-friday-observer.service": "inactive/dead",
+      "plebeian-friday-site.service": "inactive/dead",
+      "plebeian-friday-authority.service": "inactive/dead",
+      "plebeian-friday-coordinator.service": "inactive/dead"
+    }
+  },
+  "validators": {
+    "V1": {"releaseExists": false, "stageExists": false, "validator": "inactive/dead", "signer": "inactive/dead"},
+    "V2": {"releaseExists": false, "stageExists": false, "validator": "inactive/dead", "signer": "inactive/dead"},
+    "V3": {"releaseExists": false, "stageExists": false, "validator": "inactive/dead", "signer": "inactive/dead"},
+    "V4": {"releaseExists": false, "stageExists": false, "validator": "inactive/dead", "signer": "inactive/dead"}
+  },
+  "securityBoundary": {
+    "servicesStartedStoppedRestartedEnabledOrDisabled": false,
+    "authorityStateInitialized": false,
+    "credentialsCreated": false,
+    "privateKeyContentsOrHashesRead": false,
+    "paymentsPerformed": false,
+    "firewallHttpsDnsOrNginxChanged": false,
+    "predecessorReleaseModifiedOrDeleted": false
+  },
+  "requiredContinuation": {
+    "newAuthorityRequired": true,
+    "reason": "The approved plan explicitly allowed replacing only the listed site, authority, coordinator and signer units. Correcting the observer and validator guard invocation requires adding those two unit types to the replacement scope.",
+    "originalControllerMustNotBeRetried": true,
+    "minimumTechnicalChange": "Install a create-once legacy-node guard release that accepts the successor shared environment while still hash-pinning and executing the preserved predecessor Comet node binary; point only observer and validator ExecStartPre to that guard."
+  }
+}

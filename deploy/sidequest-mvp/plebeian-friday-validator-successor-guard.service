@@ -1,0 +1,29 @@
+[Unit]
+Description=Plebeian Friday Separated fake-money Comet validator
+Requires=plebeian-friday-fips.service
+After=plebeian-friday-fips.service
+
+[Service]
+Type=simple
+User=plebeian-friday
+Group=plebeian-friday-public
+Slice=plebeian-friday.slice
+EnvironmentFile=/etc/plebeian-auctions-friday/friday.env
+ExecStartPre=/usr/bin/python3 -I -S -B /opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-legacy-node-guard-v1/bin/verify-friday-separated-target.py --environment /etc/plebeian-auctions-friday/friday.env --application ${FRIDAY_APPLICATION} --service plebeian-friday-validator.service
+ExecStart=/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc node --home ${FRIDAY_NETWORK_ROOT} --slot ${FRIDAY_SLOT}
+Restart=always
+RestartSec=5s
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+# Required exact-slot 20-separated-state.conf supplies ReadWritePaths.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=384M
+TasksMax=256
+LimitNOFILE=65536
+
+LogNamespace=plebeian-friday-separated
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200

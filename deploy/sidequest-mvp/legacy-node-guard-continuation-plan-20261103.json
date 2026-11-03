@@ -1,0 +1,118 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_LEGACY_NODE_GUARD_CONTINUATION_PLAN_V1",
+  "status": "PREPARED_NOT_AUTHORIZED_NOT_EXECUTED",
+  "preparedAtUtc": "2026-11-03T16:31:53Z",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "previousApprovedPlanSha256": "b991b64a706ff771572111af71d93550aee20ec6f9545893e7733fc3891d5888",
+  "stopRecord": {
+    "path": "deploy/sidequest-mvp/inactive-launch-adoption-stop-actual-20261103.json",
+    "status": "STOPPED_FAIL_CLOSED_APP_PARTIAL_V1_THROUGH_V4_UNTOUCHED"
+  },
+  "cause": "The previous plan intentionally left observer and validator units unchanged, but their predecessor guard rejects the successor FRIDAY_TERMINAL_EXECUTOR_BIN path in the shared environment.",
+  "guardRelease": {
+    "root": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-legacy-node-guard-v1",
+    "publication": "CREATE_ONCE_FROM_DIGEST_VERIFIED_INCOMING_DIRECTORY",
+    "files": [
+      {
+        "source": "deploy/sidequest-mvp/verify-sidequest-legacy-node-target.py",
+        "destination": "bin/verify-friday-separated-target.py",
+        "bytes": 6776,
+        "sha256": "bee753683d967c6fba332b71660a6c195f70dc0148b91e7a0104564a7f0acec6",
+        "mode": "0755"
+      },
+      {
+        "source": "deploy/friday/separated/verify-friday-separated-target.py",
+        "destination": "bin/verify-friday-separated-base.py",
+        "bytes": 14659,
+        "sha256": "36bc33672b1cd2bef0961c7a7df160686cb2674e62242784303a64d652515f1d",
+        "mode": "0755"
+      },
+      {
+        "source": "deploy/friday/verify-friday-runtime-target.py",
+        "destination": "bin/verify-friday-runtime-target.py",
+        "bytes": 24764,
+        "sha256": "d5c7031676fa3e5dc15a5da5c11a8d20c44e5f5e53242b3407df90b1c026b206",
+        "mode": "0755"
+      }
+    ],
+    "preservedLegacyNode": {
+      "path": "/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc",
+      "bytes": 46580232,
+      "sha256": "8f501da6c7b054d3b33f98f4be52c0299655fc52756af70cd59cbc5740afd7c4",
+      "modified": false
+    },
+    "successorTerminalExecutor": {
+      "path": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/plebeian-friday-terminal-executor",
+      "bytes": 98846552,
+      "sha256": "630f63ed3549812d43f585aa019b20aa90ffa863119f5b505406eaa47a518460"
+    }
+  },
+  "unitExpansion": {
+    "app": {
+      "name": "plebeian-friday-observer.service",
+      "currentBytes": 1157,
+      "currentSha256": "7a9c4f65782a78aa3814c9112971f3a7904012ef17591016915113487de1736c",
+      "successorSource": "deploy/sidequest-mvp/plebeian-friday-observer-successor-guard.service",
+      "successorBytes": 1175,
+      "successorSha256": "83dd4211a10a5e108152fc234e87963b53a786413a5a7f18682dcf4174002c1a",
+      "onlyChangedSemantic": "ExecStartPre guard path",
+      "execStartLegacyNodeUnchanged": true
+    },
+    "validators": {
+      "name": "plebeian-friday-validator.service",
+      "currentBytes": 1102,
+      "currentSha256": "182b76011668fbe88639ddae2a09528d8ac574b9510876b9a65f39150e354ce9",
+      "successorSource": "deploy/sidequest-mvp/plebeian-friday-validator-successor-guard.service",
+      "successorBytes": 1120,
+      "successorSha256": "ff37b56e05c9325c7c92d821a0d73e3b9fcb153c54fcb58482c50e83351e3961",
+      "onlyChangedSemantic": "ExecStartPre guard path",
+      "execStartLegacyNodeUnchanged": true,
+      "existingPerSlotDropInsPreservedExactly": true
+    }
+  },
+  "freshReadOnlyPreconditions": {
+    "checkedAllFiveHosts": true,
+    "guardReleaseAbsentOnAllFiveHosts": true,
+    "guardStageAbsentOnAllFiveHosts": true,
+    "retainedObserverOrValidatorUnitSlotAbsentOnAllFiveHosts": true,
+    "observerUnitMatchesPinnedPredecessorOnApp": true,
+    "validatorUnitMatchesPinnedPredecessorOnV1ThroughV4": true,
+    "validatorDropInsMatchExactPerSlotPaths": true,
+    "privateFileContentsOrHashesRead": false
+  },
+  "execution": {
+    "allFiveHostPreflightsBeforeMutation": true,
+    "app": [
+      "reconcile the already committed inactive adoption without retrying it",
+      "publish the create-once guard release",
+      "retain and replace only the observer unit",
+      "run systemd-analyze verify and daemon-reload",
+      "run observer, site, authority and coordinator preflight guards",
+      "leave every service state unchanged"
+    ],
+    "validators": [
+      "execute the previously approved inactive release/configuration/ownership/signer adoption on untouched V1 through V4",
+      "publish the create-once guard release before post-install guards",
+      "retain and replace the validator unit in addition to the previously listed signer unit",
+      "preserve the exact per-slot validator and signer drop-ins",
+      "run systemd-analyze verify and daemon-reload",
+      "run validator and signer preflight guards",
+      "leave every service state unchanged"
+    ],
+    "hostOrder": ["APP", "V1", "V2", "V3", "V4"],
+    "stopOnFirstFailure": true,
+    "automaticRetryRollbackDeletionOrReset": false
+  },
+  "excludedEffects": [
+    "no service start, stop, restart, enable or disable",
+    "no authority or coordinator database initialization",
+    "no credential generation",
+    "no private key content or hash access",
+    "no DKG, FROST, validator signing-state or committee mutation",
+    "no payment, funding or real-money action",
+    "no firewall, HTTPS, DNS or nginx change",
+    "no predecessor or installed successor release modification or deletion",
+    "no activation flag set true"
+  ],
+  "exactApprovalRequest": "May I install the create-once compatibility guard and replace only APP's observer unit and V1-V4's validator units so they accept the already approved successor environment while continuing to execute the exact preserved predecessor Comet binary, then reconcile APP's partial inactive install and complete the untouched V1-V4 inactive installs? No service will be started, stopped, restarted, enabled or disabled; no private key contents will be read; no credentials or payments will be created; and execution will stop on the first failure without automatic retry or deletion."
+}
