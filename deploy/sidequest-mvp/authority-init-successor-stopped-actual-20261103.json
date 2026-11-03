@@ -1,0 +1,97 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_INIT_SUCCESSOR_STOPPED_ACTUAL_V1",
+  "status": "PUBLIC_PACKAGE_INSTALLED_INITIALIZATION_STOPPED_BEFORE_DATABASE_CREATION_NO_RETRY",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "host": {
+    "role": "APP",
+    "ipv4": "139.162.161.233"
+  },
+  "approvedAction": {
+    "path": "deploy/sidequest-mvp/authority-init-successor-action-20261103.json",
+    "bytes": 4096,
+    "sha256": "c5533ed4d80006fd630ad0f820340d7c733f4c683bfe3d4d1207d35011138ac1"
+  },
+  "controller": {
+    "path": "deploy/sidequest-mvp/run-authority-init-successor.py",
+    "sha256": "b498dd6808a94d55c3140e86e7926481eae6c37dfe57d60284cedebe4e30009f"
+  },
+  "preservedPriorAttempt": {
+    "actionSha256": "57167f5e81f07094c996246e58c629966bfd8a9166e27edf56c566e4454da6f6",
+    "stoppedSha256": "b4daf712198b244d6e076385ae1ad3bae5a400e6d02411f27291b11924d3fa63",
+    "unchanged": true
+  },
+  "publicPackage": {
+    "path": "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3/exchange/friday-demo-20261030-separated-v1-dkg1/participant-1.public.json",
+    "bytes": 301,
+    "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+    "uid": 0,
+    "gid": 988,
+    "mode": "0640",
+    "classification": "PUBLIC_FROST_KEY_PACKAGE_NOT_A_VALIDATOR_SHARE_OR_PRIVATE_KEY",
+    "installed": true,
+    "directories": {
+      "count": 4,
+      "uid": 0,
+      "gid": 988,
+      "mode": "0750"
+    }
+  },
+  "execution": {
+    "freshPreflight": "PASS",
+    "executeAttemptCount": 1,
+    "authorityBinaryExit": 1,
+    "stdoutBytes": 0,
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderrSha256": "fcc630b0993769699b5c1fc3fe28526a326231fd277ac509b84704013d662f66",
+    "stderrMatchesPriorAttempt": true,
+    "stderrContentRetained": false,
+    "automaticRetryPerformed": false,
+    "databaseTargetsCreated": 0,
+    "serviceStateChanged": false,
+    "credentialsCreated": false,
+    "paymentsPerformed": false,
+    "privateKeyShareOrSecretAccessed": false
+  },
+  "reconciledState": {
+    "allThirteenRuntimeDatabaseTargetsAbsent": true,
+    "allFiveIndependentAnchorTargetsAbsent": true,
+    "runtimeStillContainsOnlyCoordinatorIdentityPair": true,
+    "independentAnchorRootEmpty": true,
+    "auctionServicesRemainInactive": true,
+    "fipsAndMintRemainActive": true
+  },
+  "remoteReceipts": {
+    "action": {
+      "path": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-authority-init-successor-v1/ACTION.json",
+      "bytes": 4096,
+      "sha256": "c5533ed4d80006fd630ad0f820340d7c733f4c683bfe3d4d1207d35011138ac1",
+      "uid": 0,
+      "gid": 0,
+      "mode": "0600"
+    },
+    "stopped": {
+      "path": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-authority-init-successor-v1/STOPPED.json",
+      "bytes": 2732,
+      "sha256": "9590f433947931b9d0bc6e8cc4b97424e21ec66828aa69762576c7b595ed483b",
+      "uid": 0,
+      "gid": 0,
+      "mode": "0600"
+    }
+  },
+  "readOnlyDiagnostics": {
+    "exactSeparatedLoaderWithActualPublicAppInputs": "PASS",
+    "exactProductionBinaryEphemeralNamespaceUid999Gid988": "PASS_EXIT_0_EMPTY_OUTPUT",
+    "runtimeAndAnchorParentsReadableWritableSearchableAsServiceAccount": true,
+    "freeBytes": 74295554048,
+    "freeInodes": 5065735,
+    "filesystemMount": "rw_ext4",
+    "recentKernelAppArmorOrAuditDenialFound": false,
+    "qualification": "The exact loader and exact production binary succeed locally with the actual public APP inputs and service UID/GID. The remaining cause is specific to the APP invocation or process context. The inaccessible inherited working directory is a candidate, not a proven cause."
+  },
+  "continuation": {
+    "priorActionDirectoriesMustRemainImmutable": true,
+    "priorActionsMustNotBeRetried": true,
+    "newApprovalRequired": true,
+    "recommendedSuccessor": "Run one new create-once action with an explicit service-accessible working directory and bounded stderr capture; preserve all existing action and stopped receipts and stop without retry on any failure."
+  }
+}
