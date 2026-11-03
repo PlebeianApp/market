@@ -1,0 +1,94 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_VALIDATOR_LAUNCH_SEAL_INSTALL_ACTUAL_V1",
+  "completedAtUtc": "2026-11-03T08:31:49Z",
+  "status": "FOUR_VALIDATORS_HAVE_EXACT_PUBLIC_LAUNCH_SEAL_SERVICES_STOPPED",
+  "inputs": {
+    "stageFinalizeReceipt": {"path": "deploy/sidequest-mvp/validator-stage-finalize-actual-20261103.json", "sha256": "1800a3a3fb1b8d299c2a3883e0ccfc51ca88fd970690e96aeba929570f110f69"},
+    "bundleDigest": "830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "acknowledgements": [
+      {"slot": 1, "host": "V1", "sourcePath": "/var/lib/plebeian-auctions-friday/network-separated/validator-final-ack.json", "bytes": 947, "sha256": "b991efd5f40bd893991128087e2045d01aaceabd4b8cdbc58943e5c4f97f7fd6"},
+      {"slot": 2, "host": "V2", "sourcePath": "/var/lib/plebeian-auctions-friday/network-separated/validator-final-ack.json", "bytes": 947, "sha256": "151ec49fea9ff870f23a5770b2a7b63a6e0222092d8b724bec6efda8133820d8"},
+      {"slot": 3, "host": "V3", "sourcePath": "/var/lib/plebeian-auctions-friday/network-separated/validator-final-ack.json", "bytes": 947, "sha256": "12b8a692f5a62c71385ddff415bf615ebcd612493712b162d831b8f57bfaddce"},
+      {"slot": 4, "host": "V4", "sourcePath": "/var/lib/plebeian-auctions-friday/network-separated/validator-final-ack.json", "bytes": 947, "sha256": "fc545ad131274e3d26d548163eef1b3cc9ff7ec28cc11b6385b53d1baf3508af"}
+    ]
+  },
+  "generation": {
+    "binary": {"path": "/home/maximoto/Documents/Codex/2026-10-28/task-4/separated-build-final-r4/attempts/b2-r1/artifacts/plebeian-auctions-poc", "bytes": 46580232, "sha256": "8f501da6c7b054d3b33f98f4be52c0299655fc52756af70cd59cbc5740afd7c4"},
+    "subcommand": "seal-friday-comet-launch",
+    "freshLocalRoot": "/tmp/plebeian-launch-seal-20261103.C6aNjO",
+    "allFourAckSignaturesValidated": true,
+    "newSignatureCreated": false,
+    "privateKeyAccess": false,
+    "seal": {
+      "schema": "PLEBEIAN_FRIDAY_COMET_LAUNCH_SEAL_V1",
+      "bytes": 4404,
+      "mode": "0644",
+      "sha256": "a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c",
+      "deploymentId": "friday-demo-20261030-separated-v1",
+      "chainId": "plebeian-auctions-mvp-20261102",
+      "deploymentAnchorSha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb",
+      "ackSlots": [1, 2, 3, 4]
+    }
+  },
+  "executionTools": {
+    "precheck": {"path": "/tmp/plebeian-launch-precheck.py", "bytes": 2545, "sha256": "174c0a682dc74f1732335c0913215adc355521352f8e81eb1dda34b0ef8e6448"},
+    "postInstallCapture": {"path": "/tmp/plebeian-launch-capture.py", "bytes": 2402, "sha256": "26fd18c445c458b3d4c6241b93d5d9223fb01e6584d568e037553f13145a1a40"},
+    "remoteInstaller": {"path": "/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc", "sha256": "8f501da6c7b054d3b33f98f4be52c0299655fc52756af70cd59cbc5740afd7c4", "subcommand": "install-friday-comet-launch"}
+  },
+  "hosts": [
+    {
+      "role": "V1",
+      "slot": 1,
+      "ipv4": "172.105.64.142",
+      "precheck": {"ackMatched": true, "stageSealAbsent": true, "networkSealAbsent": true, "validatorService": "inactive/dead"},
+      "stagedSeal": {"path": "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf/comet-launch.json", "bytes": 4404, "mode": "0600", "sha256": "a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c", "createdExclusively": true},
+      "installedSeal": {"path": "/var/lib/plebeian-auctions-friday/network-separated/comet-launch.json", "bytes": 4404, "mode": "0644", "sha256": "a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c", "installerInvocations": 1},
+      "postcheck": {"validatorService": "inactive/dead", "privateKeyAccess": false},
+      "result": "INSTALLED"
+    },
+    {
+      "role": "V2",
+      "slot": 2,
+      "ipv4": "172.105.95.57",
+      "precheck": {"ackMatched": true, "stageSealAbsent": true, "networkSealAbsent": true, "validatorService": "inactive/dead"},
+      "stagedSeal": {"path": "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf/comet-launch.json", "bytes": 4404, "mode": "0600", "sha256": "a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c", "createdExclusively": true},
+      "installedSeal": {"path": "/var/lib/plebeian-auctions-friday/network-separated/comet-launch.json", "bytes": 4404, "mode": "0644", "sha256": "a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c", "installerInvocations": 1},
+      "postcheck": {"validatorService": "inactive/dead", "privateKeyAccess": false},
+      "result": "INSTALLED"
+    },
+    {
+      "role": "V3",
+      "slot": 3,
+      "ipv4": "172.104.240.217",
+      "precheck": {"ackMatched": true, "stageSealAbsent": true, "networkSealAbsent": true, "validatorService": "inactive/dead"},
+      "stagedSeal": {"path": "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf/comet-launch.json", "bytes": 4404, "mode": "0600", "sha256": "a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c", "createdExclusively": true},
+      "installedSeal": {"path": "/var/lib/plebeian-auctions-friday/network-separated/comet-launch.json", "bytes": 4404, "mode": "0644", "sha256": "a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c", "installerInvocations": 1},
+      "postcheck": {"validatorService": "inactive/dead", "privateKeyAccess": false},
+      "result": "INSTALLED"
+    },
+    {
+      "role": "V4",
+      "slot": 4,
+      "ipv4": "172.104.253.247",
+      "precheck": {"ackMatched": true, "stageSealAbsent": true, "networkSealAbsent": true, "validatorService": "inactive/dead"},
+      "stagedSeal": {"path": "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf/comet-launch.json", "bytes": 4404, "mode": "0600", "sha256": "a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c", "createdExclusively": true},
+      "installedSeal": {"path": "/var/lib/plebeian-auctions-friday/network-separated/comet-launch.json", "bytes": 4404, "mode": "0644", "sha256": "a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c", "installerInvocations": 1},
+      "postcheck": {"validatorService": "inactive/dead", "privateKeyAccess": false},
+      "result": "INSTALLED"
+    }
+  ],
+  "effects": {
+    "publicSealGenerated": true,
+    "publicStageFilesCreated": 4,
+    "publicNetworkFilesCreated": 4,
+    "privateKeyAccess": false,
+    "newSignatures": false,
+    "dkgOrFrostAccess": false,
+    "ownershipChanges": false,
+    "serviceChanges": false,
+    "appChanges": false,
+    "deletionOrReset": false,
+    "unexpectedOrUncertainOutcome": false
+  },
+  "nextAuthority": "APP_OBSERVER_INITIALIZATION_AND_VALIDATOR_OWNERSHIP_RUNTIME_CONFIGURATION_SERVICE_START_REMAIN_SEPARATE"
+}
