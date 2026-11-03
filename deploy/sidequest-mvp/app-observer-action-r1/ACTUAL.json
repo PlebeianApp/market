@@ -1,0 +1,82 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_APP_OBSERVER_ACTION_ACTUAL_V1",
+  "completedAtUtc": "2026-11-03T16:02:55Z",
+  "status": "APP_OBSERVER_INITIALIZED_SERVICES_UNCHANGED",
+  "sourceCommit": "c0033dccb0dabb53156a08dfffdd8225b7fa17b9",
+  "action": {
+    "path": "deploy/sidequest-mvp/app-observer-action-r1/ACTION.json",
+    "sha256": "43c85de722985d28e0b5920e0a7fcab5f80635430a47561cf4a9eecc361bed87",
+    "invocations": 1,
+    "freshPreconditionsRechecked": true
+  },
+  "target": {
+    "role": "APP",
+    "ipv4": "139.162.161.233",
+    "linodeId": 109290386,
+    "strictPinnedHostKey": true
+  },
+  "staging": {
+    "path": "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "bundleDigest": "830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "createdExclusively": true,
+    "fileMode": "0600",
+    "files": [
+      {"name": "comet-genesis-bundle.json", "bytes": 2741, "sha256": "e2ec78c285ca98233bef227379acaf9ef2d6f46c543140289803e9d2b954d383"},
+      {"name": "deployment-anchor.json", "bytes": 2411, "sha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb"},
+      {"name": "frost-final-public.json", "bytes": 17321, "sha256": "f16c7bf8eebf7ce29878f9e2a34c21c8974ad3bdef3372c364657dc7ee061877"},
+      {"name": "funding-abort-bootstrap.json", "bytes": 442, "sha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf"},
+      {"name": "genesis.json", "bytes": 1876, "sha256": "8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea"},
+      {"name": "network-facts.json", "bytes": 417, "sha256": "0dd62cc5270f9e007851ed5c892a7386e2cdf620f8b7e1958fe84019ebe594a5"},
+      {"name": "network.json", "bytes": 3716, "sha256": "0fe06ef2c15fd7f0ecd5eed32ac26111f32357c9139ab6c083e88f5ff29b0203"},
+      {"name": "separated-runtime-binding.json", "bytes": 17716, "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a"},
+      {"name": "validator-roster.json", "bytes": 4685, "sha256": "e9d68caccf10cc9d1642f736aff87836127c9f5554d21d74d4ec4c6e1f40d22e"}
+    ]
+  },
+  "observer": {
+    "home": "/var/lib/plebeian-auctions-friday/network-separated",
+    "receiptPath": "/var/lib/plebeian-auctions-friday/network-separated/observer.json",
+    "receiptBytes": 827,
+    "receiptSha256": "1970b8117cfb293a4f67f837f793b2f1521db4a1aec6ed4ea42b94031f666508",
+    "receipt": {
+      "schema": "PLEBEIAN_FRIDAY_NONVOTING_OBSERVER_V1",
+      "role": "NONVOTING_APPLICATION_OBSERVER",
+      "deployment_id": "friday-demo-20261030-separated-v1",
+      "chain_id": "plebeian-auctions-mvp-20261102",
+      "bundle_digest": "830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+      "owner_approval_public_key": "3210f99b78ecd0150b6a0efcaffc6f3b532f4e5a3d68f977e77a3b8d10febade",
+      "genesis_file_sha256": "8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea",
+      "validators_hash": "d1936c5e5e9d09d0a96107031ae144068dcc2ad3f1d071e7f8fe871a8aaff773",
+      "node_id": "71ad3719c811aaadcf58c3cf49dd2f75d2391835",
+      "public_key": "e9325e6fd45dbac49c3290aa5ae20cebb515b91599032da2b9aee0b5068de8a5",
+      "p2p_listen": "tcp://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:27656",
+      "rpc_listen": "tcp://127.0.0.1:27657"
+    },
+    "nodeKeyMetadata": {
+      "path": "/var/lib/plebeian-auctions-friday/network-separated/observer/config/node_key.json",
+      "bytes": 148,
+      "mode": "0600",
+      "uid": 0,
+      "gid": 0,
+      "contentsReadOrHashed": false
+    },
+    "validatorSigningStatePresent": false
+  },
+  "services": {
+    "plebeian-friday-fips.service": "active",
+    "plebeian-friday-observer.service": "inactive",
+    "plebeian-friday-site.service": "inactive",
+    "plebeian-friday-authority.service": "inactive",
+    "plebeian-friday-coordinator.service": "inactive"
+  },
+  "effects": {
+    "persistentNonvotingP2pKeyGenerated": true,
+    "servicesStartedStoppedOrReloaded": false,
+    "paymentsPerformed": false,
+    "validatorOrFrostPrivateMaterialAccessed": false,
+    "firewallOrHttpsChanged": false,
+    "successorReleaseOrRuntimeConfigInstalled": false,
+    "ownershipHandoffPerformed": false,
+    "unexpectedOrUncertainOutcome": false
+  },
+  "nextAuthority": "SEPARATE_RELEASE_CONFIG_OWNERSHIP_INSTALL_APPROVAL_REQUIRED_BEFORE_SERVICE_ACTIVATION"
+}
