@@ -1,0 +1,55 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_SIGNER_PUBLIC_PACKAGE_REPAIR_PLAN_V1",
+  "status": "READY_FOR_EXACT_APPROVAL_NOT_EXECUTED",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "cause": "The production separated-service loader compares the bytes at its fixed common public-package path to runtime.result.publicKeyPackageHex. The installed per-participant DKG JSON wrappers are different artifacts.",
+  "acceptedSource": {
+    "runtimeBindingPath": "/var/lib/plebeian-auctions-friday/separated-inputs/runtime-binding.json",
+    "runtimeBindingSha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a",
+    "field": "result.publicKeyPackageHex",
+    "decodedBytes": 301,
+    "decodedSha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+    "independentDigestField": "result.publicKeyPackageSha256"
+  },
+  "target": "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3/exchange/friday-demo-20261030-separated-v1-dkg1/participant-1.public.json",
+  "hostActions": [
+    {
+      "role": "V1",
+      "precondition": "Target is the 966-byte historical wrapper with SHA-256 3da508db92746874730898bf097ed8043ae1b946801289b66cb971228a77f01d; signer is failed; no signer auxiliary output exists.",
+      "action": "Create-once preserve the exact wrapper as participant-1.dkg-public-envelope-3da508db9274.json, create and fsync an incoming raw package decoded from the accepted runtime binding, then atomically replace the runtime target.",
+      "preservation": "The historical wrapper bytes remain service-owned mode 0600 and are never deleted."
+    },
+    {
+      "role": "V2",
+      "precondition": "Target is absent; participant-2.public.json remains unchanged.",
+      "action": "Create the target once from the accepted runtime binding with service ownership and mode 0600."
+    },
+    {
+      "role": "V3",
+      "precondition": "Target is absent; participant-3.public.json remains unchanged.",
+      "action": "Create the target once from the accepted runtime binding with service ownership and mode 0600."
+    },
+    {
+      "role": "V4",
+      "precondition": "Target is absent; participant-4.public.json remains unchanged.",
+      "action": "Create the target once from the accepted runtime binding with service ownership and mode 0600."
+    }
+  ],
+  "postconditions": [
+    "All four fixed runtime targets are regular, single-link, service-owned mode-0600 files of 301 bytes with SHA-256 954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5.",
+    "All original per-participant DKG JSON wrappers remain unchanged or, for V1, byte-for-byte preserved at the create-once recovery path.",
+    "No private key/share content or hash is read; DKG, validators, FIPS, APP, firewall and HTTPS state remain unchanged."
+  ],
+  "successorStart": {
+    "V1": "After repair and fresh checks, make one explicitly approved new start attempt from the confirmed pre-journal failed state.",
+    "V2V4": "Perform their first start sequentially only after their package postconditions pass.",
+    "failurePolicy": "No automatic retry, deletion, reset or DKG rerun. Preserve and report any partial state."
+  },
+  "securityEffect": "This installs only the already accepted public FROST package. It does not copy, derive, read or hash any secret share. A subsequent signer start is a separate security effect that loads local secret state.",
+  "exactApprovalRequest": "V1 failed closed before creating signer state because the runtime path contains the older 966-byte public DKG wrapper, while the accepted runtime requires the 301-byte public FROST package. The same path is absent on V2-V4. May I preserve V1's wrapper, install the exact accepted public package on all four validators, and then make one new V1 start attempt plus the first V2-V4 starts? No secret share will be copied or read, no signing or payment request will be sent, and any further failure will be preserved without retry or deletion.",
+  "notAuthorized": [
+    "Any public-package write or replacement",
+    "Any signer retry or first start",
+    "Any signing, payment, APP service, firewall or exposure action"
+  ]
+}

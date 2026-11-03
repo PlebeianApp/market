@@ -1,0 +1,80 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_SIGNER_ACTIVATION_STOPPED_ACTUAL_V1",
+  "status": "V1_FAILED_CLOSED_BEFORE_DURABLE_SIGNER_STATE_V2_V4_NOT_STARTED_NO_RETRY",
+  "completedAtUtc": "2026-11-03T22:43:06Z",
+  "sourceCommitBeforeAction": "517b5bc06c5769c9f3dfe12c7713e0d3394289ac",
+  "readinessSha256": "0fd4de6eb811e01ea43d8da1ea7f0c0ce33e1b156a280848c2fdb7f4d093001d",
+  "controller": {
+    "path": "/tmp/start_one_sidequest_signer.py",
+    "sha256": "8c9b0865fc90d3338f7e5ad7f190661c7fad89bd5899b8b8712845e24ef07660"
+  },
+  "attempt": {
+    "role": "V1",
+    "slot": 1,
+    "startedAtUtc": "2026-11-03T22:40:10Z",
+    "preStartGuard": "SIDEQUEST_ROLE_TARGET=PASS",
+    "execStartPreExit": 0,
+    "execMainExit": 1,
+    "systemdResult": "exit-code",
+    "restartPolicy": "no",
+    "restartCount": 0,
+    "automaticRetry": false,
+    "error": "SEPARATED_SERVICE: public DKG package bytes differ"
+  },
+  "v1PostFailure": {
+    "signerService": "failed",
+    "fipsService": "active",
+    "validatorService": "active",
+    "fipsListener39101Present": false,
+    "publicIpv4Listener39101Present": false,
+    "signerAuxiliaryNodeEntries": [],
+    "durableSignerJournalOrEnrollmentCreated": false,
+    "signingRequestSent": false,
+    "paymentPerformed": false
+  },
+  "untouchedHosts": {
+    "roles": [
+      "V2",
+      "V3",
+      "V4"
+    ],
+    "signerServices": "inactive",
+    "restartCounts": 0,
+    "signerStartsAttempted": false
+  },
+  "publicPackageReconciliation": {
+    "runtimeExpected": {
+      "path": "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3/exchange/friday-demo-20261030-separated-v1-dkg1/participant-1.public.json",
+      "bytes": 301,
+      "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+      "source": "publicKeyPackageHex and publicKeyPackageSha256 in the accepted separated runtime binding"
+    },
+    "V1": {
+      "pathStatus": "PRESENT_HISTORICAL_DKG_JSON_WRAPPER_NOT_RUNTIME_RAW_PACKAGE",
+      "bytes": 966,
+      "sha256": "3da508db92746874730898bf097ed8043ae1b946801289b66cb971228a77f01d"
+    },
+    "V2": {
+      "pathStatus": "ABSENT",
+      "localHistoricalWrapper": "participant-2.public.json remains unchanged"
+    },
+    "V3": {
+      "pathStatus": "ABSENT",
+      "localHistoricalWrapper": "participant-3.public.json remains unchanged"
+    },
+    "V4": {
+      "pathStatus": "ABSENT",
+      "localHistoricalWrapper": "participant-4.public.json remains unchanged"
+    }
+  },
+  "privacyAndScope": {
+    "privateKeyOrShareContentsRead": false,
+    "privateKeyOrShareHashesRead": false,
+    "dkgRepeatedOrModified": false,
+    "validatorOrFipsServiceChanged": false,
+    "appServiceChanged": false,
+    "firewallHttpsOrExternalExposureChanged": false
+  },
+  "blocker": "The signer runtime contract requires the accepted raw 301-byte public package at one fixed common path on every validator. The DKG ceremony retained per-participant JSON wrappers instead: V1's wrapper collides with the fixed participant-1 path, while that path is absent on V2-V4.",
+  "retryAuthority": "No retry is authorized or attempted. The public package mismatch must be repaired under a separate explicit approval before a new V1 attempt or any V2-V4 start."
+}
