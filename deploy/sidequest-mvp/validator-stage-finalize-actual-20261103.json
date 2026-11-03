@@ -1,0 +1,151 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_VALIDATOR_STAGE_FINALIZE_ACTUAL_V1",
+  "completedAtUtc": "2026-11-03T08:13:03Z",
+  "status": "FOUR_VALIDATORS_STAGED_AND_FINALIZED_SERVICES_STOPPED",
+  "inputs": {
+    "plan": {"path": "deploy/sidequest-mvp/validator-finalization-stage-plan.json", "sha256": "ac8abdf9b96e115d337ebd00e73841bbf45475a8d3cd6825640e9b1026c3b22b"},
+    "acceptedBundleReview": {"path": "/home/maximoto/Documents/Codex/2026-10-30/task/sidequest-genesis-assembly-r1-independent-review-20261103/INDEPENDENT-REVIEW.md", "sha256": "3060b528aed4a3b105a8d86cc70ca624d39b8d825284347ce4bd554164a54b03"},
+    "freshReadOnlyReconciliation": {"path": "deploy/sidequest-mvp/validator-readonly-reconciliation-actual-20261103.json", "sha256": "a3ca1ff821064dba07d5a321ce74f195b5c9053a63897d68d3b031dc033e56c2"},
+    "bundleDigest": "830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "genesisSha256": "c2bb4df3a19b543e270017322ea2bae37b54ae640c7964fc89ef79c77a17cc76",
+    "validatorsHash": "d1936c5e5e9d09d0a96107031ae144068dcc2ad3f1d071e7f8fe871a8aaff773",
+    "deploymentAnchorSha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb",
+    "chainId": "plebeian-auctions-mvp-20261102"
+  },
+  "executionTools": {
+    "preconditionProbe": {"path": "/tmp/plebeian-validator-readonly-probe.py", "bytes": 4445, "sha256": "3bef9baee428a543f783be2be7fd6798896ec53c7289a8ab0d38e88e1da1c9af"},
+    "stageVerifier": {"path": "/tmp/plebeian-stage-verify.py", "bytes": 3112, "sha256": "9eab362e8761104fb89b16856a742ab36ed8798fc7c89e95a3dc6530146a220e"},
+    "finalizationCapture": {"path": "/tmp/plebeian-finalization-capture.py", "bytes": 3722, "sha256": "047fffb06245462b6317849582fbdd7a2a9955dfc7f2e7c960dd8a635519519f"},
+    "installedFinalizer": {"path": "/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc", "bytes": 46580232, "sha256": "8f501da6c7b054d3b33f98f4be52c0299655fc52756af70cd59cbc5740afd7c4"}
+  },
+  "publicBundle": {
+    "stagingRoot": "/var/lib/plebeian-auctions-friday/separated-inputs/comet-genesis-bundle-830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "stagingRootMode": "0700",
+    "stagingFileMode": "0600",
+    "totalBytesPerHost": 51325,
+    "files": [
+      {"name": "comet-genesis-bundle.json", "bytes": 2741, "sha256": "e2ec78c285ca98233bef227379acaf9ef2d6f46c543140289803e9d2b954d383", "installedMode": "0644"},
+      {"name": "deployment-anchor.json", "bytes": 2411, "sha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb", "installedMode": "0600"},
+      {"name": "frost-final-public.json", "bytes": 17321, "sha256": "f16c7bf8eebf7ce29878f9e2a34c21c8974ad3bdef3372c364657dc7ee061877", "installedMode": "0600"},
+      {"name": "funding-abort-bootstrap.json", "bytes": 442, "sha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf", "installedMode": "0600"},
+      {"name": "genesis.json", "bytes": 1876, "sha256": "8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea", "installedMode": "0644"},
+      {"name": "network-facts.json", "bytes": 417, "sha256": "0dd62cc5270f9e007851ed5c892a7386e2cdf620f8b7e1958fe84019ebe594a5", "installedMode": "0600"},
+      {"name": "network.json", "bytes": 3716, "sha256": "0fe06ef2c15fd7f0ecd5eed32ac26111f32357c9139ab6c083e88f5ff29b0203", "installedMode": "0600"},
+      {"name": "separated-runtime-binding.json", "bytes": 17716, "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a", "installedMode": "0600"},
+      {"name": "validator-roster.json", "bytes": 4685, "sha256": "e9d68caccf10cc9d1642f736aff87836127c9f5554d21d74d4ec4c6e1f40d22e", "installedMode": "0600"}
+    ]
+  },
+  "hosts": [
+    {
+      "role": "V1",
+      "slot": 1,
+      "ipv4": "172.105.64.142",
+      "preconditionRechecked": true,
+      "stageCreatedExclusively": true,
+      "stageVerified": true,
+      "finalizerInvocations": 1,
+      "ack": {
+        "path": "/var/lib/plebeian-auctions-friday/network-separated/validator-final-ack.json",
+        "bytes": 947,
+        "mode": "0644",
+        "sha256": "b991efd5f40bd893991128087e2045d01aaceabd4b8cdbc58943e5c4f97f7fd6",
+        "hostId": "linode-108175009",
+        "nodeId": "bf7c5257f1494b599ee9b3bddab0920e99ccd2db",
+        "validatorAddress": "F2FEA8935978AF365AF37F9D4EF3CBFAE9A531DA",
+        "descriptorDigest": "31b8d660d9d3818b973aae27337dd9838f2fbdfdc99e852a663e456f2259d1df",
+        "validatorSignature": "8dba5a24544508db682ed1cdc78419500e78601f05b0224ad939032722618f2cf0772ce35f518c4c9573fe2f06b21add3ee5bd7e046ad8b1c0a95a069cb46c04"
+      },
+      "installedPublicFilesVerified": true,
+      "signingStateFresh": true,
+      "validatorService": "inactive/dead",
+      "result": "FINALIZED"
+    },
+    {
+      "role": "V2",
+      "slot": 2,
+      "ipv4": "172.105.95.57",
+      "preconditionRechecked": true,
+      "stageCreatedExclusively": true,
+      "stageVerified": true,
+      "finalizerInvocations": 1,
+      "ack": {
+        "path": "/var/lib/plebeian-auctions-friday/network-separated/validator-final-ack.json",
+        "bytes": 947,
+        "mode": "0644",
+        "sha256": "151ec49fea9ff870f23a5770b2a7b63a6e0222092d8b724bec6efda8133820d8",
+        "hostId": "linode-108236985",
+        "nodeId": "59e64741f815f69e5f05ae993d6adc5e8e2926b0",
+        "validatorAddress": "3983A3511A3403978B2ED1B0D4E320F7D73F8655",
+        "descriptorDigest": "b62db3e56a94e10231e355890f4850aea20923476bb5f6ca36cadf84fe4439ce",
+        "validatorSignature": "9e274a8f6b8d8e3d4ff85f9c80438bbcd7a59a24bddc4cd82f3a9acfaf435b7be9a8e79c718e6d97853f5b2b84f1609cdff21e26bb87b6167bcbbab15e808e05"
+      },
+      "installedPublicFilesVerified": true,
+      "signingStateFresh": true,
+      "validatorService": "inactive/dead",
+      "result": "FINALIZED"
+    },
+    {
+      "role": "V3",
+      "slot": 3,
+      "ipv4": "172.104.240.217",
+      "preconditionRechecked": true,
+      "stageCreatedExclusively": true,
+      "stageVerified": true,
+      "finalizerInvocations": 1,
+      "ack": {
+        "path": "/var/lib/plebeian-auctions-friday/network-separated/validator-final-ack.json",
+        "bytes": 947,
+        "mode": "0644",
+        "sha256": "12b8a692f5a62c71385ddff415bf615ebcd612493712b162d831b8f57bfaddce",
+        "hostId": "linode-108237290",
+        "nodeId": "e890c1016298472255243b981f249d5f4a500cff",
+        "validatorAddress": "F2B6DF0C5E1ED036E50AAC10312E557502E37726",
+        "descriptorDigest": "c4353fd306391e33b36a8b6b7b9292c0365619dfa03eaf4a3d0c032b976f2f15",
+        "validatorSignature": "5b176153d405070df948ee9aad951760777e0188e474cbc1351e260969e9588dd902a2f732ff08eb38f406084f2a5212543cf67af41425b840c217017c93cc03"
+      },
+      "installedPublicFilesVerified": true,
+      "signingStateFresh": true,
+      "validatorService": "inactive/dead",
+      "result": "FINALIZED"
+    },
+    {
+      "role": "V4",
+      "slot": 4,
+      "ipv4": "172.104.253.247",
+      "preconditionRechecked": true,
+      "stageCreatedExclusively": true,
+      "stageVerified": true,
+      "finalizerInvocations": 1,
+      "ack": {
+        "path": "/var/lib/plebeian-auctions-friday/network-separated/validator-final-ack.json",
+        "bytes": 947,
+        "mode": "0644",
+        "sha256": "fc545ad131274e3d26d548163eef1b3cc9ff7ec28cc11b6385b53d1baf3508af",
+        "hostId": "linode-108237424",
+        "nodeId": "18978772e14bd444ab84114d75d6db9313bff2e3",
+        "validatorAddress": "F7F47F1B733CFA53F98368C8587B9FD116D5376F",
+        "descriptorDigest": "3c2b40323ecdfc9e82897d624b88e3d254700c35aa803c1b291c973640ede80e",
+        "validatorSignature": "180b447dc61dcbb548c0616cb52d62b54a03c1440e81972ad2243f37e7e20a904df76012a9679d2f5889f2ce4aafa1af1537c9625de48b762afee50624513e08"
+      },
+      "installedPublicFilesVerified": true,
+      "signingStateFresh": true,
+      "validatorService": "inactive/dead",
+      "result": "FINALIZED"
+    }
+  ],
+  "effects": {
+    "publicStagingDirectoriesCreated": 4,
+    "publicStagingFilesCreated": 36,
+    "validatorPublicFilesInstalled": 36,
+    "publicAcknowledgementsCreated": 4,
+    "privateKeysExportedOrHashed": false,
+    "dkgOrFrostPrivateMaterialAccessed": false,
+    "ownershipChanged": false,
+    "servicesChanged": false,
+    "appChanged": false,
+    "paymentsPerformed": false,
+    "retryDeletionOrReset": false,
+    "unexpectedOrUncertainOutcome": false
+  },
+  "nextAuthority": "FOUR_ACK_PUBLIC_ACCEPTANCE_THEN_SEPARATE_LAUNCH_SEAL_AND_INSTALL_APPROVAL_REQUIRED"
+}
