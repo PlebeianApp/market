@@ -56,10 +56,19 @@ def load_guard():
     return module
 
 
+def load_role_guard():
+    spec = importlib.util.spec_from_file_location("sidequest_role_guard", ROLE_GUARD)
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 class RuntimeAdoptionFixture(unittest.TestCase):
     def test_all_role_artifacts_and_configuration_rendering(self) -> None:
         plan = json.loads(PLAN.read_text(encoding="utf-8"))
         guard = load_guard()
+        role_guard = load_role_guard()
         for artifact in plan["artifacts"].values():
             path = ROOT / artifact["sourcePath"]
             self.assertEqual((path.stat().st_size, file_digest(path)), (artifact["bytes"], artifact["sha256"]))
@@ -88,6 +97,10 @@ class RuntimeAdoptionFixture(unittest.TestCase):
                 for path in bin_root.iterdir():
                     path.chmod(0o755)
 
+                loaded_base = role_guard.load_base_guard(role_root)["verify"].__globals__
+                self.assertEqual(loaded_base["RELEASE"], role_root)
+                self.assertEqual(loaded_base["EXECUTABLE_NAMES"]["site"], "plebeian-auctions-mvp")
+
                 services = [value["service"] for value in role["successorUnits"]]
                 for service in services:
                     completed = subprocess.run([
@@ -106,6 +119,9 @@ class RuntimeAdoptionFixture(unittest.TestCase):
             self.assertEqual(inert.returncode, 0, inert.stdout + inert.stderr)
             inert_result = json.loads(inert.stdout)
             self.assertFalse(inert_result["ready"])
+            self.assertFalse(inert_result["resolved"])
+            self.assertFalse(inert_result["installAuthorized"])
+            self.assertFalse(inert_result["activationAuthorized"])
             self.assertEqual(inert_result["status"], "INERT_MISSING_INPUTS_NOT_INSTALLABLE")
             self.assertNotIn("selectedOwnerContent.chainId", inert_result["missing"])
             self.assertNotIn("frozenGenesisValue.canonicalGenesisTimeUtc", inert_result["missing"])
@@ -122,6 +138,67 @@ class RuntimeAdoptionFixture(unittest.TestCase):
             ], check=False, capture_output=True, text=True)
             self.assertNotEqual(replay.returncode, 0)
             self.assertIn("OUTPUT_ROOT_EXISTS", replay.stdout)
+
+            resolved_decisions = json.loads(DECISIONS.read_text(encoding="utf-8"))
+            resolved_decisions["status"] = "ACTUAL_INPUTS_RESOLVED_NOT_AUTHORIZED"
+            resolved_decisions["derivedRuntimeOutputs"] = {
+                "deploymentAnchorSha256": plan["acceptedExistingInputs"]["signedDeploymentAnchorSha256"],
+                "networkFactsSha256": "0dd62cc5270f9e007851ed5c892a7386e2cdf620f8b7e1958fe84019ebe594a5",
+                "browserPinsSha256": "df6e8ea5ad73397558393acfeac4313d6e0c810baa65eb85b749297ea3bc9fab",
+                "healthPinsSha256": "b6d28b268b732006d12cf52c529486e1377ab38ba51f3f570b0a0b56e9f19012",
+                "observerReceiptSha256": "1970b8117cfb293a4f67f837f793b2f1521db4a1aec6ed4ea42b94031f666508",
+                "observerNodeId": "71ad3719c811aaadcf58c3cf49dd2f75d2391835",
+            }
+            resolved_decisions_path = base / "resolved-decisions.json"
+            resolved_decisions_path.write_text(json.dumps(resolved_decisions, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+            resolved_root = base / "resolved"
+            resolved_run = subprocess.run([
+                "python3", "-I", "-S", "-B", str(RENDERER), "--plan", str(PLAN),
+                "--decisions", str(resolved_decisions_path), "--output-root", str(resolved_root),
+            ], check=False, capture_output=True, text=True)
+            self.assertEqual(resolved_run.returncode, 0, resolved_run.stdout + resolved_run.stderr)
+            resolved_result = json.loads(resolved_run.stdout)
+            self.assertTrue(resolved_result["resolved"])
+            self.assertFalse(resolved_result["installAuthorized"])
+            self.assertFalse(resolved_result["activationAuthorized"])
+            self.assertFalse(resolved_result["ready"])
+            self.assertEqual(resolved_result["missing"], [])
+            self.assertEqual(resolved_result["status"], "RESOLVED_AWAITING_INSTALL_AUTHORITY")
+            self.assertEqual(json.loads((resolved_root / "APP/sidequest-runtime-bindings.json").read_text())["status"], "RESOLVED_AWAITING_INSTALL_AUTHORITY")
+            self.assertNotIn("%UNRENDERED%", (resolved_root / "APP/friday.env").read_text())
+            self.assertEqual(parse_env(resolved_root / "APP/friday.env")["POC_FRIDAY_BROWSER_READY"], "false")
+            for role in plan["roles"]:
+                env = parse_env(resolved_root / role["role"] / "friday.env")
+                app = json.loads((resolved_root / role["role"] / "application.json").read_text())
+                services = ("site", "authority", "coordinator") if role["role"] == "APP" else ("signer",)
+                for service in services:
+                    self.assertEqual(guard.verify_values(env, app, f"plebeian-friday-{service}.service"), service)
+
+            install_decisions = json.loads(json.dumps(resolved_decisions))
+            install_decisions["status"] = "PROPOSED_INSTALL_AUTHORITY_FIXTURE"
+            install_decisions["authority"].update({
+                "releaseInstallAuthorized": True,
+                "unitInstallAuthorized": True,
+                "configurationInstallAuthorized": True,
+                "serviceActivationAuthorized": False,
+            })
+            install_decisions_path = base / "install-decisions.json"
+            install_decisions_path.write_text(json.dumps(install_decisions, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+            install_root = base / "install"
+            install_run = subprocess.run([
+                "python3", "-I", "-S", "-B", str(RENDERER), "--plan", str(PLAN),
+                "--decisions", str(install_decisions_path), "--output-root", str(install_root),
+            ], check=False, capture_output=True, text=True)
+            self.assertEqual(install_run.returncode, 0, install_run.stdout + install_run.stderr)
+            install_result = json.loads(install_run.stdout)
+            self.assertTrue(install_result["resolved"])
+            self.assertTrue(install_result["installAuthorized"])
+            self.assertFalse(install_result["activationAuthorized"])
+            self.assertFalse(install_result["ready"])
+            self.assertEqual(install_result["status"], "READY_FOR_INACTIVE_INSTALL")
+            self.assertEqual(json.loads((install_root / "APP/sidequest-runtime-bindings.json").read_text())["status"], "READY_FOR_INACTIVE_INSTALL")
+            self.assertEqual((install_root / "APP/friday.env").read_bytes(), (resolved_root / "APP/friday.env").read_bytes())
+            self.assertEqual(parse_env(install_root / "APP/friday.env")["POC_FRIDAY_BROWSER_READY"], "false")
 
             decisions = json.loads(DECISIONS.read_text(encoding="utf-8"))
             pin = "1" * 64

@@ -88,8 +88,8 @@
       "name": "verify-friday-separated-target.py",
       "sourcePath": "deploy/sidequest-mvp/verify-sidequest-role-target.py",
       "destination": "bin/verify-friday-separated-target.py",
-      "bytes": 4795,
-      "sha256": "ab5dde96f8fd5896c4c9444a589d49e5e840e3403e3ab90d6c9bf551cca7910c",
+      "bytes": 5023,
+      "sha256": "6be04d9d58c90c47dd0a3cd65a1e1402977c6e3e3c64e12187c0f0763330fe5d",
       "sourceMode": "0644",
       "installMode": "0755"
     },
@@ -97,8 +97,8 @@
       "name": "verify-friday-separated-base.py",
       "sourcePath": "deploy/friday/separated/verify-friday-separated-target.py",
       "destination": "bin/verify-friday-separated-base.py",
-      "bytes": 14508,
-      "sha256": "08802310fa9d584354ca4a2ce1a24ba290ffba2e10ce6e4007fe46bd9fe136e3",
+      "bytes": 14659,
+      "sha256": "36bc33672b1cd2bef0961c7a7df160686cb2674e62242784303a64d652515f1d",
       "sourceMode": "0644",
       "installMode": "0755"
     },

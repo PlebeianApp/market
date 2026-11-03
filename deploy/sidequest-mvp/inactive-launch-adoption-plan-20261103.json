@@ -1,0 +1,180 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_INACTIVE_LAUNCH_ADOPTION_PLAN_V1",
+  "status": "PREPARED_NOT_AUTHORIZED_NOT_EXECUTED",
+  "preparedAtUtc": "2026-11-03T16:13:13Z",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "authority": {
+    "releaseInstallAuthorized": false,
+    "unitInstallAuthorized": false,
+    "configurationInstallAuthorized": false,
+    "ownershipHandoffAuthorized": false,
+    "systemdDaemonReloadAuthorized": false,
+    "authorityStateInitializationAuthorized": false,
+    "serviceActivationAuthorized": false
+  },
+  "acceptedNetwork": {
+    "bundleDigest": "830b87e49bf4ef0ee66664b9b757344a8c9ae8a582473fe28351e8571a7180cf",
+    "genesisSha256": "c2bb4df3a19b543e270017322ea2bae37b54ae640c7964fc89ef79c77a17cc76",
+    "validatorsHash": "d1936c5e5e9d09d0a96107031ae144068dcc2ad3f1d071e7f8fe871a8aaff773",
+    "launchSealSha256": "a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c",
+    "runtimeBindingSha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a",
+    "observerReceiptSha256": "1970b8117cfb293a4f67f837f793b2f1521db4a1aec6ed4ea42b94031f666508",
+    "observerNodeId": "71ad3719c811aaadcf58c3cf49dd2f75d2391835"
+  },
+  "freshReadOnlyInventory": {
+    "sshCompletedOnAllFiveHosts": true,
+    "privateFileContentsOrHashesRead": false,
+    "successorReleaseAbsentOnAllFiveHosts": true,
+    "fixedRuntimeBindingAbsentOnAllFiveHosts": true,
+    "canonicalRuntimeBindingPresentOnAllFiveHosts": true,
+    "browserAndHealthPinsAbsentOnAllFiveHosts": true,
+    "publicNetworkRootCurrentMetadata": {"mode": "0700", "uid": 0, "gid": 0},
+    "appObserverLeafCurrentMetadata": {"mode": "0700", "uid": 0, "gid": 0},
+    "validatorLeafCurrentMetadata": {"mode": "0700", "uid": 0, "gid": 0},
+    "accounts": {
+      "core": {"name": "plebeian-friday", "uid": 999, "primaryGid": 988, "presentOnAllFiveHosts": true},
+      "site": {"name": "plebeian-friday-site", "uid": 997, "primaryGid": 988, "presentOnApp": true},
+      "mint": {"name": "plebeian-friday-mint", "uid": 995, "primaryGid": 988, "presentOnApp": true},
+      "publicGroup": {"name": "plebeian-friday-public", "gid": 988, "presentOnAllFiveHosts": true}
+    },
+    "services": {
+      "fipsActiveOnAllFiveHosts": true,
+      "mintActiveOnApp": true,
+      "observerSiteAuthorityCoordinatorInactiveOnApp": true,
+      "validatorAndSignerInactiveOnV1ThroughV4": true
+    },
+    "capacity": {
+      "appFreeBytes": 74982637568,
+      "minimumValidatorFreeBytes": 75577962496
+    },
+    "authorityStores": {
+      "coordinatorRuntimeContainsOnlyExistingRpcIdentityPair": true,
+      "anchorRootExistsAndIsEmpty": true,
+      "initStateHasNotRun": true
+    }
+  },
+  "hosts": [
+    {"role": "APP", "ipv4": "139.162.161.233", "participantId": 0},
+    {"role": "V1", "ipv4": "172.105.64.142", "participantId": 1},
+    {"role": "V2", "ipv4": "172.105.95.57", "participantId": 2},
+    {"role": "V3", "ipv4": "172.104.240.217", "participantId": 3},
+    {"role": "V4", "ipv4": "172.104.253.247", "participantId": 4}
+  ],
+  "release": {
+    "finalRoot": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4",
+    "publication": "CREATE_ONCE_FROM_DIGEST_VERIFIED_INCOMING_DIRECTORY",
+    "ownerMode": {"uid": 0, "gid": 0, "directoryMode": "0755", "fileMode": "0755"},
+    "appArtifacts": [
+      {"name": "plebeian-auctions-mvp", "bytes": 46588440, "sha256": "ab92ff6d0552f8de88208636cdad77dff3863ee8ef325eb04352e635e93e20c5"},
+      {"name": "plebeian-friday-authority", "bytes": 99171906, "sha256": "af51ff40ddafa496169cb15731c1ab8cf2b3b569f707dfd7f69719c9d294755d"},
+      {"name": "plebeian-friday-coordinator", "bytes": 98655955, "sha256": "2671bb59de2b8a63ffd34721f28c97b59098935503f322ac833b0339d6e6a777"},
+      {"name": "plebeian-friday-terminal-executor", "bytes": 98846552, "sha256": "630f63ed3549812d43f585aa019b20aa90ffa863119f5b505406eaa47a518460"},
+      {"name": "verify-sidequest-runtime.py", "bytes": 9498, "sha256": "35456a9169986c53c627e850a159d14a6ed8ac76001dedb2ccc988cc28d0e824"}
+    ],
+    "validatorArtifacts": [
+      {"name": "plebeian-friday-signer", "bytes": 98923995, "sha256": "00c448e172c13b1a9862cd97bf79608e879739c0cc44aba74019bc3df66739d9"}
+    ],
+    "allRoleSupportArtifacts": [
+      {"name": "verify-friday-separated-target.py", "bytes": 5023, "sha256": "6be04d9d58c90c47dd0a3cd65a1e1402977c6e3e3c64e12187c0f0763330fe5d"},
+      {"name": "verify-friday-separated-base.py", "bytes": 14659, "sha256": "36bc33672b1cd2bef0961c7a7df160686cb2674e62242784303a64d652515f1d"},
+      {"name": "verify-friday-runtime-target.py", "bytes": 24764, "sha256": "d5c7031676fa3e5dc15a5da5c11a8d20c44e5f5e53242b3407df90b1c026b206"}
+    ],
+    "predecessorsPreserved": [
+      "/opt/plebeian-auctions-friday/releases/separated-deploy-v1",
+      "/opt/plebeian-auctions-friday/releases/separated-site-browser-r2"
+    ]
+  },
+  "units": {
+    "replacementMethod": "VERIFY_INACTIVE_AND_PREDECESSOR_SHA256_THEN_RETAIN_PREDECESSOR_BYTES_AND_ATOMICALLY_INSTALL_ROOT_OWNED_0644",
+    "app": [
+      {"name": "plebeian-friday-site.service", "predecessorSha256": "475a8532c4a504c08cd8e5ae48495adaf53a2d4f6ee7cf8dc12d2b82a460f6f4", "successorBytes": 1404, "successorSha256": "dffaa560f8b79beff1f76553b3d2c1cb4e041b82dac403da01c6aab8a95f22fc"},
+      {"name": "plebeian-friday-authority.service", "predecessorSha256": "83012ab70ca09f773b35c3fe38554ccd98a45bbcdaa2920682201a2ba533bfeb", "successorBytes": 1819, "successorSha256": "657cfe6a205d500d93117943d3d7aec9c52e0617e599cd11e8d5ad30297c19b7"},
+      {"name": "plebeian-friday-coordinator.service", "predecessorSha256": "3adc409a3ee1d0d38afbf7df8f3a7ce5a82f20367bbf3f8a2d54c3333b583af2", "successorBytes": 1598, "successorSha256": "10c1bb4e8b126f7be4893f3543aa4e3402f5c24830c600f6a70c0a8fd4399fa5"}
+    ],
+    "validators": [
+      {"name": "plebeian-friday-signer.service", "predecessorSha256": "ff19937cdc1c1b8b03485adc738eddfee715e57cc5be841c84345194daa47f08", "successorBytes": 1346, "successorSha256": "d79d99abfd381e8886660a75d2b60cabd7f7f484f8373b36df95cc36e097e744", "preserveExistingPerSlotDropIn": true}
+    ],
+    "unchanged": ["plebeian-friday-fips.service", "plebeian-friday-mint.service", "plebeian-friday-observer.service", "plebeian-friday-validator.service"],
+    "daemonReloadAfterAllLocalFilesCommit": true,
+    "serviceStartStopEnableRestart": false
+  },
+  "configuration": {
+    "sourceDecisionsPath": "deploy/sidequest-mvp/runtime-decisions-actual-20261103.json",
+    "sourceDecisionsBytes": 4437,
+    "sourceDecisionsSha256": "f38aa5ef0c51bd7be761559af72ed88e63eda51ea5cd7e7eaa322125cc25236a",
+    "renderer": "deploy/sidequest-mvp/render-runtime-config.py",
+    "currentResolutionStatus": "RESOLVED_AWAITING_INSTALL_AUTHORITY",
+    "postApprovalInactiveStatus": "READY_FOR_INACTIVE_INSTALL",
+    "activationFlagsRemainFalse": true,
+    "postApprovalInactiveFiles": {
+      "APP": {
+        "application.json": {"bytes": 1000, "sha256": "253427ca537fb143022d48f4539e939cf01f729cbf444368d9faea75c6badeee"},
+        "friday.env": {"bytes": 2283, "sha256": "797f56d4115de50d827cbf6c4c7c5c7be56ba5b0145d19beaa9236f65949016a"},
+        "sidequest-runtime-bindings.json": {"bytes": 2943, "sha256": "86a5c6920ce64793006c33481685f4c4bfe8e621e2cda4b580645aa4f0c51526"}
+      },
+      "V1": {"application.json": {"bytes": 1005, "sha256": "0d3e0dfa115c42280d12e53cda9482fc4fb2c409d932ff5607f881a7a34a730e"}, "friday.env": {"bytes": 2140, "sha256": "ed26089a51d36cda0c02fa00d2d9533177a3e5873309e82c83ed6193820d93e7"}},
+      "V2": {"application.json": {"bytes": 1005, "sha256": "0158d757f15b52a825a74a4ed0b72ef76d6980e803b32bfacc686bd822a4fdbc"}, "friday.env": {"bytes": 2138, "sha256": "c19bece8e64048af1d5f2879e6228c2d9b89800d299b03efcfc5b80d6c52fb6b"}},
+      "V3": {"application.json": {"bytes": 1005, "sha256": "211acd09c8a8358d70bf8283a44422f354f572721bc59277e4681d3eb4371859"}, "friday.env": {"bytes": 2141, "sha256": "01a96610a7f7fb95ef52adfd6f5cd2d7120ba370d8da76a00cfb8f3894501e9e"}},
+      "V4": {"application.json": {"bytes": 1005, "sha256": "794c42f38b7669714027ef366c16288781e859e58b7bd96f68477fd45c2cbd38"}, "friday.env": {"bytes": 2141, "sha256": "d513fa84fc0a87e4518268c421290c37d822c1045598f5c2499ac56a50c00c78"}}
+    },
+    "sharedPublicFilesOnAllFiveHosts": [
+      {"destination": "/var/lib/plebeian-auctions-friday/separated-inputs/runtime-binding.json", "source": "/var/lib/plebeian-auctions-friday/network-separated/separated-runtime-binding.json", "bytes": 17716, "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a", "install": "COPY_CREATE_ONCE_ROOT_PUBLIC_GROUP_0640"},
+      {"destination": "/etc/plebeian-auctions-friday/browser-r20-pins.json", "source": "deploy/sidequest-mvp/launch-preparation-r1/browser-r20-pins.json", "bytes": 904, "sha256": "df6e8ea5ad73397558393acfeac4313d6e0c810baa65eb85b749297ea3bc9fab", "install": "CREATE_ONCE_ROOT_PUBLIC_GROUP_0640"},
+      {"destination": "/etc/plebeian-auctions-friday/health-r20-pins.json", "source": "deploy/sidequest-mvp/launch-preparation-r1/health-r20-pins.json", "bytes": 1134, "sha256": "b6d28b268b732006d12cf52c529486e1377ab38ba51f3f570b0a0b56e9f19012", "install": "CREATE_ONCE_ROOT_PUBLIC_GROUP_0640"}
+    ],
+    "replacementPolicy": "RETAIN_DIGEST_PINNED_CURRENT_APPLICATION_AND_ENVIRONMENT_THEN_ATOMICALLY_INSTALL_ROOT_PUBLIC_GROUP_0640",
+    "noPlaceholders": true
+  },
+  "leastPrivilegeOwnership": {
+    "publicNetworkRootOnAllFiveHosts": {"path": "/var/lib/plebeian-auctions-friday/network-separated", "uid": 0, "gid": 988, "mode": "0750"},
+    "publicNetworkTopLevelRegularFilesOnAllFiveHosts": {"uid": 0, "gid": 988, "mode": "0640", "allowlistOnly": true},
+    "appPrivateObserverLeaf": {
+      "directories": [
+        "/var/lib/plebeian-auctions-friday/network-separated/observer",
+        "/var/lib/plebeian-auctions-friday/network-separated/observer/config",
+        "/var/lib/plebeian-auctions-friday/network-separated/observer/data"
+      ],
+      "directoryMetadata": {"uid": 999, "gid": 988, "mode": "0700"},
+      "files": ["/var/lib/plebeian-auctions-friday/network-separated/observer/config/node_key.json"],
+      "fileMetadata": {"uid": 999, "gid": 988, "mode": "0600"}
+    },
+    "validatorPrivateLeafPerHost": {
+      "rootTemplate": "/var/lib/plebeian-auctions-friday/network-separated/validator-{slot}",
+      "directories": [".", "config", "data"],
+      "directoryMetadata": {"uid": 999, "gid": 988, "mode": "0700"},
+      "files": ["config/node_key.json", "config/priv_validator_key.json", "data/priv_validator_state.json"],
+      "fileMetadata": {"uid": 999, "gid": 988, "mode": "0600"}
+    },
+    "explicitlyUnchanged": [
+      "/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3",
+      "/var/lib/plebeian-auctions-friday/separated/node-{slot}",
+      "/var/lib/plebeian-auctions-friday/fips",
+      "/var/lib/plebeian-auctions-friday/mint",
+      "/var/lib/plebeian-auctions-friday/coordinator-v3/runtime",
+      "/var/lib/plebeian-auctions-friday-anchor-separated"
+    ],
+    "recursiveSharedRootChownForbidden": true,
+    "privateContentsReadOrHashed": false
+  },
+  "postInstallPreActivation": {
+    "authorityStateInitializationRequired": true,
+    "authorityStateInitializationCommand": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/plebeian-friday-authority init-state --application /etc/plebeian-auctions-friday/application.json",
+    "runAs": {"uid": 999, "gid": 988},
+    "precondition": "COORDINATOR_RUNTIME_HAS_ONLY_EXISTING_RPC_IDENTITY_PAIR_AND_ANCHOR_ROOT_EMPTY",
+    "includedInThisInstallAuthority": false,
+    "serviceActivationIncluded": false
+  },
+  "failurePolicy": "SEQUENTIAL_HOSTS_STOP_ON_FIRST_FAILURE_PRESERVE_PARTIAL_STATE_NO_AUTOMATIC_RETRY_DELETE_RESET_OR_ROLLBACK",
+  "excludedEffects": [
+    "no service start, stop, restart, enable or disable",
+    "no persistent credential generation",
+    "no private key content or hash access",
+    "no DKG, FROST share, nonce or committee mutation",
+    "no mint database, payment, funding or real-money action",
+    "no firewall, HTTPS, DNS or nginx change",
+    "no predecessor release deletion",
+    "no authority/coordinator SQLite initialization",
+    "no activation flag set true"
+  ],
+  "exactApprovalRequest": "May I perform the five-host inactive launch adoption described by this exact plan: install the digest-pinned successor release and resolved inactive configuration, retain and replace only the listed inactive units, apply only the listed public-group and private Comet-leaf ownership/mode changes, and run systemctl daemon-reload on APP and V1-V4? This starts, stops, restarts, enables or disables no service; creates no credentials; reads no private key contents; performs no payment; does not initialize authority databases; and stops on the first failure without automatic retry or deletion."
+}

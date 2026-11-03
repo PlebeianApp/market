@@ -22,7 +22,7 @@ ARTIFACTS = {
     ],
     "signer": [("plebeian-friday-signer", 98_923_995, "00c448e172c13b1a9862cd97bf79608e879739c0cc44aba74019bc3df66739d9")],
 }
-BASE_SHA256 = "08802310fa9d584354ca4a2ce1a24ba290ffba2e10ce6e4007fe46bd9fe136e3"
+BASE_SHA256 = "36bc33672b1cd2bef0961c7a7df160686cb2674e62242784303a64d652515f1d"
 RUNTIME_SHA256 = "d5c7031676fa3e5dc15a5da5c11a8d20c44e5f5e53242b3407df90b1c026b206"
 
 
@@ -61,8 +61,25 @@ def artifact_check(release: Path, kind: str, expected_owner: int) -> None:
     require(kind in ARTIFACTS, "SERVICE_KIND")
     for name, size, sha256 in ARTIFACTS[kind]:
         inspect(release / "bin" / name, size, sha256, 0o755, expected_owner)
-    inspect(release / "bin/verify-friday-separated-base.py", 14_508, BASE_SHA256, 0o755, expected_owner)
+    inspect(release / "bin/verify-friday-separated-base.py", 14_659, BASE_SHA256, 0o755, expected_owner)
     inspect(release / "bin/verify-friday-runtime-target.py", 24_764, RUNTIME_SHA256, 0o755, expected_owner)
+
+
+def load_base_guard(release: Path) -> dict:
+    base = release / "bin/verify-friday-separated-base.py"
+    namespace = runpy.run_path(str(base))
+    target = namespace["verify"].__globals__
+    target["RELEASE"] = release
+    target["__file__"] = str(release / "bin/verify-friday-separated-target.py")
+    target["PATHS"] = {
+        **target["PATHS"],
+        "FRIDAY_TERMINAL_EXECUTOR_BIN": str(release / "bin/plebeian-friday-terminal-executor"),
+    }
+    target["EXECUTABLE_NAMES"] = {
+        **target["EXECUTABLE_NAMES"],
+        "site": "plebeian-auctions-mvp",
+    }
+    return namespace
 
 
 def verify(release: Path, environment: Path, application: Path, service: str, fixture: bool) -> None:
@@ -73,15 +90,7 @@ def verify(release: Path, environment: Path, application: Path, service: str, fi
         return
 
     require(release == PRODUCTION_RELEASE, "PRODUCTION_RELEASE")
-    base = release / "bin/verify-friday-separated-base.py"
-    namespace = runpy.run_path(str(base))
-    target = namespace["verify"].__globals__
-    target["RELEASE"] = release
-    target["__file__"] = str(release / "bin/verify-friday-separated-target.py")
-    target["PATHS"] = {
-        **target["PATHS"],
-        "FRIDAY_TERMINAL_EXECUTOR_BIN": str(release / "bin/plebeian-friday-terminal-executor"),
-    }
+    namespace = load_base_guard(release)
     namespace["verify"](environment, application, service)
 
 

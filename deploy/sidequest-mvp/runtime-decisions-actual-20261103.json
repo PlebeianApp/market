@@ -1,0 +1,61 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_OWNER_DECISIONS_V1",
+  "status": "ACTUAL_INPUTS_RESOLVED_NOT_AUTHORIZED",
+  "selectedOwnerContent": {
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "canonicalGenesisTimePolicy": "CAPTURE_CURRENT_UTC_ONCE_AT_FINAL_SIGNING_INPUT_FREEZE"
+  },
+  "frozenGenesisValue": {
+    "canonicalGenesisTimeUtc": "2026-11-02T18:35:21Z",
+    "canonicalFreezeSha256": "e8639dae8da64d5d2c35721c43c7097af2a4844eaedd0076ad62ad38d4f9c9c2",
+    "unsignedSigningMessageBytes": 2077,
+    "unsignedSigningMessageSha256": "757b4855ed30d05d474636f60ecfa4e8388ef841ba27b39fb83c127e4f0c4d6b",
+    "independentFreezeReviewPending": false,
+    "independentFreezeReviewSha256": "4d002c529f058e9beac785cbc689212531447f8a0a92cf055b7e0a0fb1d5352d",
+    "signatureGenerated": false
+  },
+  "acceptedPaymentEvidence": {
+    "paymentConformanceReceiptPath": "/home/maximoto/Documents/Codex/2026-10-26/task-3/prototype/wednesday-shell-r20-core/mint-payment-public-receipt-projection-r1/OWNER-SUPPLIED-PUBLIC-PROJECTION-R1.json",
+    "paymentConformanceReceiptSha256": "f671be3673fed9f074cd142640e38bc7c2fb98002881164895477e1f4d9523da",
+    "activeSatKeysetId": "001a10236c313f83",
+    "testMintAssemblyUrl": "http://127.0.0.1:8180/test-mint",
+    "sourceCompatibleTestMintAssemblyCandidate": "http://127.0.0.1:8180/test-mint",
+    "cashuMintUrl": "https://139.162.161.233",
+    "conformanceFipsServerUrl": "http://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:3438",
+    "mintOnlyAcceptancePath": "/home/maximoto/Documents/Codex/2026-10-28/task-3/A3-MINT-PAYMENT-ACTUAL-PUBLIC-PROJECTION-RECONCILIATION-20261102.md",
+    "mintOnlyAcceptanceSha256": "9139b1ec862535fbbaad59c19351f81a5987d00aa78618340f63d11700df94da",
+    "underlyingRawReceiptSha256OwnerVerifiedOnly": "b5bac575046f13e1b030662818fba7ebe89df442cff12a5f8ec3983ac1332add"
+  },
+  "acceptedSignedAuthorityOutputs": {
+    "outputRoot": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output",
+    "deploymentAnchorPath": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/deployment-anchor.json",
+    "deploymentAnchorSha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb",
+    "fundingAbortBootstrapPath": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/funding-abort-bootstrap.json",
+    "fundingAbortBootstrapSha256": "ee4e7fbf23f9e66731b1d908979875aac3fbeec9c1fa54f0a9ae5fa507e2f2cf",
+    "authorityRenderReceiptPath": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-authority-render-r1/output/authority-render-receipt.json",
+    "authorityRenderReceiptSha256": "ca250b51b7dc17f51cca678e11be8180bd047a28d2675e012af70ee70506f0c2",
+    "independentReviewPath": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-render-actual-public-review-20261102/INDEPENDENT-REVIEW.md",
+    "independentReviewSha256": "da8348fc1d0ae237ad2e9db1437eb68836c9c9e0310d3b506528845a0e04cbf1",
+    "publicReconciliationPath": "/home/maximoto/Documents/Codex/2026-10-28/task-2/genesis-owner-anchor-public-reconcile-r1/ACTUAL-RECONCILIATION.json",
+    "publicReconciliationSha256": "f454abb91fce96e381d4c61db20b72770ecfcd5527c4ddbb0680a15edae04aaf",
+    "publicReconciliationReviewPath": "/home/maximoto/Documents/Codex/2026-10-30/task/genesis-owner-anchor-public-reconcile-r1-independent-review-20261102/INDEPENDENT-REVIEW.md",
+    "publicReconciliationReviewSha256": "1ce5295130e9b358826b9d2f69a737c6895e97ecde284745348093dc1e6c9718",
+    "historicalControllerStopPreserved": true,
+    "rendererRerunOrResignAuthorized": false
+  },
+  "derivedRuntimeOutputs": {
+    "deploymentAnchorSha256": "777e3df52fc4abcff952d27dc7399af99554cba2c4082211f909f5d8c9ecf1eb",
+    "networkFactsSha256": "0dd62cc5270f9e007851ed5c892a7386e2cdf620f8b7e1958fe84019ebe594a5",
+    "browserPinsSha256": "df6e8ea5ad73397558393acfeac4313d6e0c810baa65eb85b749297ea3bc9fab",
+    "healthPinsSha256": "b6d28b268b732006d12cf52c529486e1377ab38ba51f3f570b0a0b56e9f19012",
+    "observerReceiptSha256": "1970b8117cfb293a4f67f837f793b2f1521db4a1aec6ed4ea42b94031f666508",
+    "observerNodeId": "71ad3719c811aaadcf58c3cf49dd2f75d2391835"
+  },
+  "authority": {
+    "deploymentAnchorSigningApproved": true,
+    "releaseInstallAuthorized": false,
+    "unitInstallAuthorized": false,
+    "configurationInstallAuthorized": false,
+    "serviceActivationAuthorized": false
+  }
+}

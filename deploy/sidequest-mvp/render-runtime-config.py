@@ -60,7 +60,7 @@ def valid_genesis_time(value: object) -> bool:
     return parsed.year > 1
 
 
-def readiness(decisions: dict, payment_projection: dict, plan: dict) -> tuple[bool, list[str]]:
+def readiness(decisions: dict, payment_projection: dict, plan: dict) -> tuple[bool, bool, bool, list[str], list[str]]:
     selected = decisions["selectedOwnerContent"]
     frozen = decisions["frozenGenesisValue"]
     payment = decisions["acceptedPaymentEvidence"]
@@ -94,10 +94,17 @@ def readiness(decisions: dict, payment_projection: dict, plan: dict) -> tuple[bo
             missing.append("derivedRuntimeOutputs." + key)
     if not hex_value(derived["observerNodeId"], 40):
         missing.append("derivedRuntimeOutputs.observerNodeId")
-    for key in ("deploymentAnchorSigningApproved", "releaseInstallAuthorized", "unitInstallAuthorized", "configurationInstallAuthorized", "serviceActivationAuthorized"):
-        if authority[key] is not True:
-            missing.append("authority." + key)
-    return not missing, missing
+    if authority["deploymentAnchorSigningApproved"] is not True:
+        missing.append("authority.deploymentAnchorSigningApproved")
+    missing_authority = [
+        "authority." + key for key in
+        ("releaseInstallAuthorized", "unitInstallAuthorized", "configurationInstallAuthorized")
+        if authority[key] is not True
+    ]
+    resolved = not missing
+    install_authorized = resolved and not missing_authority
+    activation_authorized = install_authorized and authority["serviceActivationAuthorized"] is True
+    return resolved, install_authorized, activation_authorized, missing, missing_authority
 
 
 def validate_payment_projection(payment: dict, plan: dict, bootstrap: dict) -> None:
@@ -230,7 +237,7 @@ def application(bootstrap: dict, role: str, participant_id: int) -> dict:
     }
 
 
-def environment(app: dict, runtime: dict, prerequisites: dict, decisions: dict, ready: bool, host: dict) -> bytes:
+def environment(app: dict, runtime: dict, prerequisites: dict, decisions: dict, resolved: bool, activation_authorized: bool, host: dict) -> bytes:
     derived = decisions["derivedRuntimeOutputs"]
     unresolved = "%UNRENDERED%"
     values = {
@@ -253,21 +260,21 @@ def environment(app: dict, runtime: dict, prerequisites: dict, decisions: dict, 
         "FRIDAY_ROLE": app["role"],
         "FRIDAY_FIPS_UNDERLAY_IPV4": host["underlayIpv4"],
         "FRIDAY_FIPS_ULA": host["fipsUla"],
-        "FRIDAY_DEPLOYMENT_ANCHOR_SHA256": derived["deploymentAnchorSha256"] if ready else unresolved,
+        "FRIDAY_DEPLOYMENT_ANCHOR_SHA256": derived["deploymentAnchorSha256"] if resolved else unresolved,
         "FRIDAY_DKG_MANIFEST_DIGEST": runtime["manifestDigest"],
-        "FRIDAY_NETWORK_FACTS_SHA256": derived["networkFactsSha256"] if ready else unresolved,
+        "FRIDAY_NETWORK_FACTS_SHA256": derived["networkFactsSha256"] if resolved else unresolved,
         "FRIDAY_OWNER_APPROVAL_PUBLIC_KEY": prerequisites["ownerPublicKey"],
         "FRIDAY_SEPARATED_BOOTSTRAP_DIGEST": runtime["bootstrapDigest"],
         "FRIDAY_SEPARATED_RUNTIME_DIGEST": runtime["bindingDigest"],
-        "POC_FRIDAY_BROWSER_PINS_SHA256": derived["browserPinsSha256"] if ready else unresolved,
-        "POC_FRIDAY_HEALTH_PINS_SHA256": derived["healthPinsSha256"] if ready else unresolved,
-        "POC_FRIDAY_BROWSER_READY": "true" if ready and app["role"] == "APPLICATION" else "false",
-        "POC_FRIDAY_R20_CLOSE_TRIGGER": "true" if ready and app["role"] == "APPLICATION" else "false",
+        "POC_FRIDAY_BROWSER_PINS_SHA256": derived["browserPinsSha256"] if resolved else unresolved,
+        "POC_FRIDAY_HEALTH_PINS_SHA256": derived["healthPinsSha256"] if resolved else unresolved,
+        "POC_FRIDAY_BROWSER_READY": "true" if activation_authorized and app["role"] == "APPLICATION" else "false",
+        "POC_FRIDAY_R20_CLOSE_TRIGGER": "true" if activation_authorized and app["role"] == "APPLICATION" else "false",
         "POC_FRIDAY_RECOVERY_ONLY": "false",
     }
     if app["role"] == "APPLICATION":
-        values["FRIDAY_OBSERVER_RECEIPT_SHA256"] = derived["observerReceiptSha256"] if ready else unresolved
-        values["FRIDAY_OBSERVER_NODE_ID"] = derived["observerNodeId"] if ready else unresolved
+        values["FRIDAY_OBSERVER_RECEIPT_SHA256"] = derived["observerReceiptSha256"] if resolved else unresolved
+        values["FRIDAY_OBSERVER_NODE_ID"] = derived["observerNodeId"] if resolved else unresolved
     else:
         values["FRIDAY_SLOT"] = str(app["participant_id"])
     return "".join(f"{key}={value}\n" for key, value in sorted(values.items())).encode()
@@ -383,7 +390,7 @@ def main() -> int:
         "historicalControllerStopPreserved": True,
         "rendererRerunOrResignAuthorized": False,
     }, "SIGNED_AUTHORITY_DECISIONS")
-    ready, missing = readiness(decisions, payment_projection, plan)
+    resolved, install_authorized, activation_authorized, missing, missing_authority = readiness(decisions, payment_projection, plan)
 
     args.output_root.mkdir(mode=0o755)
     outputs: dict[str, dict] = {}
@@ -395,7 +402,7 @@ def main() -> int:
         host = bootstrap["application"] if role_name == "APP" else validator_by_id[participant_id]
         app_value = application(bootstrap, role, participant_id)
         app_raw = canonical(app_value)
-        env_raw = environment(app_value, runtime, prerequisites, decisions, ready, host)
+        env_raw = environment(app_value, runtime, prerequisites, decisions, resolved, activation_authorized, host)
         role_root = args.output_root / role_name
         role_root.mkdir(mode=0o755)
         app_path = role_root / "application.json"
@@ -411,7 +418,14 @@ def main() -> int:
 
     app_output = outputs["APP"]
     template = json.loads((args.plan.parent / "runtime-bindings.template.json").read_text(encoding="utf-8"))
-    template["status"] = "READY_FOR_SCOPED_ACTIVATION" if ready else "BLOCKED_PENDING_OWNER_AND_PAYMENT_INPUTS"
+    if activation_authorized:
+        template["status"] = "READY_FOR_SCOPED_ACTIVATION"
+    elif install_authorized:
+        template["status"] = "READY_FOR_INACTIVE_INSTALL"
+    elif resolved:
+        template["status"] = "RESOLVED_AWAITING_INSTALL_AUTHORITY"
+    else:
+        template["status"] = "BLOCKED_PENDING_OWNER_AND_PAYMENT_INPUTS"
     template["runtimeFiles"] = {
         "environment": {"path": str(CONFIG / "friday.env"), **app_output["environment"]},
         "application": {"path": str(CONFIG / "application.json"), **app_output["application"]},
@@ -441,11 +455,23 @@ def main() -> int:
     bindings_path.chmod(0o640)
     outputs["APP"]["runtimeBindings"] = {"bytes": len(bindings_raw), "sha256": digest(bindings_raw)}
 
+    if activation_authorized:
+        result_status = "READY_FIXTURE_NOT_INSTALLED"
+    elif install_authorized:
+        result_status = "READY_FOR_INACTIVE_INSTALL"
+    elif resolved:
+        result_status = "RESOLVED_AWAITING_INSTALL_AUTHORITY"
+    else:
+        result_status = "INERT_MISSING_INPUTS_NOT_INSTALLABLE"
     result = {
         "schema": "PLEBEIAN_SIDEQUEST_RUNTIME_CONFIG_RENDER_RESULT_V1",
-        "status": "READY_FIXTURE_NOT_INSTALLED" if ready else "INERT_MISSING_INPUTS_NOT_INSTALLABLE",
-        "ready": ready,
+        "status": result_status,
+        "resolved": resolved,
+        "installAuthorized": install_authorized,
+        "activationAuthorized": activation_authorized,
+        "ready": activation_authorized,
         "missing": missing,
+        "missingAuthority": missing_authority,
         "roles": outputs,
         "remoteMutation": False,
         "dkgRepeated": False,

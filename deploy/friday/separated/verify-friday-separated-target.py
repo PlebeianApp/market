@@ -45,6 +45,11 @@ COMMON=set(PATHS)|PINS|set(PORTS)|FLAGS|{'FRIDAY_ROLE','FRIDAY_FIPS_UNDERLAY_IPV
 APP_EXTRA={'FRIDAY_OBSERVER_RECEIPT_SHA256','FRIDAY_OBSERVER_NODE_ID'}
 APP_SERVICES={'observer','site','authority','coordinator','mint'}
 VALIDATOR_SERVICES={'validator','signer'}
+EXECUTABLE_NAMES={
+ 'fips':'fips','validator':'plebeian-auctions-poc','observer':'plebeian-auctions-poc',
+ 'site':'plebeian-auctions-poc','authority':'plebeian-friday-authority',
+ 'coordinator':'plebeian-friday-coordinator','signer':'plebeian-friday-signer',
+}
 
 def ula(value):
  if not isinstance(value,str):raise ValueError('ULA type')
@@ -158,8 +163,7 @@ def verify(environment,application,service):
  kind=verify_values(env,app,service)
  accounts,gid=service_accounts(kind,app['role']=='APPLICATION')
  core=accounts[CORE_USER]
- executable=RELEASE/'bin'/('fips' if kind=='fips' else 'plebeian-auctions-poc' if kind in {'validator','observer','site'} else 'plebeian-friday-'+kind)
- if kind=='mint':executable=CODE/'.venv/bin/python'
+ executable=CODE/'.venv/bin/python' if kind=='mint' else RELEASE/'bin'/EXECUTABLE_NAMES[kind]
  managed(executable,'immutable executable',CODE,{0},'file')
  for name in ('verify-friday-separated-target.py','verify-friday-runtime-target.py'):managed(RELEASE/'bin'/name,'immutable guard',RELEASE,{0},'file')
  if kind=='fips':
