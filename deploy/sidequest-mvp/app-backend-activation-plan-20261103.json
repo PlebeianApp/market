@@ -1,0 +1,141 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_APP_BACKEND_ACTIVATION_PLAN_V1",
+  "status": "READY_FOR_EXACT_APPROVAL_NOT_EXECUTED",
+  "preparedAtUtc": "2026-11-03T23:08:11Z",
+  "sourceCommit": "d75762e5fcd16aa1cf7e8dc9adc3368e8244d81d",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "host": {"role": "APP", "ipv4": "139.162.161.233"},
+  "freshReadOnlyCheck": {
+    "controller": "/tmp/check_app_backend_ready.py",
+    "controllerSha256": "7bb5da9df72344d16606c15d11984bcbc413c1933cb60f3b0c2e990f61e6fa30",
+    "remoteMutation": false,
+    "observer": {
+      "active": true,
+      "chainId": "plebeian-auctions-mvp-20261102",
+      "nodeId": "71ad3719c811aaadcf58c3cf49dd2f75d2391835",
+      "votingPower": "0",
+      "catchingUp": false,
+      "observedHeight": 2415
+    },
+    "mint": {
+      "active": true,
+      "serverVersion": "Nutshell/0.19.2",
+      "activeSatKeysetId": "001a10236c313f83",
+      "inputFeePpk": 0
+    },
+    "state": {
+      "runtimeDatabaseCount": 13,
+      "anchorDatabaseCount": 5,
+      "sqliteQuickCheckOkCount": 18,
+      "allRegularSingleLinkServiceOwned0600": true,
+      "coordinatorRevision": 0,
+      "queuedOperationCount": 0
+    },
+    "services": {
+      "fipsMintObserver": "active-running-zero-restarts",
+      "coordinatorAuthoritySite": "inactive-dead-zero-restarts"
+    },
+    "listeners": {
+      "observerLoopback27657": true,
+      "siteLoopback8180": false,
+      "authorityLoopback8181": false,
+      "public80or443": false
+    },
+    "createOnceActionAndRetentionPathsAbsent": true
+  },
+  "configurationReplacement": {
+    "unchangedApplication": {
+      "path": "/etc/plebeian-auctions-friday/application.json",
+      "bytes": 1000,
+      "sha256": "253427ca537fb143022d48f4539e939cf01f729cbf444368d9faea75c6badeee",
+      "uid": 0,
+      "gid": 988,
+      "mode": "0640"
+    },
+    "environment": {
+      "path": "/etc/plebeian-auctions-friday/friday.env",
+      "current": {"bytes": 2283, "sha256": "797f56d4115de50d827cbf6c4c7c5c7be56ba5b0145d19beaa9236f65949016a"},
+      "replacement": {"bytes": 2281, "sha256": "0f01031a9ad89cb55bcdd401acb0860a03a3c7b4015bd876ff6fd9c6d2ce538f"},
+      "retained": "/etc/plebeian-auctions-friday/.friday.pre-backend-activation-20261103.env",
+      "incoming": "/etc/plebeian-auctions-friday/.friday.backend-activation-20261103.incoming.env",
+      "metadata": {"uid": 0, "gid": 988, "mode": "0640"},
+      "onlySemanticChanges": [
+        "POC_FRIDAY_BROWSER_READY=false to true",
+        "POC_FRIDAY_R20_CLOSE_TRIGGER=false to true"
+      ]
+    },
+    "runtimeBindings": {
+      "path": "/etc/plebeian-auctions-friday/sidequest-runtime-bindings.json",
+      "current": {"bytes": 2943, "sha256": "86a5c6920ce64793006c33481685f4c4bfe8e621e2cda4b580645aa4f0c51526"},
+      "replacement": {"bytes": 2942, "sha256": "26092151896aa424614b8a8c7afe619e2d14bed8cbfbf6ce2fbf425cafe98594"},
+      "retained": "/etc/plebeian-auctions-friday/.sidequest-runtime-bindings.pre-backend-activation-20261103.json",
+      "incoming": "/etc/plebeian-auctions-friday/.sidequest-runtime-bindings.backend-activation-20261103.incoming.json",
+      "metadata": {"uid": 0, "gid": 988, "mode": "0640"},
+      "onlySemanticChanges": [
+        "authority.serviceActivationAuthorized=false to true",
+        "requiredInputs.serviceActivationApproved=false to true",
+        "runtimeFiles.environment bytes and SHA-256 updated to the activation environment",
+        "status READY_FOR_INACTIVE_INSTALL to READY_FOR_SCOPED_ACTIVATION"
+      ]
+    },
+    "method": "Verify exact current hashes and inactive services; create the retained copies and incoming files with O_EXCL; fsync; atomically replace only these two files; preserve every predecessor and partial state on failure."
+  },
+  "serviceActivation": {
+    "order": [
+      "Run the installed coordinator and authority pre-start guards as plebeian-friday from its accessible runtime directory.",
+      "Start plebeian-friday-coordinator.service.",
+      "Require active-running, NRestarts=0 and the empty revision-0 queue.",
+      "Start plebeian-friday-authority.service.",
+      "Require active-running, NRestarts=0 and exactly 127.0.0.1:8181 with no non-loopback 8181 listener.",
+      "Read GET /api/friday/status at least twice, spaced by at least one second, until the bounded readiness window reports two advancing observations.",
+      "Require HTTP 200, schema PLEBEIAN_FRIDAY_AUTHORITY_STATUS_V1, newOperationsReady=true, readinessReason=ready, mode=normal, funding=enabled_two_step_nip07, matching readiness pins and increasing committed height.",
+      "Require four epoch-1 signer anchor rows with process observations, while site, nginx, 8180 and public 80/443 remain inactive or absent."
+    ],
+    "coordinator": {
+      "listener": "none",
+      "function": "Drain only already authenticated durable operations through the terminal executor.",
+      "freshQueue": "empty-revision-0",
+      "restartPolicy": "on-failure"
+    },
+    "authority": {
+      "listener": "127.0.0.1:8181 only",
+      "function": "Loopback authority and composite readiness boundary; site and reverse proxy remain stopped.",
+      "restartPolicy": "on-failure"
+    }
+  },
+  "cryptographicAndFinancialEffects": {
+    "coordinatorIdentityPrivateKeyUsed": true,
+    "signerRpcIdentityKeysUsed": true,
+    "purpose": "Challenge-bound authenticated signer health requests and signed health responses; persist the exact signer epoch/process bindings in APP's signer-anchor database.",
+    "frostThresholdSignatureRequested": false,
+    "participantFrostShareOperationRequested": false,
+    "cashuMintIssueMeltSwapOrProofStateMutationRequested": false,
+    "fakeSatsMoved": false,
+    "realFundsInScope": false,
+    "readOnlyDependencyTraffic": [
+      "Authenticated Comet observation",
+      "Mint info, keyset and denomination-key GETs",
+      "Authenticated signer health RPCs"
+    ],
+    "durableWrites": [
+      "Create the coordinator's runtime process lease while active",
+      "Persist four signer health/enrollment anchors and process-instance bindings on APP",
+      "Ordinary SQLite WAL/metadata updates caused by startup recovery and health anchoring"
+    ],
+    "newOperationEligibility": "After readiness succeeds, the loopback authority can accept new fake-sat funding operations. No remote browser can reach it because site, nginx and HTTPS remain off."
+  },
+  "failurePolicy": {
+    "automaticSystemdBehavior": "Both services have Restart=on-failure. The bounded controller must reject any NRestarts greater than zero and immediately stop services started by this action; systemd may begin one automatic retry before that stop is observed.",
+    "cleanup": "On failed acceptance, stop only coordinator/authority units started by this action, preserve activation configuration, retained files, databases, logs and all partial anchors, then report. Do not delete, reset, rollback configuration or retry.",
+    "success": "Leave coordinator and authority active but leave site, nginx, HTTPS and public exposure unchanged."
+  },
+  "exactApprovalRequest": "May I install APP's two exact activation configuration files, retaining the current files create-once, then start the coordinator and loopback-only authority and run the bounded readiness checks? The checks use existing coordinator and signer RPC identity keys to sign authenticated health messages and will persist signer health anchors, but they do not request a FROST threshold signature or mint, spend or move fake sats. The site, nginx and HTTPS remain off. If either service fails or restarts, I will stop the services started by this action, preserve all state and not retry.",
+  "notAuthorized": [
+    "Replacing either APP activation configuration file",
+    "Starting coordinator or authority",
+    "Starting the site, nginx or exposing any port",
+    "Sending an auction, funding, signing, settlement or payment request",
+    "Stopping or restarting validators, signers, observer, mint or FIPS",
+    "Retrying after a failed or uncertain activation"
+  ]
+}
