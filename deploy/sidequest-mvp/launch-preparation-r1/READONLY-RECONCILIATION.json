@@ -1,0 +1,90 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_LAUNCH_READONLY_RECONCILIATION_V1",
+  "completedAtUtc": "2026-11-03T08:37:20Z",
+  "status": "FIVE_HOSTS_RECONCILED_LAUNCH_BLOCKED_PENDING_SCOPED_WRITES_AND_ACTIVATION",
+  "sourceCommit": "0d2f618235079932f2c4840113e0baffad9e68cd",
+  "controls": {
+    "fiveHostReadOnlyHelperSha256": "2994ffd78c1d3d63864d96f7f5c52212375d0376c0e1c09cfc44cd287a1f2052",
+    "mintGetOnlyHelperSha256": "300c9e134b44536190063321259899d455e196eff5794c50aab3ca3af4993a1a",
+    "initialFiveHostAttempt": "REMOTE_PYTHON_ARGUMENT_PARSE_FAILED_BEFORE_CHECKS_NO_MUTATION",
+    "correctedFiveHostRuns": 2,
+    "mintGetOnlyRuns": 1
+  },
+  "ssh": {
+    "agentFingerprint": "SHA256:IGu9dXOSXw4JoPmwNjAgDRI2AY+zJil/haJGjKRYt34",
+    "strictPinnedHostKeys": true,
+    "privateKeyContentsReadOrHashed": false,
+    "remoteWrites": false
+  },
+  "observed": {
+    "application": {
+      "ipv4": "139.162.161.233",
+      "fips": "active/running",
+      "mint": "active/running",
+      "observer": "inactive/dead",
+      "coordinator": "inactive/dead",
+      "authority": "inactive/dead",
+      "site": "inactive/dead",
+      "nginx": "inactive/dead",
+      "networkRootAbsent": true,
+      "observerReceiptAbsent": true,
+      "acceptedBundleStageAbsent": true,
+      "successorReleaseAbsent": true,
+      "browserPinsAbsent": true,
+      "healthPinsAbsent": true,
+      "unresolvedEnvironmentFields": 10,
+      "freeBytes": 74982965248,
+      "freeInodes": 5065821
+    },
+    "validators": {
+      "roles": ["V1", "V2", "V3", "V4"],
+      "fipsAllActive": true,
+      "validatorServicesAllInactive": true,
+      "signerServicesAllInactive": true,
+      "launchSealSha256": "a106c0a408f6f5ae35841fbe3efd416007f7578c1d62f35126b2aadc1655765c",
+      "networkRoots": {"uid": 0, "gid": 0, "mode": "0700"},
+      "localValidatorLeaves": {"uid": 0, "gid": 0, "mode": "0700"},
+      "successorReleasesAbsent": true,
+      "browserPinsAbsent": true,
+      "healthPinsAbsent": true,
+      "unresolvedEnvironmentFieldsPerHost": 8,
+      "minimumFreeBytes": 75578122240,
+      "minimumFreeInodes": 5031771
+    }
+  },
+  "mintGetSnapshot": {
+    "origin": "http://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:3438",
+    "requests": 3,
+    "requestKinds": ["GET /v1/info", "GET /v1/keysets", "GET /v1/keys/001a10236c313f83"],
+    "responseBytes": 6069,
+    "mintPublicKey": "03d09f9117b165276122ac74d7fe1b3f9356e383c2f4af2f31dde759caef09fd92",
+    "serverVersion": "Nutshell/0.19.2",
+    "activeSatKeysetId": "001a10236c313f83",
+    "denominationKeyDigest": "f39e62692ee6465fb930f04386e1d7786cfa670f17265a607a5a8f57abc0de7c",
+    "inputFeePpk": 0,
+    "nuts": [4, 5, 7, 8, 9, 10, 11, 12, 14, 17, 20],
+    "matchesAcceptedPaymentProjection": true,
+    "paymentsPerformed": false
+  },
+  "preparedPublicPins": {
+    "browser": {
+      "path": "deploy/sidequest-mvp/launch-preparation-r1/browser-r20-pins.json",
+      "sha256": "df6e8ea5ad73397558393acfeac4313d6e0c810baa65eb85b749297ea3bc9fab",
+      "productionValidatorResult": "GO_VALIDATE_BROWSER_RELEASE_PINS_PASS"
+    },
+    "health": {
+      "path": "deploy/sidequest-mvp/launch-preparation-r1/health-r20-pins.json",
+      "sha256": "b6d28b268b732006d12cf52c529486e1377ab38ba51f3f570b0a0b56e9f19012",
+      "productionValidatorResult": "HEALTH_PINS_VALIDATE_PASS"
+    },
+    "installed": false
+  },
+  "effects": {
+    "credentialsGenerated": false,
+    "servicesStartedStoppedOrReloaded": false,
+    "securitySettingsChanged": false,
+    "hostFilesChanged": false,
+    "paymentsPerformed": false,
+    "dkgOrValidatorPrivateMaterialAccessed": false
+  }
+}

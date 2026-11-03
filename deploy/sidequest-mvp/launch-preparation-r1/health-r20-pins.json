@@ -1,0 +1,22 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_HEALTH_PINS_V1",
+  "pins": {
+    "deploymentId": "friday-demo-20261030-separated-v1",
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "genesisSha256": "c2bb4df3a19b543e270017322ea2bae37b54ae640c7964fc89ef79c77a17cc76",
+    "validatorsHash": "d1936c5e5e9d09d0a96107031ae144068dcc2ad3f1d071e7f8fe871a8aaff773",
+    "committeeKeysetId": "friday-demo-frost-keyset-separated-v1",
+    "committeeKeysetVersion": "3",
+    "dkgRunId": "friday-demo-20261030-separated-v1-dkg1",
+    "publicKeyPackageSha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+    "signerRosterDigest": "c1aca1467fa1485dadfb7260024adf31f23e2d0912c99569292ee920d6d1eea1",
+    "mintUrl": "https://139.162.161.233"
+  },
+  "mint": {
+    "mintPublicKey": "03d09f9117b165276122ac74d7fe1b3f9356e383c2f4af2f31dde759caef09fd92",
+    "activeSatKeysetId": "001a10236c313f83",
+    "denominationKeyDigest": "f39e62692ee6465fb930f04386e1d7786cfa670f17265a607a5a8f57abc0de7c",
+    "serverVersion": "Nutshell/0.19.2"
+  },
+  "mintConformanceReceiptSha256": "f671be3673fed9f074cd142640e38bc7c2fb98002881164895477e1f4d9523da"
+}

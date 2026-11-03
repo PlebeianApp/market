@@ -1,0 +1,15 @@
+{
+  "schema": "PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V1",
+  "deployment_id": "friday-demo-20261030-separated-v1",
+  "auth_network_id": "plebeian-auctions-mvp-20261102",
+  "chain_id": "plebeian-auctions-mvp-20261102",
+  "genesis_sha256": "c2bb4df3a19b543e270017322ea2bae37b54ae640c7964fc89ef79c77a17cc76",
+  "cashu_mint_url": "https://139.162.161.233",
+  "committee_public_key": "026de1d6cb863ef79f5eb6f95298a7740b8bb27ab666cf133a2dc9e089a222155b",
+  "committee_keyset_id": "friday-demo-frost-keyset-separated-v1",
+  "committee_keyset_version": "3",
+  "dkg_run_id": "friday-demo-20261030-separated-v1-dkg1",
+  "public_key_package_sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+  "signer_roster_digest": "c1aca1467fa1485dadfb7260024adf31f23e2d0912c99569292ee920d6d1eea1",
+  "fake_funding_policy_digest": "3588ddbd214b3c1e57926b77a20c070249c1d468fbbe1592ff85e18daf4ae069"
+}
