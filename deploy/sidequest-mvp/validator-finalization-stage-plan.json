@@ -20,7 +20,21 @@
       {"name": "network.json", "bytes": 3716, "sha256": "0fe06ef2c15fd7f0ecd5eed32ac26111f32357c9139ab6c083e88f5ff29b0203"},
       {"name": "separated-runtime-binding.json", "bytes": 17716, "sha256": "b3e2632ddd5f2b4601b7b91ac9880ce9274767cfeff5c8b5b80aabdd79e9551a"},
       {"name": "validator-roster.json", "bytes": 4685, "sha256": "e9d68caccf10cc9d1642f736aff87836127c9f5554d21d74d4ec4c6e1f40d22e"}
-    ]
+    ],
+    "independentReview": {
+      "path": "/home/maximoto/Documents/Codex/2026-10-30/task/sidequest-genesis-assembly-r1-independent-review-20261103/INDEPENDENT-REVIEW.md",
+      "sha256": "3060b528aed4a3b105a8d86cc70ca624d39b8d825284347ce4bd554164a54b03",
+      "status": "ACCEPTED_ACTUAL_PUBLIC_BUNDLE",
+      "verified": [
+        "all four validator descriptors",
+        "owner-signed deployment anchor, chain ID and frozen genesis time",
+        "authenticated DKG public result",
+        "separated runtime binding",
+        "accepted mint public projection",
+        "assembled bundle outputs and semantic identities"
+      ],
+      "qualification": "Binary metadata does not independently prove a clean build from commit 6562b35; the relevant assembler source is unchanged and the resulting public bundle independently verifies."
+    }
   },
   "installedFinalizer": {
     "path": "/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-auctions-poc",
@@ -81,7 +95,8 @@
     }
   ],
   "requiredReadOnlyPreflight": {
-    "bundleReviewAccepted": false,
+    "bundleReviewAccepted": true,
+    "bundleReviewSha256": "3060b528aed4a3b105a8d86cc70ca624d39b8d825284347ce4bd554164a54b03",
     "perHost": [
       "host key and exact installed binary hash still match accepted pins",
       "staging root is absent; parent separated-inputs directory is real, root-owned and not a symlink",

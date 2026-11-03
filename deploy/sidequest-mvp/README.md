@@ -266,6 +266,15 @@ and validators hash is
 This is a local public artifact, not installation, finalization, launch-seal,
 observer, service or live-consensus acceptance.
 
+The actual public bundle is independently accepted by review SHA-256
+`3060b528aed4a3b105a8d86cc70ca624d39b8d825284347ce4bd554164a54b03`.
+The review matches all four descriptors, the owner anchor/chain/frozen time,
+authenticated DKG result, separated runtime binding, mint projection and
+assembled semantic identities. Its nonblocking provenance qualification is
+preserved: binary metadata alone does not prove a clean build from commit
+`6562b35`; the relevant assembler source is unchanged and the public result
+independently verifies.
+
 ## Resume checkpoint: validator finalization and APP observer
 
 `validator-finalization-stage-plan.json` is the command-ready, non-executing
@@ -276,8 +285,8 @@ installed R4 finalizer at
 (SHA-256 `8f501da6c7b054d3b33f98f4be52c0299655fc52756af70cd59cbc5740afd7c4`).
 No new validator release is required for this step.
 
-After the actual bundle review is accepted, the next grant can be limited to a
-read-only state check, creation of one digest-named public staging directory on
+The next grant can be limited to a read-only state check, creation of one
+digest-named public staging directory on
 V1-V4, and exactly one `finalize-friday-comet-validator` invocation per slot.
 That command validates the existing local keys and fresh height-zero signing
 state, installs only exact public files, and creates one public signed
