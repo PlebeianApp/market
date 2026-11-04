@@ -41,6 +41,26 @@ describe('extension manifest', () => {
 	})
 })
 
+describe('extension icon', () => {
+	test('accepts bundled image paths and https URLs only', () => {
+		for (const icon of ['/images/x.svg', '/images/extensions/logo-2.png', 'https://cdn.example/logo.webp']) {
+			expect(validateExtensionManifest({ ...manifest, icon }).ok).toBe(true)
+		}
+		for (const icon of [
+			'',
+			'images/x.svg',
+			'/images/../secret.svg',
+			'//evil.example/x.svg',
+			'/x.svg?v=1',
+			'/x.html',
+			'http://cdn.example/x.svg',
+			'javascript:alert(1)',
+		]) {
+			expect(validateExtensionManifest({ ...manifest, icon }).ok).toBe(false)
+		}
+	})
+})
+
 describe('extension host ports and egress', () => {
 	test('accepts http with declared https/localhost egress', () => {
 		const result = validateExtensionManifest({

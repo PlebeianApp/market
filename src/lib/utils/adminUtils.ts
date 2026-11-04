@@ -15,6 +15,7 @@ export const ADMIN_ROUTES = [
 	'/dashboard/app-settings/blacklists',
 	'/dashboard/app-settings/app-miscelleneous',
 	'/dashboard/app-settings/featured-items',
+	'/dashboard/app-settings/extensions',
 ] as const
 
 /**

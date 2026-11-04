@@ -127,12 +127,15 @@ interface ExtensionHostPorts {
   ADR. Signing remains in the client with the user's signer, or in existing
   Platform managers for app-signed events.
 
-Manifests gain two declarative fields, validated by
-`validateExtensionManifest`:
+Manifests gain these declarative fields, validated by
+`validateExtensionManifest`. `icon` is an optional logo: a root-relative path to
+a bundled image (no `..`, no query) or an https URL. It is carried in public
+descriptors, and an invalid icon is dropped rather than failing the descriptor.
 
 ```ts
 hostPorts: readonly ('relays:read' | 'relays:publish' | 'http' | 'storage')[]
 egress?: readonly string[] // https origins; http only for localhost
+icon?: string // '/images/x.svg' or 'https://…'
 ```
 
 ### 2. Actions: the only client → server path
@@ -649,7 +652,14 @@ capabilities in `/api/config`.
     registry wiring, the action route, and `/api/config` descriptors in
     `platform/extensions/` and `platform/server/extensions.ts`.
 
-  No built-in extension ships yet, so instance behaviour is unchanged. The
+  The first built-in, `product-image-describer`
+  (`sdk/extensions/product-image-describer/`), is a deterministic mock-up: it
+  drafts a description from the image URL filename and the seller's fields,
+  with no host ports, no egress, and no image analysis, and labels its output
+  `mock: true`. It is off unless `EXTENSION_PRODUCT_IMAGE_DESCRIBER_ENABLED` is
+  set. The admin page `/dashboard/app-settings/extensions` lists enabled
+  extensions with their logos and lets an admin try the action. With no
+  extension enabled, instance behaviour is unchanged. The
   storage port is in-memory, and rate limits reset on restart. The product
   form slot, ContextVM tool registration, the store, and the reference
   extension do not exist yet.

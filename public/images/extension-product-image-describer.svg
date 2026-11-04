@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Product image describer</title>
+  <rect width="64" height="64" rx="14" fill="#18181b"/>
+  <rect x="10" y="14" width="30" height="26" rx="4" fill="#fafafa"/>
+  <circle cx="18.5" cy="22.5" r="3" fill="#f59e0b"/>
+  <path d="M12 37l8.5-9 5.5 5.5 4-4 8 7.5V37a1 1 0 0 1-1 1H13a1 1 0 0 1-1-1z" fill="#71717a"/>
+  <rect x="10" y="45" width="34" height="3.5" rx="1.75" fill="#a1a1aa"/>
+  <rect x="10" y="51" width="24" height="3.5" rx="1.75" fill="#a1a1aa"/>
+  <path d="M48 12l2.2 5.8L56 20l-5.8 2.2L48 28l-2.2-5.8L40 20l5.8-2.2z" fill="#ec4899"/>
+  <path d="M51 34l1.1 2.9L55 38l-2.9 1.1L51 42l-1.1-2.9L47 38l2.9-1.1z" fill="#ec4899"/>
+</svg>

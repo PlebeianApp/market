@@ -8,13 +8,14 @@ import {
 	type ExtensionActionTransport,
 	type PublicExtensionActionDescriptor,
 } from './actions'
-import type { AnyExtensionDefinition } from './extension'
+import { isValidExtensionIcon, type AnyExtensionDefinition } from './extension'
 
 /** Client-safe view of an enabled extension, as published in `/api/config`. Never carries private config. */
 export interface PublicExtensionDescriptor {
 	id: string
 	version: string
 	displayName: string
+	icon?: string
 	capabilities: readonly string[]
 	config: unknown
 	actions: readonly PublicExtensionActionDescriptor[]
@@ -27,6 +28,7 @@ export function describeExtension(definition: AnyExtensionDefinition, publicConf
 		id: manifest.id,
 		version: manifest.version,
 		displayName: manifest.displayName,
+		...(manifest.icon ? { icon: manifest.icon } : {}),
 		capabilities: [...manifest.capabilities],
 		config: publicConfig,
 		actions: describeExtensionActions(definition.actions),
@@ -83,7 +85,7 @@ export function findExtensionAction(
 
 function parseDescriptor(input: unknown): PublicExtensionDescriptor | undefined {
 	if (!isRecord(input)) return undefined
-	const { id, version, displayName, capabilities, config, actions } = input
+	const { id, version, displayName, icon, capabilities, config, actions } = input
 	if (typeof id !== 'string' || !EXTENSION_ID.test(id)) return undefined
 	if (typeof version !== 'string' || version.length > 64) return undefined
 	if (!Array.isArray(capabilities) || !capabilities.every((value) => typeof value === 'string' && CAPABILITY.test(value))) return undefined
@@ -93,6 +95,8 @@ function parseDescriptor(input: unknown): PublicExtensionDescriptor | undefined 
 		id,
 		version,
 		displayName: typeof displayName === 'string' && displayName.trim() ? displayName.slice(0, MAX_TEXT) : id,
+		// An invalid icon is dropped rather than failing the descriptor; UI falls back to a placeholder.
+		...(typeof icon === 'string' && isValidExtensionIcon(icon) ? { icon } : {}),
 		capabilities: [...capabilities],
 		config: config ?? {},
 		actions: parsedActions as PublicExtensionActionDescriptor[],

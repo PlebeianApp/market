@@ -2,6 +2,7 @@ export {
 	defineActionFor,
 	defineExtension,
 	EXTENSION_RUNTIMES,
+	isValidExtensionIcon,
 	parseExtensionConfig,
 	validateExtensionDefinition,
 	validateExtensionManifest,

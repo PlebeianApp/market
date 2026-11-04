@@ -39,6 +39,7 @@ import { Route as DashboardLayoutDashboardProductsAuctionsRouteImport } from './
 import { Route as DashboardLayoutDashboardOrdersOrderIdRouteImport } from './routes/_dashboard-layout/dashboard/orders/$orderId'
 import { Route as DashboardLayoutDashboardAppSettingsTeamRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/team'
 import { Route as DashboardLayoutDashboardAppSettingsFeaturedItemsRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/featured-items'
+import { Route as DashboardLayoutDashboardAppSettingsExtensionsRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/extensions'
 import { Route as DashboardLayoutDashboardAppSettingsBlacklistsRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/blacklists'
 import { Route as DashboardLayoutDashboardAppSettingsAppMiscelleneousRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/app-miscelleneous'
 import { Route as DashboardLayoutDashboardAccountYourPurchasesRouteImport } from './routes/_dashboard-layout/dashboard/account/your-purchases'
@@ -205,6 +206,11 @@ const DashboardLayoutDashboardAppSettingsFeaturedItemsRoute = DashboardLayoutDas
 	path: '/dashboard/app-settings/featured-items',
 	getParentRoute: () => DashboardLayoutRoute,
 } as any)
+const DashboardLayoutDashboardAppSettingsExtensionsRoute = DashboardLayoutDashboardAppSettingsExtensionsRouteImport.update({
+	id: '/dashboard/app-settings/extensions',
+	path: '/dashboard/app-settings/extensions',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 const DashboardLayoutDashboardAppSettingsBlacklistsRoute = DashboardLayoutDashboardAppSettingsBlacklistsRouteImport.update({
 	id: '/dashboard/app-settings/blacklists',
 	path: '/dashboard/app-settings/blacklists',
@@ -315,6 +321,7 @@ export interface FileRoutesByFullPath {
 	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	'/dashboard/app-settings/blacklists': typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
+	'/dashboard/app-settings/extensions': typeof DashboardLayoutDashboardAppSettingsExtensionsRoute
 	'/dashboard/app-settings/featured-items': typeof DashboardLayoutDashboardAppSettingsFeaturedItemsRoute
 	'/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
@@ -362,6 +369,7 @@ export interface FileRoutesByTo {
 	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	'/dashboard/app-settings/blacklists': typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
+	'/dashboard/app-settings/extensions': typeof DashboardLayoutDashboardAppSettingsExtensionsRoute
 	'/dashboard/app-settings/featured-items': typeof DashboardLayoutDashboardAppSettingsFeaturedItemsRoute
 	'/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
@@ -411,6 +419,7 @@ export interface FileRoutesById {
 	'/_dashboard-layout/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/_dashboard-layout/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	'/_dashboard-layout/dashboard/app-settings/blacklists': typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
+	'/_dashboard-layout/dashboard/app-settings/extensions': typeof DashboardLayoutDashboardAppSettingsExtensionsRoute
 	'/_dashboard-layout/dashboard/app-settings/featured-items': typeof DashboardLayoutDashboardAppSettingsFeaturedItemsRoute
 	'/_dashboard-layout/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/_dashboard-layout/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
@@ -460,6 +469,7 @@ export interface FileRouteTypes {
 		| '/dashboard/account/your-purchases'
 		| '/dashboard/app-settings/app-miscelleneous'
 		| '/dashboard/app-settings/blacklists'
+		| '/dashboard/app-settings/extensions'
 		| '/dashboard/app-settings/featured-items'
 		| '/dashboard/app-settings/team'
 		| '/dashboard/orders/$orderId'
@@ -507,6 +517,7 @@ export interface FileRouteTypes {
 		| '/dashboard/account/your-purchases'
 		| '/dashboard/app-settings/app-miscelleneous'
 		| '/dashboard/app-settings/blacklists'
+		| '/dashboard/app-settings/extensions'
 		| '/dashboard/app-settings/featured-items'
 		| '/dashboard/app-settings/team'
 		| '/dashboard/orders/$orderId'
@@ -555,6 +566,7 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout/dashboard/account/your-purchases'
 		| '/_dashboard-layout/dashboard/app-settings/app-miscelleneous'
 		| '/_dashboard-layout/dashboard/app-settings/blacklists'
+		| '/_dashboard-layout/dashboard/app-settings/extensions'
 		| '/_dashboard-layout/dashboard/app-settings/featured-items'
 		| '/_dashboard-layout/dashboard/app-settings/team'
 		| '/_dashboard-layout/dashboard/orders/$orderId'
@@ -806,6 +818,13 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardAppSettingsFeaturedItemsRouteImport
 			parentRoute: typeof DashboardLayoutRoute
 		}
+		'/_dashboard-layout/dashboard/app-settings/extensions': {
+			id: '/_dashboard-layout/dashboard/app-settings/extensions'
+			path: '/dashboard/app-settings/extensions'
+			fullPath: '/dashboard/app-settings/extensions'
+			preLoaderRoute: typeof DashboardLayoutDashboardAppSettingsExtensionsRouteImport
+			parentRoute: typeof DashboardLayoutRoute
+		}
 		'/_dashboard-layout/dashboard/app-settings/blacklists': {
 			id: '/_dashboard-layout/dashboard/app-settings/blacklists'
 			path: '/dashboard/app-settings/blacklists'
@@ -986,6 +1005,7 @@ interface DashboardLayoutRouteChildren {
 	DashboardLayoutDashboardAccountYourPurchasesRoute: typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute: typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	DashboardLayoutDashboardAppSettingsBlacklistsRoute: typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
+	DashboardLayoutDashboardAppSettingsExtensionsRoute: typeof DashboardLayoutDashboardAppSettingsExtensionsRoute
 	DashboardLayoutDashboardAppSettingsFeaturedItemsRoute: typeof DashboardLayoutDashboardAppSettingsFeaturedItemsRoute
 	DashboardLayoutDashboardAppSettingsTeamRoute: typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	DashboardLayoutDashboardOrdersOrderIdRoute: typeof DashboardLayoutDashboardOrdersOrderIdRoute
@@ -1013,6 +1033,7 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
 	DashboardLayoutDashboardAccountYourPurchasesRoute: DashboardLayoutDashboardAccountYourPurchasesRoute,
 	DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute: DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute,
 	DashboardLayoutDashboardAppSettingsBlacklistsRoute: DashboardLayoutDashboardAppSettingsBlacklistsRoute,
+	DashboardLayoutDashboardAppSettingsExtensionsRoute: DashboardLayoutDashboardAppSettingsExtensionsRoute,
 	DashboardLayoutDashboardAppSettingsFeaturedItemsRoute: DashboardLayoutDashboardAppSettingsFeaturedItemsRoute,
 	DashboardLayoutDashboardAppSettingsTeamRoute: DashboardLayoutDashboardAppSettingsTeamRoute,
 	DashboardLayoutDashboardOrdersOrderIdRoute: DashboardLayoutDashboardOrdersOrderIdRoute,

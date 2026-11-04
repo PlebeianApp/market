@@ -65,6 +65,16 @@ describe('extension descriptors', () => {
 		expect(parsePublicExtensionDescriptors({}).ok).toBe(false)
 	})
 
+	test('keeps valid icons and drops unsafe ones without dropping the descriptor', () => {
+		const good = describeExtension(extension, {})
+		const [withIcon, unsafeIcon] = [
+			{ ...good, icon: '/images/logo.svg' },
+			{ ...good, id: 'other', icon: 'javascript:alert(1)' },
+		]
+		const result = parsePublicExtensionDescriptors([withIcon, unsafeIcon])
+		expect(result.ok && result.value.map((descriptor) => descriptor.icon)).toEqual(['/images/logo.svg', undefined])
+	})
+
 	test('finds actions by capability and transport, not by extension id', () => {
 		const descriptors = [describeExtension(extension, {})]
 		expect(findExtensionAction(descriptors, 'product.description.suggest')).toMatchObject({
