@@ -80,3 +80,5 @@ export {
 	toContextVmToolResult,
 } from './contextvm'
 export type { ContextVmCallTool, ContextVmToolResult, ExtensionActionToolDescriptor, InvokeOverContextVmOptions } from './contextvm'
+export { describeExtension, findExtensionAction, parsePublicExtensionDescriptors } from './descriptors'
+export type { ExtensionActionTarget, PublicExtensionDescriptor } from './descriptors'

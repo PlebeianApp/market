@@ -200,6 +200,23 @@ describe('executeExtensionAction', () => {
 	})
 })
 
+test('a handler that ignores the signal still ends with upstream_timeout when it aborts', async () => {
+	const controller = new AbortController()
+	const context = createTestActionContext({ publicConfig: {}, signal: controller.signal })
+	const actions = {
+		hang: action({
+			input: z.object({}),
+			output: z.object({}),
+			auth: 'user',
+			rateLimit: { perPubkey: 1, windowSeconds: 1 },
+			handler: () => new Promise(() => undefined),
+		}),
+	}
+	const pending = executeExtensionAction({ actions, actionName: 'hang', rawInput: {}, caller: testCaller(), context })
+	controller.abort()
+	expect(await pending).toMatchObject({ ok: false, error: { reason: 'upstream_timeout' } })
+})
+
 describe('action descriptors and error mapping', () => {
 	test('describes actions without handlers or schemas', () => {
 		expect(describeExtensionActions(extension.actions)).toEqual([

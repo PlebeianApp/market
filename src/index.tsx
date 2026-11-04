@@ -8,7 +8,7 @@
  */
 
 import index from './index.html'
-import { buildServer, initializeAppSettings, startEventHandlerInitialization } from '@platform/server'
+import { buildServer, initializeAppSettings, startEventHandlerInitialization, startExtensions } from '@platform/server'
 
 import.meta.hot.accept()
 
@@ -24,6 +24,8 @@ export const serverPromise: Promise<ResolvedServer> = (async () => {
 	// Heavy relay-dependent EventHandler bootstrap runs in parallel with
 	// HTTP serving — relay timeouts shouldn't block the setup form.
 	void startEventHandlerInitialization()
+	// Extensions are optional: a failure here is logged and never blocks serving the marketplace.
+	await startExtensions().catch((error) => console.error('[extensions] startup failed:', error instanceof Error ? error.message : error))
 	resolvedServer = buildServer({ indexHtml: index })
 	console.log(`🚀 Server running at ${resolvedServer.url}`)
 	return resolvedServer

@@ -1,5 +1,13 @@
 import { ValidationError } from '@sdk/core/errors'
-import { parseExtensionConfig, type AnyExtensionDefinition, type ExtensionRuntime } from '@sdk/core/extensions'
+import {
+	describeExtension,
+	parseExtensionConfig,
+	type AnyExtensionDefinition,
+	type ExtensionActionContext,
+	type ExtensionHostPorts,
+	type ExtensionRuntime,
+	type PublicExtensionDescriptor,
+} from '@sdk/core/extensions'
 import { failure, success, type Result } from '@sdk/core/result'
 
 /** Stored per-instance values; Platform owns these, including private secrets. */
@@ -10,11 +18,29 @@ export interface ExtensionInstanceSetting {
 	privateConfig?: unknown
 }
 
-export interface PublicExtensionDescriptor {
+export type { PublicExtensionDescriptor }
+
+/** Builds host ports for one extension; called once per start with that extension's abort signal. */
+export type ExtensionHostFactory = (definition: AnyExtensionDefinition, privateConfig: unknown, signal: AbortSignal) => ExtensionHostPorts
+
+export interface ExtensionStartOptions {
+	/** Required for actions; client runtimes never receive host ports. */
+	createHost?: ExtensionHostFactory
+	/**
+	 * When true, an extension that fails to start is skipped and reported instead of rolling back the
+	 * others. Extensions are optional, so a host process should not fail to boot because of one.
+	 */
+	isolateFailures?: boolean
+}
+
+export interface ExtensionStartFailure {
 	id: string
-	version: string
-	capabilities: readonly string[]
-	config: unknown
+	error: unknown
+}
+
+export interface RunningExtensionAction {
+	definition: AnyExtensionDefinition
+	context: ExtensionActionContext<unknown, unknown>
 }
 
 interface ConfiguredExtension {
@@ -25,8 +51,10 @@ interface ConfiguredExtension {
 
 interface RunningExtension {
 	definition: AnyExtensionDefinition
+	runtime: ExtensionRuntime
 	handle: unknown
 	controller: AbortController
+	context: ExtensionActionContext<unknown, unknown> | undefined
 }
 
 /** Per-instance extension enablement, config validation, and lifecycle. One registry per market instance. */
@@ -89,39 +117,62 @@ export class ExtensionRegistry {
 
 	/** Client-safe view for public config endpoints; private config is never included. */
 	getPublicDescriptors(): PublicExtensionDescriptor[] {
-		return this.configured.map(({ definition, publicConfig }) => ({
-			id: definition.manifest.id,
-			version: definition.manifest.version,
-			capabilities: [...definition.manifest.capabilities],
-			config: publicConfig,
-		}))
+		return this.configured.map(({ definition, publicConfig }) => describeExtension(definition, publicConfig))
 	}
 
-	/** Starts enabled extensions for one runtime; on failure, already-started ones are stopped. */
-	async start(runtime: ExtensionRuntime): Promise<void> {
-		const startedNow: RunningExtension[] = []
-		try {
-			for (const entry of this.configured) {
-				const { manifest, lifecycle } = entry.definition
-				if (!lifecycle || !manifest.runtimes.includes(runtime)) continue
-				if (this.running.some((item) => item.definition.manifest.id === manifest.id)) continue
+	/** Enabled, running server extension and its action context; `undefined` hides disabled and unknown alike. */
+	getActionTarget(id: string): RunningExtensionAction | undefined {
+		const running = this.running.find((item) => item.definition.manifest.id === id && item.runtime === 'server')
+		if (!running?.context || !running.definition.actions) return undefined
+		return { definition: running.definition, context: running.context }
+	}
 
-				const controller = new AbortController()
-				const handle = await lifecycle.start({
+	/** Starts enabled extensions for one runtime. Without `isolateFailures`, a failure stops those already started. */
+	async start(runtime: ExtensionRuntime, options: ExtensionStartOptions = {}): Promise<ExtensionStartFailure[]> {
+		const startedNow: RunningExtension[] = []
+		const failures: ExtensionStartFailure[] = []
+		for (const entry of [...this.configured]) {
+			const { manifest, lifecycle, actions } = entry.definition
+			if (!manifest.runtimes.includes(runtime)) continue
+			if (!lifecycle && !(runtime === 'server' && actions)) continue
+			if (this.running.some((item) => item.definition.manifest.id === manifest.id)) continue
+
+			const controller = new AbortController()
+			try {
+				const privateConfig = runtime === 'client' ? undefined : entry.privateConfig
+				const host = runtime === 'client' ? undefined : options.createHost?.(entry.definition, entry.privateConfig, controller.signal)
+				if (actions && runtime === 'server' && !host) throw new Error(`${manifest.id}: actions require host ports`)
+				const context = {
 					instanceId: this.instanceId,
 					runtime,
 					publicConfig: entry.publicConfig,
-					privateConfig: runtime === 'client' ? undefined : entry.privateConfig,
+					privateConfig,
 					signal: controller.signal,
-				})
-				const item = { definition: entry.definition, handle, controller }
+					...(host ? { host } : {}),
+				}
+				const handle = lifecycle ? await lifecycle.start(context) : undefined
+				const item: RunningExtension = {
+					definition: entry.definition,
+					runtime,
+					handle,
+					controller,
+					context: host ? { ...context, host } : undefined,
+				}
 				startedNow.push(item)
 				this.running.push(item)
+			} catch (error) {
+				controller.abort()
+				if (options.isolateFailures) {
+					failures.push({ id: manifest.id, error })
+					// A failed extension is disabled, so it is neither advertised nor reachable.
+					this.configured = this.configured.filter((item) => item !== entry)
+					continue
+				}
+				await this.stopItems(startedNow).catch(() => undefined)
+				throw error
 			}
-		} catch (error) {
-			await this.stopItems(startedNow).catch(() => undefined)
-			throw error
 		}
+		return failures
 	}
 
 	async stop(): Promise<void> {

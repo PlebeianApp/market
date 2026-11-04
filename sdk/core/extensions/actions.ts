@@ -196,9 +196,12 @@ export async function executeExtensionAction(params: ExecuteExtensionActionParam
 	const input = validateWithSchema(rawInput, action.input)
 	if (!input.ok) return failure(new ExtensionActionError('invalid_input'))
 
+	if (context.signal.aborted) return failure(new ExtensionActionError('upstream_timeout'))
+
 	let result: Result<unknown, SdkError>
 	try {
-		result = await action.handler(context, input.value, caller)
+		// Raced so a handler that ignores the signal still cannot outlive the request deadline.
+		result = await raceAbort(action.handler(context, input.value, caller), context.signal)
 	} catch (cause) {
 		if (context.signal.aborted) return failure(new ExtensionActionError('upstream_timeout', undefined, cause))
 		return failure(new ExtensionActionError('extension_failed', undefined, cause))
@@ -212,6 +215,19 @@ export async function executeExtensionAction(params: ExecuteExtensionActionParam
 	const output = validateWithSchema(result.value, action.output)
 	if (!output.ok) return failure(new ExtensionActionError('invalid_output', undefined, output.error))
 	return success(output.value)
+}
+
+function raceAbort<Value>(promise: Promise<Value>, signal: AbortSignal): Promise<Value> {
+	if (signal.aborted) {
+		promise.catch(() => undefined)
+		return Promise.reject(signal.reason)
+	}
+	let onAbort: () => void = () => undefined
+	const aborted = new Promise<never>((_, reject) => {
+		onAbort = () => reject(signal.reason)
+		signal.addEventListener('abort', onAbort, { once: true })
+	})
+	return Promise.race([promise, aborted]).finally(() => signal.removeEventListener('abort', onAbort))
 }
 
 function toWireCode(reason: ExtensionActionErrorCode): ExtensionActionWireErrorCode {

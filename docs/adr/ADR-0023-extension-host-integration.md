@@ -173,6 +173,14 @@ The request is handled in this order:
    existing admin list.
    - NIP-98 is a standard NIP but new to this repository. Adopting it is part of
      this decision, not existing behavior.
+   - The `u` tag must equal the request path and query under an accepted
+     origin: the origin of `INSTANCE_SITE_URL`, plus the request origin in
+     `development` only. The request origin comes from the client-controlled
+     `Host` header, so trusting it elsewhere would let a header signed for one
+     market be replayed on another. Outside development, an instance without
+     `INSTANCE_SITE_URL` rejects every action call, and logs that at startup.
+   - Accepted event ids are remembered for the skew window, so a captured header
+     cannot be replayed. Bodies are capped at 64 KB.
 3. Apply the per-pubkey rate limit. Exceeding it returns 429.
 4. Parse the body with `input`. Validation failure returns 400 without echoing
    the body.
@@ -242,11 +250,26 @@ signer)`, which builds the NIP-98 header with the user's signer. UI calls it;
 
 ### 4. Lifecycle wiring
 
-- `platform/server/startup.ts` creates one `ExtensionRegistry` per instance,
-  registers built-in definitions, and calls `configure()` from server
-  environment settings (ADR-018). Private values come only from the
+- The server entrypoint calls `startExtensions()` (`platform/server/extensions.ts`).
+  It creates one `ExtensionRegistry` per instance, registers the built-in
+  definitions (`platform/extensions/builtins.ts`), and calls `configure()` from
+  server environment settings (ADR-018). Private values come only from the
   environment, never from relay events or `/api/setup` payloads. It then calls
   `start('server')`, and `stop()` on shutdown.
+- Environment variables map to config like this:
+
+  | Variable                        | Meaning                                                                                            |
+  | ------------------------------- | -------------------------------------------------------------------------------------------------- |
+  | `EXTENSION_<ID>_ENABLED`        | `true` enables the extension. Otherwise it stays disabled.                                         |
+  | `EXTENSION_<ID>_PUBLIC_<FIELD>` | `publicConfig.<field>` (camelCased).                                                               |
+  | `EXTENSION_<ID>_<FIELD>`        | `privateConfig.<field>`. Private is the default, so a misnamed secret never reaches `/api/config`. |
+  | `EXTENSION_<ID>_EGRESS`         | Operator egress allowlist, intersected with the manifest's `egress`.                               |
+  | `EXTENSION_<ID>_HOST_PORTS`     | Operator port grants. Defaults to every port the manifest requests.                                |
+
+  `<ID>` is the extension id uppercased with `.` and `-` replaced by `_`. Values
+  are strings, so config schemas coerce them (for example
+  `z.coerce.number()`). Two ids that map to the same prefix are both refused.
+
 - A configuration error disables that extension and is logged by id, but it does
   not prevent the marketplace from booting. Extensions are optional by
   definition.
@@ -618,11 +641,18 @@ capabilities in `/api/config`.
 - Third-party ContextVM servers can provide capabilities without running code on
   the instance. The operator bears the trust decision, which is recorded as a
   pinned binding.
-- This ADR is proposed design. The SDK contracts exist in
-  `sdk/core/extensions/` (port interfaces, manifest and action validation,
-  `executeExtensionAction`, the HTTP and ContextVM clients, and test fakes).
-  The Platform port implementations, the action route, the NIP-98 verifier,
-  ContextVM tool registration, and the reference extension do not exist yet.
+- This ADR is proposed design. Steps 1–4 exist:
+  - SDK contracts in `sdk/core/extensions/` (port interfaces, manifest and
+    action validation, `executeExtensionAction`, descriptors and capability
+    lookup, the HTTP and ContextVM clients, and test fakes);
+  - Platform host ports, NIP-98 verifier, rate limiter, environment config,
+    registry wiring, the action route, and `/api/config` descriptors in
+    `platform/extensions/` and `platform/server/extensions.ts`.
+
+  No built-in extension ships yet, so instance behaviour is unchanged. The
+  storage port is in-memory, and rate limits reset on restart. The product
+  form slot, ContextVM tool registration, the store, and the reference
+  extension do not exist yet.
 
 ## Implementation Sequence
 

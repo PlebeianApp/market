@@ -12,6 +12,7 @@ import {
 	setAppSettings,
 } from '../runtime'
 import { getEventHandler } from '../EventHandler'
+import { getPublicExtensionDescriptors } from '../extensions'
 import type { PublicAppConfig } from '@/lib/instance-config'
 import { PUBLIC_CONFIG_SCHEMA_VERSION } from '@sdk/core/publicConfig'
 import { AppSettingsSchema } from '@/lib/schemas/app'
@@ -44,6 +45,7 @@ export const configRoutes: BunRoutes = {
 				needsSetup: !appSettings,
 				serverReady: isEventHandlerReady(),
 				externalZapRelaysEnabled: stage === 'production' || (stage === 'development' && process.env.LOCAL_RELAY_ONLY !== 'true'),
+				extensions: getPublicExtensionDescriptors(),
 			}
 			return Response.json(config)
 		},
