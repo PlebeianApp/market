@@ -1,6 +1,6 @@
 {
   "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_AGGREGATE_DIAG_R17_ACTUAL_V1",
-  "status": "DEPLOYMENT_COMPLETE_FRESH_LIVE_BID_REJECTED_BEFORE_COMMIT",
+  "status": "DEPLOYMENT_COMPLETE_FRESH_LIVE_BID_REJECTED_BEFORE_COMMIT_ROOT_CAUSE_CONFIRMED",
   "completedAtUtc": "2026-11-04T20:40:07Z",
   "valueProfile": "FAKE_MONEY_ONLY",
   "sourceCommit": "c8bce65bb10872910ee399305630f586a20f3be7",
@@ -95,7 +95,22 @@
       "signatureSha256": "46a7999d8351cafe9d952beb75f7680bfc8e75889c4b590e0c17876a241b53f1",
       "privateKeyOrSecretShareRead": false
     },
-    "qualification": "The sanitized R17 aggregate-child diagnostic was not observed in the isolated authority journal. The public transcript proves the three returned shares form a valid committee signature, but does not by itself distinguish an unobserved child invocation failure from a post-aggregate adapter rejection. A subsequent diagnostic must categorize the post-command validation and durable completion boundary before another fresh operation."
+    "qualification": "The sanitized R17 aggregate-child diagnostic was not observed because the authority failed before invoking the aggregate child. The independently valid public transcript and exact absent scratch parent identify the pre-command mkdtemp boundary."
+  },
+  "rootCause": {
+    "status": "CONFIRMED_READ_ONLY",
+    "authorityCodePath": "mkdtemp(join(scratchParent, 'admission-aggregate-'))",
+    "scratchParent": "/var/lib/plebeian-auctions-friday/coordinator-v3/runtime/scratch",
+    "scratchParentObserved": "ABSENT",
+    "runtimeParent": {
+      "path": "/var/lib/plebeian-auctions-friday/coordinator-v3/runtime",
+      "type": "directory",
+      "mode": "0700",
+      "uid": 999,
+      "gid": 988
+    },
+    "effect": "mkdtemp fails before the aggregate child can run, after the three signers have already returned valid public shares",
+    "minimumRepair": "Create exactly the absent scratch parent as uid 999, gid 988, mode 0700; verify metadata; use only a new operation for the next test."
   },
   "security": {
     "realFundsInScope": false,
@@ -105,5 +120,5 @@
     "firewallHttpsMintCometOrValidatorConfigurationChanged": false,
     "failedOperationRetried": false
   },
-  "nextStep": "Prepare and test a bounded privacy-safe post-aggregate stage diagnostic locally. Do not deploy it or run another fake-sat operation without renewed live-action authority, and never retry operation 52fe6351ca55a302d102a55cba460580b42dcc23a61bfbaa4fbcff56bb23deb6."
+  "nextStep": "After renewed live-action authority, create and verify the single missing private scratch parent without restarting services, then run one new fake-sat operation. Never retry operation 52fe6351ca55a302d102a55cba460580b42dcc23a61bfbaa4fbcff56bb23deb6."
 }
