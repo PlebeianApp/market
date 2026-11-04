@@ -1,0 +1,60 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_SITE_R2_REPAIR_STOPPED_ACTUAL_V1",
+  "status": "PATCH_INSTALLED_SITE_FUNCTIONAL_BUT_STOPPED_AFTER_ACCEPTANCE_CHECKER_SCHEMA_MISMATCH",
+  "completedAtUtc": "2026-11-04T00:42:18Z",
+  "planSha256": "4e984c8e398de3102e4a59f0e83b60f41590b73d56b7adf499567c4eacbc5be1",
+  "controller": {
+    "path": "/tmp/run_site_r2_repair_activation.py",
+    "sha256": "f92b2a5ba547c9346d803095a7d75c469b5cf7cb26fd40a52fea7ff35d117f7d"
+  },
+  "remoteAction": {
+    "path": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-site-r2-repair-v1",
+    "actionBytes": 237,
+    "actionSha256": "15046a94e8926f422dd1a6c53c6e71e54f9466d732f74c2fc82c3e3994be689f",
+    "stoppedBytes": 2771,
+    "stoppedSha256": "5d25b9e5a812e5758320cbca92a47539d3e086a148cd7ece07ed86bbe23a85af"
+  },
+  "installed": {
+    "patchRoot": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-site-r2",
+    "artifacts": {
+      "plebeian-auctions-mvp": {"bytes": 46588456, "mode": "0755", "sha256": "75d304d601c94fe3373d92923025cbadb61e915e8ad67b928b5dd88b03077b85"},
+      "verify-friday-separated-target.py": {"bytes": 6086, "mode": "0755", "sha256": "7a2f4f26e3c6e78449ce96348f22c7d593584fee2f72a62a4bb11ed053237f2d"},
+      "verify-friday-separated-base.py": {"bytes": 14659, "mode": "0755", "sha256": "36bc33672b1cd2bef0961c7a7df160686cb2674e62242784303a64d652515f1d"},
+      "verify-friday-runtime-target.py": {"bytes": 24764, "mode": "0755", "sha256": "d5c7031676fa3e5dc15a5da5c11a8d20c44e5f5e53242b3407df90b1c026b206"}
+    },
+    "siteUnit": {"bytes": 1040, "sha256": "ce91f073fa540167063a6b707adbbcdcf2d443946074b9b98dfa36be230b0d66"},
+    "predecessorUnitRetained": true
+  },
+  "observedBeforeStop": {
+    "siteStarted": true,
+    "loopbackListener": "127.0.0.1:8180",
+    "rootConfigPinsAndStateGETsPassed": true,
+    "chainCounts": {"auctions": 0, "bids": 0, "operations": 0},
+    "validators": {
+      "count": 4,
+      "height": 7269,
+      "onlineAll": true,
+      "commitSignaturesEach": 4,
+      "errorFieldPresentAny": false,
+      "catchingUpField": "omitted because false"
+    }
+  },
+  "stopCause": "The local acceptance checker required row.get('catching_up') is False. NodeStatus encodes a false catching_up value with omitempty, so all healthy responses omitted the field and the checker incorrectly rejected them.",
+  "preservedState": {
+    "site": "inactive-dead-NRestarts-7-Restart-on-failure",
+    "backendServices": "active-running-zero-restarts",
+    "listeners": ["127.0.0.1:8181"],
+    "coordinatorQueue": {"quickCheck": "ok", "revision": 0, "operations": 0}
+  },
+  "effects": {
+    "patchAndUnitInstalled": true,
+    "siteStoppedByFailurePolicy": true,
+    "publicPortOpened": false,
+    "nginxOrHttpsChanged": false,
+    "thresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "credentialCreated": false,
+    "firewallOrNtpChanged": false
+  },
+  "nextStep": "Under a renewed exact start scope, start the already installed site once and repeat the read-only acceptance while treating an omitted catching_up field as false and requiring online=true, four commit signatures, no error and a positive common height."
+}

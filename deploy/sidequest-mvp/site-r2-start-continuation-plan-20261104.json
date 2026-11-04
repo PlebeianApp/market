@@ -1,0 +1,37 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_SITE_R2_START_CONTINUATION_PLAN_V1",
+  "status": "READY_FOR_EXACT_APPROVAL_NOT_EXECUTED",
+  "preparedAtUtc": "2026-11-04T00:42:18Z",
+  "preconditions": [
+    "Preserved repair STOPPED receipt SHA-256 5d25b9e5a812e5758320cbca92a47539d3e086a148cd7ece07ed86bbe23a85af.",
+    "Exact four-artifact site R2 patch release and exact replacement unit remain installed.",
+    "Site is inactive/dead; FIPS, mint, observer, coordinator and authority are active with zero restarts.",
+    "Coordinator queue is SQLite quick_check ok, revision 0, zero operations.",
+    "Only 127.0.0.1:8181 is listening among ports 8180, 8181, 80 and 443.",
+    "APP system time remains within two seconds of its UTC RTC."
+  ],
+  "action": "Start the already installed plebeian-friday-site.service once and perform only loopback GET checks.",
+  "validatorAcceptance": {
+    "required": [
+      "four rows",
+      "online=true for every row",
+      "commit_signatures=4 for every row",
+      "no error field for every row",
+      "positive common canonical_commit_height"
+    ],
+    "schemaRule": "The catching_up field is encoded with omitempty; absent and explicit false both mean not catching up. Explicit true is rejected."
+  },
+  "otherAcceptance": [
+    "Site remains active on exactly 127.0.0.1:8180 with no new restarts.",
+    "Root security headers, /api/config readiness, release pins and empty /api/state pass.",
+    "The legacy /test-mint namespace remains non-operational 404.",
+    "Authority remains ready, coordinator queue remains empty and only loopback 8180/8181 listeners exist after checks."
+  ],
+  "failurePolicy": "Stop only the site, preserve all installed artifacts and receipts, and do not retry automatically.",
+  "exactApprovalRequest": "The site patch is installed and its first start served healthy loopback responses, including all four validators online with four commit signatures at height 7269. My checker stopped it only because Go omitted the false-valued catching_up field. May I start the already installed site once more and repeat the corrected read-only checks? This will not install anything else, open ports 80/443, enable HTTPS, move fake sats, request threshold signatures, create credentials, or change firewall/NTP.",
+  "notAuthorized": [
+    "HTTPS, nginx or public exposure",
+    "Funding, bidding, settlement, payments or threshold signatures",
+    "Credential creation or firewall/NTP changes"
+  ]
+}
