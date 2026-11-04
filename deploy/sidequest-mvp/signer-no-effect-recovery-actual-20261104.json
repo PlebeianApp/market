@@ -1,0 +1,151 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_SIGNER_NO_EFFECT_RECOVERY_ACTUAL_V1",
+  "status": "RECOVERY_COMPLETE_FRESH_BID_NOT_ATTEMPTED",
+  "completedAtUtc": "2026-11-04T18:19:32Z",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "source": {
+    "branch": "sidequest/mvp-20261102",
+    "recoveryToolCommit": "448086c4e45cc1275a0e6ce38fb22d542da2271d",
+    "scratchPreventionCommit": "9945ee93cbd7cf35c4a4bb184eb9bb341bc4e7fb",
+    "r13GuardCommit": "4066230df901c13c60920aae24a6ad2d9910036c"
+  },
+  "incidentDisposition": {
+    "affectedParticipants": [1, 2, 3],
+    "unaffectedParticipant": 4,
+    "oldOperationRetried": false,
+    "newOperationAttempted": false,
+    "thresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "rustAdmissionEffectObserved": false,
+    "conclusion": "The three reviewed pending admission rows were retained as anchored rejected_no_effect results with PRE_EFFECT_LOCAL_PREREQUISITE disposition. No pending row was deleted or made retryable."
+  },
+  "offlineTransition": {
+    "participants": [1, 2, 3],
+    "beforeEach": {
+      "admissionRows": {"complete": 1, "pending": 1, "rejected_no_effect": 0},
+      "admissionRevision": 4,
+      "admissionAnchorRevision": 4,
+      "rustAnchorRevision": 0,
+      "rustAdmissionEntries": 0
+    },
+    "afterEach": {
+      "admissionRows": {"complete": 1, "pending": 0, "rejected_no_effect": 1},
+      "admissionRevision": 5,
+      "admissionAnchorRevision": 5,
+      "rustAnchorRevision": 0,
+      "rustAdmissionEntries": 0,
+      "quarantineMarkerLive": false
+    },
+    "rollbackCopies": {
+      "locationPattern": "/var/lib/plebeian-auctions-friday/separated/node-{1,2,3}/recovery-no-effect-d44de9a/attempt-1",
+      "rootSealedMode": "0700",
+      "databasesPerHost": [
+        "admission-safety.sqlite3.backup",
+        "signer-safety-anchor.sqlite3.backup",
+        "disposition-metadata.sqlite3.backup"
+      ],
+      "allNineSQLiteQuickChecks": "ok",
+      "recoveryReceipts": "COMPLETE"
+    }
+  },
+  "r13Release": {
+    "root": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-signer-recovery-r13",
+    "installedCreateOnceOn": ["V1", "V2", "V3", "V4"],
+    "predecessorReleasesPreserved": true,
+    "artifacts": {
+      "plebeian-friday-signer": {"bytes": 100058644, "sha256": "45f27e32b0745993e705f4e1373acf66ce12ae6f13644834807ab19c28967e38"},
+      "plebeian-friday-signer-no-effect-recovery": {"bytes": 99352569, "sha256": "5770ad9a69a5fd48c23ca6ec71191e0daf0fbe1a99930bff3478e91a879fc30e"},
+      "verify-friday-separated-base.py": {"bytes": 14659, "sha256": "36bc33672b1cd2bef0961c7a7df160686cb2674e62242784303a64d652515f1d"},
+      "verify-friday-runtime-target.py": {"bytes": 24764, "sha256": "d5c7031676fa3e5dc15a5da5c11a8d20c44e5f5e53242b3407df90b1c026b206"},
+      "verify-friday-separated-target.py": {"bytes": 4387, "sha256": "021a2824ba460fd38a7bb6f687247ec77727197021a93df48d5d592f80ee593a"}
+    },
+    "unit": {
+      "path": "/etc/systemd/system/plebeian-friday-signer.service",
+      "bytes": 1405,
+      "sha256": "e75f5e2284992a39a6fea6c6d33df4c578b3e246e7c38a7bc114e0c46cf3860c",
+      "r12PreservedPath": "/etc/systemd/system/plebeian-friday-signer.service.r12-preserved-ae5b9c0a"
+    },
+    "r12FailureQualification": "The first V1 R12 start stopped in ExecStartPre before the signer process launched because the R12 package installed the predecessor base guard under the derived target name. R13 corrected only that release binding and added exact artifact pins; no R12 start was retried."
+  },
+  "postStart": {
+    "services": {
+      "V1": {"active": true, "nRestarts": 0, "listener": "[fdad:d221:cb5f:1d78:1125:b3f6:1a8f:44f8]:39101"},
+      "V2": {"active": true, "nRestarts": 0, "listener": "[fdd5:9c40:b25b:2ded:d43:fe2d:11c5:4703]:39101"},
+      "V3": {"active": true, "nRestarts": 0, "listener": "[fd16:51a0:bc17:19bc:8a04:2076:e388:74a3]:39101"},
+      "V4": {"active": true, "nRestarts": 0, "listener": "[fdbd:1deb:a2b0:9e60:dcb1:10df:90d7:5776]:39101"}
+    },
+    "scratchParents": {
+      "participants": [1, 2, 3, 4],
+      "owner": "uid-999:gid-988",
+      "mode": "0700",
+      "type": "directory"
+    },
+    "recoveredParticipants": {
+      "participants": [1, 2, 3],
+      "admissionRowsEach": {"complete": 1, "rejected_no_effect": 1},
+      "admissionRevisionEach": 5,
+      "admissionAnchorRevisionEach": 5,
+      "rustAnchorRevisionEach": 0,
+      "liveQuarantineAbsent": true,
+      "databaseQuickChecks": "ok"
+    },
+    "unaffectedParticipant4": {
+      "admissionRows": {"complete": 1},
+      "admissionRevision": 3,
+      "admissionAnchorRevision": 3,
+      "rustAnchorRevision": 0,
+      "proofClaims": 3,
+      "databaseQuickChecks": "ok"
+    }
+  },
+  "appEnrollmentRefresh": {
+    "reason": "Signer restarts monotonically advanced the signed public enrollment epochs; the running APP authority remained pinned to predecessor epochs and correctly returned signer_threshold until refreshed.",
+    "validation": {
+      "allFourSchnorrSignaturesValid": true,
+      "allFourStableBindingsEqualPredecessors": true,
+      "allFourRestartEpochsExactlyOneHigher": true,
+      "dkgRunId": "friday-demo-20261030-separated-v1-dkg1",
+      "publicKeyPackageSha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+      "signerRosterDigest": "c1aca1467fa1485dadfb7260024adf31f23e2d0912c99569292ee920d6d1eea1"
+    },
+    "records": [
+      {"participantId": 1, "oldEpoch": 3, "newEpoch": 4, "oldSha256": "dc838636a8a4a2c115849fd9e11a889f907c4b8e13dbe540ceaea5dfb4de4bdd", "newSha256": "072bb6fa2683ef84c99daeeea1fd424d1de8aee6590b72a49b39d5125bbd9c2c"},
+      {"participantId": 2, "oldEpoch": 2, "newEpoch": 3, "oldSha256": "38088cf8a44da74304fde96ce9f6972e9231884e1f97e6fba3462d78acc586f5", "newSha256": "af5c7e806d377246d36e7a81a65393825b1c61579e7dbfbcfefd9fa35c726e59"},
+      {"participantId": 3, "oldEpoch": 2, "newEpoch": 3, "oldSha256": "3c34a15c6a3f596123a912990a07a0879386b22575fe4a89194339c5477b5e0b", "newSha256": "12cec7416c9de85c2093abb1ba52a438556739743b0e336cb100b72eee08dcd1"},
+      {"participantId": 4, "oldEpoch": 2, "newEpoch": 3, "oldSha256": "d209560b5b11719d8d136c46e9714f9761dd19cfdaab17ee01ac3586accb4729", "newSha256": "69dc086e440d142a0110220d7623ea3d800fcd60ccad3ba5b9c8a9af9d0de3b4"}
+    ],
+    "predecessorsPreservedCreateOnce": true,
+    "authorityRestartedOnly": true,
+    "coordinatorAndSiteRemainedActive": true
+  },
+  "authorityAcceptance": {
+    "listener": "127.0.0.1:8181",
+    "active": true,
+    "nRestarts": 0,
+    "queuePending": 0,
+    "quarantined": false,
+    "consensusAvailable": true,
+    "mode": "normal",
+    "samples": [
+      {"http": 503, "height": 61333, "newOperationsReady": false, "reason": "warming"},
+      {"http": 200, "height": 61335, "newOperationsReady": true, "reason": "ready"},
+      {"http": 200, "height": 61339, "newOperationsReady": true, "reason": "ready"}
+    ]
+  },
+  "localVerification": {
+    "recoveryToolFocusedTests": {"passed": 87, "failed": 0},
+    "r13GuardFocusedTests": {"passed": 3, "failed": 0},
+    "r13GuardFixture": "PASS",
+    "pythonCompile": "PASS",
+    "publicEnrollmentSuccessorRuntimeValidation": "PASS",
+    "fullTypecheckQualification": "The repository-wide TypeScript check still reports pre-existing unrelated errors; the public enrollment validator executed successfully against the eight actual public records."
+  },
+  "security": {
+    "privateKeyOrShareContentReadCopiedHashedOrExported": false,
+    "credentialOrWalletMaterialRead": false,
+    "firewallHttpsMintCometOrFipsChanged": false,
+    "realFundsInScope": false,
+    "oldBidRetried": false
+  },
+  "nextStep": "Report this completed recovery before any fresh bid. A fresh auction and new fake-money operation are a separate live verification action; never retry the rejected operation."
+}
