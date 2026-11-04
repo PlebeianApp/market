@@ -13,7 +13,7 @@ async function settle() { for (let i = 0; i < 12; i++) await pause(); }
 function deferred() { let resolve; const promise = new Promise(yes => { resolve = yes; }); return { promise, resolve }; }
 async function fixture(ready = true) {
   const nodes = new Map(), timers = new Map(), intervals = [], requests = [];
-  let now = 1800000000000, timerId = 0, available = ready, failConfig = false, gate = null, connected = 0, imports = 0, demoCreated = 0;
+  let now = 1800000000000, timerId = 0, available = ready, failConfig = false, gate = null, connected = 0, imports = 0, demoCreated = 0, publicKeyReads = 0, controllerSigner = null;
   const pins = { schema: 'PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V1', deployment_id: 'deployment-one', auth_network_id: 'chain', chain_id: 'chain',
     genesis_sha256: 'a'.repeat(64), cashu_mint_url: 'https://mint.example', committee_keyset_id: 'keyset', committee_keyset_version: '1',
     dkg_run_id: 'dkg', committee_public_key: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
@@ -21,14 +21,14 @@ async function fixture(ready = true) {
   const configChange = {}, get = id => { if (!nodes.has(id)) nodes.set(id, new Element()); return nodes.get(id); };
   const config = () => ({ ...pins, fake_funding_policy: { digest: pins.fake_funding_policy_digest }, threshold_custody: true,
     browser_threshold_wallet_ready: available, browser_threshold_admission_ready: available, recovery_only: false, ...configChange });
-  const actor = 'a'.repeat(64), controller = { actor: async () => actor, pendingFakeFunding: async () => null,
+  const actor = 'a'.repeat(64), controller = { actor: async () => controllerSigner ? controllerSigner.getPublicKey() : actor, pendingFakeFunding: async () => null,
     importAvailable: async () => { imports++; return { refunds: 0, winnerPayments: 0 }; },
     balance: async () => ({ available: 0, reserved: 0, locked: 0, pending: 0, unresolved: 0 }),
     serviceSellerPlans: async () => ({ registered: 0, operations: [] }) };
   const fakeDate = class extends Date { static now() { return now; } };
   const context = vm.createContext({
-    window: { plebeianCreateDemoSigner: () => { demoCreated++; return { getPublicKey: async () => actor, signEvent: async () => { throw new Error("unused"); } }; }, nostr: { getPublicKey: async () => actor, signEvent: async () => { throw new Error('unused'); } },
-      plebeianFridayR20Connect: async ({ pins: captured }) => { connected++; assert.equal(captured.environmentId, pins.deployment_id); return controller; } },
+    window: { plebeianCreateDemoSigner: () => { demoCreated++; return { getPublicKey: async () => actor, signEvent: async () => { throw new Error("unused"); } }; }, nostr: { getPublicKey: async () => { publicKeyReads++; return actor; }, signEvent: async () => { throw new Error('unused'); } },
+      plebeianFridayR20Connect: async ({ pins: captured, signer }) => { connected++; controllerSigner = signer; assert.equal(captured.environmentId, pins.deployment_id); return controller; } },
     document: { getElementById: get, createElement: () => new Element(), createTextNode: text => ({ textContent: text }) },
     fetch: async url => {
       requests.push(url);
@@ -49,7 +49,7 @@ async function fixture(ready = true) {
   await settle();
   return { run, get, pins, configChange, requests, timers, intervals,
     available(value) { available = value; }, failure(value) { failConfig = value; }, hold(value) { gate = value; },
-    connected: () => connected, imports: () => imports, demoCreated: () => demoCreated,
+    connected: () => connected, imports: () => imports, demoCreated: () => demoCreated, publicKeyReads: () => publicKeyReads,
     async advance(ms = 4000) { now += ms; for (const [id, timer] of [...timers]) if (timer.at <= now) { timers.delete(id); timer.run(); } await settle(); },
     async refresh() { await run('refresh()'); await settle(); },
   };
@@ -61,6 +61,12 @@ test('cold warmup loads independent pins, then ordinary login works after restor
   await assert.rejects(() => f.run('connect()'), /not active/); assert.equal(f.connected(), 0);
   f.available(true); await f.advance(); await f.refresh(); await f.run('connect()');
   assert.equal(f.connected(), 1); assert.equal(f.get('faucet').disabled, false);
+});
+test('NIP-07 public-key consent is cached for the connected session instead of repeated on refresh', async () => {
+  const f = await fixture(); await f.run('connect()'); const reads = f.publicKeyReads();
+  assert.equal(reads, 1);
+  for (let index = 0; index < 4; index += 1) { await f.advance(); await f.refresh(); }
+  assert.equal(f.publicKeyReads(), reads);
 });
 test('ready -> degraded -> recovered updates controls and retains safe imports on the existing controller', async () => {
   const f = await fixture(); await f.run('connect()'); const imports = f.imports();

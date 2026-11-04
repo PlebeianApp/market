@@ -122,11 +122,19 @@ async function installSigner(signer, mode) {
   await refreshReadiness(); requireR20Ready();
   disconnect();
   const generation = state.generation;
-  state.signer = signer; state.identityMode = mode;
   const actor = await signer.getPublicKey();
-  const friday = await connectFridayController(signer);
+  // NIP-07 getPublicKey is an explicit permission boundary in common browser
+  // extensions. Consent once for this connected session instead of prompting
+  // again on every four-second wallet refresh. Every signed event still goes
+  // to the extension and the browser controller verifies its exact actor and
+  // immutable fields, so an account change remains fail-closed on mutation.
+  const sessionSigner = Object.freeze({
+    getPublicKey: async () => actor,
+    signEvent: (event) => signer.signEvent(event),
+  });
+  const friday = await connectFridayController(sessionSigner);
   if (generation !== state.generation) return;
-  state.actor = actor; state.friday = friday; state.wallet = null;
+  state.actor = actor; state.signer = sessionSigner; state.identityMode = mode; state.friday = friday; state.wallet = null;
   byId("actor").textContent = `${mode} · ${short(actor)}`;
   const pending = await friday.pendingFakeFunding();
   if (generation !== state.generation) return;
