@@ -1,0 +1,141 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_SIGNER_NO_EFFECT_RECOVERY_PLAN_V1",
+  "status": "READ_ONLY_PLAN_NOT_EXECUTION_AUTHORITY",
+  "observedAt": "2026-11-04T17:29:13Z",
+  "sourceCommit": "9945ee93cbd7cf35c4a4bb184eb9bb341bc4e7fb",
+  "scope": {
+    "valueProfile": "FAKE_MONEY_ONLY",
+    "affectedValidators": [1, 2, 3],
+    "unaffectedValidator": 4,
+    "failedOperationDisposition": "REJECT_NO_EFFECT_DO_NOT_RETRY_EXACT_OPERATION",
+    "forbidden": [
+      "read, copy, hash, rotate, or replace a DKG share or validator key",
+      "delete or silently reset a pending journal row",
+      "repeat the failed bid or request an ad-hoc threshold signature",
+      "start a signer before its journal and independent anchor agree",
+      "restore only one member of an anchored database pair",
+      "change validator, Comet, FIPS, firewall, mint, HTTPS, or real-money state"
+    ]
+  },
+  "readOnlyEvidence": {
+    "common": {
+      "signerService": "active/running with NRestarts=0",
+      "scratchParent": "absent",
+      "rustAdmissionEntries": 0,
+      "rustAnchorRevision": 0,
+      "fundingAbortRows": 0,
+      "admissionProofClaims": 3
+    },
+    "validator1": {
+      "admissionRows": {"complete": 1, "pending": 1},
+      "admissionRevision": 4,
+      "admissionAnchorRevision": 4,
+      "quarantine": "exact 28-byte SIGNER_LOCAL_UNCERTAINTY_V2 marker, uid 999 gid 988 mode 0600"
+    },
+    "validator2": {
+      "admissionRows": {"complete": 1, "pending": 1},
+      "admissionRevision": 4,
+      "admissionAnchorRevision": 4,
+      "quarantine": "exact 28-byte SIGNER_LOCAL_UNCERTAINTY_V2 marker, uid 999 gid 988 mode 0600"
+    },
+    "validator3": {
+      "admissionRows": {"complete": 1, "pending": 1},
+      "admissionRevision": 4,
+      "admissionAnchorRevision": 4,
+      "quarantine": "exact 28-byte SIGNER_LOCAL_UNCERTAINTY_V2 marker, uid 999 gid 988 mode 0600"
+    },
+    "validator4": {
+      "admissionRows": {"complete": 1, "pending": 0},
+      "admissionRevision": 3,
+      "admissionAnchorRevision": 3,
+      "quarantine": "absent"
+    },
+    "causalSourceChecks": [
+      "the signer contract binds effect scratch to separated/node-N/scratch",
+      "the effect path calls mkdtemp below that parent before invoking the Rust participant",
+      "mkdtemp cannot create a missing parent",
+      "an effect-path exception writes the exact persistent uncertainty marker",
+      "a pending admission row prevents signer readiness after restart",
+      "commit 9945ee93 provisions and validates a runtime-owned 0700 scratch parent before RPC acceptance"
+    ],
+    "conclusion": "The selected signers crossed the durable RPC claim boundary but did not cross the Rust admission commitment boundary. No nonce, commitment, threshold signature, bid, or Comet broadcast was produced."
+  },
+  "requiredRecoveryImplementation": {
+    "state": "NOT_YET_IMPLEMENTED_OR_AUTHORIZED",
+    "properties": [
+      "offline-only; all four signer services stopped and listeners absent",
+      "accept only the exact V1-V3 shape recorded above and refuse every mismatch",
+      "require rustAnchorRevision=0 and zero admission-* Rust entries before and after transition",
+      "transition each exact pending row to an explicit rejected_no_effect local-prerequisite result; never delete it",
+      "advance admission_safety_metadata and disposition_admission_safety_anchor together through the existing no-effect witness machinery",
+      "preserve the failed request as a cached rejection so the exact operation cannot be retried",
+      "move, rather than destroy, each exact quarantine marker into its root-only on-host rollback directory only after the anchored transition verifies",
+      "use the startup fix to create and validate a uid-999 mode-0700 scratch parent on all four validators before accepting RPCs"
+    ]
+  },
+  "executionPhases": [
+    {
+      "phase": 1,
+      "name": "freeze_and_recheck",
+      "actions": [
+        "stop V1-V4 signer services under a separately approved bounded action",
+        "verify no signer listener or signer process remains",
+        "repeat every count, revision, marker, scratch, and Rust-entry check from readOnlyEvidence",
+        "stop without mutation on any mismatch"
+      ]
+    },
+    {
+      "phase": 2,
+      "name": "on_host_rollback_copies",
+      "actions": [
+        "create one root-owned 0700 create-once recovery directory on each affected validator",
+        "while stopped, checkpoint and copy admission-safety.sqlite3 and signer-safety-anchor.sqlite3 with SQLite-aware tooling",
+        "copy the exact quarantine marker and record metadata only",
+        "keep every backup on its source host; do not export or hash private shares, proofs, or authentication material",
+        "verify each backup opens read-only and reproduces the pre-recovery aggregate counts and revisions"
+      ]
+    },
+    {
+      "phase": 3,
+      "name": "install_prevention_and_reconcile",
+      "actions": [
+        "install a digest-pinned successor signer built from sourceCommit without replacing predecessor artifacts",
+        "run the tested offline no-effect recovery once on V1, then V2, then V3",
+        "after each host, verify rejected_no_effect=1, pending=0, complete=1, matching admission/anchor revisions, rustAnchorRevision=0, and zero admission-* Rust entries",
+        "on V4, change no journal or quarantine state"
+      ]
+    },
+    {
+      "phase": 4,
+      "name": "bounded_restart",
+      "actions": [
+        "start signers sequentially and verify each FIPS-only listener, signed health, restart epoch advance, NRestarts=0, and private 0700 scratch parent",
+        "verify the authority returns ready with all four health anchors and no pending coordinator work",
+        "do not retry the failed operation"
+      ]
+    },
+    {
+      "phase": 5,
+      "name": "fresh_demo_verification",
+      "actions": [
+        "use a fresh auction, fresh fake-money wallet proofs, and a new funding operation",
+        "verify the first bid creates exactly one completed three-participant admission session and committee signature",
+        "then verify outbid refund and settlement without reusing the rejected operation"
+      ]
+    }
+  ],
+  "rollback": {
+    "beforeAnyJournalTransition": "No rollback is needed; leave signers stopped and preserve evidence.",
+    "afterAHostTransitionBeforeRestart": "Keep every signer stopped. Restore that host's admission database and independent anchor together from the same stopped-state backup, restore its exact quarantine marker, and rerun read-only aggregate checks. Never restore one file alone.",
+    "afterAnySignerRestartOrNewOperation": "Do not restore old files. Stop only services started by the action, preserve current state, and investigate as a new incident."
+  },
+  "acceptance": [
+    "V1-V3 retain one explicit rejected_no_effect record and no pending record",
+    "V4 journal remains unchanged",
+    "all four rustAnchorRevision values remain 0 before the fresh test",
+    "all four scratch parents are runtime-owned mode 0700",
+    "all four signers pass health over FIPS only",
+    "the old operation is rejected on replay without another Rust call",
+    "a new fake-money operation completes threshold admission exactly once"
+  ]
+}
