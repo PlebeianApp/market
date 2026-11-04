@@ -1,0 +1,109 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_AGGREGATE_DIAG_R17_ACTUAL_V1",
+  "status": "DEPLOYMENT_COMPLETE_FRESH_LIVE_BID_REJECTED_BEFORE_COMMIT",
+  "completedAtUtc": "2026-11-04T20:40:07Z",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "sourceCommit": "c8bce65bb10872910ee399305630f586a20f3be7",
+  "installedRelease": {
+    "root": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-aggregate-diag-r17",
+    "artifacts": {
+      "plebeian-friday-authority": {
+        "bytes": 100435940,
+        "sha256": "5bbfc6319a7e1d0f603187d61bfa1a8e69ee0b0e2f978fb8e98f14433869dbb0"
+      },
+      "verify-friday-separated-target.py": {
+        "bytes": 3416,
+        "sha256": "54e74bb7b56a3ed1434561d8c071a5e5423649d4648c44bc6f6589acde823559"
+      },
+      "pinnedR16Participant": {
+        "bytes": 2411344,
+        "sha256": "9158e90fe9807f65fadc121d5296cf29d4328928fd7bf3cb5df016202d97b993"
+      }
+    },
+    "authorityConfigSha256": "141603382ea90a7079402bc74fbf28e26cc71cddae1d1b55a118268dcdf7e435",
+    "activationUnitSha256": "c352680db90adb0e20dca6988feb6fdf3bf843f29680d79fd5e706eecaa02015",
+    "finalUnitSha256": "23a76cc6939b6dc0c59d8fc5c22993a276f4465eee2424257350cfce6a4f3d1b",
+    "predecessorUnit": {
+      "path": "/etc/systemd/system/plebeian-friday-authority.pre-r17-e10272a46548.service",
+      "sha256": "e10272a465481ac98f3706df341ea766b82f2a9975fdad24bbcbd1ce6faa6abb"
+    },
+    "predecessorsPreservedCreateOnce": true
+  },
+  "activation": {
+    "singleAuthorityRestart": true,
+    "initialMainPid": 51101,
+    "finalMainPid": 53088,
+    "automaticRestartDisabledDuringFirstStart": true,
+    "normalRestartPolicyRestoredWithoutRestart": true,
+    "postActivation": {
+      "active": true,
+      "subState": "running",
+      "nRestarts": 0,
+      "listener": "127.0.0.1:8181",
+      "readinessHeights": [67902, 67904],
+      "warmReadinessObserved": true
+    }
+  },
+  "freshLiveBrowserAcceptance": {
+    "status": "FAIL_FIRST_BID_HTTP_422",
+    "freshAuctionId": "auction-1793824235420",
+    "freshAuctionTitle": "Live five-member test 1793824234585",
+    "freshOperationId": "52fe6351ca55a302d102a55cba460580b42dcc23a61bfbaa4fbcff56bb23deb6",
+    "freshSessionId": "536e39d7cc7cba6594adbb7f1ab18ba5ec7cb1bdf24da1c7b3ef69c61a2c5633",
+    "passed": [
+      "five distinct demo identities signed in",
+      "five fake wallets funded with 10000 test sats each",
+      "fresh auction committed",
+      "seller plan approvals enabled",
+      "V1-V3 policy, commitment and share RPCs completed",
+      "the public three-share transcript independently aggregated and verified against the accepted public package"
+    ],
+    "failed": "the first 100-test-sat bid admission returned HTTP 422 before Comet commit",
+    "admissionSessionCompleted": false,
+    "committeeSignatureStoredByAuthority": false,
+    "committedBidPresent": false,
+    "observedAuctionState": {
+      "status": "open",
+      "highBid": 0,
+      "currentBid": null
+    },
+    "failedOperationRetried": false,
+    "mutationOutcomeUncertain": false,
+    "browserRecoveryProfilePreservedPrivately": true
+  },
+  "signerSafety": {
+    "participants": [1, 2, 3],
+    "revisionEach": 26,
+    "statusCountsEach": {
+      "complete": 10,
+      "rejectedNoEffect": 1,
+      "pending": 0
+    },
+    "latestCompleteMethodsForFreshOperation": ["commit", "share"],
+    "allThreeSignersActive": true,
+    "nRestartsEach": 0
+  },
+  "verification": {
+    "targetedTypeScriptDiagnosticTests": {
+      "passed": 8,
+      "failed": 0
+    },
+    "guardPythonCompilation": "PASS",
+    "freshPublicTranscript": {
+      "status": "PASS",
+      "participantIds": [1, 2, 3],
+      "signatureSha256": "46a7999d8351cafe9d952beb75f7680bfc8e75889c4b590e0c17876a241b53f1",
+      "privateKeyOrSecretShareRead": false
+    },
+    "qualification": "The sanitized R17 aggregate-child diagnostic was not observed in the isolated authority journal. The public transcript proves the three returned shares form a valid committee signature, but does not by itself distinguish an unobserved child invocation failure from a post-aggregate adapter rejection. A subsequent diagnostic must categorize the post-command validation and durable completion boundary before another fresh operation."
+  },
+  "security": {
+    "realFundsInScope": false,
+    "credentialsPrintedOrPublished": false,
+    "validatorKeysOrSecretSharesReadCopiedHashedOrExported": false,
+    "privateWalletProofsOrAuthorityPrivateDatabaseRead": false,
+    "firewallHttpsMintCometOrValidatorConfigurationChanged": false,
+    "failedOperationRetried": false
+  },
+  "nextStep": "Prepare and test a bounded privacy-safe post-aggregate stage diagnostic locally. Do not deploy it or run another fake-sat operation without renewed live-action authority, and never retry operation 52fe6351ca55a302d102a55cba460580b42dcc23a61bfbaa4fbcff56bb23deb6."
+}

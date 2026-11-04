@@ -1,0 +1,36 @@
+[Unit]
+Description=Plebeian Friday side-quest authenticated funding authority R17 diagnostic
+Wants=plebeian-friday-observer.service plebeian-friday-coordinator.service
+After=plebeian-friday-observer.service plebeian-friday-coordinator.service
+ConditionPathExists=/var/lib/plebeian-auctions-friday/coordinator-v3/runtime/coordinator-rpc-identity.key
+ConditionPathExists=/var/lib/plebeian-auctions-friday-anchor-separated/coordinator.sqlite3
+ConditionPathExists=/var/lib/plebeian-auctions-friday-anchor-separated/funding-replay.sqlite3
+ConditionPathExists=/var/lib/plebeian-auctions-friday-anchor-separated/funding-broadcast.sqlite3
+ConditionPathExists=/var/lib/plebeian-auctions-friday-anchor-separated/funding-abort.sqlite3
+ConditionPathExists=/var/lib/plebeian-auctions-friday-anchor-separated/seller-plan.sqlite3
+
+[Service]
+Type=simple
+User=plebeian-friday
+Group=plebeian-friday-public
+Slice=plebeian-friday.slice
+UMask=0077
+EnvironmentFile=/etc/plebeian-auctions-friday/friday.env
+ExecStartPre=/usr/bin/python3 -I -S -B /opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-aggregate-diag-r17/bin/verify-friday-separated-target.py --environment /etc/plebeian-auctions-friday/friday.env --application ${FRIDAY_APPLICATION} --service plebeian-friday-authority.service
+ExecStart=/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-aggregate-diag-r17/bin/plebeian-friday-authority serve --application ${FRIDAY_APPLICATION}
+Restart=no
+RestartSec=5s
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/plebeian-auctions-friday/coordinator-v3/runtime /var/lib/plebeian-auctions-friday-anchor-separated
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=448M
+TasksMax=192
+LimitNOFILE=8192
+
+LogNamespace=plebeian-friday-separated
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200
