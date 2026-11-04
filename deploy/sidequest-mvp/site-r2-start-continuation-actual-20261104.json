@@ -1,0 +1,72 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_SITE_R2_START_CONTINUATION_ACTUAL_V2",
+  "status": "SITE_ACTIVE_LOOPBACK_CORRECTED_READ_ONLY_ACCEPTANCE_PASSED",
+  "completedAtUtc": "2026-11-04T00:47:47Z",
+  "planSha256": "8ee9fff2f90bcf324c9e5dfa9ecf602b3f07803b0df0242b4413b67496f3bdf6",
+  "controller": {
+    "path": "/tmp/run_site_r2_start_continuation.py",
+    "sha256": "d7b1eee8a3127eb53a3e84a93e83b92024634fcfa130110d4576bfc0eddd7c63"
+  },
+  "remoteAction": {
+    "path": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-site-r2-start-continuation-v2",
+    "actionBytes": 249,
+    "actionSha256": "ca74d85c88dd927a66850c5aea7490eed4cb286985c5ca30fe5ffa5e70d782ba",
+    "actualBytes": 3304,
+    "actualSha256": "3fa4529de386c7c6fe98b6c5592b6e36f8336157329b7425bcb89194bfda900c"
+  },
+  "site": {
+    "service": "active-running",
+    "result": "success",
+    "restartPolicy": "on-failure",
+    "restarts": 0,
+    "listeners": ["127.0.0.1:8180", "127.0.0.1:8181"],
+    "public80or443Listener": false,
+    "rootSha256": "31c948019776a3b71870308630881753d228b0a2ca6274bcc9a40fcefee8a006",
+    "configSha256": "4b2b718f93a443a7da25a38239540bf77b272f0fb7e83f4076929a34bc9e646a",
+    "browserPinsSha256": "6cb24447f432b5ebc93d165e4d81a29ceb9227ca41d8de8c9f588b57f7f6bb36",
+    "stateSha256": "04c0638e2fa196184fddf38dddea3b99408aaac64bc07306181bc9406dab47ad",
+    "validatorsSha256": "fab8dc94fbeaac6e5a15d47d4adebdb3214da99f5910e5e90e57ccfae0180961"
+  },
+  "readiness": {
+    "browserThresholdAdmissionReady": true,
+    "browserThresholdWalletReady": true,
+    "authorityStatus": "ready",
+    "authorityHeightAfter": 7590,
+    "validatorCount": 4,
+    "validatorCommonHeight": 7588,
+    "commitSignaturesEach": 4,
+    "catchingUp": "omitted_or_false",
+    "validatorErrors": 0
+  },
+  "state": {
+    "chainAuctions": 0,
+    "chainBids": 0,
+    "chainOperations": 0,
+    "coordinatorQuickCheck": "ok",
+    "coordinatorRevision": 0,
+    "coordinatorQueuedOperations": 0
+  },
+  "legacyNamespace": {
+    "path": "/test-mint",
+    "status": 404,
+    "contentType": "text/plain; charset=utf-8",
+    "responseBytes": 19,
+    "responseSha256": "b16e15764b8bc06c5c3f9f19bc8b99fa48e7894aa5a6ccdad65da49bbf564793",
+    "qualification": "This is the intentionally non-operational legacy-note namespace; real Friday fake-Cashu funding uses the separately pinned HTTPS mint identity."
+  },
+  "clock": {
+    "postcheckSystemToRtcAbsoluteDeltaMs": 378,
+    "qualification": "systemd-timesyncd remains unsynchronized; RTC agreement supports only the current fake-money MVP window, not production-money readiness"
+  },
+  "effects": {
+    "siteStarted": true,
+    "loopbackOnly": true,
+    "publicPortsOpened": false,
+    "nginxOrHttpsChanged": false,
+    "thresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "credentialCreated": false,
+    "firewallOrNtpChanged": false
+  },
+  "nextStep": "Prepare separately authorized and verified HTTPS reverse-proxy exposure, then run the actual five-user NIP-07 fake-sat auction rehearsal."
+}
