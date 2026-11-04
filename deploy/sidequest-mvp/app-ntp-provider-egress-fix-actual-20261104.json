@@ -1,0 +1,154 @@
+{
+  "schema": "PLEBEIAN_APP_NTP_PROVIDER_EGRESS_FIX_ACTUAL_V1",
+  "status": "COMPLETE_APP_NTP_SYNCHRONIZED_PROVIDER_DEFAULT_DENY_PRESERVED_MVP_HEALTHY",
+  "completedAtUtc": "2026-11-04T02:07:09Z",
+  "plan": {
+    "path": "deploy/sidequest-mvp/app-ntp-provider-egress-fix-plan-20261104.json",
+    "sha256": "996368f73cced1563c2fef982bf334c18654d0212fd475e74cb9bf1ae6c8b419",
+    "commit": "ca04b28"
+  },
+  "provider": {
+    "surface": "Authenticated Akamai Cloud Manager visible UI",
+    "firewallId": 224154258,
+    "firewallLabel": "plebeian-fixture-disposable-fw",
+    "attachmentReadback": {
+      "count": 1,
+      "linodeId": 109290386,
+      "linodeLabel": "plebeian-fixture-disposable-20261026",
+      "networkInterfaceId": 1112585
+    },
+    "inbound": {
+      "default": "Drop",
+      "orderedRuleLabels": [
+        "ssh-diego",
+        "app-https-ipv4",
+        "app-fips-validators"
+      ]
+    },
+    "outbound": {
+      "default": "Drop",
+      "orderedRuleLabels": [
+        "app-fips-validators",
+        "app-dns-resolvers-udp",
+        "app-dns-resolvers-tcp",
+        "app-https-egress-ipv4",
+        "app-ntp-egress"
+      ],
+      "newRule": {
+        "label": "app-ntp-egress",
+        "description": "Permit APP system clock synchronization with rotating IPv4 NTP servers",
+        "action": "Accept",
+        "protocol": "UDP",
+        "ports": "123",
+        "destinations": "All IPv4"
+      }
+    },
+    "save": "ONE_SAVE_SETTLED_POSTSAVE_CONTROLS_DISABLED_EXACT_READBACK_PASSED",
+    "otherRuleOrDefaultChangeObserved": false
+  },
+  "precheck": {
+    "systemdTimesyncd": "active-running-NRestarts-0",
+    "ntpSynchronized": false,
+    "ntpPacketCount": 0,
+    "appAuctionServices": "six-active-running-NRestarts-0",
+    "authority": {
+      "httpStatus": 200,
+      "newOperationsReady": true,
+      "readinessReason": "ready",
+      "queuePending": 0,
+      "lastCommittedHeight": 11523
+    },
+    "chainState": {
+      "height": 11525,
+      "issued": 0,
+      "notes": 0,
+      "auctions": 0,
+      "bids": 0,
+      "locks": 0,
+      "operations": 0,
+      "cashuLocks": 0,
+      "custodyReservations": 0,
+      "integratedFundings": 0,
+      "integratedProofUses": 0,
+      "integratedDisplacements": 0,
+      "fundingLifecycles": 0,
+      "fundingProofOwners": 0
+    }
+  },
+  "timeService": {
+    "mutation": "One systemctl restart systemd-timesyncd.service",
+    "activeEnterTimestampUtc": "2026-11-04T02:04:35Z",
+    "activeState": "active",
+    "subState": "running",
+    "nRestarts": 0,
+    "synchronizedAtUtc": "2026-11-04T02:05:08Z",
+    "ntpSynchronized": true,
+    "server": "185.125.190.57",
+    "serverName": "ntp.ubuntu.com",
+    "protocolVersion": 4,
+    "stratum": 2,
+    "rootDistanceMs": 3.989,
+    "reportedInitialOffsetSeconds": 1.251388,
+    "delayMs": 11.81,
+    "packetCount": 1,
+    "pollIntervalSeconds": 32
+  },
+  "clockVerification": {
+    "method": "Three concurrent midpoint SSH samples of APP and V1-V4; comparison is APP minus the median validator offset",
+    "requiredAbsoluteDifferenceMs": 500,
+    "samples": [
+      {
+        "appMidpointOffsetMs": 1241.5,
+        "validatorMedianOffsetMs": 1330.0,
+        "appMinusValidatorMedianMs": -88.5,
+        "allFiveNtpSynchronized": true
+      },
+      {
+        "appMidpointOffsetMs": 1457.0,
+        "validatorMedianOffsetMs": 1417.25,
+        "appMinusValidatorMedianMs": 39.75,
+        "allFiveNtpSynchronized": true
+      },
+      {
+        "appMidpointOffsetMs": 1634.5,
+        "validatorMedianOffsetMs": 1625.25,
+        "appMinusValidatorMedianMs": 9.25,
+        "allFiveNtpSynchronized": true
+      }
+    ],
+    "passed": true
+  },
+  "deploymentVerification": {
+    "appServices": {
+      "plebeian-friday-fips.service": "active-running-NRestarts-0",
+      "plebeian-friday-mint.service": "active-running-NRestarts-0",
+      "plebeian-friday-observer.service": "active-running-NRestarts-0",
+      "plebeian-friday-coordinator.service": "active-running-NRestarts-0",
+      "plebeian-friday-authority.service": "active-running-NRestarts-0",
+      "plebeian-friday-site.service": "active-running-NRestarts-0"
+    },
+    "validatorServices": "V1-V4 FIPS, Comet validator and FROST signer active-running-NRestarts-0",
+    "newPublicListenerObserved": false,
+    "authorityReadyHeights": [
+      11647,
+      11649,
+      11653
+    ],
+    "authorityReadyAllSamples": true,
+    "authorityQueuePending": 0,
+    "browserThresholdAdmissionReady": true,
+    "browserThresholdWalletReady": true,
+    "recoveryOnly": false
+  },
+  "effects": {
+    "providerFirewallChanged": true,
+    "systemdTimesyncdRestartedOnce": true,
+    "appOrValidatorServiceRestarted": false,
+    "applicationOrValidatorConfigChanged": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "thresholdSignatureRequested": false,
+    "credentialOrPrivateKeyAccessed": false,
+    "httpsOrPublicSiteExposureChanged": false
+  },
+  "qualification": "The durable NTP path is restored over IPv4. The new rule permits outbound UDP destination port 123 to any IPv4 address because Cloud Firewall cannot track the rotating ntp.ubuntu.com hostname. Default-deny outbound policy and unsolicited inbound blocking remain in effect."
+}
