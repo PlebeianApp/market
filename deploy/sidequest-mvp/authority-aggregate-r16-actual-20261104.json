@@ -87,6 +87,14 @@
       "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
       "deserializesAsExactThreeOfFour": true,
       "committeePublicKey": "026de1d6cb863ef79f5eb6f95298a7740b8bb27ab666cf133a2dc9e089a222155b"
+    },
+    "freshPublicTranscript": {
+      "status": "PASS",
+      "participantIds": [1, 2, 3],
+      "operationId": "84223f2a243201c1da6e5f22c21d73970c34669382d6af1379d22f5cdaba0aaf",
+      "sessionId": "5500edcb7312b23744cbab087491649f26268f1f87b5d18a93c63b51f8d61d54",
+      "signatureSha256": "61f2175150b40ffed5e604c0bd4a3502d3d749811724d63c5189caee92383f38",
+      "qualification": "A read-only local verifier reconstructed only the public policy evidence, nonce commitments and signature shares from V1-V3 and successfully aggregated and verified them against the accepted public package. The remaining live failure is in the authority child invocation or post-aggregate adapter path, not FROST share validity."
     }
   },
   "security": {
@@ -97,5 +105,5 @@
     "firewallHttpsMintCometOrValidatorConfigurationChanged": false,
     "oldRejectedOperationRetried": false
   },
-  "nextStep": "Add a bounded sanitized aggregate diagnostic at the authority process boundary, restart only the authority under a new create-once successor, and use another fresh fake-sat operation. Do not retry operation 84223f2a243201c1da6e5f22c21d73970c34669382d6af1379d22f5cdaba0aaf."
+  "nextStep": "Deploy the prepared bounded sanitized aggregate diagnostic at the authority process boundary under a new create-once successor, restart only the authority, and use another fresh fake-sat operation. Do not retry operation 84223f2a243201c1da6e5f22c21d73970c34669382d6af1379d22f5cdaba0aaf."
 }
