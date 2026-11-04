@@ -1,0 +1,101 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_AGGREGATE_R16_ACTUAL_V1",
+  "status": "DEPLOYMENT_COMPLETE_FRESH_LIVE_BID_STILL_REJECTED",
+  "completedAtUtc": "2026-11-04T19:21:34Z",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "sourceCommit": "28470305689d44662e6de1e6add771bfd6e1001b",
+  "installedRelease": {
+    "root": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-aggregate-r16",
+    "artifacts": {
+      "plebeian-friday-authority": {
+        "bytes": 100435438,
+        "sha256": "1c9f2e05aa2fa4bca71f70122330abb894bcd5c4278eda50b21e77ad43bf4f82"
+      },
+      "coco-demo-frost-participant-3of4": {
+        "bytes": 2411344,
+        "sha256": "9158e90fe9807f65fadc121d5296cf29d4328928fd7bf3cb5df016202d97b993"
+      },
+      "verify-friday-separated-target.py": {
+        "bytes": 4217,
+        "sha256": "9ef1041d1fd6e0ac2e05d3d890211759a74a7eddf2d5d1e60ff292245de28e65"
+      }
+    },
+    "authorityConfigSha256": "141603382ea90a7079402bc74fbf28e26cc71cddae1d1b55a118268dcdf7e435",
+    "authorityUnitSha256": "e10272a465481ac98f3706df341ea766b82f2a9975fdad24bbcbd1ce6faa6abb",
+    "predecessorConfigSha256": "9cf014030b9ed39f30631d4c2435f21cf63b115036dfc9f0ac818cec16f7cc26",
+    "predecessorUnitSha256": "f3c6c7035669f2bb25594a7fa649f2f5f84356baeefa232a488f90004ca3a670",
+    "predecessorsPreservedCreateOnce": true
+  },
+  "activation": {
+    "controllerSha256": "ea6d63dd0374fbbd911ce97caee69372af10e5fc316748ce4788add0427e5370",
+    "twoPreflightStopsBeforeMutation": [
+      "obsolete APP service names",
+      "obsolete authority readiness path"
+    ],
+    "singleLiveActivation": {
+      "initialMainPid": 48643,
+      "finalMainPid": 51101,
+      "automaticRestartDisabledDuringFirstStart": true,
+      "readinessSamples": 2,
+      "normalRestartPolicyRestoredWithoutRestart": true
+    },
+    "postActivation": {
+      "active": true,
+      "nRestarts": 0,
+      "listener": "127.0.0.1:8181",
+      "quarantined": false,
+      "queuePending": 0,
+      "consensusAvailable": true,
+      "newOperationsReady": true,
+      "readinessReason": "ready",
+      "twoAdvancingHeights": [63775, 63779]
+    }
+  },
+  "freshLiveBrowserAcceptance": {
+    "status": "FAIL_FIRST_BID_HTTP_422",
+    "freshAuctionId": "auction-1793819387568",
+    "freshOperationId": "84223f2a243201c1da6e5f22c21d73970c34669382d6af1379d22f5cdaba0aaf",
+    "freshSessionId": "5500edcb7312b23744cbab087491649f26268f1f87b5d18a93c63b51f8d61d54",
+    "passed": [
+      "five distinct demo identities signed in",
+      "five fake wallets funded with 10000 test sats each",
+      "fresh auction committed",
+      "seller plan approvals enabled",
+      "V1-V3 policy, commitment and share RPCs completed"
+    ],
+    "failed": "first 100-test-sat bid admission returned HTTP 422 before Comet commit",
+    "admissionSessionCompleted": false,
+    "committeeSignaturePresent": false,
+    "committedBidPresent": false,
+    "failedOperationRetried": false,
+    "mutationOutcomeUncertain": false,
+    "signerSafety": {
+      "participants": [1, 2, 3],
+      "statusCountsEach": {"complete": 7, "rejectedNoEffect": 1, "pending": 0},
+      "revisionEach": 19,
+      "allThreeSignersActive": true,
+      "nRestartsEach": 0,
+      "qualification": "The latest V1-V3 commit and share responses belong to the fresh operation. The remaining failure is after share collection and before admission-session completion."
+    }
+  },
+  "verification": {
+    "rustTests": {"passed": 35, "failed": 0},
+    "realEphemeralFourPartyRawPackageAdmission": "PASS",
+    "targetedTypeScriptTests": {"passed": 30, "failed": 0},
+    "actualPublicPackage": {
+      "bytes": 301,
+      "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5",
+      "deserializesAsExactThreeOfFour": true,
+      "committeePublicKey": "026de1d6cb863ef79f5eb6f95298a7740b8bb27ab666cf133a2dc9e089a222155b"
+    }
+  },
+  "security": {
+    "realFundsInScope": false,
+    "credentialsPrintedOrPublished": false,
+    "validatorKeysOrSecretSharesReadCopiedHashedOrExported": false,
+    "privateWalletProofsOrAuthorityPrivateDatabaseRead": false,
+    "firewallHttpsMintCometOrValidatorConfigurationChanged": false,
+    "oldRejectedOperationRetried": false
+  },
+  "nextStep": "Add a bounded sanitized aggregate diagnostic at the authority process boundary, restart only the authority under a new create-once successor, and use another fresh fake-sat operation. Do not retry operation 84223f2a243201c1da6e5f22c21d73970c34669382d6af1379d22f5cdaba0aaf."
+}
