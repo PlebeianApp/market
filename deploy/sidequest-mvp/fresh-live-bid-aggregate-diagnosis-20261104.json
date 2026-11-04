@@ -1,0 +1,65 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_FRESH_LIVE_BID_AGGREGATE_DIAGNOSIS_V1",
+  "status": "ROOT_CAUSE_PROVEN_FIX_TESTED_LOCALLY_NOT_DEPLOYED",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "freshRun": {
+    "auctionId": "auction-1793816725557",
+    "fundingOperationId": "53d32beb233ca4e5e472d27be4dcf691f4af59d1a829bb576ef30e9dd86dfe1d",
+    "fiveDistinctDemoSignIns": true,
+    "fiveFakeFundingsAmountEach": 10000,
+    "sellerApprovalsEnabled": true,
+    "firstBidAmount": 100,
+    "browserResult": "HTTP_422_BEFORE_BID_COMMIT"
+  },
+  "settledOutcome": {
+    "bidCommitted": false,
+    "committeeSignaturePersisted": false,
+    "authorityClaimPresent": false,
+    "coordinatorOperationPresent": false,
+    "admissionSessionParticipantIds": [1, 2, 3],
+    "admissionSessionCompleted": false,
+    "appSignerAnchorMaximumRestartEpoch": 2,
+    "signerRpcEffect": "V1_V3_COMMIT_AND_SHARE_COMPLETED_V4_POLICY_ONLY",
+    "uncertainMutation": false,
+    "oldOperationWillBeRetried": false
+  },
+  "rootCause": {
+    "runtimePublicPackage": {
+      "representation": "RAW_FROST_PUBLIC_KEY_PACKAGE",
+      "bytes": 301,
+      "sha256": "954382a53b3589dc0b6069df298c803d2cebcfdec9502645f3c0264e668bdde5"
+    },
+    "predecessorAggregateContract": "The installed Rust admission-aggregate command calls read_json<FinalPublicPackage> on the separated runtime path before deserializing the package.",
+    "failure": "The exact pinned raw 301-byte package is not the historical DKG JSON envelope, so aggregation stops after the three shares complete and before a committee signature is returned.",
+    "proof": [
+      "The accepted separated runtime binding decodes result.publicKeyPackageHex to 301 bytes with the exact runtime SHA-256.",
+      "The production adapter passes that fixed raw-package path directly to admission-aggregate.",
+      "The predecessor Rust command requires the historical FinalPublicPackage JSON envelope at that argument.",
+      "A real ephemeral four-participant DKG integration test now passes through commit, share and aggregate when the same serialized public package is supplied raw."
+    ]
+  },
+  "localFix": {
+    "behavior": "Accept either the historical JSON envelope or the separated-runtime raw package, require the same pinned serialized-package SHA-256, and then deserialize the exact bytes.",
+    "domains": ["terminal_aggregate", "admission_aggregate", "funding_abort_aggregate"],
+    "successorParticipantBinary": {
+      "path": "dist/sidequest/coco-demo-frost-participant-3of4-aggregate-r16",
+      "bytes": 2411344,
+      "sha256": "9158e90fe9807f65fadc121d5296cf29d4328928fd7bf3cb5df016202d97b993"
+    },
+    "successorAuthorityBinary": {
+      "path": "dist/sidequest/plebeian-friday-authority-aggregate-r16",
+      "bytes": 100435438,
+      "sha256": "1c9f2e05aa2fa4bca71f70122330abb894bcd5c4278eda50b21e77ad43bf4f82"
+    },
+    "successorReleaseRoot": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-aggregate-r16"
+  },
+  "verification": {
+    "rust": "35 passed, 0 failed",
+    "realDkgRawPackageAdmission": "1 passed, 0 failed",
+    "targetedTypeScript": "30 passed, 0 failed after fixture-complete reruns",
+    "releaseBuild": "SUCCESS",
+    "rustfmt": "NOT_AVAILABLE_IN_PINNED_TOOLCHAIN; cargo compilation and git diff check passed"
+  },
+  "liveStateChangedByFixPreparation": false,
+  "nextAction": "Under a new bounded approval, install the create-once R16 two-binary APP release, preserve and replace only the authority config/unit with the new binary hash and path, restart only authority, verify readiness, then use a brand-new auction operation. Do not retry the failed operation."
+}

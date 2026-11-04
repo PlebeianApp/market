@@ -6,6 +6,8 @@ export const SEPARATED_PUBLIC_ORIGIN = 'https://139.162.161.233' as const
 
 export const SEPARATED_RELEASE_ROOT='/opt/plebeian-auctions-friday/releases/separated-deploy-v1' as const
 export const SEPARATED_PARTICIPANT_BINARY=`${SEPARATED_RELEASE_ROOT}/bin/coco-demo-frost-participant-3of4` as const
+export const SEPARATED_AUTHORITY_AGGREGATE_RELEASE_ROOT='/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-aggregate-r16' as const
+export const SEPARATED_AUTHORITY_PARTICIPANT_BINARY=`${SEPARATED_AUTHORITY_AGGREGATE_RELEASE_ROOT}/bin/coco-demo-frost-participant-3of4` as const
 export const SEPARATED_INSPECTOR_BINARY=`${SEPARATED_RELEASE_ROOT}/bin/coco-demo-frost-public-inspect` as const
 export const SEPARATED_EXECUTOR_BINARY=`${SEPARATED_RELEASE_ROOT}/bin/plebeian-friday-terminal-executor` as const
 export const SEPARATED_SUCCESSOR_EXECUTOR_BINARY='/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/plebeian-friday-terminal-executor' as const

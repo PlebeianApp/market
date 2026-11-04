@@ -139,6 +139,14 @@ test('three Rust FROST participants produce an admission signature accepted by t
 
 		const bindingPath = join(dkg.participants[0]!.stateDirectory, 'admission-durable-binding.json')
 		const staleBinding = await readFile(bindingPath)
+		const wrappedPublic = JSON.parse(await readFile(dkg.publicKeyPackagePath, 'utf8')) as { public_key_package_hex: string }
+		const rawPublicPath = join(parent, 'public-key-package.raw')
+		await writeFile(rawPublicPath, hexToBytes(wrappedPublic.public_key_package_hex), { mode: 0o600, flag: 'wx' })
+		const rawPort = createDemoFrostThreshold3AdmissionPort({
+			binaryPath: participantBinary, publicKeyPackagePath: rawPublicPath,
+			scratchParent: parent, participants, selectedParticipantIds: [1, 2, 3],
+			sessions: new DemoAdmissionSqliteSessionStore(sessions),
+		})
 		const signVariant = async (suffix: number) => {
 			const variantTerms: DemoIntegratedFundingReceiptTerms = {
 				...terms, funding_operation_id: `rust-go-funding-${suffix}`,
@@ -148,7 +156,7 @@ test('three Rust FROST participants produce an admission signature accepted by t
 			const variantBundle = demoIntegratedFundingBundleDigest(variantTerms)
 			const variant = prepareDemoIntegratedFundingReceipt(variantTerms, sign(variantBundle, 5))
 			const variantEvidence = [1, 2, 3].map((participantId) => evidenceFor(variant, participantId as 1 | 2 | 3)) as [DemoIntegratedAdmissionPolicyEvidenceV1, DemoIntegratedAdmissionPolicyEvidenceV1, DemoIntegratedAdmissionPolicyEvidenceV1]
-			return port.signExact({
+			return rawPort.signExact({
 				receipt: variant, receiptDigest: demoIntegratedFundingReceiptDigest(variant), bundle: {} as never,
 				nowSeconds: now, dkgBinding: {
 					dkgRunId: dkg.dkgRunId, publicKeyPackageSha256: dkg.publicKeyPackageSha256,

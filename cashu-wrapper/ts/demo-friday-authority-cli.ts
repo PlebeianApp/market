@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { isSeparatedApplication } from './demo-friday-runtime-config'
-import { SEPARATED_PARTICIPANT_BINARY } from './demo-friday-separated-constants'
+import { SEPARATED_AUTHORITY_PARTICIPANT_BINARY } from './demo-friday-separated-constants'
 import { loadSeparatedServiceBinding } from './demo-friday-separated-service'
 import { SEPARATED_INPUT_ROOT } from './demo-friday-separated-profile'
 import { supportedNutNumbers } from './demo-sigall-live-mint'
@@ -130,7 +130,7 @@ type ParticipantId = 1 | 2 | 3 | 4
 export function demoFridayAuthorityParticipantBinary(
 	schema: 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V2' | 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V3' | 'PLEBEIAN_FRIDAY_SEPARATED_APPLICATION_V1',
 ): string {
-	return schema === 'PLEBEIAN_FRIDAY_SEPARATED_APPLICATION_V1' ? SEPARATED_PARTICIPANT_BINARY : schema !== 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V2'
+	return schema === 'PLEBEIAN_FRIDAY_SEPARATED_APPLICATION_V1' ? SEPARATED_AUTHORITY_PARTICIPANT_BINARY : schema !== 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V2'
 		? DEMO_FRIDAY_R20_PARTICIPANT_BINARY : LEGACY_PARTICIPANT_BINARY
 }
 

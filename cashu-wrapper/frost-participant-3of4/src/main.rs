@@ -363,6 +363,43 @@ fn read_json<T: DeserializeOwned>(path: &Path) -> AnyResult<T> {
     Ok(serde_json::from_slice(&bytes)?)
 }
 
+/// Load the committee public package from either the historical DKG JSON
+/// envelope or the separated-runtime raw package.  The runtime binding pins
+/// the SHA-256 of the serialized FROST package, so both representations end
+/// at the same exact byte check before deserialization.
+fn read_public_key_package_bytes(
+    path: &Path,
+    expected_run_id: &str,
+    expected_keyset_id: &str,
+    expected_keyset_version: &str,
+    expected_sha256: &str,
+) -> AnyResult<Vec<u8>> {
+    refuse_symlink(path)?;
+    let encoded = fs::read(path)?;
+    let package = match serde_json::from_slice::<FinalPublicPackage>(&encoded) {
+        Ok(public) => {
+            if public.version != VERSION
+                || public.run_id != expected_run_id
+                || public.committee_keyset_id != expected_keyset_id
+                || public.committee_keyset_version != expected_keyset_version
+                || public.public_key_package_sha256 != expected_sha256
+            {
+                return Err("public key package envelope belongs to another DKG run or committee keyset".into());
+            }
+            let bytes = hex::decode(&public.public_key_package_hex)?;
+            if hex::encode(&bytes) != public.public_key_package_hex {
+                return Err("public key package envelope is not canonical hex".into());
+            }
+            bytes
+        }
+        Err(_) => encoded,
+    };
+    if sha256_hex(&package) != expected_sha256 {
+        return Err("public key package hash mismatch".into());
+    }
+    Ok(package)
+}
+
 fn read_secret(path: &Path) -> AnyResult<Vec<u8>> {
     if !path.is_absolute() {
         return Err(format!("secret path must be absolute: {}", path.display()).into());
@@ -1653,23 +1690,13 @@ fn aggregate(auth_path: &Path, public_key_path: &Path, share_path: &Path, out: &
         return Err("aggregate request authorization binding mismatch".into());
     }
     validate_aggregate_request_roster(&auth, &request)?;
-    let public: FinalPublicPackage = read_json(public_key_path)?;
-    if public.version != VERSION {
-        return Err("wrong public key package version".into());
-    }
-    if public.run_id != auth.dkg_run_id
-        || public.committee_keyset_id != auth.committee_keyset_id
-        || public.committee_keyset_version != auth.committee_keyset_version
-        || public.public_key_package_sha256 != auth.public_key_package_sha256
-    {
-        return Err("aggregate public key belongs to another DKG run or committee keyset".into());
-    }
-    let public_bytes = hex::decode(&public.public_key_package_hex)?;
-    if hex::encode(&public_bytes) != public.public_key_package_hex
-        || sha256_hex(&public_bytes) != public.public_key_package_sha256
-    {
-        return Err("public key package hash or encoding mismatch".into());
-    }
+    let public_bytes = read_public_key_package_bytes(
+        public_key_path,
+        &auth.dkg_run_id,
+        &auth.committee_keyset_id,
+        &auth.committee_keyset_version,
+        &auth.public_key_package_sha256,
+    )?;
     let public_key_package = frost::keys::PublicKeyPackage::deserialize(&public_bytes)?;
     let commitment_bundle = EnvelopeBundle {
         version: VERSION.to_string(),
@@ -1834,6 +1861,67 @@ mod tests {
         fs::set_permissions(&config_path, fs::Permissions::from_mode(0o600)).unwrap();
         fs::set_permissions(&transport_path, fs::Permissions::from_mode(0o600)).unwrap();
         (root, config_path, transport_path)
+    }
+
+    #[test]
+    fn public_package_loader_accepts_pinned_raw_runtime_bytes_and_legacy_envelope() {
+        let root = std::env::temp_dir().join(format!(
+            "friday-public-package-loader-{}-{}",
+            std::process::id(),
+            TEMP_COUNTER.fetch_add(1, Ordering::Relaxed),
+        ));
+        fs::create_dir(&root).unwrap();
+        let path = root.join("participant-1.public.json");
+        let raw = vec![0, 255, 13, 42, 7];
+        let digest = sha256_hex(&raw);
+
+        fs::write(&path, &raw).unwrap();
+        assert_eq!(
+            read_public_key_package_bytes(
+                &path,
+                "dkg-demo-1",
+                "committee-demo",
+                "1",
+                &digest,
+            )
+            .unwrap(),
+            raw,
+        );
+
+        let envelope = FinalPublicPackage {
+            version: VERSION.to_string(),
+            run_id: "dkg-demo-1".to_string(),
+            committee_keyset_id: "committee-demo".to_string(),
+            committee_keyset_version: "1".to_string(),
+            participant_id: 1,
+            public_key_package_hex: hex::encode(&raw),
+            public_key_package_sha256: digest.clone(),
+        };
+        fs::write(&path, encoded_json(&envelope).unwrap()).unwrap();
+        assert_eq!(
+            read_public_key_package_bytes(
+                &path,
+                "dkg-demo-1",
+                "committee-demo",
+                "1",
+                &digest,
+            )
+            .unwrap(),
+            raw,
+        );
+
+        let mut wrong = envelope;
+        wrong.run_id = "another-dkg".to_string();
+        fs::write(&path, encoded_json(&wrong).unwrap()).unwrap();
+        assert!(read_public_key_package_bytes(
+            &path,
+            "dkg-demo-1",
+            "committee-demo",
+            "1",
+            &digest,
+        )
+        .is_err());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

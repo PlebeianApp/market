@@ -156,7 +156,7 @@ class DemoPage {
       fundDisabled: document.querySelector('#faucet')?.disabled ?? true,
       createDisabled: document.querySelector('#create-submit')?.disabled ?? true
     }))()`, (value) => value?.actor.startsWith('tab-local demo signer · ')
-      && value?.fundDisabled === false && value?.createDisabled === false && value?.spendable !== '—',
+      && value?.fundDisabled === false && value?.createDisabled === false,
     60_000, "demo identity connection");
     return connected;
   }
@@ -166,7 +166,12 @@ class DemoPage {
     return { available: parse(value.spendable), locked: parse(value.locked), pending: parse(value.refundable) };
   }
   async fund() {
-    const before = await this.balance();
+    let before = await this.balance();
+    for (let attempt = 0; attempt < 4 && before.available === null; attempt += 1) {
+      await delay(RATE_SETTLE_MS);
+      await this.refreshView();
+      before = await this.balance();
+    }
     if (before.available !== 0 || before.locked !== 0 || before.pending !== 0) {
       throw new Error(`${this.role}: fresh wallet is not empty`);
     }
@@ -199,7 +204,7 @@ class DemoPage {
     await this.evaluate(`(() => {
       document.querySelector('#title').value = ${JSON.stringify(title)};
       document.querySelector('#description').value = 'Five-member live fake-sat browser acceptance';
-      document.querySelector('#duration').value = '240';
+      document.querySelector('#duration').value = '600';
       document.querySelector('#starting').value = '100';
       document.querySelector('#increment').value = '100';
       document.querySelector('#reserve').value = '0';
@@ -349,7 +354,7 @@ async function main() {
       const { browserContextId } = await cdp.send("Target.createBrowserContext", {});
       const opened = await createPage(cdp, browserContextId, roles[index], approved[index]);
       pages.push({ ...opened, contextId: browserContextId, role: roles[index] });
-      await delay(1500);
+      await delay(3000);
     }
     if (new Set(pages.map(({ actor }) => actor)).size !== 5) throw new Error("five browser profiles did not show distinct actor labels");
     report.phases.push({ phase: "five_signins", status: "PASS", actors: pages.map(({ role, actor }) => ({ role, actor })) });
@@ -365,6 +370,10 @@ async function main() {
     report.phases.push({ phase: "auction_created", status: "PASS", auctionId: auction.id, title });
     await delay(RATE_SETTLE_MS);
 
+    await pages[0].page.enableApprovals(title);
+    report.phases.push({ phase: "seller_approvals_enabled", status: "PASS" });
+    await delay(RATE_SETTLE_MS);
+
     for (let index = 0; index < BIDS.length; index += 1) {
       await pages[index + 1].page.bid(title, BIDS[index], pages[0].page);
       if (index > 0) {
@@ -377,7 +386,7 @@ async function main() {
     }
     const closed = await pages[0].page.poll(`fetch('/api/state', { credentials: 'same-origin', headers: { accept: 'application/json' } }).then((response) => response.json())`,
       (value) => Object.values(value?.state?.auctions || {}).some((item) => item.title === title && item.status === 'closed'),
-      360_000, "automatic close");
+      900_000, "automatic close");
     const finalAuction = Object.values(closed.state.auctions).find((item) => item.title === title);
     report.phases.push({ phase: "automatic_close", status: "PASS", winnerPresent: Boolean(finalAuction.winner), highBid: finalAuction.high_bid });
 

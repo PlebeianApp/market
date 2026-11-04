@@ -452,10 +452,8 @@ pub(super) fn aggregate(auth_path: &Path, public_path: &Path, shares_path: &Path
     if request.version != ABORT_VERSION || request.operation_id != auth.operation_id || request.session_id != auth.session_id {
         return Err("abort aggregate binding differs".into());
     }
-    let public: FinalPublicPackage = read_json(public_path)?;
-    if public.run_id != auth.dkg_run_id || public.committee_keyset_id != auth.committee_keyset_id
-        || public.committee_keyset_version != auth.committee_keyset_version || public.public_key_package_sha256 != auth.public_key_package_sha256
-    { return Err("abort aggregate public package differs".into()); }
+    let public_bytes = read_public_key_package_bytes(public_path, &auth.dkg_run_id,
+        &auth.committee_keyset_id, &auth.committee_keyset_version, &auth.public_key_package_sha256)?;
     let bundle = EnvelopeBundle { version: ABORT_VERSION.into(), entries: request.commitments.iter().map(|entry| Commitment {
         version: ABORT_VERSION.into(), operation_id: auth.operation_id.clone(), session_id: auth.session_id.clone(),
         authorization_digest: hex::encode(digest), participant_id: entry.participant_id, durable_binding: None,
@@ -468,7 +466,7 @@ pub(super) fn aggregate(auth_path: &Path, public_path: &Path, shares_path: &Path
             frost::round2::SignatureShare::deserialize(&hex::decode(&share.share_hex)?)?).is_some()
         { return Err("abort shares contain duplicate or unenrolled signer".into()); }
     }
-    let public_package = frost::keys::PublicKeyPackage::deserialize(&hex::decode(public.public_key_package_hex.clone())?)?.into_even_y(None);
+    let public_package = frost::keys::PublicKeyPackage::deserialize(&public_bytes)?.into_even_y(None);
     let signature = frost::aggregate(&package, &shares, &public_package)?;
     public_package.verifying_key().verify(&exact_hex::<32>(&auth.committee_digest, "committee digest")?, &signature)?;
     publish_json_exact(out, &AggregateSignature { version: ABORT_VERSION.into(), operation_id: auth.operation_id,

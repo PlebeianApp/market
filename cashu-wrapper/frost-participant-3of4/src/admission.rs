@@ -877,20 +877,13 @@ pub(super) fn aggregate(auth_path: &Path, public_key_path: &Path, share_path: &P
         return Err("admission aggregate request authorization mismatch".into());
     }
     validate_subset(&auth, &request)?;
-    let public: FinalPublicPackage = read_json(public_key_path)?;
-    if public.version != VERSION || public.run_id != auth.dkg_run_id
-        || public.committee_keyset_id != auth.committee_keyset_id
-        || public.committee_keyset_version != auth.committee_keyset_version
-        || public.public_key_package_sha256 != auth.public_key_package_sha256
-    {
-        return Err("admission aggregate public key belongs to another DKG/keyset".into());
-    }
-    let public_bytes = hex::decode(&public.public_key_package_hex)?;
-    if hex::encode(&public_bytes) != public.public_key_package_hex
-        || sha256_hex(&public_bytes) != public.public_key_package_sha256
-    {
-        return Err("admission public package hash or encoding mismatch".into());
-    }
+    let public_bytes = read_public_key_package_bytes(
+        public_key_path,
+        &auth.dkg_run_id,
+        &auth.committee_keyset_id,
+        &auth.committee_keyset_version,
+        &auth.public_key_package_sha256,
+    )?;
     let public_key_package = frost::keys::PublicKeyPackage::deserialize(&public_bytes)?;
     let commitment_bundle = EnvelopeBundle {
         version: ADMISSION_VERSION.to_string(),

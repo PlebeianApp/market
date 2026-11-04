@@ -31,6 +31,8 @@ function authorityPaths(root: string): DemoFridayAuthorityStorePaths {
 
 describe('fixed Friday authority CLI', () => {
 	test('selects immutable participant paths by live application schema', () => {
+		expect(demoFridayAuthorityParticipantBinary('PLEBEIAN_FRIDAY_SEPARATED_APPLICATION_V1'))
+			.toBe('/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-aggregate-r16/bin/coco-demo-frost-participant-3of4')
 		expect(demoFridayAuthorityParticipantBinary('PLEBEIAN_FRIDAY_LIVE_APPLICATION_V2'))
 			.toBe('/opt/plebeian-auctions-friday/bin/coco-demo-frost-participant-3of4')
 		expect(demoFridayAuthorityParticipantBinary('PLEBEIAN_FRIDAY_LIVE_APPLICATION_V3'))
