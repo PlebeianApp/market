@@ -21,6 +21,9 @@ Proposed — branch `feat/cms-spike`
   `platform/server/buildServer.ts`, `platform/server/http/config.ts`,
   `contextvm/server.ts` (existing ContextVM MCP server)
 - External: Routstr API reference — `https://docs.routstr.com/api/overview/`
+- Prior art for the extension store (§7.0): LNbits extensions
+  (`github.com/lnbits/lnbits`, `github.com/lnbits/lnbits-extensions`) and
+  StartOS packages and registries (`github.com/Start9Labs/start-technologies`)
 
 ## Context
 
@@ -319,6 +322,228 @@ The `http` port is the seam instead:
   publish, and records video per the Feature Quality Gate.
 - No test reaches `api.routstr.com`.
 
+### 7. Extension store
+
+The extension store is a per-instance **admin surface** for browsing,
+installing, configuring, and disabling extensions. It is modeled on two
+existing self-hosted extension ecosystems, LNbits and StartOS (Start9). It
+borrows their distribution and lifecycle ideas, but not in-process code
+loading.
+
+#### 7.0 Prior art
+
+Sources, checked 2026-10-30: LNbits `docs/devs/extensions.md`,
+`lnbits/core/models/extensions.py` on `main`, and the
+`lnbits/lnbits-extensions` `extensions.json` index; StartOS
+`projects/start-sdk/docs/src/` (`manifest.md`, `actions.md`, `tasks.md`,
+`dependencies.md`, `host-registry*.md`) in `Start9Labs/start-technologies`.
+
+**LNbits:**
+
+- **Catalog:** admins add "Extension Sources", which are URLs of `manifest.json`
+  indexes (or the `LNBITS_EXTENSIONS_MANIFESTS` environment variable). Each
+  index lists releases: `id`, `version`, `min/max_lnbits_version`, `archive`
+  (zip URL), sha256 `hash`, `icon`, `details_link`, and optionally `pay_link` /
+  `paid_features`. Several releases per id are listed, and the host picks a
+  compatible one.
+- **Install:** the archive is downloaded and its hash checked. The Python code
+  runs in-process, with its own routes (`/<ext>/api/...`), UI pages, and
+  database migrations.
+- **Enablement has two levels.** An admin installs and activates the extension
+  server-wide. Each user then enables it for their own account
+  (`UserExtension.active`), optionally pay-to-enable.
+- **Main is moving to sandboxing.** It now models a WASM runtime with metered
+  host calls (HTTP, storage, wallet counters, runtime limits) and per-user
+  **permission grants with policy**. For example, a background payment grant
+  carries `max_amount` and a `own_wallets_only` / `external_allowed`
+  destination policy.
+
+**StartOS:**
+
+- **Catalog:** multiple independent **registries** that anyone can run.
+  Packages (`.s9pk`) are signed. A registry admin scopes **signers** to specific
+  packages, and an index entry is `(package id, version, sighash)`. Sideloading
+  is possible.
+- **Manifest:** id, title, license, package and upstream repos, marketing and
+  donation URLs, short and long descriptions (≤120 / ≤2000 characters, enforced
+  at pack time), volumes, images, and dependencies.
+  - Dependencies carry version ranges, `kind: 'running'`, and health checks, and
+    can be optional or conditional.
+  - Updates can carry a pre-download alert keyed to the installed version.
+- **Actions** have typed input forms and typed results (`single` / `multiline` /
+  `group`, with `masked` values). Visibility is `user`, `dependent`, or
+  `public`, and the handler knows its caller (a package id, or `null` for the
+  user).
+- **Tasks** prompt the user to run an action. A `critical` task blocks the
+  service from starting until it is done, for example setting credentials.
+- **Isolation:** each service runs in its own container with declared volumes,
+  and services expose health checks.
+
+**What we adopt, adapt, or reject:**
+
+| Idea                                       | Source         | Decision for Plebeian Market                                                                                                                                                                             |
+| ------------------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Operator-chosen catalog sources            | LNbits, Start9 | **Adopt** as _registries_ (7.2). Default is none for remote entries.                                                                                                                                     |
+| Signed entries, signer scoped per package  | Start9         | **Adopt via Nostr.** Remote entries are signed by the ContextVM server key. Registries are curator pubkeys the operator trusts.                                                                          |
+| Sideload by explicit identity              | Start9         | **Adopt.** An admin may add a remote server by pubkey, labeled _sideloaded_.                                                                                                                             |
+| Release pin by hash                        | LNbits, Start9 | **Adapt.** Built-ins are pinned by the release itself. Remote bindings pin tool name plus an `inputSchema` hash (7.5).                                                                                   |
+| Host-version compatibility range           | LNbits, Start9 | **Defer.** Built-ins compile with the host. Revisit if remote tools need a protocol version.                                                                                                             |
+| Download and run extension code in-process | LNbits         | **Reject.** Code runs only if it is compiled in (built-ins) or hosted elsewhere (remote). LNbits' own move to WASM with metered host calls confirms that downloaded code needs a sandbox.                |
+| Metered host calls, permission grants      | LNbits (main)  | **Adopt.** Host ports are the grant surface (§1). Each grant shows on the consent screen, and Platform counts calls per port for the admin view.                                                         |
+| Two-level enablement (admin, then user)    | LNbits         | **Adapt** (7.6). The admin installs. Users opt in per capability as a client preference for data-flow consent, never as authorization.                                                                   |
+| Pay-to-install / pay-to-enable             | LNbits         | **Reject for now.** It is a payment flow and needs its own decision (AGENTS.md payment-state rules).                                                                                                     |
+| Typed action forms and results, `masked`   | Start9         | **Adopt in UI.** Action I/O stays schema-typed. Store config forms render from the config schemas, and private fields display like `masked`.                                                             |
+| Action visibility and caller identity      | Start9         | **Already decided** (§2): `auth: 'user' \| 'admin'` and `ExtensionCaller`.                                                                                                                               |
+| `critical` task blocks start until done    | Start9         | **Adopt** as the `needs_setup` state (7.3).                                                                                                                                                              |
+| Health checks                              | Start9         | **Adopt** for remote bindings (`unreachable`). An optional built-in lifecycle health hook is follow-up SDK work.                                                                                         |
+| Dependencies with version ranges           | Start9         | **Defer.** If needed, express dependencies by **capability**, not by extension id.                                                                                                                       |
+| Pre-update alerts                          | Start9         | **Adapt.** When a release changes an extension's config schema, stored settings are revalidated at boot, and the extension shows `needs_setup` or `misconfigured` instead of starting with stale config. |
+| Short/long descriptions with hard limits   | Start9         | **Adopt** for store entries: short ≤120 characters (aim for 80), long ≤2000, rendered as plain text or sanitized markdown.                                                                               |
+| Per-extension database / volumes           | LNbits, Start9 | **Already decided:** the `storage` port is namespaced per extension.                                                                                                                                     |
+
+The resulting shape is a **Start9-style registry model for discovery and
+trust**, an **LNbits-style split between admin install and user activation**,
+and **host ports in place of in-process code**. Host ports are the boundary
+LNbits is now converging on with WASM.
+
+#### 7.1 Built-in entries
+
+- These are the definitions registered in the instance's `ExtensionRegistry`.
+  This is the code compiled into the running Platform release, so the release
+  is the pin.
+- An entry shows only client-safe metadata:
+  - id, version, display name, and short and long descriptions;
+  - license and repository;
+  - capabilities and runtimes;
+  - requested `hostPorts` and `egress` origins;
+  - action descriptors (name, auth, rate limit, transports);
+  - config form fields derived from the `publicConfig` and `privateConfig`
+    schemas, but **never private values**.
+
+  The description, license, and repository fields require a small SDK manifest
+  addition (implementation step 8).
+
+#### 7.2 Remote entries and registries (ContextVM)
+
+- **Entries** are third-party ContextVM servers, described by their existing
+  announcements: kind 11316 (server announcement) and kind 11317 (tool list),
+  as defined by `@contextvm/sdk`. No new event kind is introduced for entries.
+- **Sources.** Following Start9, there is no global open catalog. An entry
+  appears only through a source the operator added:
+  - **Registry:** a curator pubkey the operator trusts, whose published list of
+    ContextVM server pubkeys defines the entries. The list format is an open
+    question, and it must reuse an existing list kind.
+  - **Sideload:** a single server pubkey the admin enters directly. It is
+    labeled _sideloaded_.
+- Announcements are read only from operator-configured relays, and relay hints
+  are not followed. Announcements are untrusted. They are parsed with a schema
+  first, and unparseable ones are dropped with the failed constraint recorded
+  for the admin.
+- An entry shows:
+  - the server pubkey and name, about/website, and the relays it was seen on;
+  - the source it came through (which registry, or sideloaded);
+  - its tools with their `inputSchema`.
+
+  It is always labeled **third-party**.
+
+- Tools that require payment (ContextVM payment flows) are listed as **not
+  installable**. This is the same decision as rejecting LNbits' pay-to-enable.
+
+#### 7.3 Install state
+
+Each entry has one of these states, kept distinct:
+
+| State                | Meaning                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------- |
+| `available`          | Listed, not installed.                                                                                  |
+| `needs_setup`        | Installed, but required config is missing, or config must be revisited after an update. Does not start. |
+| `installed_enabled`  | Installed, valid config, running (built-in) or bound and healthy (remote).                              |
+| `installed_disabled` | Installed and configured, switched off by the admin.                                                    |
+| `misconfigured`      | Config fails validation or start (built-in), or the bound tool no longer matches its pin (remote).      |
+| `env_managed`        | Built-in extension configured by `EXTENSION_<ID>_*` environment variables. Read-only in the store.      |
+| `unreachable`        | Remote, installed, but the server failed its last health check.                                         |
+
+`needs_setup` corresponds to a Start9 `critical` task: the admin is told what
+to do, and the extension cannot run until it is done. `misconfigured` means
+something is broken, not merely unfinished.
+
+#### 7.4 Installing a built-in extension
+
+1. The admin opens the entry. Store routes are authenticated with NIP-98 and
+   require the admin role.
+2. A **consent screen** lists the grants: requested host ports, egress origins,
+   and what data leaves the instance (for example, "seller-written text is sent
+   to the configured model provider"). The admin must confirm it explicitly.
+   This corresponds to LNbits permission grants.
+3. The extension enters `needs_setup` until required config is provided. The
+   admin fills in the config form. Platform validates it with
+   `parseExtensionConfig`, which does not echo private values in errors.
+4. Valid settings are written to the server-side settings store (7.7). Private
+   fields are **write-only**: after saving, the UI shows only `set` / `not set`
+   (like a Start9 `masked` value) and can replace a value, but never read it
+   back.
+5. Platform stops the running extensions, calls `configure()` with the new
+   settings, and starts them again. An extension that fails to start becomes
+   `misconfigured` without affecting the others.
+6. `/api/config` descriptors update, so capability-gated UI appears.
+
+Environment variables keep authority (ADR-018). If `EXTENSION_<ID>_*` is set,
+the extension is `env_managed`. The store displays it but cannot change it, and
+stored settings for that id are ignored.
+
+On boot after a release, stored settings are revalidated against the new
+schemas. An extension whose stored settings no longer parse enters
+`needs_setup`, and it never starts with config that fails validation.
+
+#### 7.5 Installing a remote extension
+
+1. The admin selects a remote entry and the specific tools to bind. Each tool is
+   mapped to a capability, for example `product.description.suggest`, so UI
+   keeps rendering by capability.
+2. The binding is **pinned**: server pubkey, tool name, and a hash of the tool's
+   `inputSchema` as reviewed. This plays the role of the LNbits archive hash and
+   the Start9 sighash. If a later announcement changes the tool, the binding
+   becomes `misconfigured` and stops serving until the admin approves it again.
+   Announcements are replaceable, so the instance must not pick up changes
+   silently.
+3. Clients call bound tools through the same action contract and the same route.
+   - A binding is exposed as extension id `remote.<server-pubkey>`, under a
+     kebab-case action name the admin chooses at binding time, because remote
+     tool names need not follow action naming.
+   - Platform calls the remote server as an MCP client over a ContextVM
+     `NostrClientTransport`, using a dedicated instance client key. This key is
+     not the app signing key, and it is never exposed to extensions.
+   - The per-pubkey rate limit of the action applies before the remote call.
+4. Remote output is untrusted. It is wrapped in the standard envelope, rendered
+   as plain text only, and never auto-published. No `privateConfig` or operator
+   secret is ever sent to a remote server.
+5. Platform health-checks bound servers. Failures move the binding to
+   `unreachable` until the next successful check.
+
+#### 7.6 User activation
+
+LNbits separates admin install from per-user enablement. Here, the admin
+installs and enables an extension for the instance. Individual users then see
+its capability, but for extensions that send user content to a third party, UI
+asks the user to opt in once per capability before the first call.
+
+- The opt-in records **data-flow consent**, not authorization. Authorization
+  stays with the action's `auth` and the caller's pubkey.
+- It is client-side preference state. It is not a payment, it is not published
+  to relays by this ADR, and the server does not require it.
+
+#### 7.7 Settings store prerequisite
+
+Installing from the store requires a server-side settings store with private
+values encrypted at rest. Its design (location, key management, backup) is a
+separate decision. **Until it exists, the store is read-only.** It can browse
+built-in entries, registries, and sideloaded entries, and show `env_managed`
+state, and installation stays environment-driven.
+
+The store never writes extension settings, bindings, sources, or install state
+to relays. Public visitors never see the store. They see only the resulting
+capabilities in `/api/config`.
+
 ## Rules
 
 - Extensions never import `@nostr-dev-kit/*`, `nostr-tools` relay classes, app
@@ -334,6 +559,12 @@ The `http` port is the seam instead:
   billing errors map to availability errors.
 - ContextVM exposure is opt-in per action and per instance. Caller identity on
   that transport comes only from the transport-injected `_meta.clientPubkey`.
+- The extension store installs by enabling, configuring, or binding. It never
+  downloads or executes code.
+- Store-managed private values are write-only. Environment configuration
+  overrides store settings.
+- Remote bindings are pinned to a reviewed tool definition, and they never
+  receive operator secrets.
 
 ## Alternatives Considered
 
@@ -348,9 +579,23 @@ The `http` port is the seam instead:
 - **Client-runtime extension with a user-supplied Cashu token.** This is a valid
   second mode with user-funded inference and no operator secret. It needs a
   separate decision on client token storage under the Cashu wallet ADR-0010.
-- **Third-party plugin loading (dynamic import from URL).** Out of scope.
-  Extensions are first-party modules compiled into Platform until a sandboxing
-  decision exists.
+- **Third-party plugin loading (dynamic import from URL), as LNbits does with
+  extension archives.** Out of scope. Extensions are first-party modules
+  compiled into Platform until a sandboxing decision exists. LNbits' own move
+  toward a WASM runtime with metered host calls shows what that decision has to
+  cover. If it is ever made, the host ports in §1 are the import surface such a
+  sandbox would expose.
+- **A global open catalog of every ContextVM announcement.** Rejected. Following
+  StartOS registries, entries appear only through registries the operator
+  trusts or explicit sideloads.
+
+- **Publishing the store catalog or install state as Nostr events.** Rejected.
+  Install state includes private configuration and operator decisions that do
+  not belong on relays. Remote discovery reuses existing ContextVM announcement
+  kinds instead of a new catalog kind.
+- **Letting the browser call remote ContextVM extensions directly.** Deferred.
+  It would bypass the instance rate limit and the pinned binding. Platform
+  proxies bound tools instead.
 
 ## Consequences
 
@@ -368,6 +613,11 @@ The `http` port is the seam instead:
 - Extension actions become callable by Nostr-native agents and other clients
   over ContextVM. Exposing them on public relays widens who can spend operator
   money, which is why exposure is opt-in per action and per instance.
+- Operators get an admin store, but installs from it depend on a server-side
+  settings store that does not exist yet. Until then the store is read-only.
+- Third-party ContextVM servers can provide capabilities without running code on
+  the instance. The operator bears the trust decision, which is recorded as a
+  pinned binding.
 - This ADR is proposed design. The SDK contracts exist in
   `sdk/core/extensions/` (port interfaces, manifest and action validation,
   `executeExtensionAction`, the HTTP and ContextVM clients, and test fakes).
@@ -393,7 +643,20 @@ Each step is an independently reviewable PR.
 7. Platform: register opted-in extension actions as ContextVM tools
    (`injectClientPubkey: true`, `ext.` tool names, shared rate-limit budget)
    and an operator switch for ContextVM exposure.
-8. Docs: operator guide for enabling extensions and the data-flow disclosure.
+8. SDK: manifest `description` (short ≤120 / long ≤2000), `license`, and
+   `repository` fields; store entry types; parsers for kind 11316/11317
+   announcements; the install-state vocabulary (including `needs_setup`); and
+   the binding pin (tool name plus `inputSchema` hash), with unit tests.
+9. Platform + UI: read-only admin store (built-in entries, registries,
+   sideloads, `env_managed` state) behind NIP-98 admin auth, with per-port call
+   counters on the admin view.
+10. Platform: server-side settings store (separate decision), then store
+    installs for built-in extensions with consent, write-only secrets, and
+    registry reconfiguration.
+11. Platform: remote bindings — the ContextVM client proxy, pin verification,
+    health checks, and capability mapping.
+12. Docs: operator guide for enabling extensions, the store, and the data-flow
+    disclosure.
 
 ## Open Questions
 
@@ -412,3 +675,16 @@ Each step is an independently reviewable PR.
   per-pubkey rate-limit budget needs shared storage.
 - Should ContextVM extension tools be announced to public bootstrap relays in
   production, or kept on the operational relays only?
+- Settings store design: where it lives, how private values are encrypted and
+  keyed, and how it is backed up and migrated.
+- Registry list format: which existing list kind a curator uses to publish
+  ContextVM server pubkeys. A new kind needs its own decision. Should Plebeian
+  Market ship a default registry, or none (operator adds sources explicitly)?
+- Should user activation (§7.6) persist across devices, for example as
+  application-specific data, or stay local to the client?
+- Should built-in extensions get an optional lifecycle `health()` hook, so the
+  store can report Start9-style health for them too?
+- Health-check cadence for remote bindings, and whether an `unreachable`
+  binding hides its capability from `/api/config`.
+- Can a remote binding be invoked over the instance's own ContextVM transport
+  (re-exposure), or only over HTTP?
