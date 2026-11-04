@@ -64,6 +64,7 @@
     "state": "NOT_YET_IMPLEMENTED_OR_AUTHORIZED",
     "properties": [
       "offline-only; all four signer services stopped and listeners absent",
+      "run from a root-owned, runtime-group-readable mode-0640 action file as the exact signer runtime UID/GID while holding the signer lease",
       "accept only the exact V1-V3 shape recorded above and refuse every mismatch",
       "require rustAnchorRevision=0 and zero admission-* Rust entries before and after transition",
       "transition each exact pending row to an explicit rejected_no_effect local-prerequisite result; never delete it",
@@ -88,10 +89,10 @@
       "phase": 2,
       "name": "on_host_rollback_copies",
       "actions": [
-        "create one root-owned 0700 create-once recovery directory on each affected validator",
-        "while stopped, checkpoint and copy admission-safety.sqlite3 and signer-safety-anchor.sqlite3 with SQLite-aware tooling",
+        "create one runtime-owned 0700 create-once recovery directory on each affected validator, run the offline tool as the signer runtime identity, then root-seal the completed directory after verification",
+        "while stopped, serialize admission-safety.sqlite3, signer-safety-anchor.sqlite3, and disposition-metadata.sqlite3 with SQLite-aware tooling",
         "copy the exact quarantine marker and record metadata only",
-        "keep every backup on its source host; do not export or hash private shares, proofs, or authentication material",
+        "keep every backup on its source host; after the tool settles, change only the completed recovery directory to root ownership without changing database files; do not export or hash private shares, proofs, or authentication material",
         "verify each backup opens read-only and reproduces the pre-recovery aggregate counts and revisions"
       ]
     },
@@ -126,7 +127,7 @@
   ],
   "rollback": {
     "beforeAnyJournalTransition": "No rollback is needed; leave signers stopped and preserve evidence.",
-    "afterAHostTransitionBeforeRestart": "Keep every signer stopped. Restore that host's admission database and independent anchor together from the same stopped-state backup, restore its exact quarantine marker, and rerun read-only aggregate checks. Never restore one file alone.",
+    "afterAHostTransitionBeforeRestart": "Keep every signer stopped. Restore that host's admission database, signer metadata, and independent anchor together from the same stopped-state backup, restore its exact quarantine marker, and rerun read-only aggregate checks. Never restore one file alone.",
     "afterAnySignerRestartOrNewOperation": "Do not restore old files. Stop only services started by the action, preserve current state, and investigate as a new incident."
   },
   "acceptance": [

@@ -162,6 +162,8 @@
 		"demo-signer-rpc.ts",
 		"demo-signer-rpc-server.ts",
 		"demo-signer-rpc-sqlite.ts",
+		"demo-signer-no-effect-recovery.ts",
+		"demo-signer-no-effect-recovery.test.ts",
 		"demo-signer-coordinator-anchor-sqlite.ts",
 		"demo-signer-rpc.test.ts",
 		"demo-fips-mesh-evidence.ts",

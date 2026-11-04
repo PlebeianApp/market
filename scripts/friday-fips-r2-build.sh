@@ -28,6 +28,7 @@ cd "$repo_root/cashu-wrapper/ts"
 bun run typecheck:friday
 bun build ./demo-fips-dkg-cli.ts --compile --target=bun-linux-x64-modern --outfile ../../lab-bin/plebeian-friday-frost-dkg
 bun build ./demo-fips-signer-cli.ts --compile --target=bun-linux-x64-modern --outfile ../../lab-bin/plebeian-friday-signer
+bun build ./demo-signer-no-effect-recovery.ts --compile --target=bun-linux-x64-modern --outfile ../../lab-bin/plebeian-friday-signer-no-effect-recovery
 bun build ./demo-fips-integrated-driver.ts --compile --target=bun-linux-x64-modern --outfile ../../lab-bin/plebeian-friday-integrated-driver
 
 cd "$repo_root"

@@ -6,6 +6,8 @@ import { DemoSignerCachedRejection, DemoSignerJournalConflict, demoSignerRejecti
 
 export const DEMO_SIGNER_LOCAL_SCHEMA = 2
 export const DEMO_SIGNER_MAX_JOURNAL_ROWS = 10000
+export const DEMO_SIGNER_PRE_EFFECT_RECOVERY_REASON = 'PRE_EFFECT_LOCAL_PREREQUISITE' as const
+const PRE_EFFECT_RECOVERY_BODY = JSON.stringify({ error: `DEMO_SIGNER_RECOVERED_NO_EFFECT:${DEMO_SIGNER_PRE_EFFECT_RECOVERY_REASON}` })
 const HEX = /^[0-9a-f]{64}$/
 const TABLES = ['demo_fips_admission_rpc_journal', 'demo_fips_funding_abort_rpc_journal'] as const
 export type DemoSignerJournalTable = typeof TABLES[number]
@@ -97,7 +99,8 @@ export class DemoSignerRpcJournalV2<R> {
 		if (row.status === 'pending') return { status: 'pending' }
 		if (row.status === 'rejected_no_effect') {
 			if (row.rejection_status !== 422 || row.rejection_body === null || row.safety_witness === null
-				|| row.rejection_body !== demoSignerRejectionBody(row.rejection_reason as DemoSignerPureReason)) throw new Error('JOURNAL_REJECTION_INVALID')
+				|| row.rejection_body !== (row.rejection_reason === DEMO_SIGNER_PRE_EFFECT_RECOVERY_REASON
+					? PRE_EFFECT_RECOVERY_BODY : demoSignerRejectionBody(row.rejection_reason as DemoSignerPureReason))) throw new Error('JOURNAL_REJECTION_INVALID')
 			return { status: 'rejected', body: row.rejection_body }
 		}
 		if (row.status !== 'complete' || row.response_json === null) throw new Error('JOURNAL_STATE_INVALID')
@@ -132,6 +135,45 @@ export class DemoSignerRpcJournalV2<R> {
 		}).immediate()
 		this.advance(witness, id, null, this.expectedRow(id, digest, 'rejected_no_effect', null, reason, body, witness))
 		throw new DemoSignerCachedRejection(body)
+	}
+	/** Offline operator transition for a request proven to have stopped before
+	 * the Rust effect boundary.  It intentionally accepts no request identifier:
+	 * the store must contain exactly one pending row, which is retained as a
+	 * cached terminal rejection.  Callers must hold the signer lease and bind the
+	 * supplied witness to independent zero-effect evidence before invoking this.
+	 */
+	async operatorRejectOnlyPendingPreEffect(witness: string): Promise<void> {
+		this.current()
+		if (this.safety?.assertNoEffectWitness === undefined || this.safety.recordRpcJournalAdvance === undefined
+			|| witness.length > 8192) throw new Error('JOURNAL_NO_EFFECT_WITNESS_REQUIRED')
+		const rows = this.database.query<Record<string, unknown>, []>(
+			`SELECT request_id,request_digest,status,response_json,rejection_reason,rejection_status,rejection_body,safety_witness
+			 FROM ${this.table} WHERE status='pending' ORDER BY request_id`,
+		).all()
+		if (rows.length !== 1 || typeof rows[0]!.request_id !== 'string' || typeof rows[0]!.request_digest !== 'string'
+			|| !HEX.test(rows[0]!.request_id as string) || !HEX.test(rows[0]!.request_digest as string)) {
+			throw new Error('JOURNAL_PRE_EFFECT_RECOVERY_REQUIRES_ONE_PENDING')
+		}
+		const prior = rows[0]!, id = prior.request_id as string, digest = prior.request_digest as string
+		this.safety.assertNoEffectWitness(witness)
+		const body = PRE_EFFECT_RECOVERY_BODY
+		const next = this.expectedRow(id, digest, 'rejected_no_effect', null,
+			DEMO_SIGNER_PRE_EFFECT_RECOVERY_REASON, body, witness)
+		this.database.transaction(() => {
+			this.safety!.assertNoEffectWitness!(witness)
+			const found = this.storedRow(id)
+			if (found === null || JSON.stringify(found) !== JSON.stringify(prior)) {
+				throw new Error('JOURNAL_PRE_EFFECT_RECOVERY_ROW_CHANGED')
+			}
+			const changed = this.database.query(`UPDATE ${this.table}
+				SET status='rejected_no_effect',response_json=NULL,rejection_reason=?,rejection_status=422,rejection_body=?,safety_witness=?
+				WHERE request_id=? AND request_digest=? AND status='pending'`).run(
+				DEMO_SIGNER_PRE_EFFECT_RECOVERY_REASON, body, witness, id, digest,
+			)
+			if (changed.changes !== 1) throw new Error('JOURNAL_PRE_EFFECT_RECOVERY_CAS')
+			this.database.exec('UPDATE admission_safety_metadata SET revision=revision+1 WHERE id=1')
+		}).immediate()
+		this.advance(witness, id, prior, next)
 	}
 	async complete(id: string, digest: string, response: R): Promise<void> {
 		this.current(); const body = JSON.stringify(response)
