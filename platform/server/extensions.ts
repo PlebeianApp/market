@@ -2,7 +2,13 @@ import { getEventHandler } from './EventHandler'
 import { determineStage, getInstanceConfig, RELAY_URL } from './runtime'
 import { createPoolRelayPort, type NostrRelayPort } from '@sdk/core'
 import { relayPoolAdapter } from '@sdk/core/nostr-io'
-import { describeCatalogEntry, EXTENSION_CATALOG_PATH, type AnyExtensionDefinition, type ExtensionCatalogEntry } from '@sdk/core/extensions'
+import {
+	describeCatalogEntry,
+	EXTENSION_CATALOG_PATH,
+	EXTENSION_SIDELOADS_PATH,
+	type AnyExtensionDefinition,
+	type ExtensionCatalog,
+} from '@sdk/core/extensions'
 import { createExtensionActionHandler, createExtensionCatalogHandler, EXTENSION_ACTION_ROUTE } from '../extensions/actionRoute'
 import { BUILTIN_EXTENSIONS } from '../extensions/builtins'
 import { extensionEnvPrefix, readExtensionEnvConfig, type ExtensionEnvPolicy } from '../extensions/envConfig'
@@ -10,6 +16,9 @@ import { HttpAuthReplayCache } from '../extensions/nip98'
 import { buildExtensionHost, type ExtensionPortUsage } from '../extensions/ports/host'
 import { createMemoryKeyValueStorage } from '../extensions/ports/storage'
 import { ExtensionRateLimiter } from '../extensions/rateLimiter'
+import { createRepositoryLoader, readRepositoryConfig } from '../extensions/repository'
+import { createSideloadHandlers } from '../extensions/sideloadRoutes'
+import { DEFAULT_EXTENSIONS_STATE_PATH, SqliteExtensionStateStore, type ExtensionStateStore } from '../extensions/stateStore'
 import { ExtensionRegistry, type PublicExtensionDescriptor } from '../extensions/registry'
 import type { BunRoutes } from './http/types'
 
@@ -18,6 +27,8 @@ interface ExtensionRuntimeState {
 	usage: Map<string, ExtensionPortUsage>
 	/** Admin-safe reasons an extension is not running, keyed by id. Never contains private values. */
 	problems: Map<string, string>
+	repository: ReturnType<typeof createRepositoryLoader>
+	stateStore: ExtensionStateStore
 }
 
 // Kept on globalThis so a hot reload of the entrypoint stops the previous registry instead of leaking it.
@@ -60,7 +71,16 @@ export async function startExtensions(
 
 	const usage = new Map<string, ExtensionPortUsage>()
 	const problems = new Map<string, string>()
-	globalState[STATE_KEY] = { registry, usage, problems }
+	const stateStore = new SqliteExtensionStateStore(env.EXTENSIONS_STATE_PATH || DEFAULT_EXTENSIONS_STATE_PATH)
+	const repositoryConfig = readRepositoryConfig(env, RELAY_URL)
+	for (const error of repositoryConfig.errors) console.error(`[extensions] ${error}`)
+	const repository = createRepositoryLoader({
+		curators: repositoryConfig.curators,
+		relays: repositoryConfig.relays,
+		getRelayPort: sharedRelayPort,
+		getSideloads: () => stateStore.listSideloads().map((record) => record.pubkey),
+	})
+	globalState[STATE_KEY] = { registry, usage, problems, repository, stateStore }
 
 	const config = readExtensionEnvConfig(definitions, env)
 	for (const error of config.errors) {
@@ -82,7 +102,7 @@ export async function startExtensions(
 				privateConfig,
 				{
 					relayUrls: RELAY_URL ? [RELAY_URL] : [],
-					getRelayPort: () => (relayPort ??= createPoolRelayPort(relayPoolAdapter(), { deadlineMs: 8_000 })),
+					getRelayPort: sharedRelayPort,
 					storage,
 					allowLocalhostEgress: determineStage() !== 'production',
 					grantedPorts: (id) => policyFor(id)?.hostPorts,
@@ -115,6 +135,7 @@ export async function stopExtensions(): Promise<void> {
 	const state = globalState[STATE_KEY]
 	if (!state) return
 	globalState[STATE_KEY] = undefined
+	state.stateStore.close()
 	await state.registry.stop().catch((error) => console.error('[extensions] stop failed:', error instanceof Error ? error.message : error))
 }
 
@@ -129,8 +150,15 @@ function hookShutdown() {
 	}
 }
 
-/** Admin store listing: every built-in with its state; config values are never included. */
-export function getExtensionCatalog(): { entries: ExtensionCatalogEntry[] } {
+function sharedRelayPort(): NostrRelayPort {
+	return (relayPort ??= createPoolRelayPort(relayPoolAdapter(), { deadlineMs: 8_000 }))
+}
+
+/**
+ * Admin store listing: every built-in with its state, plus third-party entries from configured repositories.
+ * Config values are never included.
+ */
+export async function getExtensionCatalog(): Promise<ExtensionCatalog> {
 	const state = globalState[STATE_KEY]
 	if (!state) return { entries: [] }
 	const entries = state.registry.getDefinitions().map((definition) => {
@@ -139,7 +167,8 @@ export function getExtensionCatalog(): { entries: ExtensionCatalogEntry[] } {
 		const status = state.registry.isEnabled(id) ? 'installed_enabled' : problem ? 'misconfigured' : 'available'
 		return describeCatalogEntry(definition, { state: status, envPrefix: extensionEnvPrefix(id), ...(problem ? { problem } : {}) })
 	})
-	return { entries }
+	const repository = await state.repository.getSnapshot()
+	return { entries, ...(repository ? { repository } : {}) }
 }
 
 /**
@@ -165,7 +194,21 @@ export function resolveAcceptedOrigins(
 
 const acceptedOrigins = (request: Request) => resolveAcceptedOrigins(request, determineStage(), process.env.INSTANCE_SITE_URL)
 
+const sideloads = createSideloadHandlers({
+	store: () => {
+		const state = globalState[STATE_KEY]
+		if (!state) throw new Error('Extensions are not started')
+		return state.stateStore
+	},
+	isAdmin: (pubkey) => getEventHandler().isAdmin(pubkey),
+	replayCache,
+	acceptedOrigins,
+	onChange: () => globalState[STATE_KEY]?.repository.invalidate(),
+})
+
 export const extensionRoutes: BunRoutes = {
+	[EXTENSION_SIDELOADS_PATH]: { POST: sideloads.add },
+	[`${EXTENSION_SIDELOADS_PATH}/:pubkey`]: { DELETE: sideloads.remove },
 	[EXTENSION_CATALOG_PATH]: {
 		GET: createExtensionCatalogHandler({
 			getCatalog: getExtensionCatalog,

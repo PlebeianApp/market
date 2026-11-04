@@ -457,8 +457,10 @@ LNbits is now converging on with WASM.
 - **Sources.** Following Start9, there is no global open catalog. An entry
   appears only through a source the operator added:
   - **Registry:** a curator pubkey the operator trusts, whose published list of
-    ContextVM server pubkeys defines the entries. The list format is an open
-    question, and it must reuse an existing list kind.
+    ContextVM server pubkeys defines the entries. The list is a NIP-51 follow
+    set: kind 30000, `d` = `plebeian-extension-registry`, and one `p` tag per
+    ContextVM server pubkey. No new kind is introduced. Only the curator's
+    newest validly signed list is used.
   - **Sideload:** a single server pubkey the admin enters directly. It is
     labeled _sideloaded_.
 - Announcements are read only from operator-configured relays, and relay hints
@@ -558,13 +560,46 @@ asks the user to opt in once per capability before the first call.
 - It is client-side preference state. It is not a payment, it is not published
   to relays by this ADR, and the server does not require it.
 
-#### 7.7 Current implementation (read-only built-in store)
+#### 7.7 Current implementation (read-only repository and built-ins)
 
 - The Extensions admin page (`/dashboard/app-settings/extensions`) has an
   **Extension store** button at the top right. It opens the read-only store.
-- The store lists every built-in from `GET /api/extensions/catalog`. The
-  request is authenticated with NIP-98 (a signed `GET` with no payload), and
-  non-admins get `404`, so public visitors cannot see the store.
+- The store reads `GET /api/extensions/catalog`. The request is authenticated
+  with NIP-98 (a signed `GET` with no payload), and non-admins get `404`, so
+  public visitors cannot see the store.
+- **Repository tab (default).** It shows third-party extensions from registries
+  (7.2):
+  - Curators come from `EXTENSIONS_REGISTRY_CURATORS` (hex or npub), on top of
+    the Plebeian default registry. The default's curator key is not chosen yet,
+    so it is empty.
+  - Relays come from `EXTENSIONS_REGISTRY_RELAYS`, which defaults to the app
+    relay, so no other relay is contacted unless the operator opts in.
+  - Platform reads the registry lists, then the listed servers' kind 11316 and
+    11317 announcements. Every event is signature-verified and parsed as
+    untrusted (`sdk/core/extensions/repository.ts`).
+  - The result is cached for 5 minutes. After a relay failure Platform retries
+    no sooner than 30 seconds, and the failure is shown to the admin.
+  - Each entry shows its name, about text, version, an https-only logo and
+    website, tools with input fields, and CEP-8 prices. Entries are labelled
+    _Third-party_ and, if any tool is priced, _Paid_.
+  - Listed servers with no valid announcement show as _Unavailable_ with the
+    failed constraint. Curators with no list are reported.
+  - **Sideload.** An admin can add a ContextVM server by hex pubkey or npub
+    (`POST /api/extensions/sideloads`) and remove it
+    (`DELETE /api/extensions/sideloads/:pubkey`). Both are NIP-98-authenticated
+    and admin-only, and non-admins get `404`.
+    - The entry is labelled _Sideloaded_ and described only by the server's own
+      signed announcements, exactly like registry entries. Sideloading lists a
+      server for review; it grants the server nothing.
+    - Sideloads persist in a `bun:sqlite` file (`EXTENSIONS_STATE_PATH`,
+      default `./data/extensions.sqlite`, git-ignored), capped at 50 servers.
+      The file stores only the server pubkey, the admin pubkey that added it,
+      and the time. It never stores secrets.
+    - A change invalidates the repository cache. A relay read started before
+      the change cannot overwrite the newer listing.
+  - The tab is browse-only. Paid entries are marked as not installable, and
+    binding remote tools (7.5) is not implemented.
+- **Built-in tab.** It shows every extension compiled into this release.
 - Each entry (`ExtensionCatalogEntry`, `sdk/core/extensions/catalog.ts`) shows:
   - logo, short description (manifest `description`, at most 120 characters),
     capabilities, and actions;
@@ -573,8 +608,10 @@ asks the user to opt in once per capability before the first call.
     private-safe reason;
   - the `EXTENSION_<ID>_` variables that enable it.
 - Config values are never included. Every entry is `managedBy: 'environment'`.
-- Remote entries, `needs_setup`, `installed_disabled`, `unreachable`, and
-  installing from the store are not implemented. They wait on 7.8.
+- Remote bindings, `needs_setup`, `installed_disabled`, `unreachable`, and
+  installing from the store are not implemented. The SQLite file above is a
+  first, secret-free piece of the 7.8 settings store; storing private values
+  there still needs the encryption and key-management decision.
 
 #### 7.8 Settings store prerequisite
 
@@ -735,9 +772,9 @@ Each step is an independently reviewable PR.
   production, or kept on the operational relays only?
 - Settings store design: where it lives, how private values are encrypted and
   keyed, and how it is backed up and migrated.
-- Registry list format: which existing list kind a curator uses to publish
-  ContextVM server pubkeys. A new kind needs its own decision. Should Plebeian
-  Market ship a default registry, or none (operator adds sources explicitly)?
+- Which key curates the Plebeian Market default registry
+  (`DEFAULT_REGISTRY_CURATORS` in `platform/extensions/repository.ts` is empty
+  until it is chosen)?
 - Should user activation (§7.6) persist across devices, for example as
   application-specific data, or stay local to the client?
 - Should built-in extensions get an optional lifecycle `health()` hook, so the

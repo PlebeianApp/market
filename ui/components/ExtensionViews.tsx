@@ -1,12 +1,21 @@
-import { ImageIcon, Puzzle, ShieldCheck, Sparkles, Store } from 'lucide-react'
+import { ImageIcon, Plus, Puzzle, ShieldCheck, Sparkles, Store, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import type { ExtensionCatalogEntry, ExtensionCatalogState, ExtensionHostPortName, PublicExtensionDescriptor } from '@sdk/core/extensions'
+import type {
+	ExtensionCatalog,
+	ExtensionCatalogEntry,
+	ExtensionCatalogState,
+	ExtensionHostPortName,
+	PublicExtensionDescriptor,
+	RepositoryExtensionEntry,
+	RepositorySnapshot,
+} from '@sdk/core/extensions'
 import { Badge } from '../primitives/badge'
 import { Button } from '../primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../primitives/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../primitives/dialog'
 import { Input } from '../primitives/input'
 import { Label } from '../primitives/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../primitives/tabs'
 import { Textarea } from '../primitives/textarea'
 
 /** Extension logo with a neutral fallback when the descriptor carries none. */
@@ -292,17 +301,258 @@ export function ExtensionStoreEntry({ entry }: { entry: ExtensionCatalogEntry })
 	)
 }
 
+const shortKey = (pubkey: string) => `${pubkey.slice(0, 8)}…${pubkey.slice(-4)}`
+
+export interface SideloadControls {
+	onAdd: (server: string) => void
+	onRemove: (pubkey: string) => void
+	pending: boolean
+	errorMessage?: string
+}
+
+/**
+ * Third-party extension from a registry or a sideload. Browse-only: binding remote tools is not implemented yet,
+ * and sideloading only lists a server for review; it grants the server nothing.
+ */
+export function RepositoryEntryCard({
+	entry,
+	onRemove,
+	removing,
+}: {
+	entry: RepositoryExtensionEntry
+	onRemove?: (pubkey: string) => void
+	removing?: boolean
+}) {
+	return (
+		<li className="space-y-3 rounded-lg border p-4" data-testid={`repository-entry-${entry.serverPubkey}`}>
+			<div className="flex items-start gap-3">
+				<ExtensionLogo icon={entry.picture} name={entry.name} size={40} />
+				<div className="min-w-0 flex-1">
+					<div className="flex flex-wrap items-center gap-2 font-medium">
+						{entry.name}
+						{entry.version && <Badge variant="secondary">v{entry.version}</Badge>}
+						<Badge variant="outline" className="border-sky-500 text-sky-700">
+							Third-party
+						</Badge>
+						{entry.sideloaded && (
+							<Badge variant="outline" className="border-violet-500 text-violet-700">
+								Sideloaded
+							</Badge>
+						)}
+						{entry.paid && (
+							<Badge variant="outline" className="border-amber-500 text-amber-700">
+								Paid
+							</Badge>
+						)}
+						{entry.state === 'unavailable' && (
+							<Badge variant="outline" className="border-red-500 text-red-600">
+								Unavailable
+							</Badge>
+						)}
+					</div>
+					{entry.about && <p className="text-sm text-muted-foreground">{entry.about}</p>}
+					<p className="mt-1 text-xs text-muted-foreground">
+						Server{' '}
+						<span className="font-mono" title={entry.serverPubkey}>
+							{shortKey(entry.serverPubkey)}
+						</span>
+						{entry.listedBy.length > 0 && (
+							<>
+								{' '}
+								· listed by{' '}
+								{entry.listedBy.map((curator) => (
+									<span key={curator} className="font-mono" title={curator}>
+										{shortKey(curator)}{' '}
+									</span>
+								))}
+							</>
+						)}
+						{entry.sideloaded && entry.listedBy.length === 0 && ' · added by an admin of this marketplace'}
+						{entry.website && (
+							<>
+								{' '}
+								·{' '}
+								<a href={entry.website} target="_blank" rel="noopener noreferrer nofollow" className="underline">
+									website
+								</a>
+							</>
+						)}
+					</p>
+				</div>
+				{entry.sideloaded && onRemove && (
+					<Button
+						variant="ghost"
+						size="sm"
+						disabled={removing}
+						onClick={() => onRemove(entry.serverPubkey)}
+						aria-label={`Remove ${entry.name}`}
+						data-testid={`repository-remove-${entry.serverPubkey}`}
+					>
+						<Trash2 className="h-4 w-4" />
+					</Button>
+				)}
+			</div>
+
+			{entry.problem && (
+				<p role="alert" className="text-sm text-red-600">
+					{entry.problem}
+				</p>
+			)}
+
+			{entry.tools.length > 0 && (
+				<div className="text-sm">
+					<div className="mb-1 font-medium">Tools</div>
+					<ul className="space-y-1">
+						{entry.tools.map((tool) => (
+							<li key={tool.name} className="text-muted-foreground">
+								<span className="font-mono text-foreground">{tool.title ?? tool.name}</span>
+								{tool.price && (
+									<span className="ml-2 text-xs text-amber-700">
+										{tool.price.amount} {tool.price.unit}
+									</span>
+								)}
+								{tool.description && <span className="block">{tool.description}</span>}
+								{tool.inputFields.length > 0 && <span className="block text-xs">Inputs: {tool.inputFields.join(', ')}</span>}
+							</li>
+						))}
+					</ul>
+				</div>
+			)}
+
+			<p className="text-xs text-muted-foreground">
+				{entry.paid
+					? 'Paid extensions cannot be installed: paying third-party services is not supported yet.'
+					: 'Installing third-party extensions is not available yet. Listings are for review only.'}
+			</p>
+		</li>
+	)
+}
+
+/** Sideload a ContextVM server by pubkey; the server validates the value, so any text is accepted here. */
+export function SideloadForm({ controls }: { controls: SideloadControls }) {
+	const [server, setServer] = useState('')
+	const submit = (event: FormEvent) => {
+		event.preventDefault()
+		if (!server.trim() || controls.pending) return
+		controls.onAdd(server.trim())
+		setServer('')
+	}
+	return (
+		<form onSubmit={submit} className="space-y-1 rounded-lg border border-dashed p-3" data-testid="sideload-form">
+			<Label htmlFor="sideload-server">Add a ContextVM server</Label>
+			<div className="flex gap-2">
+				<Input
+					id="sideload-server"
+					data-testid="sideload-server-input"
+					placeholder="npub1… or 64-character hex pubkey"
+					value={server}
+					onChange={(event) => setServer(event.target.value)}
+				/>
+				<Button type="submit" disabled={controls.pending || !server.trim()} data-testid="sideload-submit">
+					<Plus className="mr-1 h-4 w-4" />
+					{controls.pending ? 'Adding…' : 'Add'}
+				</Button>
+			</div>
+			<p className="text-xs text-muted-foreground">
+				The server is shown from its own signed announcement, labelled sideloaded. Adding it does not grant it any access.
+			</p>
+			{controls.errorMessage && (
+				<p role="alert" className="text-sm text-red-600" data-testid="sideload-error">
+					{controls.errorMessage}
+				</p>
+			)}
+		</form>
+	)
+}
+
+export function RepositorySection({
+	repository,
+	registryEnvExample,
+	sideload,
+}: {
+	repository: RepositorySnapshot | undefined
+	registryEnvExample: string
+	sideload?: SideloadControls
+}) {
+	if (!repository) {
+		return (
+			<div className="space-y-2 py-6 text-center text-sm">
+				<p className="font-medium">No relay is configured to read extensions from.</p>
+				<p className="text-muted-foreground">
+					Set the app relay or the registry relays in the server environment, then restart the server:
+				</p>
+				<pre className="mx-auto w-fit rounded bg-zinc-100 px-3 py-2 text-left text-xs">{registryEnvExample}</pre>
+			</div>
+		)
+	}
+	return (
+		<div className="space-y-3">
+			{sideload && <SideloadForm controls={sideload} />}
+			{repository.curators.length === 0 ? (
+				<div className="text-xs text-muted-foreground">
+					<p>No registries are configured. To list a registry's extensions, add its curator key and restart the server:</p>
+					<pre className="mt-1 w-fit rounded bg-zinc-100 px-3 py-2 text-left">{registryEnvExample}</pre>
+				</div>
+			) : (
+				<p className="text-xs text-muted-foreground">
+					Reading {repository.curators.length} {repository.curators.length === 1 ? 'registry' : 'registries'} from{' '}
+					<span className="font-mono">{repository.relays.join(', ')}</span>.
+				</p>
+			)}
+			{repository.problem && (
+				<p role="alert" className="text-sm text-red-600">
+					{repository.problem}
+				</p>
+			)}
+			{repository.missingRegistries.length > 0 && (
+				<p className="text-sm text-amber-700">
+					No registry list found for{' '}
+					{repository.missingRegistries.map((curator) => (
+						<span key={curator} className="font-mono" title={curator}>
+							{shortKey(curator)}{' '}
+						</span>
+					))}
+				</p>
+			)}
+			{repository.entries.length === 0 ? (
+				<p className="py-4 text-center text-sm text-muted-foreground">No extensions are listed yet.</p>
+			) : (
+				<ul className="space-y-3">
+					{repository.entries.map((entry) => (
+						<RepositoryEntryCard key={entry.serverPubkey} entry={entry} onRemove={sideload?.onRemove} removing={sideload?.pending} />
+					))}
+				</ul>
+			)}
+		</div>
+	)
+}
+
 export interface ExtensionStoreDialogProps {
 	open: boolean
 	onOpenChange: (open: boolean) => void
-	entries: readonly ExtensionCatalogEntry[] | undefined
+	catalog: ExtensionCatalog | undefined
 	isLoading: boolean
 	errorMessage?: string
 	onRetry: () => void
+	registryEnvExample: string
+	sideload?: SideloadControls
 }
 
-/** Read-only store (ADR-0023 §7): installs are environment-managed until a server-side settings store exists. */
-export function ExtensionStoreDialog({ open, onOpenChange, entries, isLoading, errorMessage, onRetry }: ExtensionStoreDialogProps) {
+/**
+ * The store: a repository of third-party extensions from registries the operator trusts, plus the built-ins in
+ * this release. Read-only (ADR-0023 §7): enabling stays in the server environment, remote installs come later.
+ */
+export function ExtensionStoreDialog({
+	open,
+	onOpenChange,
+	catalog,
+	isLoading,
+	errorMessage,
+	onRetry,
+	registryEnvExample,
+	sideload,
+}: ExtensionStoreDialogProps) {
+	const repositoryCount = catalog?.repository?.entries.length ?? 0
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl" data-testid="extension-store-dialog">
@@ -311,8 +561,7 @@ export function ExtensionStoreDialog({ open, onOpenChange, entries, isLoading, e
 						<Store className="h-5 w-5" /> Extension store
 					</DialogTitle>
 					<DialogDescription>
-						Extensions available on this marketplace. Enabling is managed in the server environment for now; installing from here comes with
-						the settings store.
+						Browse extensions from registries this marketplace trusts, and the ones built into this release.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -327,15 +576,31 @@ export function ExtensionStoreDialog({ open, onOpenChange, entries, isLoading, e
 						</Button>
 					</div>
 				)}
-				{entries && entries.length === 0 && !isLoading && (
-					<p className="py-6 text-center text-sm text-muted-foreground">No extensions are available in this release.</p>
-				)}
-				{entries && entries.length > 0 && (
-					<ul className="space-y-3">
-						{entries.map((entry) => (
-							<ExtensionStoreEntry key={entry.id} entry={entry} />
-						))}
-					</ul>
+				{catalog && (
+					<Tabs defaultValue="repository" className="w-full">
+						<TabsList>
+							<TabsTrigger value="repository" data-testid="extension-store-tab-repository">
+								Repository ({repositoryCount})
+							</TabsTrigger>
+							<TabsTrigger value="builtin" data-testid="extension-store-tab-builtin">
+								Built-in ({catalog.entries.length})
+							</TabsTrigger>
+						</TabsList>
+						<TabsContent value="repository" className="pt-3">
+							<RepositorySection repository={catalog.repository} registryEnvExample={registryEnvExample} sideload={sideload} />
+						</TabsContent>
+						<TabsContent value="builtin" className="pt-3">
+							{catalog.entries.length === 0 ? (
+								<p className="py-6 text-center text-sm text-muted-foreground">No extensions are built into this release.</p>
+							) : (
+								<ul className="space-y-3">
+									{catalog.entries.map((entry) => (
+										<ExtensionStoreEntry key={entry.id} entry={entry} />
+									))}
+								</ul>
+							)}
+						</TabsContent>
+					</Tabs>
 				)}
 			</DialogContent>
 		</Dialog>

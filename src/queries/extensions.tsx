@@ -1,12 +1,14 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import {
 	findExtensionAction,
 	invokeExtensionAction,
 	parsePublicExtensionDescriptors,
+	addSideloadedServer,
 	ExtensionActionError,
 	fetchExtensionCatalog,
-	type ExtensionCatalogEntry,
+	removeSideloadedServer,
+	type ExtensionCatalog,
 	type PublicExtensionDescriptor,
 } from '@sdk/core/extensions'
 import {
@@ -91,7 +93,7 @@ export function useDescribeProductImage() {
  * open) and is not retried automatically, to avoid repeated signer prompts.
  */
 export function useExtensionCatalog(pubkey: string | undefined, enabled: boolean) {
-	return useQuery<ExtensionCatalogEntry[], ExtensionActionError>({
+	return useQuery<ExtensionCatalog, ExtensionActionError>({
 		queryKey: extensionKeys.catalog(pubkey ?? ''),
 		enabled: enabled && Boolean(pubkey),
 		staleTime: 60_000,
@@ -103,4 +105,41 @@ export function useExtensionCatalog(pubkey: string | undefined, enabled: boolean
 			return result.value
 		},
 	})
+}
+
+/**
+ * Admin sideload add/remove. On success the catalog is refetched (the server has already invalidated its cache).
+ * Validation errors carry our own server's message, so it is shown as-is.
+ */
+export function useSideloadMutations(pubkey: string | undefined) {
+	const queryClient = useQueryClient()
+	const refresh = () => queryClient.invalidateQueries({ queryKey: extensionKeys.catalog(pubkey ?? '') })
+	const run = async (call: () => ReturnType<typeof addSideloadedServer>) => {
+		const result = await call()
+		if (!result.ok) throw result.error
+		return result.value
+	}
+
+	const add = useMutation<{ pubkey: string }, ExtensionActionError, string>({
+		mutationFn: (server) => run(() => addSideloadedServer({ sign }, server)),
+		onSuccess: refresh,
+	})
+	const remove = useMutation<{ pubkey: string }, ExtensionActionError, string>({
+		mutationFn: (server) => run(() => removeSideloadedServer({ sign }, server)),
+		onSuccess: refresh,
+	})
+
+	const error = add.error ?? remove.error
+	return {
+		onAdd: (server: string) => {
+			remove.reset()
+			add.mutate(server)
+		},
+		onRemove: (server: string) => {
+			add.reset()
+			remove.mutate(server)
+		},
+		pending: add.isPending || remove.isPending,
+		errorMessage: error ? (error.reason === 'invalid_input' ? error.message : extensionErrorMessage(error)) : undefined,
+	}
 }

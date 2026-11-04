@@ -85,10 +85,39 @@ export type { ContextVmCallTool, ContextVmToolResult, ExtensionActionToolDescrip
 export { describeExtension, findExtensionAction, parsePublicExtensionAction, parsePublicExtensionDescriptors } from './descriptors'
 export type { ExtensionActionTarget, PublicExtensionDescriptor } from './descriptors'
 export {
+	addSideloadedServer,
 	describeCatalogEntry,
+	EXTENSION_SIDELOADS_PATH,
+	removeSideloadedServer,
 	EXTENSION_CATALOG_PATH,
 	EXTENSION_CATALOG_STATES,
 	fetchExtensionCatalog,
 	parseExtensionCatalog,
+	parseExtensionCatalogResponse,
 } from './catalog'
-export type { ExtensionCatalogEntry, ExtensionCatalogState, ExtensionManagedBy, FetchExtensionCatalogOptions } from './catalog'
+export type {
+	ExtensionCatalog,
+	ExtensionCatalogEntry,
+	ExtensionCatalogState,
+	ExtensionManagedBy,
+	FetchExtensionCatalogOptions,
+} from './catalog'
+export {
+	buildRepositorySnapshot,
+	collectRegistryServers,
+	CONTEXTVM_SERVER_ANNOUNCEMENT_KIND,
+	CONTEXTVM_TOOLS_LIST_KIND,
+	EXTENSION_REGISTRY_D_TAG,
+	EXTENSION_REGISTRY_LIST_KIND,
+	parseRegistryList,
+	parseRepositorySnapshot,
+	parseServerAnnouncement,
+	parseToolsList,
+} from './repository'
+export type {
+	BuildRepositoryParams,
+	RepositoryEntryState,
+	RepositoryExtensionEntry,
+	RepositorySnapshot,
+	RepositoryTool,
+} from './repository'

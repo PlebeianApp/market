@@ -34,8 +34,9 @@ describe('extension store catalog route', () => {
 		const result = await fetchExtensionCatalog(signerFor(adminKey), { baseUrl: ORIGIN, fetch, now: () => NOW_MS })
 		expect(result.ok).toBe(true)
 		if (!result.ok) return
-		expect(result.value).toHaveLength(1)
-		expect(result.value[0]).toMatchObject({
+		expect(result.value.repository).toBeUndefined()
+		expect(result.value.entries).toHaveLength(1)
+		expect(result.value.entries[0]).toMatchObject({
 			id: 'product-image-describer',
 			icon: '/images/extension-product-image-describer.svg',
 			state: 'available',

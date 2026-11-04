@@ -1,6 +1,12 @@
 import { useConfigQuery } from '@/queries/config'
 import { useUserRole } from '@/queries/app-settings'
-import { extensionErrorMessage, useDescribeProductImage, useExtensionCatalog, useExtensionDescriptors } from '@/queries/extensions'
+import {
+	extensionErrorMessage,
+	useDescribeProductImage,
+	useExtensionCatalog,
+	useExtensionDescriptors,
+	useSideloadMutations,
+} from '@/queries/extensions'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import {
 	ExtensionCard,
@@ -23,6 +29,8 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/
 
 const header = { icon: Puzzle, title: 'Extensions', description: 'Extensions enabled on this marketplace' }
 const ENV_EXAMPLE = 'EXTENSION_PRODUCT_IMAGE_DESCRIBER_ENABLED=true'
+const REGISTRY_ENV_EXAMPLE =
+	'EXTENSIONS_REGISTRY_CURATORS=npub1…\n# optional, defaults to the app relay\nEXTENSIONS_REGISTRY_RELAYS=wss://relay.example'
 
 function ExtensionsComponent() {
 	useDashboardTitle('Extensions')
@@ -32,6 +40,7 @@ function ExtensionsComponent() {
 	const describe = useDescribeProductImage()
 	const [storeOpen, setStoreOpen] = useState(false)
 	const catalog = useExtensionCatalog(currentUserPubkey, storeOpen && amIAdmin)
+	const sideload = useSideloadMutations(currentUserPubkey)
 
 	if (isLoading || isRoleLoading) return <SettingsLoadingSkeleton />
 	// Client-side workflow gate only; the action route enforces its own auth and roles.
@@ -47,7 +56,9 @@ function ExtensionsComponent() {
 				<ExtensionStoreDialog
 					open={storeOpen}
 					onOpenChange={setStoreOpen}
-					entries={catalog.data}
+					catalog={catalog.data}
+					registryEnvExample={REGISTRY_ENV_EXAMPLE}
+					sideload={sideload}
 					isLoading={catalog.isFetching && !catalog.data}
 					errorMessage={catalog.error ? extensionErrorMessage(catalog.error) : undefined}
 					onRetry={() => void catalog.refetch()}

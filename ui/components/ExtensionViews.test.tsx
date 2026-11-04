@@ -8,6 +8,8 @@ import {
 	ExtensionStoreButton,
 	ExtensionStoreEntry,
 	ImageDescribePanel,
+	RepositoryEntryCard,
+	RepositorySection,
 } from './ExtensionViews'
 import { SettingsPageHeader } from './OperatorSettingsViews'
 
@@ -114,5 +116,117 @@ describe('extension store views', () => {
 		)
 		expect(markup).toContain('Extension store')
 		expect(markup).toContain('justify-between')
+	})
+})
+
+describe('repository views', () => {
+	const server = 'a'.repeat(64)
+	const curator = 'b'.repeat(64)
+	const entry = {
+		serverPubkey: server,
+		listedBy: [curator],
+		sideloaded: false,
+		state: 'listed' as const,
+		name: 'Shipping rates',
+		about: 'Live carrier rates',
+		website: 'https://rates.example/',
+		version: '2.1.0',
+		tools: [
+			{
+				name: 'quote',
+				title: 'Get a quote',
+				description: 'Rates for a parcel',
+				inputFields: ['weight'],
+				price: { amount: '10', unit: 'sats' },
+			},
+		],
+		paid: true,
+		encrypted: true,
+	}
+
+	test('repository entry is labelled third-party and paid, links safely, and is not installable', () => {
+		const markup = renderToStaticMarkup(<RepositoryEntryCard entry={entry} />)
+		expect(markup).toContain('Third-party')
+		expect(markup).toContain('Paid')
+		expect(markup).toContain('10 sats')
+		expect(markup).toContain('rel="noopener noreferrer nofollow"')
+		expect(markup).toContain('Paid extensions cannot be installed')
+		expect(markup).toContain(`title="${curator}"`)
+	})
+
+	test('section explains how to add registries and surfaces relay problems', () => {
+		expect(
+			renderToStaticMarkup(<RepositorySection repository={undefined} registryEnvExample="EXTENSIONS_REGISTRY_CURATORS=npub1…" />),
+		).toContain('EXTENSIONS_REGISTRY_CURATORS=npub1…')
+		const markup = renderToStaticMarkup(
+			<RepositorySection
+				registryEnvExample=""
+				repository={{
+					sideloaded: [],
+					curators: [curator],
+					relays: ['wss://relay.example'],
+					entries: [],
+					missingRegistries: [curator],
+					fetchedAt: 0,
+					problem: 'Could not read',
+				}}
+			/>,
+		)
+		expect(markup).toContain('Could not read')
+		expect(markup).toContain('No registry list found for')
+		expect(markup).toContain('No extensions are listed yet')
+	})
+})
+
+describe('sideload views', () => {
+	const server = 'c'.repeat(64)
+	const controls = {
+		onAdd: () => {},
+		onRemove: () => {},
+		pending: false,
+		errorMessage: 'Enter a server pubkey as 64-character hex or npub',
+	}
+	const sideloaded = {
+		serverPubkey: server,
+		listedBy: [],
+		sideloaded: true,
+		state: 'unavailable' as const,
+		name: 'cccccccc…',
+		tools: [],
+		paid: false,
+		encrypted: false,
+		problem: 'No server announcement found on the configured relays',
+	}
+
+	test('sideloaded entries are labelled and removable', () => {
+		const markup = renderToStaticMarkup(<RepositoryEntryCard entry={sideloaded} onRemove={() => {}} />)
+		expect(markup).toContain('Sideloaded')
+		expect(markup).toContain('added by an admin of this marketplace')
+		expect(markup).toContain(`data-testid="repository-remove-${server}"`)
+		expect(markup).not.toContain('listed by')
+		expect(renderToStaticMarkup(<RepositoryEntryCard entry={{ ...sideloaded, sideloaded: false }} onRemove={() => {}} />)).not.toContain(
+			'repository-remove-',
+		)
+	})
+
+	test('section shows the sideload form and registry setup hint with no curators', () => {
+		const markup = renderToStaticMarkup(
+			<RepositorySection
+				registryEnvExample="EXTENSIONS_REGISTRY_CURATORS=npub1…"
+				sideload={controls}
+				repository={{
+					curators: [],
+					relays: ['wss://app.example'],
+					sideloaded: [server],
+					entries: [sideloaded],
+					missingRegistries: [],
+					fetchedAt: 0,
+				}}
+			/>,
+		)
+		expect(markup).toContain('data-testid="sideload-form"')
+		expect(markup).toContain('Enter a server pubkey as 64-character hex or npub')
+		expect(markup).toContain('No registries are configured')
+		expect(markup).toContain('Sideloaded')
 	})
 })

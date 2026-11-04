@@ -40,8 +40,10 @@ describe('extension store catalog states', () => {
 			EXTENSION_ON_ENABLED: 'true',
 			EXTENSION_BROKEN_ENABLED: 'true',
 			EXTENSION_BROKEN_API_KEY: 'not-a-key-secret',
+			EXTENSIONS_STATE_PATH: ':memory:',
 		})
-		const entries = getExtensionCatalog().entries
+		const { entries, repository } = await getExtensionCatalog()
+		expect(repository?.entries ?? []).toEqual([])
 		expect(entries.map((entry) => [entry.id, entry.state])).toEqual([
 			['on', 'installed_enabled'],
 			['off', 'available'],
@@ -49,6 +51,6 @@ describe('extension store catalog states', () => {
 		])
 		expect(JSON.stringify(entries)).not.toContain('not-a-key-secret')
 		await stopExtensions()
-		expect(getExtensionCatalog().entries).toEqual([])
+		expect((await getExtensionCatalog()).entries).toEqual([])
 	})
 })

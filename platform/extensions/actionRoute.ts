@@ -106,7 +106,7 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
 }
 
 export interface ExtensionCatalogHandlerDeps {
-	getCatalog: () => unknown
+	getCatalog: () => unknown | Promise<unknown>
 	isAdmin: (pubkey: string) => boolean
 	replayCache: HttpAuthReplayCache
 	acceptedOrigins: (request: Request) => readonly string[]
@@ -131,6 +131,6 @@ export function createExtensionCatalogHandler(deps: ExtensionCatalogHandlerDeps)
 		})
 		if (!auth.ok) return errorResponse('unauthorized', { 'www-authenticate': 'Nostr' })
 		if (!deps.isAdmin(auth.pubkey)) return errorResponse('not_found')
-		return json(200, { ok: true, value: deps.getCatalog() })
+		return json(200, { ok: true, value: await deps.getCatalog() })
 	}
 }

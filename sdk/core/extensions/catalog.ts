@@ -15,6 +15,7 @@ import {
 	type ExtensionRuntime,
 } from './extension'
 import { EXTENSION_HOST_PORTS, parseEgressOrigin, type ExtensionHostPortName } from './hostPorts'
+import { parseRepositorySnapshot, type RepositorySnapshot } from './repository'
 
 export const EXTENSION_CATALOG_PATH = '/api/extensions/catalog'
 
@@ -78,6 +79,21 @@ const CAPABILITY = /^[a-z0-9]+(?:[.:-][a-z0-9]+)*$/
 const ENV_PREFIX = /^EXTENSION_[A-Z0-9_]+_$/
 const MAX_ENTRIES = 200
 
+/** Store contents: built-ins compiled into this release, plus third-party entries from configured repositories. */
+export interface ExtensionCatalog {
+	entries: readonly ExtensionCatalogEntry[]
+	/** Absent when no repository curators are configured. */
+	repository?: RepositorySnapshot
+}
+
+/** Parses an untrusted catalog response, including the optional repository snapshot. */
+export function parseExtensionCatalogResponse(input: unknown): Result<ExtensionCatalog, ValidationError> {
+	const entries = parseExtensionCatalog(input)
+	if (!entries.ok) return entries
+	const repository = isRecord(input) && input.repository !== undefined ? parseRepositorySnapshot(input.repository) : undefined
+	return success({ entries: entries.value, ...(repository ? { repository } : {}) })
+}
+
 /** Parses an untrusted catalog response; malformed entries are dropped individually. */
 export function parseExtensionCatalog(input: unknown): Result<ExtensionCatalogEntry[], ValidationError> {
 	const entries = isRecord(input) ? input.entries : undefined
@@ -101,20 +117,65 @@ export interface FetchExtensionCatalogOptions {
 }
 
 /** Admin-only: `GET /api/extensions/catalog` with a NIP-98 header signed by the admin's signer. */
-export async function fetchExtensionCatalog(
+export function fetchExtensionCatalog(
 	signer: Signer<SignedEventLike & NostrEventLike>,
 	options: FetchExtensionCatalogOptions = {},
-): Promise<Result<ExtensionCatalogEntry[], ExtensionActionError>> {
+): Promise<Result<ExtensionCatalog, ExtensionActionError>> {
+	return sendAdminRequest(signer, 'GET', EXTENSION_CATALOG_PATH, undefined, options, {
+		parse(value) {
+			const catalog = parseExtensionCatalogResponse(value)
+			if (!catalog.ok) throw catalog.error
+			return catalog.value
+		},
+	})
+}
+
+export const EXTENSION_SIDELOADS_PATH = '/api/extensions/sideloads'
+
+const sideloadResult = {
+	parse(value: unknown): { pubkey: string } {
+		if (!isRecord(value) || typeof value.pubkey !== 'string' || !/^[0-9a-f]{64}$/.test(value.pubkey))
+			throw new ValidationError('Invalid sideload response')
+		return { pubkey: value.pubkey }
+	},
+}
+
+/** Admin-only: sideload a ContextVM server by hex pubkey or npub. The server validates and normalizes it. */
+export function addSideloadedServer(
+	signer: Signer<SignedEventLike & NostrEventLike>,
+	server: string,
+	options: FetchExtensionCatalogOptions = {},
+): Promise<Result<{ pubkey: string }, ExtensionActionError>> {
+	return sendAdminRequest(signer, 'POST', EXTENSION_SIDELOADS_PATH, JSON.stringify({ server: server.trim() }), options, sideloadResult)
+}
+
+/** Admin-only: remove a sideloaded server. */
+export function removeSideloadedServer(
+	signer: Signer<SignedEventLike & NostrEventLike>,
+	pubkey: string,
+	options: FetchExtensionCatalogOptions = {},
+): Promise<Result<{ pubkey: string }, ExtensionActionError>> {
+	return sendAdminRequest(signer, 'DELETE', `${EXTENSION_SIDELOADS_PATH}/${encodeURIComponent(pubkey)}`, undefined, options, sideloadResult)
+}
+
+async function sendAdminRequest<Output>(
+	signer: Signer<SignedEventLike & NostrEventLike>,
+	method: 'GET' | 'POST' | 'DELETE',
+	path: string,
+	body: string | undefined,
+	options: FetchExtensionCatalogOptions,
+	output: { parse(value: unknown): Output },
+): Promise<Result<Output, ExtensionActionError>> {
 	const baseUrl = options.baseUrl ?? (globalThis as { location?: { origin?: string } }).location?.origin
-	if (!baseUrl) return failure(new ExtensionActionError('network_error', 'fetchExtensionCatalog requires a baseUrl outside the browser'))
+	if (!baseUrl) return failure(new ExtensionActionError('network_error', 'Extension admin requests require a baseUrl outside the browser'))
 	const fetchImpl = options.fetch ?? (globalThis.fetch as unknown as ExtensionActionFetch | undefined)
 	if (!fetchImpl) return failure(new ExtensionActionError('network_error', 'No fetch implementation available'))
 
-	const url = new URL(EXTENSION_CATALOG_PATH, baseUrl).toString()
+	const url = new URL(path, baseUrl).toString()
 	let authorization: string
 	try {
 		const createdAt = Math.floor((options.now?.() ?? Date.now()) / 1000)
-		authorization = encodeHttpAuthHeader(toRawEvent(await signer.sign(buildHttpAuthTemplate({ url, method: 'GET', createdAt }))))
+		authorization = encodeHttpAuthHeader(toRawEvent(await signer.sign(buildHttpAuthTemplate({ url, method, body, createdAt }))))
 	} catch (cause) {
 		return failure(new ExtensionActionError('unauthorized', 'Could not sign the request', cause))
 	}
@@ -122,20 +183,15 @@ export async function fetchExtensionCatalog(
 	let status: number
 	let text: string
 	try {
-		const response = await fetchImpl(url, { method: 'GET', headers: { authorization }, signal: options.signal })
+		const headers: Record<string, string> = { authorization, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }
+		const response = await fetchImpl(url, { method, headers, ...(body !== undefined ? { body } : {}), signal: options.signal })
 		status = response.status
 		text = await response.text()
 	} catch (cause) {
 		return failure(new ExtensionActionError('network_error', undefined, cause))
 	}
 
-	return parseExtensionActionResponse(status, text, {
-		parse(value) {
-			const catalog = parseExtensionCatalog(value)
-			if (!catalog.ok) throw catalog.error
-			return catalog.value
-		},
-	})
+	return parseExtensionActionResponse(status, text, output)
 }
 
 function parseEntry(input: unknown): ExtensionCatalogEntry | undefined {
