@@ -1,0 +1,154 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_LIVE_FIVE_MEMBER_READINESS_V1",
+  "status": "BACKEND_AND_LOOPBACK_SITE_ACTIVE_LIVE_FIVE_MEMBER_ACCEPTANCE_NOT_YET_RUN",
+  "observedAtUtc": "2026-11-04T01:34:36Z",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "sourceCommit": "0a8f7b3b194755c90a5988cb884d526edc3be740",
+  "readOnlyControllers": {
+    "clock": {
+      "path": "/tmp/measure_plebeian_host_clocks.py",
+      "sha256": "20cb3429d71b7ca07614ad9cfa3b40629893702c0308bc7792fd716d79c3f634"
+    },
+    "services": {
+      "path": "/tmp/read_plebeian_service_states.py",
+      "sha256": "be31376985428c63db4c1d0ce6ed448acfd5d7bd4a55f6baf9942513f540c7f1"
+    },
+    "acceptancePrerequisites": {
+      "path": "/tmp/read_plebeian_acceptance_prereqs.py",
+      "sha256": "f76bf37f528a0aedb99f049e5ce18e3fb17499ce98d37c7c4056c6fb2b18315c"
+    }
+  },
+  "clock": {
+    "appNtpSynchronized": false,
+    "validatorNtpSynchronized": true,
+    "appMidpointOffsetMs": -21.5,
+    "validatorMidpointOffsetsMs": [1215.5, 1241.5, 1367.5, 1184.0],
+    "validatorMedianOffsetMs": 1228.5,
+    "appBehindValidatorMedianMs": 1250.0,
+    "qualification": "The current difference remains below the two-second signed-health bound but APP is not synchronized. Re-measure immediately before the live run and stop if the bound is reached."
+  },
+  "runtime": {
+    "appServices": {
+      "fips": "active-running-zero-restarts",
+      "mint": "active-running-zero-restarts",
+      "observer": "active-running-zero-restarts",
+      "coordinator": "active-running-zero-restarts",
+      "authority": "active-running-zero-restarts",
+      "site": "active-running-zero-restarts"
+    },
+    "validatorServices": "V1-V4 fips, Comet validator and FROST signer active-running with zero restarts",
+    "publicHttpListeners": [],
+    "appLoopbackListeners": ["127.0.0.1:27657", "127.0.0.1:8180", "127.0.0.1:8181"],
+    "authority": {
+      "newOperationsReady": true,
+      "quarantined": false,
+      "chainId": "plebeian-auctions-mvp-20261102",
+      "queuePending": 0,
+      "observedHeight": 9835
+    },
+    "consensus": {
+      "validatorsOnline": 4,
+      "commitSignatures": 4,
+      "commonObservedHeight": 9835,
+      "chainAuctions": 0,
+      "chainBids": 0,
+      "chainOperations": 0
+    },
+    "readinessWarmup": {
+      "sixSequentialConfigSamples": [false, true, true, true, true, true],
+      "sixSequentialAuthoritySamples": [true, true, true, true, true, true],
+      "explanation": "The authority readiness machine intentionally requires two advancing samples spaced by at least one second after its twenty-second continuity window expires. The public browser polls every four seconds; wait for stable true flags before connecting or mutating."
+    }
+  },
+  "fiveMemberJourney": {
+    "implementedUi": true,
+    "identity": "Five distinct NIP-07 actors in five isolated browser profiles; tab-local demo identities are disposable fallback only.",
+    "exactTestVector": {
+      "sellerCount": 1,
+      "bidderCount": 4,
+      "fundingPerActor": 10000,
+      "durationSeconds": 600,
+      "lateBidWindowSeconds": 180,
+      "lateBidExtensionSeconds": 180,
+      "maxTotalExtensionSeconds": 1800,
+      "emergencyRecoverySeconds": 900,
+      "startingBid": 100,
+      "minimumIncrement": 100,
+      "bidAmounts": [100, 200, 300, 400],
+      "expectedFinalSpendableFromZero": [10400, 10000, 10000, 10000, 9600],
+      "expectedTotal": 50000
+    },
+    "requiredEvidence": [
+      "five distinct NIP-07 public actors and clean isolated browser wallets",
+      "five finalized fake-funding operations at 10000 sats each",
+      "four admitted bids with committed heights and exact 3-of-4 threshold admission receipts",
+      "three full certified outbid returns",
+      "one late-bid 180-second extension",
+      "automatic close while V4 is unavailable and three canonical commit signatures remain",
+      "one seller winner-payment import for 400 sats",
+      "exact 50000-sat conservation with no reserved, locked, pending or unresolved balance",
+      "V4 rejoined afterward with a four-signature canonical commit"
+    ]
+  },
+  "acceptanceTooling": {
+    "sourceDriverStatus": "CONCRETE_OPERATOR_ADAPTERS_NOT_BROWSER_BRIDGED_OR_LIVE_TESTED",
+    "focusedTests": {
+      "passed": 38,
+      "failed": 0,
+      "suites": [
+        "demo-friday-browser-acceptance-runner.test.ts",
+        "demo-friday-browser-acceptance-adapters.test.ts",
+        "demo-friday-r20-acceptance-operator-cli.test.ts",
+        "demo-friday-r20-browser-acceptance-composition.test.ts"
+      ]
+    },
+    "localBuildsNotInstalled": [
+      {
+        "path": "dist/sidequest/plebeian-friday-comet-probe",
+        "bytes": 99296969,
+        "sha256": "e6f498b88a513b26d68a4f824a3721afce4864f582b98ed22700fd69eb9f501b"
+      },
+      {
+        "path": "dist/sidequest/plebeian-friday-r20-acceptance-operator",
+        "bytes": 99339504,
+        "sha256": "55ccf5c4d8b3d7372c736b3ee28039ce114694ff3055161d3932e628939e254f"
+      }
+    ],
+    "remoteFindings": {
+      "cometProbeOnV2": "absent from every fixed current candidate path checked",
+      "acceptanceOperatorOnV2OrV4": "absent from every fixed current candidate path checked",
+      "validatorUnitSha256": "ff37b56e05c9325c7c92d821a0d73e3b9fcb153c54fcb58482c50e83351e3961",
+      "operatorFixedAgentSocket": "/tmp/plebeian-poc-owner-agent.sock",
+      "operatorFixedAgentSocketPresent": false,
+      "currentAgentSocket": "/tmp/ssh-1UGv8p0CgFNJ/agent.263905",
+      "fixedKnownHostsHasV2AndV4": true
+    },
+    "qualification": "The local tools are tested builds only. The current R20 source pins the probe/operator beneath the predecessor separated-deploy-v1 release, so a minimal successor acceptance path correction and rebuild is required before any create-once install; predecessor releases must remain untouched."
+  },
+  "blockers": [
+    "Verified public HTTPS exposure is not complete; the browser controller rejects every non-HTTPS origin.",
+    "The real five-person NIP-07 and fake-sat journey has not run.",
+    "The concrete R20 composition automates only seller, bidder-a and bidder-b roles; the five-member runner is tested but not browser/operator bridged. The live UI can perform the five roles manually.",
+    "The audited V4 stop/rejoin operator path is not installed and its fixed SSH agent socket is absent. Separate fresh stop and start approvals remain mandatory.",
+    "APP is about 1.25 seconds behind the validator median and remains NTP-unsynchronized."
+  ],
+  "nextSafeSequence": [
+    "Complete and verify the HTTPS reverse proxy without bypassing certificate validation.",
+    "Warm readiness with at least two advancing samples and re-measure APP-to-validator clock skew immediately before the run.",
+    "Install a create-once successor acceptance release containing the pinned Comet probe and owner-side operator after correcting their immutable path contract; do not touch predecessor releases.",
+    "Open five isolated HTTPS browser profiles, connect five distinct NIP-07 identities, confirm empty unavailable balances, and fund each with 10000 fake sats.",
+    "Create the exact 600-second auction and admit the first three bids while the seller explicitly services each plan; verify each threshold admission and displaced refund.",
+    "Place the fourth bid in the final 180-second window and verify the 180-second extension and third refund.",
+    "Under a fresh bounded STOP_VALIDATOR_4_ONCE approval, stop V4, verify three-signature finality, and observe automatic close plus seller import.",
+    "Under a distinct fresh START_VALIDATOR_4_ONCE approval, restart V4 and verify a new four-signature canonical commit.",
+    "Publish only sanitized public acceptance evidence; exclude bearer proofs, wallet keys, NIP-07 private material, validator keys and FROST shares."
+  ],
+  "effects": {
+    "remoteWrites": false,
+    "servicesChanged": false,
+    "credentialsChanged": false,
+    "networkChanged": false,
+    "thresholdSignaturesRequested": false,
+    "paymentsOrFakeSatsMoved": false
+  }
+}
