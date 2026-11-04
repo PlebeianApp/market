@@ -1,5 +1,6 @@
 /** Pure topology and path binding shared by all three concrete signer policies. */
 import { join } from 'node:path'
+import { lstat, mkdir } from 'node:fs/promises'
 import { exactDemoFridayApplication, exactDemoFridayStatePath, demoFridayLoopbackRpc, isSeparatedApplication,
 	demoFridayMintIdentityUrl, demoFridayMintUrl, demoFridayNodeRoot } from './demo-friday-runtime-config'
 
@@ -23,6 +24,31 @@ export function resolveDemoFridaySignerContract(input: unknown, slot: 1 | 2 | 3 
 	issued.add(contract); return contract
 }
 export type DemoFridaySignerContract = ReturnType<typeof resolveDemoFridaySignerContract>
+
+/** Create the private invocation-scratch parent before the service accepts RPCs.
+ *
+ * Effectful signer paths use mkdtemp(3) below this directory.  Leaving the
+ * parent implicit lets a request pass pure policy checks and enter the durable
+ * pending state before failing with ENOENT.  The signer therefore provisions
+ * this one directory at startup and refuses files, links, foreign ownership or
+ * permissive modes instead of discovering a bad path during a signing round.
+ */
+export async function ensureDemoFridaySignerScratch(contract: DemoFridaySignerContract): Promise<string> {
+	if (!issued.has(contract)) throw new Error('DEMO_SIGNER_SCRATCH: unissued contract')
+	const path = contract.paths.scratchParent
+	try { await mkdir(path, { mode: 0o700 }) }
+	catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+	}
+	const metadata = await lstat(path)
+	const runtimeUid = process.geteuid?.()
+	if (!metadata.isDirectory() || metadata.isSymbolicLink()
+		|| runtimeUid === undefined || metadata.uid !== runtimeUid
+		|| (metadata.mode & 0o777) !== 0o700) {
+		throw new Error('DEMO_SIGNER_SCRATCH: path must be a runtime-owned 0700 directory')
+	}
+	return path
+}
 export function assertDemoFridaySignerContract(contract: DemoFridaySignerContract, pins: {
 	cometRpc: string; mintUrl: string; mintTransportUrl: string; participantId?: number
 }): void {

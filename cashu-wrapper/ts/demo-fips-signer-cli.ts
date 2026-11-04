@@ -25,7 +25,7 @@ import {
 } from './demo-fips-funding-abort-rpc'
 import { DemoFipsFundingAbortRpcSqliteJournal } from './demo-fips-funding-abort-rpc-sqlite'
 import { assertDemoFipsTerminalPins, createDemoFipsTerminalPolicyPorts } from './demo-fips-terminal-policy'
-import { preflightDemoFridaySignerPolicyComposition } from './demo-friday-signer-contract'
+import { ensureDemoFridaySignerScratch, preflightDemoFridaySignerPolicyComposition } from './demo-friday-signer-contract'
 import { ensureDemoFridaySignerEnrollment } from './demo-friday-signer-enrollment'
 import {
 	exactDemoFridayApplication, isSeparatedApplication,
@@ -222,6 +222,7 @@ async function boundedParticipant(command: string[], signal: AbortSignal): Promi
 }
 const stateDirectory = binding.stateDirectory
 const { scratchParent, proofUsePath, anchorPath, admissionSafetyPath, enrollmentPermit } = signerContract.paths
+await ensureDemoFridaySignerScratch(signerContract)
 let anchor!: DemoDispositionSignerAnchor
 let assertJournalReadiness = () => {}
 const mutationGate = createDemoSignerSerialization({

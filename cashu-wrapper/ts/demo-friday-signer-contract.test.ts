@@ -135,8 +135,9 @@ import { prepareDemoIntegratedFundingReceiptV4 } from './demo-integrated-funding
 import { demoFridayFundingKeyAuthorizationDigest, demoFridayFundingAuthorizationUnsignedEvent } from './demo-friday-browser-funding-authorization'
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
-import { preflightDemoFridaySignerPolicyComposition, demoFridaySignerCometFetch } from './demo-friday-signer-contract'
+import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { preflightDemoFridaySignerPolicyComposition, demoFridaySignerCometFetch, ensureDemoFridaySignerScratch } from './demo-friday-signer-contract'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { createDemoFipsAdmissionParticipant, assertDemoFipsAdmissionPins } from './demo-fips-admission-policy'
 import { createDemoFipsFundingAbortParticipant, assertDemoFipsFundingAbortPins } from './demo-fips-funding-abort-policy'
@@ -247,6 +248,30 @@ test('P1 Comet origin guard rejects a foreign host before fetch',async()=>{
 	let reads=0;const c=composition().contract,fetchImpl=Object.assign(async()=>{reads++;return Response.json({})},{preconnect:fetch.preconnect})
 	await expect(demoFridaySignerCometFetch(c,fetchImpl)('http://127.0.0.1:26657/status')).rejects.toThrow(/ORIGIN/);expect(reads).toBe(0)
 })
+test('P1 signer startup creates and revalidates its private scratch parent',async()=>{
+	const root=await mkdtemp('/tmp/plebeian-friday-fips-lab.signer-scratch.')
+	try{
+		const application={...lab,network_root:join(root,'network'),dkg_root:join(root,'frost','keyset')}
+		const contract=composition(application).contract
+		await mkdir(contract.nodeRoot,{recursive:true,mode:0o700})
+		expect(await ensureDemoFridaySignerScratch(contract)).toBe(contract.paths.scratchParent)
+		const metadata=await lstat(contract.paths.scratchParent)
+		expect(metadata.isDirectory()).toBe(true);expect(metadata.mode&0o777).toBe(0o700)
+		expect(await ensureDemoFridaySignerScratch(contract)).toBe(contract.paths.scratchParent)
+	}finally{await rm(root,{recursive:true,force:true})}
+})
+for(const kind of ['file','symlink','mode'] as const)test(`P1 signer startup rejects unsafe scratch ${kind}`,async()=>{
+	const root=await mkdtemp('/tmp/plebeian-friday-fips-lab.signer-scratch-reject.')
+	try{
+		const application={...lab,network_root:join(root,'network'),dkg_root:join(root,'frost','keyset')}
+		const contract=composition(application).contract
+		await mkdir(contract.nodeRoot,{recursive:true,mode:0o700})
+		if(kind==='file')await writeFile(contract.paths.scratchParent,'not a directory',{mode:0o600})
+		if(kind==='symlink')await symlink(root,contract.paths.scratchParent)
+		if(kind==='mode'){await mkdir(contract.paths.scratchParent,{mode:0o700});await chmod(contract.paths.scratchParent,0o750)}
+		await expect(ensureDemoFridaySignerScratch(contract)).rejects.toThrow(/runtime-owned 0700 directory/)
+	}finally{await rm(root,{recursive:true,force:true})}
+})
 for(const slot of [1,2,3,4] as const)test(`P2 slot${slot}: every CLI writer and SQLite sidecar fits exact rendered roots`,async()=>{
 	const c=composition(r20,slot).contract,renderer=new URL('../../deploy/friday/r20/render-friday-signer-state-dropin.py',import.meta.url).pathname
 	const child=Bun.spawn(['python3','-I','-S','-B',renderer,'--slot',String(slot)],{stdin:new Blob([JSON.stringify(r20)]),stdout:'pipe',stderr:'pipe'})
@@ -261,6 +286,7 @@ for(const slot of [1,2,3,4] as const)test(`P2 slot${slot}: every CLI writer and 
 	const cli=await readFile(new URL('./demo-fips-signer-cli.ts',import.meta.url),'utf8')
 	for(const name of ['signerJournalPath','publicEnrollmentPath','leasePath','quarantinePath'])expect(cli).toContain('signerContract.paths.'+name)
 	expect(cli.indexOf('} = preflightDemoFridaySignerPolicyComposition(')).toBeLessThan(cli.indexOf('const participantBootstrap ='))
+	expect(cli.indexOf('await ensureDemoFridaySignerScratch(signerContract)')).toBeLessThan(cli.indexOf('createDemoSignerSerialization({'))
 	expect(cli).not.toContain('demoFridayLoopbackRpc(');expect(cli).not.toContain('nodeRoot,')
 })
 
