@@ -1,0 +1,58 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_APP_CLOCK_CORRECTION_BACKEND_START_PLAN_V1",
+  "status": "READY_FOR_EXACT_APPROVAL_NOT_EXECUTED",
+  "preparedAtUtc": "2026-11-04T00:05:27Z",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "cause": "APP system time is approximately 7.2 seconds behind all four NTP-synchronized validators, exceeding the signer-health protocol's fixed five-second authentication window. APP's UTC RTC matches validator time, while systemd-timesyncd is active but has received zero NTP replies.",
+  "clockCorrection": {
+    "host": "APP",
+    "currentDirection": "forward-only",
+    "expectedStepSeconds": "approximately 7",
+    "trustedReference": "APP /proc/driver/rtc cross-checked against V1-V4 NTP-synchronized clocks",
+    "mechanism": "Read rtc_date and rtc_time once on APP and invoke /usr/bin/date --utc --set once from that captured UTC value.",
+    "preconditions": [
+      "Fresh parallel measurement shows V1-V4 NTP synchronized with mutually consistent clocks.",
+      "Fresh APP RTC value agrees with validator time while APP system time is between 5 and 15 seconds behind.",
+      "Coordinator, authority and site are stopped; queue is revision 0 with zero operations and signer anchors are empty.",
+      "The preserved signer-threshold STOPPED receipt is exact."
+    ],
+    "postconditions": [
+      "APP system time never moved backward.",
+      "Fresh APP-to-V1-V4 measurements show absolute skew below two seconds.",
+      "systemd-timesyncd configuration and service state are unchanged."
+    ],
+    "notChanged": [
+      "APP RTC",
+      "systemd-timesyncd configuration",
+      "provider or host firewall",
+      "validator clocks",
+      "application credentials, keys or databases"
+    ],
+    "operationalEffect": "Wall-clock timestamps on active APP observer, mint and FIPS processes jump forward by approximately seven seconds. No auction backend process is active during the step."
+  },
+  "backendContinuation": [
+    "After successful clock verification, recheck exact public config, coordinator R2 release/unit, four public enrollment files, inactive coordinator/authority/site, active observer/mint/FIPS, empty queue and absent 8180/8181/80/443 listeners.",
+    "Run the coordinator and authority guards.",
+    "Start coordinator and authority once with NRestarts=0 and exact 127.0.0.1:8181 authority listener.",
+    "Collect bounded status samples and require warming then ready, advancing committed heights, exact pins, mode normal, funding enabled_two_step_nip07 and four epoch-1 signer anchors.",
+    "Keep site/nginx/HTTPS off and queue revision 0 with zero operations."
+  ],
+  "securityAndFinancialEffects": {
+    "appSystemClockChanged": true,
+    "authenticatedRpcIdentityHealthSignatures": true,
+    "signerHealthAnchorsPersisted": true,
+    "frostThresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "realFundsInScope": false
+  },
+  "failurePolicy": "If clock preconditions or post-verification fail, do not start backend services and do not step the clock again. If backend activation fails, stop only coordinator/authority started by this action. Preserve all files, receipts, databases and anchor records; do not move the clock backward, retry, reset or delete.",
+  "longTermQualification": "This is a bounded MVP correction, not a permanent NTP repair. APP's NTP egress/reply path remains unsynchronized and should be repaired separately before production-money use.",
+  "exactApprovalRequest": "The backend and chain are healthy, but APP is about seven seconds behind the four NTP-synchronized validators, so all signed signer-health requests expire. APP's UTC hardware clock is correct. May I step APP's system clock forward once from that RTC after fresh cross-checks, verify skew below two seconds, and then start coordinator and authority once more for the signed readiness checks? This will not change firewalls, NTP configuration, the website or HTTPS, and it will not request a threshold signature or payment.",
+  "notAuthorized": [
+    "Changing APP system time",
+    "Starting coordinator or authority again",
+    "Changing NTP configuration or firewalls",
+    "Starting site, nginx or HTTPS",
+    "Sending a threshold signing, funding, auction, settlement or payment request"
+  ]
+}

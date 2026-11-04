@@ -1,0 +1,100 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_APP_BACKEND_SIGNER_THRESHOLD_STOPPED_ACTUAL_V1",
+  "status": "COORDINATOR_AND_AUTHORITY_STARTED_CHAIN_AND_MINT_READY_SIGNER_HEALTH_THRESHOLD_BLOCKED_BY_APP_CLOCK_SKEW_BOTH_STOPPED_NO_RETRY",
+  "completedAtUtc": "2026-11-04T00:05:27Z",
+  "planSha256": "70477c52f63e59feb6359d71f01171fa20e55ec3469c9dae0246b98514dddf8d",
+  "controller": {
+    "path": "/tmp/run_app_backend_final_start.py",
+    "sha256": "28e1439f30ef2d35c3d1034c8c26a98e985b76bfcbf31191c611af4752f5ebe0"
+  },
+  "startup": {
+    "coordinatorGuard": "SIDEQUEST_COORDINATOR_R2_TARGET=PASS",
+    "authorityGuard": "SIDEQUEST_ROLE_TARGET=PASS",
+    "coordinatorReachedRunning": true,
+    "authorityReachedRunning": true,
+    "authorityListener": "127.0.0.1:8181",
+    "restartCountAcceptance": "both zero; corrected check passed",
+    "applicationStartupError": false
+  },
+  "readiness": {
+    "samples": 12,
+    "allHttpStatus": 503,
+    "allSchema": "PLEBEIAN_FRIDAY_AUTHORITY_STATUS_V1",
+    "allReason": "signer_threshold",
+    "allMode": "normal",
+    "allFunding": "enabled_two_step_nip07",
+    "firstCommittedHeight": 4967,
+    "lastCommittedHeight": 4999,
+    "chainProgressVerified": true,
+    "readinessConfigSha256": "b6d28b268b732006d12cf52c529486e1377ab38ba51f3f570b0a0b56e9f19012",
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "mintUrl": "https://139.162.161.233",
+    "signerHealthAnchorsAccepted": 0
+  },
+  "clockDiagnosis": {
+    "protocolWindowMs": 5000,
+    "measurementController": "/tmp/measure_plebeian_host_clocks.py",
+    "measurementControllerSha256": "20cb3429d71b7ca07614ad9cfa3b40629893702c0308bc7792fd716d79c3f634",
+    "midpointOffsetMs": {
+      "APP": -5696.0,
+      "V1": 1473.5,
+      "V2": 1554.5,
+      "V3": 1593.5,
+      "V4": 1440.0
+    },
+    "appBehindValidatorRangeMs": [7136.0, 7289.5],
+    "validatorNtpSynchronized": true,
+    "appNtpConfiguredAndRunning": true,
+    "appNtpSynchronized": false,
+    "appRtcApproximatelyMatchesValidators": true,
+    "timesyncServer": "ntp.ubuntu.com",
+    "timesyncPacketCount": 0,
+    "timesyncFailure": "Repeated IPv4 and IPv6 UDP/123 reply timeouts",
+    "localHostFirewallActive": false,
+    "causalAssessment": "The measured APP-to-validator skew exceeds the exact signed health authentication window and is sufficient to make all otherwise valid health requests fail before signer anchors are recorded."
+  },
+  "publicSignerDiagnostics": {
+    "controller": "/tmp/diagnose_signer_health_public.py",
+    "controllerSha256": "fcf2c1b88a04f31ef033c19cdd71594ff82b7da36bbd6949b82e77c7de98d267",
+    "allFourServicesActiveZeroRestarts": true,
+    "allFourExactFipsOnlyListeners": true,
+    "allFourPublicApplicationsPinsAndEnrollmentFilesExact": true,
+    "allFourJournalQuickChecksOk": true,
+    "allSignerAdmissionFundingAbortJournalsEmpty": true,
+    "allSignerRestartEpochs": 1,
+    "appHealthPathProbeController": "/tmp/probe_app_health_paths.py",
+    "appHealthPathProbeControllerSha256": "3c52db4d64b05fe99e4841faec942f418543813803b1192abdbcb54359e47b47",
+    "allFourHealthHandlersReachableOverFips": true,
+    "invalidPublicSignatureProbeResult": "403 HEALTH_AUTHENTICATION on all four; no state mutation"
+  },
+  "settledState": {
+    "coordinator": "inactive-dead-NRestarts-0",
+    "authority": "inactive-dead-NRestarts-0",
+    "site": "inactive-dead",
+    "observerMintFips": "active-unchanged",
+    "listeners8180or8181": false,
+    "listeners80or443": false,
+    "queueRevision": 0,
+    "queuedOperations": 0,
+    "coordinatorDatabaseQuickCheck": "ok",
+    "signerAnchorRows": 0
+  },
+  "effects": {
+    "signedHealthRequestsAttempted": true,
+    "signedHealthAnchorsPersisted": false,
+    "frostThresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "siteNginxHttpsFirewallOrExternalExposureChanged": false,
+    "systemClockOrTimeSyncConfigurationChanged": false
+  },
+  "remoteReceipts": {
+    "actionSha256": "ba9d9fcd92e68f4dccf4c21e7dc2bf5d484fda3ebbda599cafcf204b8fa1ceae",
+    "stoppedSha256": "ec1df19a4b3baab453dec9586a4b9f6a1cf28436ac364a12af354cdc1341d724"
+  },
+  "reconciliation": {
+    "path": "/tmp/reconcile_app_backend_final_start.py",
+    "sha256": "779779036637b7212b91f722f46bdb03afa5d8525b7a08c2aa4c05ba714560e4",
+    "remoteMutation": false
+  },
+  "nextStep": "Under separate explicit approval, step APP system time forward once from its already-correct UTC RTC after fresh validator/RTC cross-checks, verify skew is below two seconds, then perform one new backend activation and signed readiness check."
+}
