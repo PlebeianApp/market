@@ -1,0 +1,27 @@
+[Unit]
+Description=Plebeian Auctions side-quest fake-money site/API R4 module-loader fix
+Wants=plebeian-friday-observer.service
+After=plebeian-friday-observer.service
+
+[Service]
+Type=simple
+User=plebeian-friday-site
+Group=plebeian-friday-public
+Slice=plebeian-friday.slice
+EnvironmentFile=/etc/plebeian-auctions-friday/friday.env
+ExecStartPre=/usr/bin/python3 -I -S -B /opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-site-r4/bin/verify-friday-separated-target.py --environment /etc/plebeian-auctions-friday/friday.env --application ${FRIDAY_APPLICATION} --service plebeian-friday-site.service
+ExecStart=/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-site-r4/bin/plebeian-auctions-mvp serve --home ${FRIDAY_NETWORK_ROOT} --listen 127.0.0.1:${FRIDAY_SITE_PORT}
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+MemoryMax=160M
+TasksMax=128
+
+LogNamespace=plebeian-friday-separated
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200
