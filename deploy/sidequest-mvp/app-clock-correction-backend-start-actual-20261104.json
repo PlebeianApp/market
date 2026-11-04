@@ -1,0 +1,124 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_APP_CLOCK_CORRECTION_BACKEND_START_ACTUAL_V1",
+  "status": "APP_CLOCK_CORRECTED_COORDINATOR_AND_LOOPBACK_AUTHORITY_ACTIVE_COMPOSITE_READY_FOUR_SIGNER_HEALTH_ANCHORS_NO_THRESHOLD_SIGNATURE_OR_PAYMENT",
+  "completedAtUtc": "2026-11-04T00:14:43Z",
+  "planSha256": "d3c276e83ad5882a7fdb1a1df90bd6ecdab32bc9ab613ecd63a597e3cc7cb5bc",
+  "controller": {
+    "path": "/tmp/run_app_clock_correction_backend_start.py",
+    "sha256": "80ed44ac484e6fb60fbae2170b31c3ba16c9a5cca0a572a1c0c5ec4ec7615fc6"
+  },
+  "clockPrecheck": {
+    "allValidatorsNtpSynchronized": true,
+    "validatorMidpointOffsetsMs": [1772.0, 2013.0, 1943.0, 1771.0],
+    "validatorOffsetSpreadMs": 242.0,
+    "appMidpointOffsetMs": -5206.0,
+    "appBehindValidatorMedianMs": 7063.5,
+    "rtcMs": 1793751248000,
+    "systemMs": 1793751242198,
+    "rtcAgreedWithValidators": true,
+    "backendAndSiteInactive": true,
+    "queueRevision": 0,
+    "queuedOperations": 0,
+    "signerAnchorRows": 0
+  },
+  "clockCorrection": {
+    "direction": "forward-only",
+    "source": "APP UTC RTC cross-checked against V1-V4 synchronized clocks",
+    "systemBeforeMs": 1793751244144,
+    "rtcBeforeMs": 1793751250000,
+    "systemAfterMs": 1793751250000,
+    "rtcAfterMs": 1793751250000,
+    "forwardStepMs": 5856,
+    "clockReceiptSha256": "fe2a62cec6afa3073b9128ef9f9ff13e520d58a28ddc798d996f4e666582419d",
+    "clockReceiptBytes": 444,
+    "ntpConfigurationChanged": false,
+    "firewallChanged": false,
+    "rtcChanged": false
+  },
+  "clockPostcheck": {
+    "appMidpointOffsetMs": -249.5,
+    "validatorMedianOffsetMs": 1125.25,
+    "appBehindValidatorMedianMs": 1374.75,
+    "requiredAbsoluteSkewBelowMs": 2000,
+    "passed": true
+  },
+  "backend": {
+    "coordinatorGuard": "SIDEQUEST_COORDINATOR_R2_TARGET=PASS",
+    "authorityGuard": "SIDEQUEST_ROLE_TARGET=PASS",
+    "coordinator": "active-running-NRestarts-0",
+    "authority": "active-running-NRestarts-0",
+    "authorityListener": "127.0.0.1:8181",
+    "site": "inactive-dead",
+    "public80or443Listener": false,
+    "site8180Listener": false
+  },
+  "compositeReadiness": {
+    "activationSamples": [
+      {
+        "httpStatus": 503,
+        "readinessReason": "warming",
+        "newOperationsReady": false,
+        "lastCommittedHeight": 5871
+      },
+      {
+        "httpStatus": 200,
+        "readinessReason": "ready",
+        "newOperationsReady": true,
+        "lastCommittedHeight": 5873
+      }
+    ],
+    "independentReconciliationSamples": [
+      {
+        "httpStatus": 503,
+        "readinessReason": "warming",
+        "newOperationsReady": false,
+        "lastCommittedHeight": 5937
+      },
+      {
+        "httpStatus": 200,
+        "readinessReason": "ready",
+        "newOperationsReady": true,
+        "lastCommittedHeight": 5941
+      }
+    ],
+    "mode": "normal",
+    "funding": "enabled_two_step_nip07",
+    "readinessConfigSha256": "b6d28b268b732006d12cf52c529486e1377ab38ba51f3f570b0a0b56e9f19012",
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "mintUrl": "https://139.162.161.233",
+    "chainAdvanced": true,
+    "fourSignerThresholdSatisfied": true
+  },
+  "signerAnchors": [
+    {"participantId": 1, "maximumRestartEpoch": 1, "processObserved": true},
+    {"participantId": 2, "maximumRestartEpoch": 1, "processObserved": true},
+    {"participantId": 3, "maximumRestartEpoch": 1, "processObserved": true},
+    {"participantId": 4, "maximumRestartEpoch": 1, "processObserved": true}
+  ],
+  "coordinatorState": {
+    "queueRevision": 0,
+    "queuedOperations": 0,
+    "quickCheck": "ok"
+  },
+  "receipts": {
+    "actionSha256": "3b0ba2b9e6a690a494363d62f8a39c4903f90fea41e34b4b8c2fbe7fc2d82e78",
+    "clockSha256": "fe2a62cec6afa3073b9128ef9f9ff13e520d58a28ddc798d996f4e666582419d",
+    "actualSha256": "8be9a8ae925c95e16da9abc11e3810beaad14a6902fd76137b36a2549a83abb7"
+  },
+  "effects": {
+    "appSystemClockSteppedForwardOnce": true,
+    "authenticatedRpcIdentityHealthSignatures": true,
+    "signerHealthAnchorsPersisted": true,
+    "frostThresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "siteNginxHttpsNtpOrFirewallChanged": false,
+    "secretShareOrPrivateKeyCopied": false
+  },
+  "reconciliation": {
+    "path": "/tmp/reconcile_app_clock_backend_success.py",
+    "sha256": "2dd7557424965a154a2655c2bf2ec23b6d96588bea3ec8ed300ab3b80e04238d",
+    "remoteMutationBeyondAuthorizedSignedHealth": false
+  },
+  "qualification": "APP systemd-timesyncd remains enabled but unsynchronized because its NTP requests receive no replies. The RTC correction is sufficient for the current fake-money MVP window but the NTP path must be repaired before production-money use.",
+  "nextStep": "Prepare and separately approve loopback site activation and browser-level five-user fake-sat acceptance. Public HTTPS remains a distinct blocked step."
+}
