@@ -1,0 +1,29 @@
+[Unit]
+Description=Plebeian Friday side-quest fake-money FROST signer R13 (recovery guard successor)
+Requires=plebeian-friday-fips.service plebeian-friday-validator.service
+After=plebeian-friday-fips.service plebeian-friday-validator.service
+
+[Service]
+Type=simple
+User=plebeian-friday
+Group=plebeian-friday-public
+Slice=plebeian-friday.slice
+UMask=0077
+EnvironmentFile=/etc/plebeian-auctions-friday/friday.env
+ExecStartPre=/usr/bin/python3 -I -S -B /opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-signer-recovery-r13/bin/verify-friday-separated-target.py --environment /etc/plebeian-auctions-friday/friday.env --application ${FRIDAY_APPLICATION} --service plebeian-friday-signer.service
+ExecStart=/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-signer-recovery-r13/bin/plebeian-friday-signer serve --application ${FRIDAY_APPLICATION} --dkg-result ${FRIDAY_DKG_RESULT} --expected-manifest-digest ${FRIDAY_DKG_MANIFEST_DIGEST} --network-facts ${FRIDAY_NETWORK_FACTS} --slot ${FRIDAY_SLOT} --participant-binary ${FRIDAY_PARTICIPANT_BIN}
+Restart=no
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=320M
+TasksMax=192
+LimitNOFILE=8192
+
+LogNamespace=plebeian-friday-separated
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200
