@@ -1,0 +1,81 @@
+{
+  "schema": "PLEBEIAN_AUCTIONS_MVP_PUBLICATION_MANIFEST_V1",
+  "status": "SOURCE_AND_SANITIZED_CONFIGURATION_ONLY",
+  "target": {
+    "repository": "PlebeianApp/market",
+    "branch": "wip/auctions-mvp-checkpoint-2026-11-04"
+  },
+  "sourceParentCommit": "559fe3cf85fdb2e1271c883efe1b9c4ba9f80615",
+  "sourceAtParent": {
+    "trackedFiles": 939,
+    "canonical": true,
+    "components": [
+      "Go auction site, API, observer and Comet integration",
+      "TypeScript Coco wallet, coordinator, authority and browser integration",
+      "Rust 3-of-4 FROST participant",
+      "deployment guards, units, templates, tests and public evidence"
+    ]
+  },
+  "includedByThisExpansion": [
+    "PUBLICATION-MANIFEST.json",
+    "deploy/sidequest-mvp/publication/README.md",
+    "deploy/sidequest-mvp/publication/application.app.example.json",
+    "deploy/sidequest-mvp/publication/application.validator.example.json",
+    "deploy/sidequest-mvp/publication/friday.app.env.example",
+    "deploy/sidequest-mvp/publication/friday.validator.env.example"
+  ],
+  "historicalSourceTriage": {
+    "divergentCurrentRuntimeVariants": {
+      "files": 14,
+      "bytes": 306426,
+      "disposition": "SUPERSEDED_NOT_PUBLISHED_AS_CURRENT",
+      "qualification": "The canonical current files add 801 lines and remove 117 relative to these variants. Preserve only in a labeled private archive unless a separate semantic review identifies a missing change."
+    },
+    "legacyR20DeploymentVariants": {
+      "files": 14,
+      "bytes": 263587,
+      "disposition": "HISTORICAL_ARCHIVE_ONLY"
+    },
+    "untrackedHistoricalSourceLikeMaterial": {
+      "files": 710,
+      "bytes": 32410055,
+      "disposition": "DO_NOT_BULK_PUBLISH",
+      "qualification": "This set is dominated by generated bundles, offline dependency closures, repeated operation controllers and superseded revisions."
+    }
+  },
+  "explicitlyExcluded": {
+    "generatedBinaries": {
+      "files": 19,
+      "bytes": 1472818092,
+      "reason": "Release assets require a separate approval, provenance manifest, SBOM and checksum publication."
+    },
+    "publicNetworkArtifacts": {
+      "files": 9,
+      "bytes": 51325,
+      "reason": "Not authorized by this source-only publication scope."
+    },
+    "exactRuntimeConfiguration": {
+      "files": 12,
+      "bytes": 20409,
+      "reason": "Contains exact infrastructure topology, identifiers, addresses and paths."
+    },
+    "credentialsAndPrivateState": {
+      "included": false,
+      "categories": [
+        "passwords and htpasswd material",
+        "TLS or ACME private material",
+        "validator voting keys and FROST secret shares",
+        "identity keys and authentication databases",
+        "wallet seeds, proofs and tokens",
+        "private SQLite state and provider authentication evidence"
+      ]
+    }
+  },
+  "configurationExamples": {
+    "documentationOnly": true,
+    "deployableWithoutReplacement": false,
+    "addresses": "IANA documentation ranges or local example ULAs only",
+    "origins": "reserved .invalid domains only",
+    "secretValues": false
+  }
+}
