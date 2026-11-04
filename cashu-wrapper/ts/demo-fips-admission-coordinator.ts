@@ -2,7 +2,8 @@
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { schnorr } from '@noble/curves/secp256k1.js'
-import { hexToBytes } from '@noble/hashes/utils.js'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
 
 import type { DemoFipsAdmissionCommitPayloadV1, DemoFipsAdmissionRpcClient, DemoFipsAdmissionSharePayloadV1 } from './demo-fips-admission-rpc'
 import {
@@ -40,10 +41,42 @@ async function scratch<T>(parent: string, run: (directory: string) => Promise<T>
 	const directory = await mkdtemp(join(parent, 'admission-aggregate-')); await chmod(directory, 0o700)
 	try { return await run(directory) } finally { await rm(directory, { recursive: true, force: true }) }
 }
+export interface DemoFipsAdmissionAggregateDiagnosticV1 {
+	schema: 'DEMO_FIPS_ADMISSION_AGGREGATE_DIAGNOSTIC_V1'
+	category: 'PUBLIC_PACKAGE_HASH' | 'PUBLIC_PACKAGE_DECODE' | 'AUTHORIZATION'
+		| 'SHARE_SET' | 'AGGREGATE_VERIFY' | 'FILESYSTEM' | 'OTHER'
+	stderrSha256: string
+	stderrBytes: number
+}
+
+/**
+ * Convert the child diagnostic into a bounded, non-sensitive category. The
+ * raw stderr can contain implementation paths and is never logged or returned.
+ */
+export function demoFipsAdmissionAggregateDiagnostic(stderr: string): DemoFipsAdmissionAggregateDiagnosticV1 {
+	const bytes = utf8ToBytes(stderr)
+	const lower = stderr.toLowerCase()
+	const category = lower.includes('public key package hash mismatch') ? 'PUBLIC_PACKAGE_HASH'
+		: lower.includes('public key package') || lower.includes('deserialize') || lower.includes('postcard') ? 'PUBLIC_PACKAGE_DECODE'
+			: lower.includes('authorization') ? 'AUTHORIZATION'
+				: lower.includes('share') || lower.includes('participant') ? 'SHARE_SET'
+					: lower.includes('signature') || lower.includes('verify') ? 'AGGREGATE_VERIFY'
+						: lower.includes('permission denied') || lower.includes('no such file') || lower.includes('os error') ? 'FILESYSTEM'
+							: 'OTHER'
+	return {
+		schema: 'DEMO_FIPS_ADMISSION_AGGREGATE_DIAGNOSTIC_V1', category,
+		stderrSha256: bytesToHex(sha256(bytes)), stderrBytes: bytes.length,
+	}
+}
+
 async function command(argv: string[]): Promise<void> {
 	const child = Bun.spawn(argv, { stdout: 'pipe', stderr: 'pipe' })
 	const [code, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()])
-	if (code !== 0) throw new Error(`DEMO_FIPS_ADMISSION_AGGREGATE_COMMAND: exit ${code}: ${stderr.trim() || 'no diagnostic'}`)
+	if (code !== 0) {
+		const diagnostic = demoFipsAdmissionAggregateDiagnostic(stderr)
+		console.error(JSON.stringify({ ...diagnostic, exitCode: code }))
+		throw new Error(`DEMO_FIPS_ADMISSION_AGGREGATE_COMMAND: exit ${code}: ${diagnostic.category}:${diagnostic.stderrSha256}`)
+	}
 }
 
 export function createDemoFipsAdmissionParticipantPort(
