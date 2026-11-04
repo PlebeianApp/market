@@ -31,8 +31,9 @@ import type {
 } from './demo-friday-browser-acceptance-runner'
 import type { PlebeianFridayBrowserController } from './poc-friday-browser-entry'
 import type { DemoFridayFakeFundingPolicyV1 } from './demo-friday-browser-payment-state'
-import { SEPARATED_RELEASE_ROOT } from './demo-friday-separated-constants'
-const DEMO_FRIDAY_R20_ACCEPTANCE_OPERATOR_BINARY = `${SEPARATED_RELEASE_ROOT}/bin/plebeian-friday-r20-acceptance-operator`
+import {
+	DEMO_FRIDAY_SIDEQUEST_ACCEPTANCE_OPERATOR_BINARY,
+} from './demo-friday-sidequest-acceptance-path-contract'
 
 const HEX32 = /^[0-9a-f]{64}$/
 const HEX64 = /^[0-9a-f]{128}$/
@@ -351,7 +352,7 @@ export function createDemoFridayR20OperatorAcceptanceComposition(options: {
 	const gate: DemoFridayR20FaultGateV1 = Object.freeze({ schema: 'PLEBEIAN_FRIDAY_R20_EXTERNAL_FAULT_GATE_V1',
 		deploymentId: DEMO_FRIDAY_ACCEPTANCE_R20_DEPLOYMENT_ID,
 		approvalSha256: options.faultApprovalSha256, unitSha256: options.validatorUnitSha256,
-		command: Object.freeze([DEMO_FRIDAY_R20_ACCEPTANCE_OPERATOR_BINARY,
+		command: Object.freeze([DEMO_FRIDAY_SIDEQUEST_ACCEPTANCE_OPERATOR_BINARY,
 			'validator-4-offline', '--approval', options.faultApprovalPath, '--approval-sha256',
 			options.faultApprovalSha256, '--unit-sha256', options.validatorUnitSha256]) })
 	let phase: 'start' | 'created' | 'first' | 'second' | 'late-window' | 'late' | 'fault-gated' | 'faulted' | 'closed' = 'start'

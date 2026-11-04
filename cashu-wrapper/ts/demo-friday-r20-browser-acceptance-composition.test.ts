@@ -17,6 +17,9 @@ import {
 	connectPlebeianFridayR20Controller,
 	validateDemoFridayBrowserPublicState,
 } from './poc-friday-browser-entry'
+import {
+	DEMO_FRIDAY_SIDEQUEST_ACCEPTANCE_OPERATOR_BINARY,
+} from './demo-friday-sidequest-acceptance-path-contract'
 
 const secret = new Uint8Array(32).fill(7), actor = bytesToHex(schnorr.getPublicKey(secret))
 const pins: DemoFridayR20AcceptancePinsV1 = { environmentId: 'friday-demo-20261030-separated-v1',
@@ -156,6 +159,11 @@ describe('R20 staged browser acceptance composition', () => {
 			faultApprovalSha256: '55'.repeat(32), validatorUnitSha256: '66'.repeat(32) })
 		expect(() => composition.prepareValidator4FaultExact()).toThrow(/out of order/)
 		await expect(composition.closeAuctionExact('auction-r20')).rejects.toThrow(/out of order/)
+	})
+
+	test('pins the create-once sidequest operator path', () => {
+		expect(DEMO_FRIDAY_SIDEQUEST_ACCEPTANCE_OPERATOR_BINARY)
+			.toBe('/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-acceptance-r1/bin/plebeian-friday-r20-acceptance-operator')
 	})
 
 	test('pins the reviewed payment and anti-sniping policy', () => {

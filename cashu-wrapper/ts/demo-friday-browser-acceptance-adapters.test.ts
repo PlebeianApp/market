@@ -306,7 +306,7 @@ describe('concrete Friday acceptance adapters', () => {
 
 	test('selects the immutable release probe only for the R20 deployment profile', async () => {
 		const probeHash = '12'.repeat(32), calls: string[][] = []
-		const releaseProbe = '/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-friday-comet-probe'
+		const releaseProbe = '/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-acceptance-r1/bin/plebeian-friday-comet-probe'
 		const command: DemoFridayExactCommandPort = { async runExact(argv) { calls.push([...argv])
 			if (argv.includes('/usr/bin/sha256sum')) return { exitCode: 0,
 				stdout: `${probeHash}  ${releaseProbe}\n`, stderr: '' }

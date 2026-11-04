@@ -13,8 +13,7 @@ import type {
 	DemoFridayAcceptanceConsensusPort,
 	DemoFridayAcceptanceValidatorV1,
 } from './demo-friday-browser-acceptance-runner'
-import { SEPARATED_RELEASE_ROOT } from './demo-friday-separated-constants'
-const DEMO_FRIDAY_R20_COMET_PROBE_BINARY = `${SEPARATED_RELEASE_ROOT}/bin/plebeian-friday-comet-probe`
+import { DEMO_FRIDAY_SIDEQUEST_COMET_PROBE_BINARY } from './demo-friday-sidequest-acceptance-path-contract'
 
 const HEX32 = /^[0-9a-f]{64}$/
 const HEX64 = /^[0-9a-f]{128}$/
@@ -38,7 +37,7 @@ const REMOTE_PROBE = '/opt/plebeian-auctions-friday/bin/plebeian-friday-comet-pr
 
 function remoteProbe(deploymentId: DemoFridayAcceptanceDeploymentId): string {
 	return deploymentId === DEMO_FRIDAY_ACCEPTANCE_R20_DEPLOYMENT_ID
-		? DEMO_FRIDAY_R20_COMET_PROBE_BINARY : REMOTE_PROBE
+		? DEMO_FRIDAY_SIDEQUEST_COMET_PROBE_BINARY : REMOTE_PROBE
 }
 
 function fail(message: string): never { throw new Error(`PLEBEIAN_FRIDAY_ACCEPTANCE_ADAPTER: ${message}`) }

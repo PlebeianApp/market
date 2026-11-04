@@ -11,6 +11,11 @@ import {
 	DEMO_FRIDAY_R20_PERMISSION_SEAL_BINARY, DEMO_FRIDAY_R20_RELEASE_ROOT,
 	DEMO_FRIDAY_R20_TERMINAL_EXECUTOR_BINARY,
 } from './demo-friday-r20-path-contract'
+import {
+	DEMO_FRIDAY_SIDEQUEST_ACCEPTANCE_OPERATOR_BINARY,
+	DEMO_FRIDAY_SIDEQUEST_ACCEPTANCE_RELEASE_ROOT,
+	DEMO_FRIDAY_SIDEQUEST_COMET_PROBE_BINARY,
+} from './demo-friday-sidequest-acceptance-path-contract'
 
 const LEGACY_PARTICIPANT = '/opt/plebeian-auctions-friday/bin/coco-demo-frost-participant-3of4'
 
@@ -55,6 +60,25 @@ describe('immutable R20 path contract', () => {
 			.toBe('/home/maximoto/.local/state/plebeian-auctions-friday/r20-courier/operator')
 		expect(FRIDAY_R20_COURIER_INPUT_ROOT).toBe(DEMO_FRIDAY_R20_COURIER_INPUT_ROOT)
 		expect(FRIDAY_R20_COURIER_ROOT).toBe(DEMO_FRIDAY_R20_COURIER_OPERATOR_ROOT)
+	})
+
+	test('keeps live sidequest acceptance tools out of predecessor and application releases', async () => {
+		expect(DEMO_FRIDAY_SIDEQUEST_ACCEPTANCE_RELEASE_ROOT)
+			.toBe('/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-acceptance-r1')
+		for (const path of [DEMO_FRIDAY_SIDEQUEST_COMET_PROBE_BINARY,
+			DEMO_FRIDAY_SIDEQUEST_ACCEPTANCE_OPERATOR_BINARY]) {
+			expect(path.startsWith(`${DEMO_FRIDAY_SIDEQUEST_ACCEPTANCE_RELEASE_ROOT}/bin/`)).toBeTrue()
+			expect(path).not.toContain('/separated-deploy-v1/')
+			expect(path).not.toContain('/sidequest-mvp-r4/bin/')
+		}
+		for (const name of ['demo-friday-browser-acceptance-adapters.ts',
+			'demo-friday-r20-browser-acceptance-composition.ts']) {
+			const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8')
+			expect(source).not.toContain("from './demo-friday-separated-constants'")
+			expect(source).toContain(name.includes('adapters')
+				? 'DEMO_FRIDAY_SIDEQUEST_COMET_PROBE_BINARY'
+				: 'DEMO_FRIDAY_SIDEQUEST_ACCEPTANCE_OPERATOR_BINARY')
+		}
 	})
 
 	test('leaves historical generic path contracts unchanged', async () => {
