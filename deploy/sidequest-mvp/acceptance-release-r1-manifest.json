@@ -1,0 +1,127 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_ACCEPTANCE_RELEASE_R1_MANIFEST_V1",
+  "createdAtUtc": "2026-11-04T04:35:37Z",
+  "status": "BUILT_AND_LOCALLY_TESTED_NOT_INSTALLED_NOT_AUTHORIZED_FOR_REMOTE_MUTATION",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "source": {
+    "commit": "de441230de34b87563e44badc389c77ca4b9f0f4",
+    "releaseRoot": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-acceptance-r1",
+    "pathContract": "cashu-wrapper/ts/demo-friday-sidequest-acceptance-path-contract.ts"
+  },
+  "artifacts": [
+    {
+      "name": "plebeian-friday-comet-probe",
+      "localPath": "dist/sidequest/plebeian-friday-comet-probe-acceptance-r1",
+      "bytes": 99296983,
+      "sha256": "e509f29f5edadbba037991cec02ca310518439bb23f5faaa36c9fc8158ecb230",
+      "mode": "0755",
+      "target": {
+        "role": "V2",
+        "ipv4": "172.105.95.57",
+        "path": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-acceptance-r1/bin/plebeian-friday-comet-probe"
+      }
+    },
+    {
+      "name": "plebeian-friday-r20-acceptance-operator",
+      "localPath": "dist/sidequest/plebeian-friday-r20-acceptance-operator-acceptance-r1",
+      "bytes": 99339182,
+      "sha256": "c7408f041a726a6177693149212b40bf14ab5d3b4d7595949e5594b849f00305",
+      "mode": "0755",
+      "target": {
+        "role": "OWNER_WORKSTATION",
+        "path": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-acceptance-r1/bin/plebeian-friday-r20-acceptance-operator"
+      }
+    }
+  ],
+  "localVerification": {
+    "focusedSuites": [
+      "demo-friday-browser-acceptance-runner.test.ts",
+      "demo-friday-browser-acceptance-adapters.test.ts",
+      "demo-friday-r20-acceptance-operator-cli.test.ts",
+      "demo-friday-r20-browser-acceptance-composition.test.ts",
+      "demo-friday-r20-path-contract.test.ts"
+    ],
+    "testsPassed": 48,
+    "testsFailed": 0,
+    "thresholdReceiptAndPolicySuites": [
+      "demo-integrated-funding-receipt-v4.test.ts",
+      "demo-integrated-funding-receipt.test.ts",
+      "demo-frost-threshold3-admission.test.ts",
+      "demo-frost-participant-policy.test.ts"
+    ],
+    "thresholdReceiptAndPolicyTestsPassed": 23,
+    "thresholdReceiptAndPolicyTestsFailed": 0,
+    "thresholdReceiptAndPolicyWorkingDirectory": "cashu-wrapper/ts",
+    "typecheck": "bunx tsc -p tsconfig.friday.json --noEmit PASS",
+    "negativeSmoke": {
+      "probeNoArgsExit": 1,
+      "probeNoArgsStdoutBytes": 0,
+      "operatorNoArgsExit": 1,
+      "operatorNoArgsStdoutBytes": 0
+    }
+  },
+  "installContract": {
+    "releaseRootMustBeAbsent": true,
+    "createOnce": true,
+    "owner": "root:root",
+    "directoryModes": "0755",
+    "fileModes": "0755",
+    "regularSingleLinkFilesOnly": true,
+    "noSymlinks": true,
+    "fsyncFilesAndDirectories": true,
+    "verifyExactBytesBeforeAndAfter": true,
+    "preserve": [
+      "/opt/plebeian-auctions-friday/releases/separated-deploy-v1",
+      "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4",
+      "all systemd units",
+      "all Comet and FROST state",
+      "all browser and wallet state"
+    ],
+    "serviceOrNetworkEffect": "NONE"
+  },
+  "operatorPins": {
+    "deploymentId": "friday-demo-20261030-separated-v1",
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "validatorsHash": "d1936c5e5e9d09d0a96107031ae144068dcc2ad3f1d071e7f8fe871a8aaff773",
+    "validatorAddressesBySlot": [
+      "F2FEA8935978AF365AF37F9D4EF3CBFAE9A531DA",
+      "3983A3511A3403978B2ED1B0D4E320F7D73F8655",
+      "F2B6DF0C5E1ED036E50AAC10312E557502E37726",
+      "F7F47F1B733CFA53F98368C8587B9FD116D5376F"
+    ],
+    "validatorUnitSha256": "ff37b56e05c9325c7c92d821a0d73e3b9fcb153c54fcb58482c50e83351e3961",
+    "sshAgentSocket": "/tmp/plebeian-poc-owner-agent.sock",
+    "knownHosts": "/home/maximoto/.ssh/known_hosts"
+  },
+  "additionalOwnerWorkstationPrerequisites": {
+    "acceptanceReleaseRoot": "ABSENT",
+    "sshAgentSocket": "ABSENT",
+    "faultConsumptionRoot": {
+      "path": "/var/lib/plebeian-auctions-friday-operator/acceptance-fault",
+      "state": "ABSENT",
+      "requiredOwnerMode": "root:root 0700"
+    },
+    "recoveryConsumptionRoot": {
+      "path": "/var/lib/plebeian-auctions-friday-operator/acceptance-recovery",
+      "state": "ABSENT",
+      "requiredOwnerMode": "root:root 0700"
+    },
+    "knownHostsContainsV2AndV4": true
+  },
+  "approvalBoundary": {
+    "notGranted": [
+      "Install either artifact",
+      "Create the owner workstation release or consumption roots",
+      "Create or load an SSH agent",
+      "Stop or start any validator",
+      "Create NIP-07 identities",
+      "Move fake sats or request a threshold signature"
+    ],
+    "separateFutureApprovals": [
+      "Install the inactive acceptance-only release on V2 and the owner workstation",
+      "Create the two root-owned consumption directories and a bounded fixed SSH agent",
+      "STOP_VALIDATOR_4_ONCE with a fresh time-bounded approval",
+      "START_VALIDATOR_4_ONCE with a distinct fresh time-bounded approval"
+    ]
+  }
+}
