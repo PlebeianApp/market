@@ -24,6 +24,8 @@ const HEX_32 = /^[0-9a-f]{64}$/
 const HEX_64 = /^[0-9a-f]{128}$/
 const POINT = /^(?:02|03)[0-9a-f]{64}$/
 const ID = /^[A-Za-z0-9_-]{1,160}$/
+const UINT64_MAX = 0xffff_ffff_ffff_ffffn
+const SAFE_INTEGER_MAX = BigInt(Number.MAX_SAFE_INTEGER)
 type DemoBrowserFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
 function refuse(message: string): never { throw new Error(`DEMO_FRIDAY_BROWSER_TRUST_HTTP: ${message}`) }
@@ -72,7 +74,8 @@ function exactKeyset(value: unknown) {
 	exactKeys(raw, ['id', 'unit', 'keys'], 'keyset')
 	const keys = record(raw.keys, 'denomination keys')
 	if (!ID.test(String(raw.id)) || raw.unit !== 'sat' || Object.keys(keys).length < 1
-		|| Object.entries(keys).some(([amount, key]) => !/^[1-9][0-9]*$/.test(amount) || !POINT.test(String(key)))) refuse('keyset is malformed')
+		|| Object.entries(keys).some(([amount, key]) => !/^[1-9][0-9]*$/.test(amount)
+			|| BigInt(amount) > UINT64_MAX || !POINT.test(String(key)))) refuse('keyset is malformed')
 	return { id: String(raw.id), unit: 'sat', keys: Object.fromEntries(Object.entries(keys).map(([amount, key]) => [amount, String(key)])) }
 }
 
@@ -86,7 +89,12 @@ function exactDeployment(value: unknown): DemoFridayTrustedBrowserDeploymentV1 {
 		'denominationAmounts', 'inputFeePpk', 'nuts'], 'mint snapshot')
 	const keyset = exactKeyset(raw.keyset)
 	const mint = exactOrigin(String(raw.canonicalMintUrl))
-	const amounts = Object.keys(keyset.keys).map(Number).sort((a, b) => a - b)
+	// NUT-01 keysets legitimately include uint64 denominations above the
+	// JavaScript safe-integer range. The mint snapshot keeps their exact
+	// decimal spellings in denominationKeyDigest, while denominationAmounts is
+	// intentionally the safe number[] projection used by browser operations.
+	const amounts = Object.keys(keyset.keys).map(BigInt).filter((amount) => amount <= SAFE_INTEGER_MAX)
+		.map(Number).sort((a, b) => a - b)
 	if (raw.schema !== 'PLEBEIAN_FRIDAY_TRUSTED_BROWSER_DEPLOYMENT_V1'
 		|| !ID.test(String(raw.environmentId)) || !ID.test(String(raw.authNetworkId)) || !ID.test(String(raw.chainId))
 		|| !HEX_32.test(String(raw.genesisSha256))

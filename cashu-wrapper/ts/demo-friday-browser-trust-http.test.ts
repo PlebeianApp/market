@@ -19,7 +19,10 @@ const capability = { schema: 'COCO_DEMO_RECIPIENT_CAPABILITY_V1' as const, netwo
 	auctionId: 'auction-1', operationId: 'funding-1', role: 'winner_settlement' as const, mintUrl: origin, unit: 'sat',
 	recipientPublicKey: point(12), outputsDigest: demoOutputsDigest(outputs), signature: 'aa'.repeat(64) }
 const winnerRequest = { capability, outputs }
-const keys = { '1': point(20), '2': point(21), '4': point(22) }
+// Nutshell advertises the full uint64 power-of-two keyset. The exact digest
+// covers every key, while the browser's number[] snapshot excludes unsafe
+// denominations such as 2^53.
+const keys = { '1': point(20), '2': point(21), '4': point(22), '9007199254740992': point(23) }
 
 function canonical(value: unknown): string {
 	if (value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') return JSON.stringify(value)

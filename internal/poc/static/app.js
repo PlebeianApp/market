@@ -179,7 +179,10 @@ async function sign(kind, tags, content) {
   return state.signer.signEvent({ kind, created_at: Math.floor(Date.now() / 1000), tags, content: JSON.stringify(content) });
 }
 function updateControls() {
-  const ready = Boolean(state.actor && state.friday && state.releasePins && r20RuntimeReady());
+  const connectReady = Boolean(state.releasePins && r20RuntimeReady());
+  const ready = Boolean(state.actor && state.friday && connectReady);
+  byId("login").disabled = !connectReady;
+  byId("demo-login").disabled = !connectReady;
   byId("faucet").disabled = !ready;
   byId("process-payments").disabled = !ready;
   byId("disconnect").disabled = !state.signer;
