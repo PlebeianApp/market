@@ -6,10 +6,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const CHROME = "/home/maximoto/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome";
-const CREDENTIALS = "/home/maximoto/Documents/Codex/2026-10-30/task-2/app-https-public-demo-activation-r1/DEMO-CREDENTIALS.txt";
+const CREDENTIALS = process.env.PLEBEIAN_DEMO_CREDENTIALS || "";
 const SITE = "https://139.162.161.233/";
 const FUNDING = 10_000;
 const BIDS = [100, 200, 300, 400];
+const RATE_SETTLE_MS = 10_000;
+const PROXY_SERVER = process.env.PLEBEIAN_BROWSER_PROXY || "";
+if (PROXY_SERVER && !/^socks5:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}$/.test(PROXY_SERVER)) {
+  throw new Error("PLEBEIAN_BROWSER_PROXY must be a loopback SOCKS5 endpoint");
+}
+if (!CREDENTIALS.startsWith("/") || CREDENTIALS.includes("\0")) {
+  throw new Error("PLEBEIAN_DEMO_CREDENTIALS must name the owner-only absolute credential file");
+}
 
 function credentials() {
   const records = new Map();
@@ -191,7 +199,7 @@ class DemoPage {
     await this.evaluate(`(() => {
       document.querySelector('#title').value = ${JSON.stringify(title)};
       document.querySelector('#description').value = 'Five-member live fake-sat browser acceptance';
-      document.querySelector('#duration').value = '30';
+      document.querySelector('#duration').value = '240';
       document.querySelector('#starting').value = '100';
       document.querySelector('#increment').value = '100';
       document.querySelector('#reserve').value = '0';
@@ -221,7 +229,12 @@ class DemoPage {
       input.value = String(${amount}); button.click(); return { ok: true };
     })()`);
   }
+  async refreshView() {
+    await this.evaluate(`document.querySelector('#refresh')?.click(); true`);
+    await delay(750);
+  }
   async waitAuctionCard(title) {
+    await this.refreshView();
     await this.poll(`([...document.querySelectorAll('article.auction')].some((node) => node.querySelector('h3')?.textContent === ${JSON.stringify(title)}))`,
       Boolean, 45_000, "auction card");
   }
@@ -236,6 +249,20 @@ class DemoPage {
     return this.poll(`document.querySelector('#seller-approval-status')?.textContent || ''`,
       (value) => /Registered [1-9][0-9]* seller plan/.test(value), 75_000, "seller plan registration");
   }
+  async servicePendingPlan() {
+    const started = await this.evaluate(`(() => {
+      const button = document.querySelector('#process-payments');
+      if (!button || button.disabled) return false;
+      button.click(); return true;
+    })()`);
+    if (!started) throw new Error(`${this.role}: manual seller service control unavailable`);
+    const result = await this.poll(`document.querySelector('#seller-approval-status')?.textContent || ''`,
+      (value) => /Registered [1-9][0-9]* seller plan\(s\)\. Manual pass complete\./.test(value)
+        || /Approvals paused:/.test(value), 90_000, "manual seller plan service");
+    if (!/Registered [1-9][0-9]* seller plan/.test(result)) {
+      throw new Error(`${this.role}: seller plan service failed: ${result}`);
+    }
+  }
   async bid(title, amount, seller) {
     await this.waitAuctionCard(title);
     const first = await this.auctionAction(title, "bid", amount);
@@ -245,7 +272,9 @@ class DemoPage {
         || (/error|refused|failed|invalid|unavailable/i.test(value?.message || '') && value?.label !== 'Authorizing…'),
       120_000, `first ${amount} bid attempt`);
     if (/Seller authorization pending/.test(firstResult.message)) {
-      await seller.waitSellerRegistered();
+      await delay(RATE_SETTLE_MS);
+      await seller.servicePendingPlan();
+      await delay(RATE_SETTLE_MS);
       const retry = await this.auctionAction(title, "bid", amount);
       if (!retry.ok) throw new Error(`${this.role}: retained bid retry controls missing: ${retry.reason}`);
     }
@@ -274,6 +303,25 @@ async function createPage(cdp, contextId, role, credential) {
     cdp.send("Runtime.enable", {}, sessionId),
     cdp.send("Network.enable", {}, sessionId),
   ]);
+  // Five real participants arrive from separate networks. This single-host
+  // acceptance runner shares one source IP, so suppress only the two passive
+  // UI repaint/readiness intervals. Every mutation below still performs its
+  // normal explicit refresh and all server-side limits remain unchanged.
+  await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: `(() => {
+    const nativeSetInterval = globalThis.setInterval.bind(globalThis);
+    const nativeClearInterval = globalThis.clearInterval.bind(globalThis);
+    globalThis.setInterval = (callback, delay, ...args) => {
+      if (delay === 1000) return 0;
+      if (delay !== 4000) return nativeSetInterval(callback, delay, ...args);
+      let ticks = 0; let handle = 0;
+      handle = nativeSetInterval(() => {
+        callback(...args);
+        ticks += 1;
+        if (ticks >= 2) nativeClearInterval(handle);
+      }, delay);
+      return handle;
+    };
+  })();` }, sessionId);
   const page = new DemoPage(cdp, sessionId, role);
   const connected = await page.open(credential);
   return { page, actor: connected.actor };
@@ -282,11 +330,13 @@ async function createPage(cdp, contextId, role, credential) {
 async function main() {
   const profile = mkdtempSync(join(tmpdir(), "plebeian-live-auction-"));
   const recoveryMarker = "/tmp/plebeian-live-auction-recovery-location";
-  const chrome = spawn(CHROME, [
+  const chromeArgs = [
     "--headless=new", "--remote-debugging-pipe", `--user-data-dir=${profile}`,
     "--no-first-run", "--no-default-browser-check", "--disable-background-networking",
     "--disable-component-update", "--disable-sync", "--metrics-recording-only", "about:blank",
-  ], { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"] });
+  ];
+  if (PROXY_SERVER) chromeArgs.splice(chromeArgs.length - 1, 0, `--proxy-server=${PROXY_SERVER}`);
+  const chrome = spawn(CHROME, chromeArgs, { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"] });
   let stderr = ""; let success = false;
   chrome.stderr.on("data", (chunk) => { stderr = `${stderr}${chunk}`.slice(-4096); });
   const cdp = new PipeCdp(chrome);
@@ -299,28 +349,32 @@ async function main() {
       const { browserContextId } = await cdp.send("Target.createBrowserContext", {});
       const opened = await createPage(cdp, browserContextId, roles[index], approved[index]);
       pages.push({ ...opened, contextId: browserContextId, role: roles[index] });
+      await delay(1500);
     }
     if (new Set(pages.map(({ actor }) => actor)).size !== 5) throw new Error("five browser profiles did not show distinct actor labels");
     report.phases.push({ phase: "five_signins", status: "PASS", actors: pages.map(({ role, actor }) => ({ role, actor })) });
 
-    for (const entry of pages) await entry.page.fund();
+    for (const entry of pages) {
+      await entry.page.fund();
+      await delay(RATE_SETTLE_MS);
+    }
     report.phases.push({ phase: "five_fake_fundings", status: "PASS", amountEach: FUNDING });
 
     const title = `Live five-member test ${Date.now()}`;
     const auction = await pages[0].page.createAuction(title);
-    await pages[0].page.enableApprovals(title);
     report.phases.push({ phase: "auction_created", status: "PASS", auctionId: auction.id, title });
+    await delay(RATE_SETTLE_MS);
 
     for (let index = 0; index < BIDS.length; index += 1) {
       await pages[index + 1].page.bid(title, BIDS[index], pages[0].page);
       if (index > 0) {
+        await pages[index].page.refreshView();
         await pages[index].page.poll(`document.querySelector('#spendable')?.textContent || ''`,
           (value) => Number(String(value).replace(/[^0-9-]/g, "")) === FUNDING, 90_000, "certified outbid return");
       }
       report.phases.push({ phase: `bid_${BIDS[index]}`, status: "PASS" });
+      await delay(RATE_SETTLE_MS);
     }
-    await pages[0].page.stopApprovals(title);
-
     const closed = await pages[0].page.poll(`fetch('/api/state', { credentials: 'same-origin', headers: { accept: 'application/json' } }).then((response) => response.json())`,
       (value) => Object.values(value?.state?.auctions || {}).some((item) => item.title === title && item.status === 'closed'),
       360_000, "automatic close");
@@ -330,6 +384,7 @@ async function main() {
     const expected = [10_400, 10_000, 10_000, 10_000, 9_600];
     const balances = [];
     for (let index = 0; index < pages.length; index += 1) {
+      await pages[index].page.refreshView();
       const balance = await pages[index].page.poll(`(() => {
         const number = (id) => Number((document.querySelector(id)?.textContent || '').replace(/[^0-9-]/g, ''));
         return { available: number('#spendable'), locked: number('#locked'), pending: number('#refundable') };

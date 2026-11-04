@@ -63,12 +63,12 @@ describe('Coco Friday threshold token reader', () => {
 
 	test('uses the configured origin-bound transport for active-keyset verification', async () => {
 		const held = token([secret()])
-		const target = { type: 'p2pk', options: {
+		const methodData = { options: {
 			kind: 'P2PK', data: lock.bidderPubkey, pubkeys: [lock.committeePubkey], requiredSignatures: 2,
 			locktime: lock.locktime, refundKeys: [lock.refundPubkey], requiredRefundSignatures: 1, sigFlag: 'SIG_ALL',
 		} }
 		const prepared = { id: 'threshold-operation', mintUrl: 'https://mint.invalid', unit: 'sat', amount: 2,
-			method: 'default', target, state: 'prepared' }
+			method: 'p2pk', methodData, state: 'prepared' }
 		const operation = { ...prepared, state: 'pending', token: held }
 		let current: typeof prepared | typeof operation | null = null
 		const manager = { quotes: { mint: {}, melt: {} }, ops: {
@@ -94,16 +94,17 @@ describe('Coco Friday threshold token reader', () => {
 
 	test('resumes the exact durable threshold operation without preparing or executing another send', async () => {
 		const held = token([secret(), secret()])
-		const target = { type: 'p2pk', options: {
+		const methodData = { options: {
 			kind: 'P2PK', data: lock.bidderPubkey, pubkeys: [lock.committeePubkey], requiredSignatures: 2,
 			locktime: lock.locktime, refundKeys: [lock.refundPubkey], requiredRefundSignatures: 1, sigFlag: 'SIG_ALL',
 		} }
 		const operation = { id: 'threshold-resume', mintUrl: 'https://mint.invalid', unit: 'sat', amount: 3,
-			method: 'default', target, state: 'pending', token: held }
+			method: 'p2pk', methodData, state: 'pending', token: held }
 		let prepared = 0, executed = 0, recovered = 0
+		let currentOperation: unknown = operation
 		const manager = { quotes: { mint: {}, melt: {} }, ops: {
 			mint: {}, melt: {}, receive: {}, send: {
-				async get() { return operation }, async prepare() { prepared += 1; return operation },
+				async get() { return currentOperation }, async prepare() { prepared += 1; return operation },
 				async execute() { executed += 1; return { operation, token: held } },
 				recovery: { async run() { recovered += 1 }, inProgress() { return false } },
 			},
@@ -122,7 +123,13 @@ describe('Coco Friday threshold token reader', () => {
 		expect({ prepared, executed, recovered }).toEqual({ prepared: 0, executed: 0, recovered: 0 })
 		await expect(rail.resumeThresholdSigAll({ mintUrl: operation.mintUrl, amount: 3, operationId: operation.id,
 			lock: { ...lock, locktime: lock.locktime + 1 } })).rejects.toThrow(/intent-conflict/)
+		const changed = structuredClone(operation)
+		changed.methodData.options.requiredSignatures = 1
+		currentOperation = changed
+		await expect(rail.resumeThresholdSigAll({ mintUrl: operation.mintUrl, amount: 3,
+			operationId: operation.id, lock })).rejects.toThrow(/intent-conflict/)
 		expect({ prepared, executed, recovered }).toEqual({ prepared: 0, executed: 0, recovered: 0 })
+		currentOperation = operation
 		expect(await rail.ensureThresholdSigAll({ mintUrl: operation.mintUrl, amount: 3,
 			operationId: operation.id, lock })).toMatchObject({ operationId: operation.id, state: 'pending' })
 		expect({ prepared, executed, recovered }).toEqual({ prepared: 0, executed: 0, recovered: 0 })
@@ -139,7 +146,9 @@ describe('Coco Friday threshold token reader', () => {
 				async get() { return current },
 				async prepare(input: Record<string, unknown>) {
 					prepared += 1
-					current = { ...input, id: input.operationId, unit: 'sat', method: 'default', state: 'prepared' }
+					const target = input.target as { type: string; options: unknown }
+					current = { id: input.operationId, mintUrl: input.mintUrl, amount: input.amount,
+						unit: 'sat', method: target.type, methodData: { options: target.options }, state: 'prepared' }
 					return current
 				},
 				async execute() { executed += 1; throw new Error('must not execute during prepare') },

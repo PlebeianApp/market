@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
 	Amount,
+	OutputData,
 	SigAll,
 	signP2PKProof,
 	verifyP2PKSpendingConditions,
@@ -31,7 +32,7 @@ import {
 	type DemoSigAllContract,
 	type DemoSigAllMintPort,
 } from './demo-sigall-settlement'
-import { buildP2PKSecret, type BlindedMessage, type CashuProof } from './nut-client'
+import { buildP2PKSecret, parseP2PKSecret, type BlindedMessage, type CashuProof } from './nut-client'
 
 const key = (value: number): string => value.toString(16).padStart(64, '0')
 const publicKey = (privateKey: string): string => bytesToHex(secp256k1.getPublicKey(hexToBytes(privateKey), true))
@@ -270,7 +271,7 @@ describe('demo SIG_ALL settlement compatibility', () => {
 		// cashu-ts 5.0.0-rc.4 additionally commits C points and output
 		// amounts. The demo targets the deployed Nutshell 0.19.2 mint, whose
 		// verifier signs input secrets followed by blinded output points.
-		expect(libraryDigests.current).toBe('9867ee73b3877bc384348e035cf75150a3070bf55b98c5e634b1d631b998b025')
+		expect(libraryDigests.current).toBe('2a58c51cdeeed529393a91ee3ee783bd92ade3321f96c580636694963c3e4be1')
 		expect(libraryDigests.current).not.toBe(contract.approval.cashuSigAllDigest)
 		expect(contract.approval.cashuSigAllDigest).toBe(demoCashuSigAllDigest(contract.inputs, contract.outputs))
 
@@ -302,6 +303,20 @@ describe('demo SIG_ALL settlement compatibility', () => {
 			: { ...input })
 		expect(SigAll.computeDigests(cashuTsProofs(changedInputs), libraryOutputs).current).not.toBe(libraryDigests.current)
 		expect(demoCashuSigAllDigest(changedInputs, contract.outputs)).toBe(contract.approval.cashuSigAllDigest)
+	})
+
+	test('rebuilds the exact P2PK SIG_ALL secret emitted by cashu-ts for Coco', () => {
+		const output = OutputData.createSingleP2PKData({
+			kind: 'P2PK', data: BIDDER_PUBLIC, pubkeys: [COMMITTEE_PUBLIC], requiredSignatures: 2,
+			locktime: 2_000_000_000, refundKeys: [REFUND_PUBLIC], requiredRefundSignatures: 1,
+			sigFlag: 'SIG_ALL',
+		}, 1, '00deadbeef')
+		const secret = new TextDecoder().decode(output.secret)
+		const parsed = parseP2PKSecret(secret)
+		expect(parsed).not.toBeNull()
+		expect(buildDemoSigAllSecret({ nonce: parsed!.nonce, bidderPublicKey: BIDDER_PUBLIC,
+			committeePublicKey: COMMITTEE_PUBLIC, refundPublicKey: REFUND_PUBLIC,
+			locktime: 2_000_000_000 })).toBe(secret)
 	})
 
 	test('cashu-ts 5.0.0-rc.4 separates the main and refund keys but does not commit refund destination', () => {

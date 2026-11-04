@@ -148,6 +148,36 @@ export interface CocoMintSnapshot {
 	readonly nuts: readonly number[];
 }
 
+/**
+ * Return only NUTs the mint explicitly advertises as usable.
+ *
+ * Nutshell includes disabled/unsupported entries in the public `nuts` map.
+ * Treating every numeric key as supported makes the browser's live
+ * inspection differ from the authority's cryptographically pinned snapshot,
+ * even though both observed the same mint.  NUT-04 has its own method shape;
+ * the other entries use the standard `supported: true` signal.
+ */
+function supportedMintNutNumbers(value: unknown): number[] {
+	if (value === null || typeof value !== "object" || Array.isArray(value)) return [];
+	const supported: number[] = [];
+	for (const [rawNut, rawSettings] of Object.entries(value as Record<string, unknown>)) {
+		if (!/^(?:0|[1-9][0-9]*)$/.test(rawNut) || rawSettings === null
+			|| typeof rawSettings !== "object" || Array.isArray(rawSettings)) continue;
+		const nut = Number(rawNut);
+		if (!Number.isSafeInteger(nut)) continue;
+		const settings = rawSettings as Record<string, unknown>;
+		if (nut === 4) {
+			if (settings.disabled === true || !Array.isArray(settings.methods)) continue;
+			if (settings.methods.some((method) => method !== null && typeof method === "object"
+				&& !Array.isArray(method) && (method as Record<string, unknown>).method === "bolt11"
+				&& (method as Record<string, unknown>).unit === "sat")) supported.push(nut);
+			continue;
+		}
+		if (settings.supported === true) supported.push(nut);
+	}
+	return supported.sort((left, right) => left - right);
+}
+
 /** Private funding references. Callers must keep these out of logs, DOM and public stores. */
 export interface CocoMintQuoteRef {
 	readonly quoteId: string;
@@ -679,11 +709,31 @@ export function createCocoRail(manager: Manager, options: {
 		mintUrl: string; amount: number; unit?: string; operationId: string; lock: ThresholdSigAllLockTarget
 	}): void => {
 		if (operation === null || typeof operation !== "object") throw new RailRefusedError("refused-threshold-operation-shape");
-		const view = operation as { id?: unknown; mintUrl?: unknown; unit?: unknown; amount?: unknown; method?: unknown; target?: unknown };
+		const view = operation as { id?: unknown; mintUrl?: unknown; unit?: unknown; amount?: unknown; method?: unknown; methodData?: unknown };
+		const methodData = view.methodData;
+		const methodRecord = methodData !== null && typeof methodData === "object" && !Array.isArray(methodData)
+			? methodData as Record<string, unknown> : null;
+		const optionsValue = methodRecord?.options;
+		const optionsRecord = optionsValue !== null && typeof optionsValue === "object" && !Array.isArray(optionsValue)
+			? optionsValue as Record<string, unknown> : null;
+		const exactMethod = methodRecord !== null
+			&& JSON.stringify(Object.keys(methodRecord).sort()) === JSON.stringify(["options"])
+			&& optionsRecord !== null
+			&& JSON.stringify(Object.keys(optionsRecord).sort()) === JSON.stringify([
+				"data", "kind", "locktime", "pubkeys", "refundKeys", "requiredRefundSignatures",
+				"requiredSignatures", "sigFlag",
+			])
+			&& optionsRecord.kind === "P2PK"
+			&& optionsRecord.data === input.lock.bidderPubkey
+			&& JSON.stringify(optionsRecord.pubkeys) === JSON.stringify([input.lock.committeePubkey])
+			&& optionsRecord.requiredSignatures === 2
+			&& optionsRecord.locktime === input.lock.locktime
+			&& JSON.stringify(optionsRecord.refundKeys) === JSON.stringify([input.lock.refundPubkey])
+			&& optionsRecord.requiredRefundSignatures === 1
+			&& optionsRecord.sigFlag === "SIG_ALL";
 		if (view.id !== input.operationId || typeof view.mintUrl !== "string" || !sameMint(view.mintUrl, input.mintUrl)
 			|| (typeof view.unit === "string" ? view.unit : "sat") !== (input.unit ?? "sat")
-			|| amountOf(view.amount) !== input.amount || (view.method !== undefined && view.method !== "default")
-			|| JSON.stringify(view.target) !== JSON.stringify(thresholdTarget(input.lock))) {
+			|| amountOf(view.amount) !== input.amount || view.method !== "p2pk" || !exactMethod) {
 			throw new RailRefusedError("refused-threshold-operation-intent-conflict");
 		}
 	};
@@ -735,7 +785,7 @@ export function createCocoRail(manager: Manager, options: {
 			if (denominations.length === 0) throw new RailRefusedError("refused-mint-snapshot-keys");
 			const safeDenominationAmounts = denominations.map(([amount]) => BigInt(amount)).filter((amount) => amount <= BigInt(Number.MAX_SAFE_INTEGER)).map(Number);
 			if (safeDenominationAmounts.length === 0) throw new RailRefusedError("refused-mint-snapshot-keys");
-			const nuts = Object.keys(info.nuts ?? {}).filter((nut) => /^[0-9]+$/.test(nut)).map(Number).sort((left, right) => left - right);
+			const nuts = supportedMintNutNumbers(info.nuts);
 			if (typeof info.pubkey !== "string" || !/^0[23][0-9a-f]{64}$/.test(info.pubkey) || typeof info.version !== "string" || info.version.length === 0) throw new RailRefusedError("refused-mint-snapshot-info");
 			const inputFeePpk = active[0]!.input_fee_ppk ?? 0;
 			if (!Number.isSafeInteger(inputFeePpk) || inputFeePpk < 0) throw new RailRefusedError("refused-mint-snapshot-fee");

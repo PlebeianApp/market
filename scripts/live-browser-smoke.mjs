@@ -6,8 +6,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const CHROME = "/home/maximoto/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome";
-const CREDENTIALS = "/home/maximoto/Documents/Codex/2026-10-30/task-2/app-https-public-demo-activation-r1/DEMO-CREDENTIALS.txt";
+const CREDENTIALS = process.env.PLEBEIAN_DEMO_CREDENTIALS || "";
 const SITE = "https://139.162.161.233/";
+const PROXY_SERVER = process.env.PLEBEIAN_BROWSER_PROXY || "";
+if (PROXY_SERVER && !/^socks5:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}$/.test(PROXY_SERVER)) {
+  throw new Error("PLEBEIAN_BROWSER_PROXY must be a loopback SOCKS5 endpoint");
+}
+if (!CREDENTIALS.startsWith("/") || CREDENTIALS.includes("\0")) {
+  throw new Error("PLEBEIAN_DEMO_CREDENTIALS must name the owner-only absolute credential file");
+}
 
 function demoCredential(name) {
   const lines = readFileSync(CREDENTIALS, "utf8").split(/\r?\n/).filter(Boolean);
@@ -131,6 +138,7 @@ async function main() {
     "--disable-component-update",
     "--disable-sync",
     "--metrics-recording-only",
+    ...(PROXY_SERVER ? [`--proxy-server=${PROXY_SERVER}`] : []),
     "about:blank",
   ], { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"] });
   let stderr = "";

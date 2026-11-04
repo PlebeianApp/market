@@ -47,7 +47,12 @@ describe("Coco rail durable funding lifecycle", () => {
     const requests: string[] = [];
     const fetchImpl = (async (input: Parameters<typeof fetch>[0]) => {
       const url = String(input); requests.push(url);
-      if (url.endsWith("/v1/info")) return response({ pubkey: MINT_KEY, version: "cdk-mintd/0.18.1", nuts: { 4: {}, 7: {}, 9: {}, 10: {}, 11: {}, 12: {} } }, url);
+      if (url.endsWith("/v1/info")) return response({ pubkey: MINT_KEY, version: "cdk-mintd/0.18.1", nuts: {
+				4: { methods: [{ method: "bolt11", unit: "sat" }], disabled: false },
+				5: { supported: false }, 7: { supported: true }, 9: { supported: true },
+				10: { supported: true }, 11: { supported: true }, 12: { supported: true },
+				17: { supported: false },
+			} }, url);
       if (url.endsWith("/v1/keysets")) return response({ keysets: [{ id: KEYSET, unit: "sat", active: true, input_fee_ppk: 100 }] }, url);
       return response({ keysets: [{ id: KEYSET, unit: "sat", keys: { 1: AMOUNT_KEY, 2: AMOUNT_KEY, "9223372036854775808": AMOUNT_KEY } }] }, url);
     }) as typeof fetch;

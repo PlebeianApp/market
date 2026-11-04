@@ -410,12 +410,16 @@ export function buildDemoSigAllSecret(options: {
 		{
 			nonce: options.nonce,
 			data: options.bidderPublicKey,
+			// cashu-ts OutputData.createSingleP2PKData emits NUT-11 tags in this
+			// exact order.  The browser receives those mint-signed proofs from
+			// Coco, so our canonical reader must rebuild the authoritative wire
+			// representation rather than a locally invented tag ordering.
 			tags: [
+				['locktime', String(options.locktime)],
 				['pubkeys', options.committeePublicKey],
 				['n_sigs', '2'],
-				['sigflag', 'SIG_ALL'],
-				['locktime', String(options.locktime)],
 				['refund', refundPublicKey],
+				['sigflag', 'SIG_ALL'],
 			],
 		},
 	])
