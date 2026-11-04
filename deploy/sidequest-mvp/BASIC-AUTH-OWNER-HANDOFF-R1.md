@@ -63,6 +63,13 @@ After the certificate lane has produced its exact final APP virtual host:
    flow succeeds after authentication and the origin remains exactly
    `https://139.162.161.233`.
 
+Before activation, the final proxy must also return `404` for external
+`/api/admin/offline`, `/api/close`, `/api/interim/faucet` and `/api/cashu/`;
+the automatic close worker uses loopback and is unaffected. Apply method
+allowlists and per-authenticated-user connection/request limits to the
+remaining routes. The rationale and bounded meeting envelope are in
+`PUBLIC-LINK-RISK-ASSESSMENT-R1.md`.
+
 Never log an `Authorization` header. Access logs may retain usernames depending
 on the final nginx format; use a format that omits `$remote_user`, query strings
 and request bodies for the short demo.
