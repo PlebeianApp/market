@@ -73,7 +73,9 @@ func TestFridayPhoneUIHasPermanentDisclosuresAndNoVisibleRemoteFaultControl(t *t
 	handler.ServeHTTP(bootstrapResponse, bootstrapRequest)
 	if bootstrapResponse.Code != http.StatusOK ||
 		!strings.Contains(bootstrapResponse.Body.String(), `import "/friday-browser.js";`) ||
-		!strings.Contains(bootstrapResponse.Body.String(), `import "/app.js";`) {
+		!strings.Contains(bootstrapResponse.Body.String(), `import "/app.js";`) ||
+		strings.Contains(bootstrapResponse.Body.String(), `import "/demo-signer.js";`) ||
+		!strings.Contains(browserResponse.Body.String(), "plebeianCreateDemoSigner") {
 		t.Fatalf("Friday ES-module bootstrap is absent or does not order the browser bundle before the app")
 	}
 	if csp := indexResponse.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "img-src 'self' data: https:") {
