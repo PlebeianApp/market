@@ -1,0 +1,128 @@
+{
+  "schema": "PLEBEIAN_APP_NTP_PROVIDER_EGRESS_FIX_PLAN_V1",
+  "createdAt": "2026-11-04T01:41:35Z",
+  "status": "PREPARED_NOT_AUTHORIZED_NOT_EXECUTED",
+  "target": {
+    "role": "APP",
+    "publicIp": "139.162.161.233",
+    "providerFirewallId": 224154258,
+    "providerFirewallLabel": "plebeian-fixture-disposable-fw"
+  },
+  "finding": {
+    "cause": "The APP provider firewall has outbound default Drop and no UDP/123 allow rule, so systemd-timesyncd cannot reach ntp.ubuntu.com. The host firewall is inactive and is not the blocker.",
+    "confidence": "CONFIRMED_BY_PROVIDER_POLICY_AND_LIVE_HOST_COMPARISON",
+    "liveApp": {
+      "systemdTimesyncd": "active-running",
+      "ntpSynchronized": false,
+      "configuredServer": "ntp.ubuntu.com",
+      "observedBehavior": "Repeated timeouts to every resolved IPv4 and IPv6 Ubuntu NTP address for multiple days",
+      "clockOffsetFromValidatorMedianSeconds": -1.25
+    },
+    "controlValidator": {
+      "role": "V1",
+      "configuredServer": "ntp.ubuntu.com",
+      "ntpSynchronized": true,
+      "providerOutboundDefault": "Accept"
+    },
+    "hostNetworkChecks": {
+      "appDns": "working",
+      "appIpv4DefaultRoute": "present",
+      "appIpv6DefaultRoute": "present",
+      "appUfw": "inactive",
+      "appNftablesAndIptables": "no effective filtering rules",
+      "timesyncdOverrides": "none"
+    }
+  },
+  "evidence": [
+    {
+      "path": "/home/maximoto/Documents/Codex/2026-10-30/task/fips-mesh-provider-read-r1-20261030/provider-evidence.json",
+      "sha256": "9547b00795e05fcda025180b70fe88363d245eb5157dd631195b57f4018d0ea4",
+      "establishes": "APP firewall 224154258 is attached to APP, outbound default is Drop, and its four outbound rules allow only FIPS UDP/32121, provider DNS UDP/TCP 53, and TCP/443; UDP/123 is absent"
+    },
+    {
+      "path": "/home/maximoto/Documents/Codex/2026-10-30/task/provider-firewall-delta-apply-r1-20261030/provider-firewall-delta-result.json",
+      "sha256": "d78625e4d6dd63342ebe421814628255e83a37c2ab7adbe380e13de344a1d7cd",
+      "establishes": "The later validator firewall change preserved APP's enabled firewall with the same three inbound and four outbound rules"
+    },
+    {
+      "path": "deploy/sidequest-mvp/live-five-member-readiness-20261104.json",
+      "sha256": "f6deb5abf8e2e8e8eca07196e0a641bd60e6f7f29f8a9f2014e4cf13b17b87b0",
+      "establishes": "All MVP services are running without restarts, APP remains unsynchronized, and the last measured APP clock was 1.250 seconds behind the validator median"
+    }
+  ],
+  "providerConstraint": {
+    "cloudFirewallDestinations": "IP addresses or CIDR ranges; hostnames are not accepted",
+    "reasonNotToPinCurrentAddresses": "ntp.ubuntu.com is a pool name and its resolved addresses can change; fixed /32 rules would be narrower but not durable",
+    "documentation": [
+      "https://techdocs.akamai.com/cloud-computing/docs/manage-firewall-rules",
+      "https://techdocs.akamai.com/cloud-computing/docs/create-a-cloud-firewall",
+      "https://techdocs.akamai.com/cloud-computing/docs/comparing-cloud-firewalls-to-linux-firewall-software"
+    ]
+  },
+  "recommendedMutation": {
+    "preconditions": [
+      "Fresh provider readback shows firewall 224154258 remains enabled and attached only to APP interface 1112585",
+      "Outbound default remains Drop and the existing four outbound rules exactly match accepted evidence",
+      "APP remains NTPSynchronized=no and systemd-timesyncd remains active",
+      "APP has no in-progress auction or admission session"
+    ],
+    "createOneOutboundRule": {
+      "label": "app-ntp-egress",
+      "action": "ACCEPT",
+      "protocol": "UDP",
+      "ports": "123",
+      "addresses": {
+        "ipv4": [
+          "0.0.0.0/0"
+        ],
+        "ipv6": []
+      }
+    },
+    "preserve": [
+      "Outbound default Drop",
+      "All existing inbound and outbound rules",
+      "All host firewall and systemd-timesyncd configuration",
+      "All auction, Comet, FROST, mint, HTTPS and application services"
+    ],
+    "immediateConvergence": "After provider save and exact readback, restart only systemd-timesyncd once so it sends a fresh request instead of waiting for its current backoff interval",
+    "forbidden": [
+      "No outbound-default change",
+      "No broad UDP rule",
+      "No inbound rule",
+      "No IPv6 egress rule",
+      "No manual date or RTC step",
+      "No application or validator restart",
+      "No NTP server installation on validators"
+    ]
+  },
+  "acceptance": {
+    "provider": [
+      "Exact post-save readback contains one new UDP/123 IPv4 outbound rule and no other delta",
+      "Firewall remains enabled and attached only to APP interface 1112585",
+      "Outbound default remains Drop"
+    ],
+    "time": [
+      "NTPSynchronized=yes",
+      "systemd-timesyncd reports a valid NTP message and a positive packet count",
+      "Three bounded samples place APP within 0.500 seconds of the synchronized V1-V4 median",
+      "No backward or repeated correction is attempted"
+    ],
+    "deployment": [
+      "All previously active APP and V1-V4 services remain active-running",
+      "NRestarts remains zero for auction services",
+      "Authority returns two advancing ready samples after the time correction",
+      "No new public listener appears"
+    ],
+    "failurePolicy": "Stop without broadening destinations, changing defaults, restarting application services, or retrying. Preserve provider and host readbacks for diagnosis. Any rollback or alternate server selection requires a separate decision."
+  },
+  "security": {
+    "benefit": "Restores durable clock synchronization while preserving default-deny egress and limiting the new capability to the standard NTP destination port over IPv4.",
+    "risks": [
+      "A compromised APP host could send UDP traffic to destination port 123 on arbitrary IPv4 addresses; the provider firewall remains stateful and unsolicited inbound traffic remains blocked.",
+      "NTP itself is not cryptographically authenticated; trust remains the operating system's Ubuntu pool configuration and DNS resolution.",
+      "The first successful synchronization may move APP's clock forward by approximately 1.25 seconds, changing application timestamps and invalidating in-flight readiness or admission windows. Perform it before real users begin an auction."
+    ],
+    "whyThisScope": "The provider firewall cannot express an ntp.ubuntu.com hostname destination. Allowing all IPv4 destinations on only UDP/123 is the smallest configuration-only rule that remains functional when the pool rotates addresses; changing the global outbound default would be materially broader."
+  },
+  "approvalScope": "Add one outbound ACCEPT UDP/123 rule to 0.0.0.0/0 on APP firewall 224154258 while preserving all defaults and current rules, then restart only systemd-timesyncd once and perform the listed read-only verification."
+}
