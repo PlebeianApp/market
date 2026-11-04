@@ -89,7 +89,7 @@ function parseDescriptor(input: unknown): PublicExtensionDescriptor | undefined 
 	if (typeof id !== 'string' || !EXTENSION_ID.test(id)) return undefined
 	if (typeof version !== 'string' || version.length > 64) return undefined
 	if (!Array.isArray(capabilities) || !capabilities.every((value) => typeof value === 'string' && CAPABILITY.test(value))) return undefined
-	const parsedActions = Array.isArray(actions) ? actions.map(parseAction) : []
+	const parsedActions = Array.isArray(actions) ? actions.map(parsePublicExtensionAction) : []
 	if (parsedActions.some((action) => action === undefined)) return undefined
 	return {
 		id,
@@ -103,7 +103,7 @@ function parseDescriptor(input: unknown): PublicExtensionDescriptor | undefined 
 	}
 }
 
-function parseAction(input: unknown): PublicExtensionActionDescriptor | undefined {
+export function parsePublicExtensionAction(input: unknown): PublicExtensionActionDescriptor | undefined {
 	if (!isRecord(input)) return undefined
 	const { name, description, auth, rateLimit, transports } = input
 	if (typeof name !== 'string' || !isValidExtensionActionName(name)) return undefined

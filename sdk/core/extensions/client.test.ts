@@ -45,7 +45,7 @@ describe('invokeExtensionAction', () => {
 		expect(event.tags).toEqual([
 			['u', url],
 			['method', 'POST'],
-			['payload', sha256Hex(init.body)],
+			['payload', sha256Hex(init.body ?? '')],
 		])
 	})
 

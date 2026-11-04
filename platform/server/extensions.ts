@@ -2,10 +2,10 @@ import { getEventHandler } from './EventHandler'
 import { determineStage, getInstanceConfig, RELAY_URL } from './runtime'
 import { createPoolRelayPort, type NostrRelayPort } from '@sdk/core'
 import { relayPoolAdapter } from '@sdk/core/nostr-io'
-import type { AnyExtensionDefinition } from '@sdk/core/extensions'
-import { createExtensionActionHandler, EXTENSION_ACTION_ROUTE } from '../extensions/actionRoute'
+import { describeCatalogEntry, EXTENSION_CATALOG_PATH, type AnyExtensionDefinition, type ExtensionCatalogEntry } from '@sdk/core/extensions'
+import { createExtensionActionHandler, createExtensionCatalogHandler, EXTENSION_ACTION_ROUTE } from '../extensions/actionRoute'
 import { BUILTIN_EXTENSIONS } from '../extensions/builtins'
-import { readExtensionEnvConfig, type ExtensionEnvPolicy } from '../extensions/envConfig'
+import { extensionEnvPrefix, readExtensionEnvConfig, type ExtensionEnvPolicy } from '../extensions/envConfig'
 import { HttpAuthReplayCache } from '../extensions/nip98'
 import { buildExtensionHost, type ExtensionPortUsage } from '../extensions/ports/host'
 import { createMemoryKeyValueStorage } from '../extensions/ports/storage'
@@ -16,6 +16,8 @@ import type { BunRoutes } from './http/types'
 interface ExtensionRuntimeState {
 	registry: ExtensionRegistry
 	usage: Map<string, ExtensionPortUsage>
+	/** Admin-safe reasons an extension is not running, keyed by id. Never contains private values. */
+	problems: Map<string, string>
 }
 
 // Kept on globalThis so a hot reload of the entrypoint stops the previous registry instead of leaking it.
@@ -56,15 +58,21 @@ export async function startExtensions(
 	const registry = new ExtensionRegistry(getInstanceConfig().handlerId)
 	for (const definition of definitions) registry.register(definition)
 
+	const usage = new Map<string, ExtensionPortUsage>()
+	const problems = new Map<string, string>()
+	globalState[STATE_KEY] = { registry, usage, problems }
+
 	const config = readExtensionEnvConfig(definitions, env)
-	for (const error of config.errors) console.error(`[extensions] ${error.id} disabled: ${error.message}`)
+	for (const error of config.errors) {
+		console.error(`[extensions] ${error.id} disabled: ${error.message}`)
+		problems.set(error.id, error.message)
+	}
 	const configured = registry.configure(config.settings)
 	if (!configured.ok) {
 		for (const error of configured.error) console.error(`[extensions] configuration rejected: ${error.message}`)
 		return
 	}
 
-	const usage = new Map<string, ExtensionPortUsage>()
 	const policyFor = (id: string): ExtensionEnvPolicy | undefined => config.policies.get(id)
 	const failures = await registry.start('server', {
 		isolateFailures: true,
@@ -90,9 +98,9 @@ export async function startExtensions(
 		const name = failure.error instanceof Error ? failure.error.name : typeof failure.error
 		console.error(`[extensions] ${failure.id} failed to start (${name}); it stays disabled`)
 		usage.delete(failure.id)
+		problems.set(failure.id, `Failed to start (${name}). See the server log.`)
 	}
 
-	globalState[STATE_KEY] = { registry, usage }
 	const running = registry.getPublicDescriptors()
 	if (running.length > 0) {
 		console.log(`[extensions] running: ${running.map((descriptor) => descriptor.id).join(', ')}`)
@@ -121,6 +129,19 @@ function hookShutdown() {
 	}
 }
 
+/** Admin store listing: every built-in with its state; config values are never included. */
+export function getExtensionCatalog(): { entries: ExtensionCatalogEntry[] } {
+	const state = globalState[STATE_KEY]
+	if (!state) return { entries: [] }
+	const entries = state.registry.getDefinitions().map((definition) => {
+		const id = definition.manifest.id
+		const problem = state.problems.get(id)
+		const status = state.registry.isEnabled(id) ? 'installed_enabled' : problem ? 'misconfigured' : 'available'
+		return describeCatalogEntry(definition, { state: status, envPrefix: extensionEnvPrefix(id), ...(problem ? { problem } : {}) })
+	})
+	return { entries }
+}
+
 /**
  * NIP-98 `u` origins. The request origin comes from the client-controlled Host header, so it is trusted only
  * in development; elsewhere only `INSTANCE_SITE_URL` is accepted, and without it every action call is refused.
@@ -145,6 +166,14 @@ export function resolveAcceptedOrigins(
 const acceptedOrigins = (request: Request) => resolveAcceptedOrigins(request, determineStage(), process.env.INSTANCE_SITE_URL)
 
 export const extensionRoutes: BunRoutes = {
+	[EXTENSION_CATALOG_PATH]: {
+		GET: createExtensionCatalogHandler({
+			getCatalog: getExtensionCatalog,
+			isAdmin: (pubkey) => getEventHandler().isAdmin(pubkey),
+			replayCache,
+			acceptedOrigins,
+		}),
+	},
 	[EXTENSION_ACTION_ROUTE]: {
 		POST: createExtensionActionHandler({
 			getRegistry: getExtensionRegistry,

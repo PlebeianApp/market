@@ -104,3 +104,33 @@ function errorResponse(code: ExtensionActionErrorCode, headers: Record<string, s
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
 	return Response.json(body, { status, headers: { 'cache-control': 'no-store', ...headers } })
 }
+
+export interface ExtensionCatalogHandlerDeps {
+	getCatalog: () => unknown
+	isAdmin: (pubkey: string) => boolean
+	replayCache: HttpAuthReplayCache
+	acceptedOrigins: (request: Request) => readonly string[]
+	nowMs?: () => number
+}
+
+/**
+ * `GET /api/extensions/catalog` (ADR-0023 §7): admin-only store listing. Non-admins get 404, so the
+ * store's existence and contents are not disclosed to public visitors.
+ */
+export function createExtensionCatalogHandler(deps: ExtensionCatalogHandlerDeps) {
+	const now = deps.nowMs ?? (() => Date.now())
+	return async (request: Request): Promise<Response> => {
+		const url = new URL(request.url)
+		const auth = verifyHttpAuth({
+			authorization: request.headers.get('authorization'),
+			acceptedUrls: deps.acceptedOrigins(request).map((origin) => `${origin}${url.pathname}${url.search}`),
+			method: request.method,
+			body: '',
+			nowSeconds: Math.floor(now() / 1000),
+			replayCache: deps.replayCache,
+		})
+		if (!auth.ok) return errorResponse('unauthorized', { 'www-authenticate': 'Nostr' })
+		if (!deps.isAdmin(auth.pubkey)) return errorResponse('not_found')
+		return json(200, { ok: true, value: deps.getCatalog() })
+	}
+}

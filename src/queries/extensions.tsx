@@ -1,10 +1,12 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import {
 	findExtensionAction,
 	invokeExtensionAction,
 	parsePublicExtensionDescriptors,
 	ExtensionActionError,
+	fetchExtensionCatalog,
+	type ExtensionCatalogEntry,
 	type PublicExtensionDescriptor,
 } from '@sdk/core/extensions'
 import {
@@ -16,6 +18,7 @@ import {
 import { sign } from '@/lib/nostr/io'
 import type { PublicAppConfig } from '@/lib/instance-config'
 import { useConfigQuery } from './config'
+import { extensionKeys } from './queryKeyFactory'
 
 /** `/api/config` is untrusted: descriptors are parsed, and malformed entries are dropped. */
 export function selectExtensionDescriptors(config: Pick<PublicAppConfig, 'extensions'> | undefined): PublicExtensionDescriptor[] {
@@ -81,4 +84,23 @@ export function useDescribeProductImage() {
 	})
 
 	return { available: Boolean(target), target, ...mutation }
+}
+
+/**
+ * Admin-only store catalog. Each fetch signs a NIP-98 header, so it runs only when `enabled` (the store is
+ * open) and is not retried automatically, to avoid repeated signer prompts.
+ */
+export function useExtensionCatalog(pubkey: string | undefined, enabled: boolean) {
+	return useQuery<ExtensionCatalogEntry[], ExtensionActionError>({
+		queryKey: extensionKeys.catalog(pubkey ?? ''),
+		enabled: enabled && Boolean(pubkey),
+		staleTime: 60_000,
+		retry: false,
+		refetchOnWindowFocus: false,
+		queryFn: async ({ signal }) => {
+			const result = await fetchExtensionCatalog({ sign }, { signal })
+			if (!result.ok) throw result.error
+			return result.value
+		},
+	})
 }

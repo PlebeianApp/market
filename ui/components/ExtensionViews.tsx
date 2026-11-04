@@ -1,9 +1,10 @@
-import { ImageIcon, Puzzle, Sparkles } from 'lucide-react'
+import { ImageIcon, Puzzle, ShieldCheck, Sparkles, Store } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import type { PublicExtensionDescriptor } from '@sdk/core/extensions'
+import type { ExtensionCatalogEntry, ExtensionCatalogState, ExtensionHostPortName, PublicExtensionDescriptor } from '@sdk/core/extensions'
 import { Badge } from '../primitives/badge'
 import { Button } from '../primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../primitives/card'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../primitives/dialog'
 import { Input } from '../primitives/input'
 import { Label } from '../primitives/label'
 import { Textarea } from '../primitives/textarea'
@@ -198,6 +199,146 @@ export function ImageDescribePanel({ onDescribe, pending, result, errorMessage }
 				)}
 			</CardContent>
 		</Card>
+	)
+}
+
+export function ExtensionStoreButton({ onClick }: { onClick: () => void }) {
+	return (
+		<Button variant="outline" onClick={onClick} data-testid="extension-store-button">
+			<Store className="mr-2 h-4 w-4" />
+			Extension store
+		</Button>
+	)
+}
+
+const STATE_LABELS: Record<ExtensionCatalogState, { label: string; className: string }> = {
+	installed_enabled: { label: 'Enabled', className: 'border-green-600 text-green-700' },
+	available: { label: 'Available', className: 'border-zinc-400 text-zinc-600' },
+	misconfigured: { label: 'Needs attention', className: 'border-red-500 text-red-600' },
+}
+
+const PORT_LABELS: Record<ExtensionHostPortName, string> = {
+	'relays:read': 'Read events from this marketplace’s relays',
+	'relays:publish': 'Publish already-signed events to this marketplace’s relays',
+	http: 'Make HTTP requests to the listed origins',
+	storage: 'Keep its own key/value data on the server',
+}
+
+export function ExtensionStoreEntry({ entry }: { entry: ExtensionCatalogEntry }) {
+	const state = STATE_LABELS[entry.state]
+	return (
+		<li className="space-y-3 rounded-lg border p-4" data-testid={`extension-store-entry-${entry.id}`}>
+			<div className="flex items-start gap-3">
+				<ExtensionLogo icon={entry.icon} name={entry.displayName} size={40} />
+				<div className="min-w-0 flex-1">
+					<div className="flex flex-wrap items-center gap-2 font-medium">
+						{entry.displayName}
+						<Badge variant="secondary">v{entry.version}</Badge>
+						<Badge variant="outline" className={state.className} data-testid={`extension-store-state-${entry.id}`}>
+							{state.label}
+						</Badge>
+						<Badge variant="outline">Built-in</Badge>
+					</div>
+					{entry.description && <p className="text-sm text-muted-foreground">{entry.description}</p>}
+				</div>
+			</div>
+
+			{entry.problem && (
+				<p role="alert" className="text-sm text-red-600">
+					{entry.problem}
+				</p>
+			)}
+
+			<div className="grid gap-3 text-sm md:grid-cols-2">
+				<div>
+					<div className="mb-1 font-medium">Capabilities</div>
+					<div className="flex flex-wrap gap-1">
+						{entry.capabilities.map((capability) => (
+							<Badge key={capability} variant="outline" className="font-mono">
+								{capability}
+							</Badge>
+						))}
+					</div>
+				</div>
+				<div>
+					<div className="mb-1 flex items-center gap-1 font-medium">
+						<ShieldCheck className="h-4 w-4" /> Permissions
+					</div>
+					{entry.hostPorts.length === 0 ? (
+						<p className="text-muted-foreground">No relay, network, or storage access.</p>
+					) : (
+						<ul className="list-disc pl-5 text-muted-foreground">
+							{entry.hostPorts.map((port) => (
+								<li key={port}>
+									{PORT_LABELS[port]}
+									{port === 'http' && entry.egress.length > 0 && <span className="block font-mono text-xs">{entry.egress.join(', ')}</span>}
+								</li>
+							))}
+						</ul>
+					)}
+				</div>
+			</div>
+
+			{entry.state !== 'installed_enabled' && (
+				<div className="text-sm">
+					<div className="mb-1 font-medium">To enable</div>
+					<p className="mb-1 text-muted-foreground">Set this in the server environment and restart the server:</p>
+					<pre className="overflow-x-auto rounded bg-zinc-100 px-3 py-2 text-xs">
+						{`${entry.envPrefix}ENABLED=true${entry.hasPrivateConfig ? `\n${entry.envPrefix}<SETTING>=…   # private settings, see the extension docs` : ''}`}
+					</pre>
+				</div>
+			)}
+		</li>
+	)
+}
+
+export interface ExtensionStoreDialogProps {
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	entries: readonly ExtensionCatalogEntry[] | undefined
+	isLoading: boolean
+	errorMessage?: string
+	onRetry: () => void
+}
+
+/** Read-only store (ADR-0023 §7): installs are environment-managed until a server-side settings store exists. */
+export function ExtensionStoreDialog({ open, onOpenChange, entries, isLoading, errorMessage, onRetry }: ExtensionStoreDialogProps) {
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl" data-testid="extension-store-dialog">
+				<DialogHeader>
+					<DialogTitle className="flex items-center gap-2">
+						<Store className="h-5 w-5" /> Extension store
+					</DialogTitle>
+					<DialogDescription>
+						Extensions available on this marketplace. Enabling is managed in the server environment for now; installing from here comes with
+						the settings store.
+					</DialogDescription>
+				</DialogHeader>
+
+				{isLoading && <p className="py-6 text-center text-sm text-muted-foreground">Loading extensions… you may be asked to sign.</p>}
+				{errorMessage && (
+					<div className="space-y-2 py-4 text-center">
+						<p role="alert" className="text-sm text-red-600">
+							{errorMessage}
+						</p>
+						<Button variant="outline" size="sm" onClick={onRetry}>
+							Try again
+						</Button>
+					</div>
+				)}
+				{entries && entries.length === 0 && !isLoading && (
+					<p className="py-6 text-center text-sm text-muted-foreground">No extensions are available in this release.</p>
+				)}
+				{entries && entries.length > 0 && (
+					<ul className="space-y-3">
+						{entries.map((entry) => (
+							<ExtensionStoreEntry key={entry.id} entry={entry} />
+						))}
+					</ul>
+				)}
+			</DialogContent>
+		</Dialog>
 	)
 }
 

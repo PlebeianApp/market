@@ -469,6 +469,7 @@ function DashboardLayout() {
 												location.pathname === '/dashboard/app-settings/team' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/blacklists' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/featured-items' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/app-settings/extensions' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/about' && 'p-0 lg:p-0',
 											)}
 										>
@@ -494,6 +495,7 @@ function DashboardLayout() {
 												location.pathname !== '/dashboard/app-settings/team' &&
 												location.pathname !== '/dashboard/app-settings/blacklists' &&
 												location.pathname !== '/dashboard/app-settings/featured-items' &&
+												location.pathname !== '/dashboard/app-settings/extensions' &&
 												location.pathname !== '/dashboard/account/network' &&
 												location.pathname !== '/dashboard/about' &&
 												location.pathname !== '/dashboard/account/preferences' &&
@@ -514,6 +516,7 @@ function DashboardLayout() {
 														location.pathname !== '/dashboard/app-settings/team' &&
 														location.pathname !== '/dashboard/app-settings/blacklists' &&
 														location.pathname !== '/dashboard/app-settings/featured-items' &&
+														location.pathname !== '/dashboard/app-settings/extensions' &&
 														location.pathname !== '/dashboard/sales/circular-economy' &&
 														location.pathname !== '/dashboard/products/products' &&
 														location.pathname !== '/dashboard/products/auctions' &&

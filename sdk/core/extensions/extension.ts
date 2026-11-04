@@ -24,6 +24,8 @@ export interface ExtensionManifest<PublicConfig = unknown, PrivateConfig = never
 	displayName: string
 	/** Logo: a root-relative path to a bundled asset (e.g. `/images/x.svg`) or an https URL. */
 	icon?: string
+	/** One-line store summary, plain text, at most 120 characters (ADR-0023 §7.0). */
+	description?: string
 	capabilities: readonly string[]
 	runtimes: readonly ExtensionRuntime[]
 	/** Values safe to ship to browsers and public config endpoints. */
@@ -69,6 +71,12 @@ export function validateExtensionManifest(manifest: ExtensionManifest<unknown, u
 	if (!EXTENSION_ID.test(manifest.id)) return failure(new ValidationError('Extension id must be lowercase dot/dash separated', ['id']))
 	if (!SEMVER.test(manifest.version)) return failure(new ValidationError('Extension version must be semver', ['version']))
 	if (!manifest.displayName.trim()) return failure(new ValidationError('Extension displayName must be non-empty', ['displayName']))
+	if (
+		manifest.description !== undefined &&
+		(typeof manifest.description !== 'string' || !manifest.description.trim() || manifest.description.length > MAX_DESCRIPTION_LENGTH)
+	) {
+		return failure(new ValidationError(`Extension description must be 1-${MAX_DESCRIPTION_LENGTH} characters`, ['description']))
+	}
 	if (manifest.icon !== undefined && !isValidExtensionIcon(manifest.icon)) {
 		return failure(new ValidationError('Extension icon must be a root-relative image path or an https URL', ['icon']))
 	}
@@ -86,6 +94,7 @@ export function validateExtensionManifest(manifest: ExtensionManifest<unknown, u
 	return validateHostPorts(manifest)
 }
 
+export const MAX_DESCRIPTION_LENGTH = 120
 const BUNDLED_ICON = /^\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+\.(?:svg|png|webp|jpe?g)$/
 const MAX_ICON_LENGTH = 512
 

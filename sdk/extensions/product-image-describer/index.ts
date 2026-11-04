@@ -46,6 +46,7 @@ export const productImageDescriberManifest = {
 	version: '0.1.0',
 	displayName: 'Product image describer',
 	icon: '/images/extension-product-image-describer.svg',
+	description: 'Drafts a product description from an image link and your notes. Mock-up: no image analysis.',
 	capabilities: [PRODUCT_IMAGE_DESCRIBE_CAPABILITY],
 	runtimes: ['server'],
 	publicConfig: PublicConfigSchema,

@@ -7,7 +7,7 @@ import { EXTENSION_ACTION_ERROR_STATUS, ExtensionActionError, extensionActionPat
 
 export type ExtensionActionFetch = (
 	url: string,
-	init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal },
+	init: { method: string; headers: Record<string, string>; body?: string; signal?: AbortSignal },
 ) => Promise<{
 	status: number
 	text(): Promise<string>

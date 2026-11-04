@@ -504,7 +504,7 @@ something is broken, not merely unfinished.
 3. The extension enters `needs_setup` until required config is provided. The
    admin fills in the config form. Platform validates it with
    `parseExtensionConfig`, which does not echo private values in errors.
-4. Valid settings are written to the server-side settings store (7.7). Private
+4. Valid settings are written to the server-side settings store (7.8). Private
    fields are **write-only**: after saving, the UI shows only `set` / `not set`
    (like a Start9 `masked` value) and can replace a value, but never read it
    back.
@@ -558,7 +558,25 @@ asks the user to opt in once per capability before the first call.
 - It is client-side preference state. It is not a payment, it is not published
   to relays by this ADR, and the server does not require it.
 
-#### 7.7 Settings store prerequisite
+#### 7.7 Current implementation (read-only built-in store)
+
+- The Extensions admin page (`/dashboard/app-settings/extensions`) has an
+  **Extension store** button at the top right. It opens the read-only store.
+- The store lists every built-in from `GET /api/extensions/catalog`. The
+  request is authenticated with NIP-98 (a signed `GET` with no payload), and
+  non-admins get `404`, so public visitors cannot see the store.
+- Each entry (`ExtensionCatalogEntry`, `sdk/core/extensions/catalog.ts`) shows:
+  - logo, short description (manifest `description`, at most 120 characters),
+    capabilities, and actions;
+  - permissions in plain language (host ports and egress origins);
+  - state: `installed_enabled`, `available`, or `misconfigured` with a
+    private-safe reason;
+  - the `EXTENSION_<ID>_` variables that enable it.
+- Config values are never included. Every entry is `managedBy: 'environment'`.
+- Remote entries, `needs_setup`, `installed_disabled`, `unreachable`, and
+  installing from the store are not implemented. They wait on 7.8.
+
+#### 7.8 Settings store prerequisite
 
 Installing from the store requires a server-side settings store with private
 values encrypted at rest. Its design (location, key management, backup) is a

@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { PublicExtensionDescriptor } from '@sdk/core/extensions'
-import { ExtensionCard, ExtensionLogo, ExtensionsEmptyState, ImageDescribePanel } from './ExtensionViews'
+import {
+	ExtensionCard,
+	ExtensionLogo,
+	ExtensionsEmptyState,
+	ExtensionStoreButton,
+	ExtensionStoreEntry,
+	ImageDescribePanel,
+} from './ExtensionViews'
+import { SettingsPageHeader } from './OperatorSettingsViews'
 
 const descriptor: PublicExtensionDescriptor = {
 	id: 'product-image-describer',
@@ -53,5 +61,58 @@ describe('extension views', () => {
 		expect(markup).toContain('Mock-up — no image analysis')
 		expect(markup).toContain('&lt;b&gt;bold&lt;/b&gt; mug')
 		expect(markup).toContain('Too many requests.')
+	})
+})
+
+describe('extension store views', () => {
+	const entry = {
+		id: 'product-image-describer',
+		version: '0.1.0',
+		displayName: 'Product image describer',
+		icon: '/images/extension-product-image-describer.svg',
+		description: 'Drafts a description.',
+		capabilities: ['product.image.describe'],
+		runtimes: ['server'],
+		hostPorts: [],
+		egress: [],
+		actions: [],
+		hasPrivateConfig: false,
+		state: 'available',
+		managedBy: 'environment',
+		envPrefix: 'EXTENSION_PRODUCT_IMAGE_DESCRIBER_',
+	} as const
+
+	test('store entry shows logo, state, permissions, and how to enable', () => {
+		const markup = renderToStaticMarkup(<ExtensionStoreEntry entry={entry} />)
+		expect(markup).toContain('src="/images/extension-product-image-describer.svg"')
+		expect(markup).toContain('Available')
+		expect(markup).toContain('No relay, network, or storage access.')
+		expect(markup).toContain('EXTENSION_PRODUCT_IMAGE_DESCRIBER_ENABLED=true')
+	})
+
+	test('enabled entries omit enable instructions; misconfigured ones show the problem', () => {
+		expect(renderToStaticMarkup(<ExtensionStoreEntry entry={{ ...entry, state: 'installed_enabled' }} />)).not.toContain('To enable')
+		const broken = renderToStaticMarkup(
+			<ExtensionStoreEntry
+				entry={{
+					...entry,
+					state: 'misconfigured',
+					problem: 'invalid private config',
+					hostPorts: ['http'],
+					egress: ['https://api.example'],
+				}}
+			/>,
+		)
+		expect(broken).toContain('Needs attention')
+		expect(broken).toContain('invalid private config')
+		expect(broken).toContain('https://api.example')
+	})
+
+	test('header renders top-right actions', () => {
+		const markup = renderToStaticMarkup(
+			<SettingsPageHeader icon={() => null} title="Extensions" description="d" actions={<ExtensionStoreButton onClick={() => {}} />} />,
+		)
+		expect(markup).toContain('Extension store')
+		expect(markup).toContain('justify-between')
 	})
 })

@@ -107,6 +107,11 @@ export class ExtensionRegistry {
 		return success(undefined)
 	}
 
+	/** Every registered definition, enabled or not, in registration order (for the admin store). */
+	getDefinitions(): AnyExtensionDefinition[] {
+		return [...this.definitions.values()]
+	}
+
 	isEnabled(id: string): boolean {
 		return this.configured.some((entry) => entry.definition.manifest.id === id)
 	}

@@ -1,10 +1,12 @@
 import { useConfigQuery } from '@/queries/config'
 import { useUserRole } from '@/queries/app-settings'
-import { extensionErrorMessage, useDescribeProductImage, useExtensionDescriptors } from '@/queries/extensions'
+import { extensionErrorMessage, useDescribeProductImage, useExtensionCatalog, useExtensionDescriptors } from '@/queries/extensions'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import {
 	ExtensionCard,
 	ExtensionsEmptyState,
+	ExtensionStoreButton,
+	ExtensionStoreDialog,
 	ImageDescribePanel,
 	SettingsAccessDenied,
 	SettingsLoadingSkeleton,
@@ -13,6 +15,7 @@ import {
 } from '@ui/index'
 import { createFileRoute } from '@tanstack/react-router'
 import { Puzzle } from 'lucide-react'
+import { useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/extensions')({
 	component: ExtensionsComponent,
@@ -24,19 +27,31 @@ const ENV_EXAMPLE = 'EXTENSION_PRODUCT_IMAGE_DESCRIBER_ENABLED=true'
 function ExtensionsComponent() {
 	useDashboardTitle('Extensions')
 	const { data: config } = useConfigQuery()
-	const { amIAdmin, isLoading: isRoleLoading } = useUserRole(config?.appPublicKey)
+	const { amIAdmin, currentUserPubkey, isLoading: isRoleLoading } = useUserRole(config?.appPublicKey)
 	const { descriptors, isLoading } = useExtensionDescriptors()
 	const describe = useDescribeProductImage()
+	const [storeOpen, setStoreOpen] = useState(false)
+	const catalog = useExtensionCatalog(currentUserPubkey, storeOpen && amIAdmin)
 
 	if (isLoading || isRoleLoading) return <SettingsLoadingSkeleton />
 	// Client-side workflow gate only; the action route enforces its own auth and roles.
 	if (!amIAdmin) return <SettingsAccessDenied header={header} message="Only marketplace admins can view extensions." />
 
+	const storeButton = <ExtensionStoreButton onClick={() => setStoreOpen(true)} />
+
 	return (
 		<div>
-			<SettingsPageHeader {...header} />
+			<SettingsPageHeader {...header} actions={storeButton} />
 			<div className="space-y-6 p-4 lg:p-8">
-				<SettingsMobileHeader {...header} />
+				<SettingsMobileHeader {...header} actions={storeButton} />
+				<ExtensionStoreDialog
+					open={storeOpen}
+					onOpenChange={setStoreOpen}
+					entries={catalog.data}
+					isLoading={catalog.isFetching && !catalog.data}
+					errorMessage={catalog.error ? extensionErrorMessage(catalog.error) : undefined}
+					onRetry={() => void catalog.refetch()}
+				/>
 
 				{descriptors.length === 0 ? (
 					<ExtensionsEmptyState envExample={ENV_EXAMPLE} />

@@ -3,6 +3,7 @@ export {
 	defineExtension,
 	EXTENSION_RUNTIMES,
 	isValidExtensionIcon,
+	MAX_DESCRIPTION_LENGTH,
 	parseExtensionConfig,
 	validateExtensionDefinition,
 	validateExtensionManifest,
@@ -81,5 +82,13 @@ export {
 	toContextVmToolResult,
 } from './contextvm'
 export type { ContextVmCallTool, ContextVmToolResult, ExtensionActionToolDescriptor, InvokeOverContextVmOptions } from './contextvm'
-export { describeExtension, findExtensionAction, parsePublicExtensionDescriptors } from './descriptors'
+export { describeExtension, findExtensionAction, parsePublicExtensionAction, parsePublicExtensionDescriptors } from './descriptors'
 export type { ExtensionActionTarget, PublicExtensionDescriptor } from './descriptors'
+export {
+	describeCatalogEntry,
+	EXTENSION_CATALOG_PATH,
+	EXTENSION_CATALOG_STATES,
+	fetchExtensionCatalog,
+	parseExtensionCatalog,
+} from './catalog'
+export type { ExtensionCatalogEntry, ExtensionCatalogState, ExtensionManagedBy, FetchExtensionCatalogOptions } from './catalog'
