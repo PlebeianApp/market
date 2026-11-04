@@ -1,0 +1,35 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_APP_LOOPBACK_SITE_ACTIVATION_PLAN_V1",
+  "status": "AUTHORIZED_DEPLOYMENT_CONTINUATION_PREPARED_FOR_ONE_START",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "target": "APP 139.162.161.233",
+  "scope": [
+    "Recheck the active zero-restart coordinator, authority, observer, mint and FIPS services and the inactive zero-restart site.",
+    "Require the authority to remain composite-ready, the coordinator queue to remain revision 0 with zero operations, and APP system time to remain within two seconds of its UTC RTC.",
+    "Require the exact installed site unit, site binary, release binding, loopback authority listener and absence of listeners on 8180, 80 and 443.",
+    "Start plebeian-friday-site.service once and verify it binds exactly 127.0.0.1:8180 with zero restarts.",
+    "Perform read-only GET probes of the root document, browser release pins, API configuration, state and validator status.",
+    "Preserve a create-once action receipt and final actual or stopped receipt. Stop only the site started by this action if acceptance fails."
+  ],
+  "acceptance": [
+    "Site remains active with NRestarts=0 and listener exactly 127.0.0.1:8180.",
+    "No listener appears on 0.0.0.0, ::, ports 80 or 443; nginx stays inactive.",
+    "GET / returns the embedded application with the expected browser security headers.",
+    "GET /api/config reports FAKE_MONEY_ONLY, the pinned chain, threshold custody, both browser readiness flags true and recovery_only=false.",
+    "GET /api/browser-release-pins returns the pinned release manifest.",
+    "GET /api/state and GET /api/validators succeed without creating an operation.",
+    "The authority remains ready and the coordinator queue remains revision 0 with zero operations after the probes."
+  ],
+  "knownQualification": "The genesis compatibility URL http://127.0.0.1:8180/test-mint is intentionally a non-operational legacy namespace in the installed Friday server and must return 404. The real Friday browser wallet talks to the separately pinned Cashu HTTPS identity. Therefore the obsolete service-activation-plan requirement that /test-mint proxy to the mint is not an acceptance criterion for this action.",
+  "securityEffects": [
+    "The site becomes reachable only from APP loopback; it remains unavailable to the five remote team browsers.",
+    "The site process may read public chain state and exposes mutation routes only on loopback. No mutation route is probed.",
+    "The close trigger starts but the precondition requires an empty chain/application queue; no due auction exists.",
+    "No threshold signature, payment, fake-sat movement, credential creation, HTTPS, nginx, firewall, NTP configuration or public exposure is requested."
+  ],
+  "failurePolicy": "Stop only plebeian-friday-site.service if this action started it, preserve all receipts and state, and do not retry automatically.",
+  "remainingBlockers": [
+    "Remote five-user use requires separately authorized and verified HTTPS reverse-proxy exposure; the browser controller rejects non-HTTPS origins.",
+    "APP systemd-timesyncd remains unsynchronized; RTC agreement is a temporary fake-money window only and is not production-money readiness."
+  ]
+}

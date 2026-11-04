@@ -1,0 +1,101 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_SITE_EXECUTOR_BINDING_REPAIR_PLAN_V1",
+  "status": "READY_FOR_EXACT_APPROVAL_NOT_EXECUTED",
+  "preparedAtUtc": "2026-11-04T00:35:10Z",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "cause": "The first loopback site action settled STOPPED because the installed site binary accepts only the separated predecessor terminal-executor path. The accepted sidequest environment correctly selects the successor executor at /opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/plebeian-friday-terminal-executor.",
+  "sourceRepair": {
+    "files": [
+      "internal/poc/r20_close_trigger.go",
+      "internal/poc/friday_separated_readiness_test.go"
+    ],
+    "policy": "For deployment friday-demo-20261030-separated-v1, admit only the exact sidequest-mvp-r4 terminal-executor path. Explicitly reject the predecessor path and all near misses. The older R20 deployment path remains unchanged."
+  },
+  "tests": {
+    "focusedGo": "PASS: go test ./internal/poc -run TestFridaySeparatedBrowserReadinessAndRoleBoundClose|TestR20CloseTriggerActivation -count=1",
+    "fullGoPackage": "PASS: go test ./internal/poc -count=1",
+    "patchGuard": "PASS: 2 unittest cases; exact fixture accepted, binary drift rejected, unit is loopback-only",
+    "systemdSyntax": "Parsed successfully with only the expected pre-install missing patch-binary warning"
+  },
+  "patchRelease": {
+    "root": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-site-r2",
+    "createOnce": true,
+    "artifacts": [
+      {
+        "source": "dist/sidequest/plebeian-auctions-mvp-site-r4-fix",
+        "destination": "bin/plebeian-auctions-mvp",
+        "bytes": 46588456,
+        "mode": "0755",
+        "sha256": "75d304d601c94fe3373d92923025cbadb61e915e8ad67b928b5dd88b03077b85"
+      },
+      {
+        "source": "deploy/sidequest-mvp/verify-sidequest-site-r2.py",
+        "destination": "bin/verify-friday-separated-target.py",
+        "bytes": 6086,
+        "mode": "0755",
+        "sha256": "7a2f4f26e3c6e78449ce96348f22c7d593584fee2f72a62a4bb11ed053237f2d"
+      },
+      {
+        "source": "deploy/friday/separated/verify-friday-separated-target.py",
+        "destination": "bin/verify-friday-separated-base.py",
+        "bytes": 14659,
+        "mode": "0755",
+        "sha256": "36bc33672b1cd2bef0961c7a7df160686cb2674e62242784303a64d652515f1d"
+      },
+      {
+        "source": "deploy/friday/verify-friday-runtime-target.py",
+        "destination": "bin/verify-friday-runtime-target.py",
+        "bytes": 24764,
+        "mode": "0755",
+        "sha256": "d5c7031676fa3e5dc15a5da5c11a8d20c44e5f5e53242b3407df90b1c026b206"
+      }
+    ],
+    "preserves": [
+      "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4",
+      "/opt/plebeian-auctions-friday/releases/separated-deploy-v1",
+      "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-coordinator-r2"
+    ]
+  },
+  "guard": {
+    "pins": [
+      "new site binary",
+      "existing exact sidequest terminal executor",
+      "existing activation environment",
+      "existing application configuration",
+      "existing public runtime bindings",
+      "existing separated topology and public input metadata"
+    ],
+    "readsPrivateKeyContents": false
+  },
+  "unitReplacement": {
+    "source": "deploy/sidequest-mvp/plebeian-friday-site-r2.service",
+    "bytes": 1040,
+    "mode": "0644",
+    "sha256": "ce91f073fa540167063a6b707adbbcdcf2d443946074b9b98dfa36be230b0d66",
+    "destination": "/etc/systemd/system/plebeian-friday-site.service",
+    "retainCurrent": true,
+    "daemonReload": true,
+    "listener": "127.0.0.1:8180"
+  },
+  "continuation": [
+    "Recheck the preserved STOPPED receipt, inactive site, active zero-restart backend, empty revision-0 coordinator queue, exact activation configuration, no 8180/80/443 listeners and APP-to-RTC skew below two seconds.",
+    "Install the four-artifact patch release create-once; retain and replace only the inactive site unit; daemon-reload without starting unrelated services.",
+    "Run the exact site R2 guard as plebeian-friday-site.",
+    "Make one new site start and require active-running, zero new restarts and listener exactly 127.0.0.1:8180.",
+    "Perform only GET probes of root, config, browser pins, state and validator status; require the chain/application state and coordinator queue to remain empty.",
+    "Require no listeners on 80/443 and preserve the site/backend state on any failure without automatic retry."
+  ],
+  "securityEffects": "The patch release and one systemd unit are new persistent public artifacts. The site becomes reachable only from APP loopback. No key, secret share, credential, firewall, nginx, HTTPS, NTP configuration, payment or threshold-signing state is changed.",
+  "exactApprovalRequest": "The loopback site start stopped because its binary expected the predecessor executor path; the backend stayed healthy and no request or public listener was created. I have rebuilt and tested a site that accepts only the exact installed sidequest executor. May I install it as a new create-once site patch release, retain and replace only the inactive site unit, reload systemd, and make one new loopback-only start with read-only checks? This will not open ports 80/443, enable nginx/HTTPS, request a threshold signature, move fake sats, create credentials, or change firewalls/NTP.",
+  "notAuthorizedWithoutTheRequestedApproval": [
+    "Installing the patch release or site unit",
+    "Starting the site again",
+    "Changing nginx, HTTPS, firewalls or NTP",
+    "Initiating funding, bidding, settlement or any threshold signature"
+  ],
+  "remainingAfterSuccess": [
+    "Separately approved and verified HTTPS reverse-proxy exposure",
+    "Five distinct NIP-07 user identities and an actual fake-sat auction rehearsal",
+    "Durable NTP repair before any production-money use"
+  ]
+}

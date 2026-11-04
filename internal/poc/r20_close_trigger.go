@@ -25,9 +25,10 @@ const (
 )
 
 const (
-	r20ApplicationPath = "/etc/plebeian-auctions-friday/application.json"
-	r20ExecutorPath    = "/opt/plebeian-auctions-friday/releases/r20-deploy-v1/bin/plebeian-friday-terminal-executor"
-	r20NetworkRoot     = "/var/lib/plebeian-auctions-friday/network-r20"
+	r20ApplicationPath          = "/etc/plebeian-auctions-friday/application.json"
+	r20ExecutorPath             = "/opt/plebeian-auctions-friday/releases/r20-deploy-v1/bin/plebeian-friday-terminal-executor"
+	r20NetworkRoot              = "/var/lib/plebeian-auctions-friday/network-r20"
+	fridaySeparatedExecutorPath = "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/plebeian-friday-terminal-executor"
 )
 
 type r20CloseState struct {
@@ -79,7 +80,7 @@ func requireR20CloseTriggerActivation(root, listen string, manifest NetworkManif
 	expectedExecutor := r20ExecutorPath
 	if manifest.DeploymentID == fridaySeparatedDeploymentID {
 		expectedRoot = "/var/lib/plebeian-auctions-friday/network-separated"
-		expectedExecutor = "/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-friday-terminal-executor"
+		expectedExecutor = fridaySeparatedExecutorPath
 		roleOK = os.Getenv("FRIDAY_ROLE") == "APPLICATION" && os.Getenv("FRIDAY_SLOT") == "" && server.observerNodeID != ""
 		binding = os.Getenv("FRIDAY_SEPARATED_RUNTIME_DIGEST")
 		expectedBinding = manifest.SeparatedRuntimeBindingDigest

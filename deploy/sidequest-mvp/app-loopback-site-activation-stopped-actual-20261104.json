@@ -1,0 +1,50 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_APP_LOOPBACK_SITE_ACTIVATION_STOPPED_ACTUAL_V1",
+  "status": "SITE_START_STOPPED_AND_RECONCILED_BACKEND_REMAINS_HEALTHY_NO_PUBLIC_EXPOSURE_NO_OPERATION",
+  "completedAtUtc": "2026-11-04T00:35:10Z",
+  "planSha256": "508044934fc207493553d1c85647f46f6a7e425c6cdb51c2481d7ab976eb4840",
+  "controller": {
+    "path": "/tmp/run_app_loopback_site_activation.py",
+    "finalSha256": "c42e8e94bfa5f58eee62ebd40912fa7e85377e86fec18c9240b3419e132158b3",
+    "qualification": "Two earlier local prechecks stopped before creating the remote action: the first corrected a truncated expected public runtime-binding digest and the second corrected polling for the documented warming-to-ready authority transition. Neither precheck changed remote state."
+  },
+  "remoteAction": {
+    "path": "/var/lib/plebeian-auctions-friday/separated-inputs/.sidequest-mvp-r4-app-loopback-site-activation-v1",
+    "actionBytes": 227,
+    "actionSha256": "0e2247bf7ae93935d94f517547b8bb8dbfc37c16200dd269bf8c72e0946afe97",
+    "stoppedBytes": 624,
+    "stoppedSha256": "c00a4a4cd55424eca18c938afe4d0517a14af3b086810fac1daaadc714ff222e",
+    "siteRestartCountObserved": 7,
+    "cleanup": "systemctl stop plebeian-friday-site.service exited 0; unit is inactive/dead and the stopped receipt is preserved"
+  },
+  "startupGuards": {
+    "roleTarget": "PASS",
+    "runtime": "READY",
+    "mainProcessError": "R20_CLOSE_ACTIVATION_HOST_BINDING_INVALID",
+    "cause": "The installed site binary hardcodes the separated predecessor terminal-executor path, while the accepted activation environment points to the exact sidequest-mvp-r4 successor executor."
+  },
+  "preservedState": {
+    "servicesActiveZeroRestarts": [
+      "plebeian-friday-fips.service",
+      "plebeian-friday-mint.service",
+      "plebeian-friday-observer.service",
+      "plebeian-friday-coordinator.service",
+      "plebeian-friday-authority.service"
+    ],
+    "site": "inactive-dead-NRestarts-7",
+    "listeners": ["127.0.0.1:8181"],
+    "public80or443Listener": false,
+    "coordinatorQueue": {"quickCheck": "ok", "revision": 0, "operations": 0}
+  },
+  "effects": {
+    "siteServedRequest": false,
+    "publicPortOpened": false,
+    "nginxOrHttpsChanged": false,
+    "thresholdSignatureRequested": false,
+    "paymentOrFakeSatMovementRequested": false,
+    "credentialCreated": false,
+    "firewallOrNtpChanged": false
+  },
+  "qualification": "APP systemd-timesyncd remains unsynchronized. The earlier validated RTC correction remains suitable only for this short fake-money MVP window, not production-money readiness.",
+  "nextStep": "Install the tested create-once site R2 patch release and retained site-unit replacement under a new explicit action, then make one new loopback-only start and repeat read-only acceptance."
+}

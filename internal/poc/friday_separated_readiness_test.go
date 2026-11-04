@@ -66,7 +66,7 @@ func TestFridaySeparatedBrowserReadinessAndRoleBoundClose(t *testing.T) {
 	t.Setenv("POC_FRIDAY_R20_CLOSE_TRIGGER", "true")
 	t.Setenv("FRIDAY_NETWORK_ROOT", root)
 	t.Setenv("FRIDAY_APPLICATION", r20ApplicationPath)
-	t.Setenv("FRIDAY_TERMINAL_EXECUTOR_BIN", "/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-friday-terminal-executor")
+	t.Setenv("FRIDAY_TERMINAL_EXECUTOR_BIN", fridaySeparatedExecutorPath)
 	t.Setenv("FRIDAY_SITE_PORT", "8180")
 	t.Setenv("FRIDAY_ROLE", "APPLICATION")
 	t.Setenv("FRIDAY_SLOT", "")
@@ -74,6 +74,11 @@ func TestFridaySeparatedBrowserReadinessAndRoleBoundClose(t *testing.T) {
 	if ok, e := requireR20CloseTriggerActivation(root, "127.0.0.1:8180", m, s); e != nil || !ok {
 		t.Fatal("exact app observer close refused", e)
 	}
+	t.Setenv("FRIDAY_TERMINAL_EXECUTOR_BIN", "/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-friday-terminal-executor")
+	if ok, e := requireR20CloseTriggerActivation(root, "127.0.0.1:8180", m, s); e == nil || ok {
+		t.Fatal("predecessor executor path accepted by successor deployment")
+	}
+	t.Setenv("FRIDAY_TERMINAL_EXECUTOR_BIN", fridaySeparatedExecutorPath)
 	t.Setenv("FRIDAY_SLOT", "2")
 	if ok, e := requireR20CloseTriggerActivation(root, "127.0.0.1:8180", m, s); e == nil || ok {
 		t.Fatal("validator slot masqueraded as application")
