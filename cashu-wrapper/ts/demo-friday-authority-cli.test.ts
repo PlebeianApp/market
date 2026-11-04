@@ -1,12 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { mkdir, mkdtemp, open, readFile, rm, stat } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, open, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import {
 	demoFridayAuthorityArgs,
 	demoFridayAuthorityParticipantBinary,
+	ensureDemoFridayAuthorityScratch,
 	initializeDemoFridayAuthorityStores,
 	initializeDemoFridaySellerPlanStores,
 	type DemoFridayAuthorityStorePaths,
@@ -52,6 +53,33 @@ describe('fixed Friday authority CLI', () => {
 			'serve', '--application', '/tmp/plebeian-friday-fips-lab.fake/application.json',
 		])).toThrow(/fixed live application path/)
 	})
+
+	test('creates and revalidates one private authority scratch parent', async () => {
+		const root = await mkdtemp(join(tmpdir(), 'friday-authority-scratch.'))
+		const scratch = join(root, 'scratch')
+		try {
+			expect(await ensureDemoFridayAuthorityScratch(scratch)).toBe(scratch)
+			const metadata = await stat(scratch)
+			expect(metadata.isDirectory()).toBe(true)
+			expect(metadata.mode & 0o777).toBe(0o700)
+			expect(metadata.uid).toBe(process.getuid())
+			expect(metadata.gid).toBe(process.getgid())
+			expect(await ensureDemoFridayAuthorityScratch(scratch)).toBe(scratch)
+		} finally { await rm(root, { recursive: true, force: true }) }
+	})
+
+	for (const kind of ['file', 'symlink', 'mode'] as const) {
+		test(`rejects unsafe authority scratch ${kind}`, async () => {
+			const root = await mkdtemp(join(tmpdir(), 'friday-authority-scratch-refusal.'))
+			const scratch = join(root, 'scratch')
+			try {
+				if (kind === 'file') await writeFile(scratch, 'not a directory', { mode: 0o600 })
+				if (kind === 'symlink') await symlink(root, scratch)
+				if (kind === 'mode') { await mkdir(scratch, { mode: 0o700 }); await chmod(scratch, 0o750) }
+				await expect(ensureDemoFridayAuthorityScratch(scratch)).rejects.toThrow(/runtime-owned 0700 directory/)
+			} finally { await rm(root, { recursive: true, force: true }) }
+		})
+	}
 
 	test('reserves and initializes every authority store and independent anchor exactly once', async () => {
 		const root = await mkdtemp(join(tmpdir(), 'friday-authority-state-init.')), paths = authorityPaths(root)

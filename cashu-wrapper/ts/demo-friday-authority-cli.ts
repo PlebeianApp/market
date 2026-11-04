@@ -10,7 +10,7 @@ import { probeFridaySignerHealth, collectFridayReadySigners } from './demo-frida
 /** Fixed-path, loopback-only Friday authority process. Public exposure is separately gated. */
 import { Database } from 'bun:sqlite'
 import { createHash } from 'node:crypto'
-import { lstat, open, readFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import { hasValidDleq } from '@cashu/cashu-ts'
@@ -132,6 +132,24 @@ export function demoFridayAuthorityParticipantBinary(
 ): string {
 	return schema === 'PLEBEIAN_FRIDAY_SEPARATED_APPLICATION_V1' ? SEPARATED_AUTHORITY_PARTICIPANT_BINARY : schema !== 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V2'
 		? DEMO_FRIDAY_R20_PARTICIPANT_BINARY : LEGACY_PARTICIPANT_BINARY
+}
+
+/**
+ * Create or revalidate the authority's private invocation-scratch parent.
+ * The parent runtime directory is already service-private; refusing links,
+ * shared modes, or another owner keeps aggregate inputs out of shared paths.
+ */
+export async function ensureDemoFridayAuthorityScratch(path: string): Promise<string> {
+	try { await mkdir(path, { mode: 0o700 }) }
+	catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+	}
+	const metadata = await lstat(path)
+	if (!metadata.isDirectory() || metadata.isSymbolicLink() || (metadata.mode & 0o777) !== 0o700
+		|| metadata.uid !== process.getuid() || metadata.gid !== process.getgid()) {
+		throw new Error('DEMO_FRIDAY_AUTHORITY_CLI: scratch parent must be a runtime-owned 0700 directory')
+	}
+	return path
 }
 
 function anchorPaths(schema: 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V2' | 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V3' | 'PLEBEIAN_FRIDAY_SEPARATED_APPLICATION_V1') {
@@ -465,6 +483,8 @@ export async function main(): Promise<void> {
 	 : createLoopbackCometReader(`http://127.0.0.1:${application.comet_rpc_port}`,fetchImpl)
 	const dkg = 'result' in publicDkg ? publicDkg.result : publicDkg.runtime.result
 	const heldPins = pins(facts, dkg)
+	const root = application.coordinator_root
+	await ensureDemoFridayAuthorityScratch(join(root, 'scratch'))
 	const coordinatorSecret = await exactSecret(application.coordinator_rpc_identity_path)
 	if (xonly(coordinatorSecret) !== dkg.coordinatorIdentity) {
 		coordinatorSecret.fill(0); throw new Error('DEMO_FRIDAY_AUTHORITY_CLI: coordinator identity differs from DKG')
@@ -475,7 +495,6 @@ export async function main(): Promise<void> {
 		key.fill(0); coordinatorSecret.fill(0)
 		throw new Error('DEMO_FRIDAY_AUTHORITY_CLI: POC_FRIDAY_RECOVERY_ONLY must be exactly true or false')
 	}
-	const root = application.coordinator_root
 	const terminalDb = new Database(join(root, 'terminal.sqlite3'), { create: false, strict: true })
 	const coordinatorDb = new Database(join(root, 'operations.sqlite3'), { create: false, strict: true })
 	const authorityDb = new Database(join(root, 'authority.sqlite3'), { create: false, strict: true })
