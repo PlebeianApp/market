@@ -56,7 +56,7 @@ func TestFridayPhoneUIHasPermanentDisclosuresAndNoVisibleRemoteFaultControl(t *t
 		`name="viewport"`, `Worthless fake sats only`, `3-of-4 FROST admission`,
 		`Participant-local policy over FIPS transport`, `not production or federal FIPS compliance`,
 		`id="description"`, `id="image"`, `id="increment"`, `id="faucet-amount"`,
-		`id="process-payments"`, `src="/ui-helpers.js"`, `src="/friday-browser.js"`,
+		`id="process-payments"`, `type="module" src="/app-bootstrap.js"`,
 	} {
 		if !strings.Contains(body, required) {
 			t.Fatalf("Friday index is missing %q", required)
@@ -67,6 +67,14 @@ func TestFridayPhoneUIHasPermanentDisclosuresAndNoVisibleRemoteFaultControl(t *t
 	handler.ServeHTTP(browserResponse, browserRequest)
 	if browserResponse.Code != http.StatusOK || !strings.Contains(browserResponse.Body.String(), "plebeianFridayConnect") {
 		t.Fatalf("Friday Coco v2 browser bundle is absent or not served")
+	}
+	bootstrapRequest := httptest.NewRequest(http.MethodGet, "/app-bootstrap.js", nil)
+	bootstrapResponse := httptest.NewRecorder()
+	handler.ServeHTTP(bootstrapResponse, bootstrapRequest)
+	if bootstrapResponse.Code != http.StatusOK ||
+		!strings.Contains(bootstrapResponse.Body.String(), `import "/friday-browser.js";`) ||
+		!strings.Contains(bootstrapResponse.Body.String(), `import "/app.js";`) {
+		t.Fatalf("Friday ES-module bootstrap is absent or does not order the browser bundle before the app")
 	}
 	if csp := indexResponse.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "img-src 'self' data: https:") {
 		t.Fatalf("Friday HTTPS item images are not bounded by the expected CSP: %q", csp)
