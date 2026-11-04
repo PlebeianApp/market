@@ -9,21 +9,22 @@ omits infrastructure fault testing and production-identity provisioning.
 1. Finish the existing HTTPS lane for the exact pinned origin
    `https://139.162.161.233`. The browser flow itself rejects HTTP and any
    different origin. Never bypass a certificate warning.
-2. Permit inbound TCP/443 only from the meeting's current public IPv4 address
-   or the five current team `/32` addresses. Keep the application bound to
-   loopback behind the reverse proxy. Do not add a wildcard 443 rule.
+2. Install the separately prepared server-level Basic Auth include with five
+   independent accounts named `demo-1` through `demo-5`. Keep the application
+   bound to loopback behind the reverse proxy. Follow
+   `BASIC-AUTH-OWNER-HANDOFF-R1.md`; no plaintext password belongs in this
+   repository or an agent session.
 3. Each person opens the valid origin in a separate browser profile or on a
-   separate device and selects **Use demo identity**. These identities are
-   generated locally in the tab, are not exported, and require no account or
-   credential creation.
+   separate device, authenticates with only their assigned account and selects
+   **Use demo identity**. The auction identities are generated locally in the
+   tab and are not exported.
 4. Keep every demo tab open until its refund or payout is imported. Reloading
    loses that tab's ephemeral identity, so a reloaded profile must stop rather
    than fund again.
 
-If all five people share the same meeting network, one inbound `/32` is enough.
-If they are remote, collect the five current public IPv4 addresses immediately
-before the demo and remove those temporary rules afterward under a separately
-approved cleanup action.
+The five testers are on separate networks, so source-IP allowlisting is not the
+selected access control. The temporary public 443 listener must expose only the
+authenticated TLS virtual host; APP ports 8180 and 8181 remain loopback-only.
 
 ## Minimal preflight
 
@@ -101,8 +102,8 @@ having passed merely because this slim demo succeeds.
 
 The slim run still requires explicit approval for two separate actions:
 
-1. exposing HTTPS to the exact temporary source-IP allowlist once certificate
-   verification is complete; and
+1. installing the five-account Basic Auth gate and exposing only its HTTPS
+   virtual host once certificate verification is complete; and
 2. beginning the five-person run, which issues fake sats and causes real
    committee signatures and auction settlement.
 
