@@ -150,6 +150,28 @@ class DemoPage {
       return consecutive >= 2;
     }, 60_000, `${label} readiness`);
   }
+  async warmRuntimeReadiness(label) {
+    let consecutive = 0;
+    await this.poll(`fetch('/api/config', {
+      credentials: 'same-origin', headers: { accept: 'application/json' }
+    }).then(async (response) => {
+      const value = response.headers.get('content-type')?.split(';')[0] === 'application/json'
+        ? await response.json() : null;
+      return {
+        status: response.status,
+        ready: response.ok && value?.threshold_custody === true
+          && value?.browser_threshold_wallet_ready === true
+          && value?.browser_threshold_admission_ready === true
+          && value?.recovery_only === false
+      };
+    })`, (value) => {
+      consecutive = value?.ready === true ? consecutive + 1 : 0;
+      return consecutive >= 2;
+    }, 60_000, `${label} backend readiness`);
+    // Update the page's independently pinned readiness state after the two
+    // direct samples have warmed the request-driven backend gate.
+    await this.refreshView();
+  }
   status() {
     return this.evaluate(`(() => ({
       actor: document.querySelector('#actor')?.textContent || '',
@@ -208,6 +230,7 @@ class DemoPage {
     // next sample warms the continuity gate. Never drop a synthetic click on
     // a disabled control and then mistake the absence of a request for a
     // funding timeout.
+    await this.warmRuntimeReadiness("fake funding");
     await this.waitActionEnabled("#faucet", "fake funding");
     await this.evaluate(`(() => {
       const input = document.querySelector('#faucet-amount'); input.value = '${FUNDING}';
@@ -235,6 +258,7 @@ class DemoPage {
     })`);
   }
   async createAuction(title) {
+    await this.warmRuntimeReadiness("auction creation");
     await this.waitActionEnabled("#create-submit", "auction creation");
     await this.evaluate(`(() => {
       document.querySelector('#title').value = ${JSON.stringify(title)};
@@ -291,6 +315,7 @@ class DemoPage {
       (value) => /Registered [1-9][0-9]* seller plan/.test(value), 75_000, "seller plan registration");
   }
   async servicePendingPlan() {
+    await this.warmRuntimeReadiness("manual seller service");
     await this.waitActionEnabled("#process-payments", "manual seller service");
     const started = await this.evaluate(`(() => {
       const button = document.querySelector('#process-payments');
@@ -307,6 +332,7 @@ class DemoPage {
   }
   async bid(title, amount, seller) {
     await this.waitAuctionCard(title);
+    await this.warmRuntimeReadiness(`${amount} bid`);
     await this.waitAuctionBidEnabled(title, `${amount} bid`);
     const first = await this.auctionAction(title, "bid", amount);
     if (!first.ok) throw new Error(`${this.role}: ${first.reason}`);
@@ -318,6 +344,7 @@ class DemoPage {
       await delay(RATE_SETTLE_MS);
       await seller.servicePendingPlan();
       await delay(RATE_SETTLE_MS);
+      await this.warmRuntimeReadiness(`${amount} retained bid`);
       await this.waitAuctionBidEnabled(title, `${amount} retained bid`);
       const retry = await this.auctionAction(title, "bid", amount);
       if (!retry.ok) throw new Error(`${this.role}: retained bid retry controls missing: ${retry.reason}`);
