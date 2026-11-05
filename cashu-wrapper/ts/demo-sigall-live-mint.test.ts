@@ -50,7 +50,7 @@ function request(path: 'MAIN' | 'REFUND'): DemoSigAllSwapRequest {
 	}
 }
 
-function scriptedFetch(calls: string[], origins?: string[]): typeof fetch {
+function scriptedFetch(calls: string[], origins?: string[], denominationKeys: Record<string, string> = { 1: MINT_KEY }): typeof fetch {
 	return (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
 		calls.push(`${init?.method ?? 'GET'} ${url.pathname}`)
@@ -62,7 +62,7 @@ function scriptedFetch(calls: string[], origins?: string[]): typeof fetch {
 		}
 		if (url.pathname === '/v1/info') return json({ version: 'test-mint', pubkey: MINT_KEY, nuts: { 7: { supported: true }, 10: { supported: true }, 11: { supported: true } } })
 		if (url.pathname === '/v1/keysets') return json({ keysets: [{ id: KEYSET, unit: 'sat', active: true, input_fee_ppk: 0 }] })
-		if (url.pathname === `/v1/keys/${KEYSET}`) return json({ keysets: [{ id: KEYSET, unit: 'sat', keys: { 1: MINT_KEY } }] })
+		if (url.pathname === `/v1/keys/${KEYSET}`) return json({ keysets: [{ id: KEYSET, unit: 'sat', keys: denominationKeys }] })
 		if (url.pathname === '/v1/swap') return json({ signatures: [{ amount: 1, id: KEYSET, C_: publicKey(scalar(50)) }] })
 		const response = new Response('unexpected', { status: 500 })
 		Object.defineProperty(response, 'url', { value: url.href })
@@ -105,6 +105,23 @@ describe('branch-aware live SIG_ALL mint adapter', () => {
 		await expect(port.swapExact(request('REFUND'))).resolves.toMatchObject({ signatures: [{ amount: 1 }] })
 		expect(calls).toContain('POST /v1/swap')
 		expect(new Set(origins)).toEqual(new Set(['http://[fd42::1]:3438']))
+	})
+
+	test('matches the browser seal when a mint advertises uint64 denominations above MAX_SAFE_INTEGER', async () => {
+		const calls: string[] = []
+		const denominationKeys = {
+			1: MINT_KEY,
+			'9007199254740992': publicKey(scalar(21)),
+			'18446744073709551615': publicKey(scalar(22)),
+		}
+		const exact = request('REFUND')
+		exact.mintSeal.denominationKeyDigest = demoDenominationKeyDigest(denominationKeys)
+		exact.mintSeal.denominationAmounts = [1]
+		const port = createCashuMintSigAllBranchAwarePort({
+			mintUrl: MINT_URL, fetchImpl: scriptedFetch(calls, undefined, denominationKeys), nowSeconds: () => LOCKTIME,
+		})
+		await expect(port.swapExact(exact)).resolves.toMatchObject({ signatures: [{ amount: 1, id: KEYSET }] })
+		expect(calls).toContain('POST /v1/swap')
 	})
 
 	test('pre-locktime REFUND and clock-crossing MAIN fail before swap', async () => {

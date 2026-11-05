@@ -115,13 +115,26 @@ function enforceTime(path: DemoSigAllSpendPath, request: DemoSigAllSwapRequest, 
 function exactSeal(clientUrl: string, info: { pubkey?: unknown; version?: unknown; nuts?: unknown }, keyset: {
 	id: string; keys: Record<string, string>
 }, inputFeePpk: number): DemoMintCapabilitySeal {
+	const exactAmounts = Object.keys(keyset.keys).map((amount) => {
+		if (!/^[1-9][0-9]*$/.test(amount)) refuse('DEMO_SIGALL_LIVE_DRIFT', 'mint denomination is not canonical')
+		const value = BigInt(amount)
+		if (value > 0xffff_ffff_ffff_ffffn) refuse('DEMO_SIGALL_LIVE_DRIFT', 'mint denomination exceeds uint64')
+		return value
+	}).sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
+	const denominationAmounts = exactAmounts
+		.filter((amount) => amount <= BigInt(Number.MAX_SAFE_INTEGER))
+		.map(Number)
+	if (denominationAmounts.length === 0) refuse('DEMO_SIGALL_LIVE_DRIFT', 'mint has no safely representable denomination')
 	return {
 		mintUrl: clientUrl,
 		mintPublicKey: typeof info.pubkey === 'string' ? info.pubkey : '',
 		serverVersion: typeof info.version === 'string' ? info.version : '',
 		activeSatKeysetId: keyset.id,
 		denominationKeyDigest: demoDenominationKeyDigest(keyset.keys),
-		denominationAmounts: Object.keys(keyset.keys).map(Number).sort((left, right) => left - right),
+		// The browser snapshot retains exact uint64 strings in the digest but exposes
+		// only integers JavaScript can represent without rounding. Keep the live
+		// preflight byte-for-byte aligned with that public seal.
+		denominationAmounts,
 		inputFeePpk,
 		nuts: supportedNutNumbers(info.nuts),
 	}
