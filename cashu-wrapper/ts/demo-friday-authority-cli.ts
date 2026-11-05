@@ -125,7 +125,17 @@ import { DEMO_FRIDAY_R20_PARTICIPANT_BINARY } from './demo-friday-r20-path-contr
 const HEX_32 = /^[0-9a-f]{64}$/
 const AUTHORITY_CONFIG = `${FRIDAY_LIVE_CONFIG_ROOT}/authority.json`
 const LEGACY_PARTICIPANT_BINARY = '/opt/plebeian-auctions-friday/bin/coco-demo-frost-participant-3of4'
+const MVP_GENESIS_IDENTITY_SHA256 = 'c2bb4df3a19b543e270017322ea2bae37b54ae640c7964fc89ef79c77a17cc76'
+const MVP_GENESIS_FILE_SHA256 = '8574fadb77fafea9c56fff7cff32af0205be7b2e05d12f1ab1fcf4a1a8f3a4ea'
 type ParticipantId = 1 | 2 | 3 | 4
+
+export function demoFridayGenesisFileSha256(facts: Pick<Facts, 'chain_id' | 'genesis_sha256'>): string {
+	if (facts.chain_id !== 'plebeian-auctions-mvp-20261102'
+		|| facts.genesis_sha256 !== MVP_GENESIS_IDENTITY_SHA256) {
+		throw new Error('DEMO_FRIDAY_AUTHORITY_CLI: no exact genesis file pin exists for the fixed network identity')
+	}
+	return MVP_GENESIS_FILE_SHA256
+}
 
 export function demoFridayAuthorityParticipantBinary(
 	schema: 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V2' | 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V3' | 'PLEBEIAN_FRIDAY_SEPARATED_APPLICATION_V1',
@@ -725,6 +735,7 @@ export async function main(): Promise<void> {
 				pins: fundingAbortPins, validatorsHash: facts.validators_hash, reader,
 				genesis: createDemoFridayPinnedGenesisFilePort({
 					chainId: facts.chain_id, genesisSha256: facts.genesis_sha256,
+					genesisFileSha256: demoFridayGenesisFileSha256(facts),
 					genesisPath: join(application.network_root, 'genesis.json'),
 				}),
 				broadcaster: createLoopbackCometBidBroadcaster(`http://127.0.0.1:${application.comet_rpc_port}`),
@@ -772,6 +783,7 @@ export async function main(): Promise<void> {
 				chainId: facts.chain_id, genesisSha256: facts.genesis_sha256, validatorsHash: facts.validators_hash,
 				reader, genesis: createDemoFridayPinnedGenesisFilePort({
 					chainId: facts.chain_id, genesisSha256: facts.genesis_sha256,
+					genesisFileSha256: demoFridayGenesisFileSha256(facts),
 					genesisPath: join(application.network_root, 'genesis.json'),
 				}), prepared: preparedFunding,
 				onFailure(diagnostic) { console.error(JSON.stringify(diagnostic)) },

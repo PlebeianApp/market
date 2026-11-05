@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync } from 'node:fs'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { schnorr } from '@noble/curves/secp256k1.js'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
@@ -15,6 +18,7 @@ import {
 } from './demo-integrated-funding-receipt-v4'
 import {
 	createDemoFridayV4CometAdmission,
+	createDemoFridayPinnedGenesisFilePort,
 	type DemoFridayPinnedGenesisPort,
 	type DemoFridayPreparedFundingAdmissionPort,
 } from './demo-friday-v4-comet-admission'
@@ -172,6 +176,25 @@ function adapter(value: ReturnType<typeof harness>, onFailure?: Parameters<typeo
 }
 
 describe('Friday V4 authenticated Comet admission', () => {
+	test('keeps the non-circular genesis identity distinct from exact file bytes', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'friday-genesis-pin-'))
+		const path = join(directory, 'genesis.json')
+		const bytes = new TextEncoder().encode(JSON.stringify({ chain_id: 'friday-chain', app_hash: 'a'.repeat(64) }))
+		await writeFile(path, bytes, { mode: 0o600 })
+		try {
+			const port = createDemoFridayPinnedGenesisFilePort({
+				chainId: 'friday-chain', genesisSha256: GENESIS,
+				genesisFileSha256: bytesToHex(sha256(bytes)), genesisPath: path,
+			})
+			await expect(port.readExact()).resolves.toEqual({
+				schema: 'PLEBEIAN_FRIDAY_PINNED_GENESIS_IDENTITY_V1',
+				chainId: 'friday-chain', genesisSha256: GENESIS,
+			})
+		} finally {
+			await rm(directory, { recursive: true })
+		}
+	})
+
 	test('admits only after exact H/H+1/H+2, transaction, state, package and genesis binding', async () => {
 		const value = harness()
 		const first = await adapter(value).confirmAndAdmitExact(value.identity)

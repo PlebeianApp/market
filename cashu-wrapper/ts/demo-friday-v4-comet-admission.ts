@@ -221,10 +221,14 @@ function exactPrivateBundle(
 /** Read one exact local genesis file and compare its bytes with the reviewed pin. */
 export function createDemoFridayPinnedGenesisFilePort(options: {
 	chainId: string
+	/** Non-circular consensus identity used by protocol pins. */
 	genesisSha256: string
+	/** SHA-256 of the exact on-disk genesis.json bytes. */
+	genesisFileSha256: string
 	genesisPath: string
 }): DemoFridayPinnedGenesisPort {
-	if (!HEX_32.test(options.genesisSha256) || !options.genesisPath.startsWith('/')) fail('genesis file pins are malformed')
+	if (!HEX_32.test(options.genesisSha256) || !HEX_32.test(options.genesisFileSha256)
+		|| !options.genesisPath.startsWith('/')) fail('genesis file pins are malformed')
 	return Object.freeze({
 		async readExact() {
 			const bytes = await readFile(options.genesisPath)
@@ -233,10 +237,14 @@ export function createDemoFridayPinnedGenesisFilePort(options: {
 			try { value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) }
 			catch { return fail('pinned genesis file is not JSON') }
 			if (value === null || typeof value !== 'object' || Array.isArray(value)
-				|| (value as Record<string, unknown>).chain_id !== options.chainId || digest !== options.genesisSha256) {
+				|| (value as Record<string, unknown>).chain_id !== options.chainId || digest !== options.genesisFileSha256) {
 				fail('pinned genesis bytes or chain identity changed')
 			}
-			return { schema: 'PLEBEIAN_FRIDAY_PINNED_GENESIS_IDENTITY_V1' as const, chainId: options.chainId, genesisSha256: digest }
+			return {
+				schema: 'PLEBEIAN_FRIDAY_PINNED_GENESIS_IDENTITY_V1' as const,
+				chainId: options.chainId,
+				genesisSha256: options.genesisSha256,
+			}
 		},
 	})
 }
