@@ -155,6 +155,7 @@ export class DemoFridayDiscoveringTerminalSource {
 		return this.source.nextExact()
 	}
 	markQueuedExact(...args: Parameters<DemoFridayTrustedTerminalSqlite['markQueuedExact']>) { return this.source.markQueuedExact(...args) }
+	markExpiredExact(...args: Parameters<DemoFridayTrustedTerminalSqlite['markExpiredExact']>) { return this.source.markExpiredExact(...args) }
 	recoverInterruptedExact(): number { return this.source.recoverInterruptedExact() }
 	pendingCount(): number { return this.source.pendingCount() }
 }
