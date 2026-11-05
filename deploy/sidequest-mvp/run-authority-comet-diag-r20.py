@@ -33,6 +33,17 @@ runtime["CONFIG"] = config
 runtime["UNIT"] = unit
 runtime["PRESERVED_UNIT"] = PathClass("/etc/systemd/system/plebeian-friday-authority.pre-r20-529db43a993c.service")
 runtime["PRIOR_OPERATION"] = "bb0ebdbf39afe15fb8ef5981af3ce19e864c0494db1a4e9a9073c2262b2b7113"
+def require_prior_broadcast() -> None:
+    database = runtime["sqlite3"].connect(f"file:{runtime['BROADCAST_DB']}?mode=ro", uri=True)
+    try:
+        row = database.execute(
+            "SELECT phase, revision FROM friday_v4_broadcast_journal WHERE funding_operation_id = ?",
+            (runtime["PRIOR_OPERATION"],),
+        ).fetchone()
+    finally:
+        database.close()
+    runtime["require"](row == ("broadcast", 4), "PRIOR_OPERATION_CHANGED")
+runtime["require_prior_uncommitted"] = require_prior_broadcast
 runtime["FILES"] = {
     "plebeian-friday-authority": (100_439_459, "de7292699d78284f6ff2dee707d175aaa3cf6f85b0e10170449ce23f802d33e7"),
     "verify-friday-separated-target.py": (3_387, "0125ab56c49d16ef88adc470eb353cff11e1c5860700e6d45dca81f05688057d"),
