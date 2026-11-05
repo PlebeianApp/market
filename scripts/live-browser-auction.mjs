@@ -12,6 +12,7 @@ const CREDENTIALS = process.env.PLEBEIAN_DEMO_CREDENTIALS || "";
 const SITE = "https://139.162.161.233/";
 const FUNDING = 10_000;
 const BIDS = [100, 200, 300, 400];
+const AUCTION_DURATION_SECONDS = 900;
 const RATE_SETTLE_MS = 10_000;
 // The five real users arrive from separate networks. This one-host acceptance
 // runner does not, so pace each tab's explicit same-origin reads below the
@@ -263,7 +264,7 @@ class DemoPage {
     await this.evaluate(`(() => {
       document.querySelector('#title').value = ${JSON.stringify(title)};
       document.querySelector('#description').value = 'Five-member live fake-sat browser acceptance';
-      document.querySelector('#duration').value = '600';
+      document.querySelector('#duration').value = String(${AUCTION_DURATION_SECONDS});
       document.querySelector('#starting').value = '100';
       document.querySelector('#increment').value = '100';
       document.querySelector('#reserve').value = '0';
@@ -330,8 +331,8 @@ class DemoPage {
       throw new Error(`${this.role}: seller plan service failed: ${result}`);
     }
   }
-  async importTerminalToBalance(expected, label) {
-    const deadline = Date.now() + 120_000;
+  async importTerminalToBalance(expected, label, timeoutMs = 120_000) {
+    const deadline = Date.now() + timeoutMs;
     let last = await this.status();
     while (Date.now() < deadline) {
       await this.warmRuntimeReadiness(label);
@@ -467,7 +468,7 @@ async function main() {
     const expected = [10_400, 10_000, 10_000, 10_000, 9_600];
     const balances = [];
     for (let index = 0; index < pages.length; index += 1) {
-      if (index === 0) await pages[index].page.importTerminalToBalance(expected[index], "seller payout import");
+      if (index === 0) await pages[index].page.importTerminalToBalance(expected[index], "seller payout import", 300_000);
       else await pages[index].page.refreshView();
       const balance = await pages[index].page.poll(`(() => {
         const number = (id) => Number((document.querySelector(id)?.textContent || '').replace(/[^0-9-]/g, ''));
