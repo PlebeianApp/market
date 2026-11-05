@@ -32,6 +32,9 @@ import type {
 	DemoFridayRecoveryOnlyAction,
 	DemoFridayRecoveryOnlyGuardPort,
 } from './demo-friday-recovery-only'
+import { DemoIntegratedAuthorityRefusedError } from './demo-integrated-authority'
+import { DemoIntegratedCloseAuthorityRefusedError } from './demo-integrated-close-authority'
+import { DemoIntegratedRejectedAuthorityRefusedError } from './demo-integrated-rejected-authority'
 
 export const DEMO_FRIDAY_AUTHORITY_LOOPBACK_PORT = 8_181 as const
 const MAX_BODY = 32 * 1024
@@ -47,6 +50,18 @@ export interface DemoFridayTrustedTerminalSourcePort {
 	nextExact(): Promise<DemoFridayTrustedTerminalCandidateV1 | null>
 	/** Durable acknowledgement after the exact queue operation succeeds. */
 	markQueuedExact(reference: string, result: DemoIntegratedThreshold3QueuedTerminalResult): Promise<void>
+	/** Permanently isolate one authenticated reference only after a typed certified cutoff. */
+	markExpiredExact?(reference: string, code: DemoFridayPermanentTerminalCutoffCode): Promise<void>
+}
+
+export type DemoFridayPermanentTerminalCutoffCode =
+	| 'DEMO_CLOSE_CUTOFF' | 'DEMO_REJECT_CUTOFF' | 'DEMO_AUTHORITY_CUTOFF'
+
+export function demoFridayPermanentTerminalCutoffCode(error: unknown): DemoFridayPermanentTerminalCutoffCode | null {
+	if (error instanceof DemoIntegratedCloseAuthorityRefusedError && error.code === 'DEMO_CLOSE_CUTOFF') return error.code
+	if (error instanceof DemoIntegratedRejectedAuthorityRefusedError && error.code === 'DEMO_REJECT_CUTOFF') return error.code
+	if (error instanceof DemoIntegratedAuthorityRefusedError && error.code === 'DEMO_AUTHORITY_CUTOFF') return error.code
+	return null
 }
 
 export interface DemoFridayAuthorityHealthPort {
@@ -166,7 +181,14 @@ export function createDemoFridayFixedAuthorityService(options: {
 				const candidate = await options.terminalSource.nextExact()
 				if (candidate === null) return 'idle'
 				if (!ID.test(candidate.reference)) throw new Error('DEMO_FRIDAY_AUTHORITY_SOURCE: trusted operation reference is invalid')
-				const result = await options.terminalRuntime.queueTerminal(candidate.request)
+				let result: DemoIntegratedThreshold3QueuedTerminalResult
+				try { result = await options.terminalRuntime.queueTerminal(candidate.request) }
+				catch (error) {
+					const code = demoFridayPermanentTerminalCutoffCode(error)
+					if (code === null || options.terminalSource.markExpiredExact === undefined) throw error
+					await options.terminalSource.markExpiredExact(candidate.reference, code)
+					return 'queued'
+				}
 				await options.terminalSource.markQueuedExact(candidate.reference, result)
 				return 'queued'
 			} finally { draining = false }

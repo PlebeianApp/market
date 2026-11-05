@@ -4,6 +4,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import { createDemoFridayFixedAuthorityService } from './demo-friday-authority-service'
 import { demoFridayFundingAuthorizationUnsignedEvent, demoFridayFundingKeyAuthorizationDigest } from './demo-friday-browser-funding-authorization'
+import { DemoIntegratedCloseAuthorityRefusedError } from './demo-integrated-close-authority'
 
 const secret = hexToBytes('1'.padStart(64, '0'))
 const actor = bytesToHex(schnorr.getPublicKey(secret))
@@ -97,6 +98,33 @@ describe('fixed Friday authority API', () => {
 		})
 		expect(await service.drainOne()).toBe('queued')
 		expect(events).toEqual(['anchor', 'source', 'queue', 'ack'])
+	})
+
+	test('expires one typed permanent cutoff at the queue boundary without acknowledging it', async () => {
+		const opaqueRequest = { branch: 'winner_payout', options: { captured: true } } as never
+		const events: string[] = []
+		const service = createDemoFridayFixedAuthorityService({
+			readiness: { async readExact() { return { ready: true, reason: 'test_fixture', height: 42 } } },
+			publicOrigin: 'https://172.105.64.142', authNetworkId: 'friday-demo', chainId: 'friday-chain',
+			mintUrl: 'http://127.0.0.1:3438/', nowSeconds: () => 1_100,
+			terminalSource: {
+				async nextExact() { events.push('source'); return { reference: 'terminal-expired', request: opaqueRequest } },
+				async markQueuedExact() { throw new Error('must not acknowledge an expired terminal') },
+				async markExpiredExact(reference, code) {
+					expect({ reference, code }).toEqual({ reference: 'terminal-expired', code: 'DEMO_CLOSE_CUTOFF' })
+					events.push('expired')
+				},
+			},
+			terminalRuntime: { async queueTerminal() {
+				events.push('queue')
+				throw new DemoIntegratedCloseAuthorityRefusedError('DEMO_CLOSE_CUTOFF', 'outside MAIN')
+			} },
+			health: { async readExact() { events.push('anchor'); return {
+				deploymentId: 'friday-blue', quarantined: false, queuePending: 1, lastCommittedHeight: 42,
+			} } },
+		})
+		expect(await service.drainOne()).toBe('queued')
+		expect(events).toEqual(['anchor', 'source', 'queue', 'expired'])
 	})
 
 	test('authenticates same-origin browser authorization but keeps funding fail-closed', async () => {

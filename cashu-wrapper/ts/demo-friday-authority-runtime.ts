@@ -1,30 +1,22 @@
 /** Concrete durable adapters for the fixed Friday authority process. */
 import { Database } from 'bun:sqlite'
 
-import type {
-	DemoFridayAuthorityHealthPort,
-	DemoFridayFixedAuthorityService,
-	DemoFridayTrustedTerminalSourcePort,
-	DemoFridayTrustedTerminalCandidateV1,
+import {
+	demoFridayPermanentTerminalCutoffCode,
+	type DemoFridayPermanentTerminalCutoffCode,
+	type DemoFridayAuthorityHealthPort,
+	type DemoFridayFixedAuthorityService,
+	type DemoFridayTrustedTerminalSourcePort,
+	type DemoFridayTrustedTerminalCandidateV1,
 } from './demo-friday-authority-service'
 import type { DemoFridayCoordinatorRollbackAnchorPort, DemoFridayCoordinatorSqlite } from './demo-friday-coordinator-runtime'
 import type {
 	DemoIntegratedThreshold3QueuedTerminalResult,
 	DemoIntegratedThreshold3TerminalRequest,
 } from './demo-integrated-threshold3-terminal-service'
-import { DemoIntegratedAuthorityRefusedError } from './demo-integrated-authority'
-import { DemoIntegratedCloseAuthorityRefusedError } from './demo-integrated-close-authority'
-import { DemoIntegratedRejectedAuthorityRefusedError } from './demo-integrated-rejected-authority'
 
 const ID = /^[A-Za-z0-9_-]{1,160}$/
 const HEX_32 = /^[0-9a-f]{64}$/
-
-function permanentTerminalCutoff(error: unknown): string | null {
-	if (error instanceof DemoIntegratedCloseAuthorityRefusedError && error.code === 'DEMO_CLOSE_CUTOFF') return error.code
-	if (error instanceof DemoIntegratedRejectedAuthorityRefusedError && error.code === 'DEMO_REJECT_CUTOFF') return error.code
-	if (error instanceof DemoIntegratedAuthorityRefusedError && error.code === 'DEMO_AUTHORITY_CUTOFF') return error.code
-	return null
-}
 
 export interface DemoFridayTrustedTerminalReferenceV1 {
 	schema: 'PLEBEIAN_FRIDAY_TERMINAL_REFERENCE_V1'
@@ -100,19 +92,23 @@ export class DemoFridayTrustedTerminalSqlite implements DemoFridayTrustedTermina
 			try {
 				return { reference: reference.reference, request: await this.resolver.resolveExact(reference) }
 			} catch (error) {
-				const code = permanentTerminalCutoff(error)
+				const code = demoFridayPermanentTerminalCutoffCode(error)
 				if (code === null) throw error
-				this.database.transaction(() => {
-					const changed = this.database.query(`UPDATE friday_terminal_references
-						SET phase = 'expired', revision = revision + 1, result_json = ?
-						WHERE reference = ? AND identity_digest = ? AND phase = 'resolving'`).run(
-						JSON.stringify({ schema: 'PLEBEIAN_FRIDAY_TERMINAL_EXPIRY_V1', code }),
-						reference.reference, reference.identityDigest,
-					)
-					if (changed.changes !== 1) throw new Error('DEMO_FRIDAY_TERMINAL_SOURCE_CAS: expiry changed concurrently')
-				}).immediate()
+				await this.markExpiredExact(reference.reference, code)
 			}
 		}
+	}
+
+	async markExpiredExact(reference: string, code: DemoFridayPermanentTerminalCutoffCode): Promise<void> {
+		if (!ID.test(reference)) throw new Error('DEMO_FRIDAY_TERMINAL_SOURCE: expiry reference is invalid')
+		this.database.transaction(() => {
+			const changed = this.database.query(`UPDATE friday_terminal_references
+				SET phase = 'expired', revision = revision + 1, result_json = ?
+				WHERE reference = ? AND phase = 'resolving'`).run(
+				JSON.stringify({ schema: 'PLEBEIAN_FRIDAY_TERMINAL_EXPIRY_V1', code }), reference,
+			)
+			if (changed.changes !== 1) throw new Error('DEMO_FRIDAY_TERMINAL_SOURCE_CAS: expiry changed concurrently')
+		}).immediate()
 	}
 
 	async markQueuedExact(reference: string, result: DemoIntegratedThreshold3QueuedTerminalResult): Promise<void> {
