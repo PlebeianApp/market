@@ -126,6 +126,27 @@ export interface DemoFridayV4FundingAdmissionPort {
 	}): Promise<DemoFridayV4FundingStatusV1>
 }
 
+export type DemoFridayV4ConfirmFailureStage =
+	| 'initial_anchor'
+	| 'confirmation_shape'
+	| 'journal_read'
+	| 'signed_event_validation'
+	| 'journal_signed_transition'
+	| 'signed_anchor'
+	| 'broadcast_recovery'
+	| 'broadcasting_transition'
+	| 'broadcast_request'
+	| 'broadcast_transition'
+	| 'broadcast_anchor'
+	| 'comet_admission'
+	| 'admitted_transition'
+	| 'admitted_anchor'
+
+export interface DemoFridayV4ConfirmFailureDiagnosticV1 {
+	schema: 'PLEBEIAN_FRIDAY_V4_CONFIRM_FAILURE_DIAGNOSTIC_V1'
+	stage: DemoFridayV4ConfirmFailureStage
+}
+
 export interface DemoFridayV4CommittedLeaderPort {
 	/** Authenticated fixed-chain read; never supplied by the browser request. */
 	readExact(auctionId: string): Promise<{ bidId: string; bidder: string; bidAmount: number; height: number }>
@@ -479,6 +500,8 @@ export function createDemoFridayV4FundingAdmission(options: {
 	cometAdmission: DemoFridayV4CometAdmissionPort
 	nowSeconds(): number
 	policyTimeoutMs?: number
+	/** Payload-free diagnostic sink; it must never affect protocol behavior. */
+	onConfirmFailure?: (diagnostic: DemoFridayV4ConfirmFailureDiagnosticV1) => void
 }): DemoFridayV4FundingAdmissionPort {
 	const anchor = (): void => options.journalAnchor.observeExact(options.journal.anchorSnapshot())
 	return Object.freeze({
@@ -560,63 +583,84 @@ export function createDemoFridayV4FundingAdmission(options: {
 		},
 
 		async confirmExact(value: unknown): Promise<DemoFridayV4FundingResultV1> {
-			anchor()
-			const confirmation = exactConfirmation(value)
-			let row = options.journal.readExact(confirmation.fundingAuthorizationEventId)
-			if (row === null) fail('funding confirmation has no prepared package')
-			if (row.phase === 'claimed') fail('funding confirmation arrived before threshold preparation')
-			if (row.phase === 'quarantined') fail('broadcast identity is quarantined')
-			if (row.receipt === undefined) fail('funding confirmation lacks a prepared receipt')
-			const event = exactSignedBid(confirmation.signedEvent, unsignedBidFor(row.receipt))
-			if (row.signed !== undefined && canonical(event) !== canonical(row.signed.event)) {
-				fail('funding confirmation differs from the persisted signed transaction')
-			}
-			if (row.phase === 'admitted') return resultFrom(row)
-			if (row.phase === 'broadcasting') {
-				const recovered = await options.broadcastRecovery.recoverExact(row.signed!.transactionHash)
-				if (recovered === null) fail('broadcast outcome remains unknown; no authenticated transaction was found')
-				if (recovered.txHash !== row.signed!.transactionHash || !Number.isSafeInteger(recovered.height) || recovered.height < 1) {
-					fail('recovered broadcast identity differs from the persisted transaction')
-				}
-				const identity: DemoFridayV4BroadcastIdentityV1 = {
-					schema: 'PLEBEIAN_FRIDAY_V4_BROADCAST_IDENTITY_V1',
-					fundingAuthorizationEventId: row.authorizationEventId, bidEventId: row.signed!.event.id,
-					fundingOperationId: row.fundingOperationId, committedHeight: recovered.height,
-					transactionHash: recovered.txHash,
-				}
-				row = options.journal.transitionExact(row, 'broadcast', { broadcast: identity }); anchor()
-			}
-
-			if (row.phase === 'prepared') {
-				const tx = new TextEncoder().encode(JSON.stringify({ version: 1, type: 'event', event }))
-				row = options.journal.transitionExact(row, 'signed', {
-					signed: { event, transactionHash: bytesToHex(sha256(tx)), transactionHex: bytesToHex(tx) },
-				})
+			let stage: DemoFridayV4ConfirmFailureStage = 'initial_anchor'
+			try {
 				anchor()
-			}
-
-			if (row.phase === 'signed') {
-				row = options.journal.transitionExact(row, 'broadcasting'); anchor()
-				const tx = hexToBytes(row.signed!.transactionHex)
-				const broadcast = await options.broadcaster.broadcastAndWait(tx)
-				if (broadcast.txHash !== row.signed!.transactionHash || !Number.isSafeInteger(broadcast.height) || broadcast.height < 1) fail('broadcast response differs from exact signed transaction')
-				const identity: DemoFridayV4BroadcastIdentityV1 = {
-					schema: 'PLEBEIAN_FRIDAY_V4_BROADCAST_IDENTITY_V1',
-					fundingAuthorizationEventId: row.authorizationEventId, bidEventId: row.signed!.event.id,
-					fundingOperationId: row.fundingOperationId, committedHeight: broadcast.height,
-					transactionHash: broadcast.txHash,
+				stage = 'confirmation_shape'
+				const confirmation = exactConfirmation(value)
+				stage = 'journal_read'
+				let row = options.journal.readExact(confirmation.fundingAuthorizationEventId)
+				if (row === null) fail('funding confirmation has no prepared package')
+				if (row.phase === 'claimed') fail('funding confirmation arrived before threshold preparation')
+				if (row.phase === 'quarantined') fail('broadcast identity is quarantined')
+				if (row.receipt === undefined) fail('funding confirmation lacks a prepared receipt')
+				stage = 'signed_event_validation'
+				const event = exactSignedBid(confirmation.signedEvent, unsignedBidFor(row.receipt))
+				if (row.signed !== undefined && canonical(event) !== canonical(row.signed.event)) {
+					fail('funding confirmation differs from the persisted signed transaction')
 				}
-				row = options.journal.transitionExact(row, 'broadcast', { broadcast: identity }); anchor()
+				if (row.phase === 'admitted') return resultFrom(row)
+				if (row.phase === 'broadcasting') {
+					stage = 'broadcast_recovery'
+					const recovered = await options.broadcastRecovery.recoverExact(row.signed!.transactionHash)
+					if (recovered === null) fail('broadcast outcome remains unknown; no authenticated transaction was found')
+					if (recovered.txHash !== row.signed!.transactionHash || !Number.isSafeInteger(recovered.height) || recovered.height < 1) {
+						fail('recovered broadcast identity differs from the persisted transaction')
+					}
+					const identity: DemoFridayV4BroadcastIdentityV1 = {
+						schema: 'PLEBEIAN_FRIDAY_V4_BROADCAST_IDENTITY_V1',
+						fundingAuthorizationEventId: row.authorizationEventId, bidEventId: row.signed!.event.id,
+						fundingOperationId: row.fundingOperationId, committedHeight: recovered.height,
+						transactionHash: recovered.txHash,
+					}
+					stage = 'broadcast_transition'
+					row = options.journal.transitionExact(row, 'broadcast', { broadcast: identity })
+					stage = 'broadcast_anchor'; anchor()
+				}
+
+				if (row.phase === 'prepared') {
+					const tx = new TextEncoder().encode(JSON.stringify({ version: 1, type: 'event', event }))
+					stage = 'journal_signed_transition'
+					row = options.journal.transitionExact(row, 'signed', {
+						signed: { event, transactionHash: bytesToHex(sha256(tx)), transactionHex: bytesToHex(tx) },
+					})
+					stage = 'signed_anchor'; anchor()
+				}
+
+				if (row.phase === 'signed') {
+					stage = 'broadcasting_transition'
+					row = options.journal.transitionExact(row, 'broadcasting'); anchor()
+					stage = 'broadcast_request'
+					const tx = hexToBytes(row.signed!.transactionHex)
+					const broadcast = await options.broadcaster.broadcastAndWait(tx)
+					if (broadcast.txHash !== row.signed!.transactionHash || !Number.isSafeInteger(broadcast.height) || broadcast.height < 1) fail('broadcast response differs from exact signed transaction')
+					const identity: DemoFridayV4BroadcastIdentityV1 = {
+						schema: 'PLEBEIAN_FRIDAY_V4_BROADCAST_IDENTITY_V1',
+						fundingAuthorizationEventId: row.authorizationEventId, bidEventId: row.signed!.event.id,
+						fundingOperationId: row.fundingOperationId, committedHeight: broadcast.height,
+						transactionHash: broadcast.txHash,
+					}
+					stage = 'broadcast_transition'
+					row = options.journal.transitionExact(row, 'broadcast', { broadcast: identity })
+					stage = 'broadcast_anchor'; anchor()
+				}
+				if (row.phase !== 'broadcast') fail('broadcast journal did not reach confirmable state')
+				stage = 'comet_admission'
+				const admitted: DemoFridayFundingReplayRecordV1 = await options.cometAdmission.confirmAndAdmitExact(row.broadcast!)
+				if (admitted.phase !== 'admitted' || admitted.admission?.transactionHash !== row.broadcast!.transactionHash
+					|| admitted.admission.committedHeight !== row.broadcast!.committedHeight) fail('Comet admission returned another durable identity')
+				stage = 'admitted_transition'
+				row = options.journal.transitionExact(row, 'admitted', { disposition: {
+					disposition: admitted.admission.disposition,
+					...(admitted.admission.rejectionReason === undefined ? {} : { rejectionReason: admitted.admission.rejectionReason }),
+				} })
+				stage = 'admitted_anchor'; anchor()
+				return resultFrom(row)
+			} catch (error) {
+				try { options.onConfirmFailure?.({ schema: 'PLEBEIAN_FRIDAY_V4_CONFIRM_FAILURE_DIAGNOSTIC_V1', stage }) }
+				catch { /* diagnostics cannot alter the protocol result */ }
+				throw error
 			}
-			if (row.phase !== 'broadcast') fail('broadcast journal did not reach confirmable state')
-			const admitted: DemoFridayFundingReplayRecordV1 = await options.cometAdmission.confirmAndAdmitExact(row.broadcast!)
-			if (admitted.phase !== 'admitted' || admitted.admission?.transactionHash !== row.broadcast!.transactionHash
-				|| admitted.admission.committedHeight !== row.broadcast!.committedHeight) fail('Comet admission returned another durable identity')
-			row = options.journal.transitionExact(row, 'admitted', { disposition: {
-				disposition: admitted.admission.disposition,
-				...(admitted.admission.rejectionReason === undefined ? {} : { rejectionReason: admitted.admission.rejectionReason }),
-			} }); anchor()
-			return resultFrom(row)
 		},
 
 		async readExact(request: {

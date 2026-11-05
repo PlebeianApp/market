@@ -776,6 +776,7 @@ export async function main(): Promise<void> {
 				}), prepared: preparedFunding,
 			}),
 			nowSeconds: () => Math.floor(Date.now() / 1_000), policyTimeoutMs: 15_000,
+			onConfirmFailure(diagnostic) { console.error(JSON.stringify(diagnostic)) },
 		})
 		const degradedRecovery = createDemoFridayRecoveryOnlyGuard({
 			readFundingRecoveryPhaseExact: (eventId) => fundingJournal.readExact(eventId)?.phase ?? null,

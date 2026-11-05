@@ -11,6 +11,7 @@ import {
 	type DemoIntegratedFundingReceiptV4Unsigned,
 } from './demo-integrated-funding-receipt-v4'
 import {
+	createDemoFridayV4FundingAdmission,
 	DemoFridayV4BroadcastJournalSqlite,
 	DemoFridayV4BroadcastRollbackAnchorSqlite,
 } from './demo-friday-v4-funding-service'
@@ -47,6 +48,30 @@ function signed(receiptValue: ReturnType<typeof receipt>) {
 }
 
 describe('Friday V4 broadcast journal', () => {
+	test('reports only a fixed confirmation stage and never changes the rejection', async () => {
+		const journal = new DemoFridayV4BroadcastJournalSqlite(new Database(':memory:'), 'friday-blue')
+		const anchor = new DemoFridayV4BroadcastRollbackAnchorSqlite(new Database(':memory:'), true)
+		anchor.observeExact(journal.anchorSnapshot())
+		const exact = receipt()
+		let row = journal.claimExact(exact.actor_funding_authorization.id, exact.funding_operation_id)
+		row = journal.transitionExact(row, 'prepared', { receipt: exact })
+		const diagnostics: unknown[] = []
+		const service = createDemoFridayV4FundingAdmission({
+			prepared: {} as never, journal, journalAnchor: anchor, leader: {} as never,
+			dkgBinding: {} as never, participants: [] as never, committee: {} as never,
+			broadcaster: {} as never, broadcastRecovery: {} as never, cometAdmission: {} as never,
+			nowSeconds: () => 1, onConfirmFailure: (diagnostic) => diagnostics.push(diagnostic),
+		})
+		const confirmation = { schema: 'PLEBEIAN_FRIDAY_V4_FUNDING_CONFIRMATION_V1',
+			fundingAuthorizationEventId: exact.actor_funding_authorization.id,
+			signedEvent: { ...signed(exact).event, sig: '0'.repeat(128) } }
+		await expect(service.confirmExact(confirmation)).rejects.toThrow(/invalid Nostr bid/)
+		expect(diagnostics).toEqual([{
+			schema: 'PLEBEIAN_FRIDAY_V4_CONFIRM_FAILURE_DIAGNOSTIC_V1', stage: 'signed_event_validation',
+		}])
+		expect(journal.readExact(exact.actor_funding_authorization.id)).toEqual(row)
+	})
+
 	test('owns event/operation globally and persists an outcome-unknown broadcast boundary', () => {
 		const database = new Database(':memory:')
 		const first = new DemoFridayV4BroadcastJournalSqlite(database, 'friday-blue')

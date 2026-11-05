@@ -1,6 +1,6 @@
 {
   "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_SCRATCH_AND_BIDDING_TEST_ACTUAL_V1",
-  "recordedAt": "2026-11-05T00:23:07Z",
+  "recordedAt": "2026-11-05T00:43:58Z",
   "valueProfile": "FAKE_MONEY_ONLY",
   "authorization": {
     "summary": "Create the missing APP authority scratch directory and test bidding with an entirely fresh fake-sat flow.",
@@ -77,7 +77,70 @@
     "scope": "single-host acceptance runner only",
     "behavior": "Require two consecutive enabled-control observations before each synthetic funding, auction, seller-service, or bid click.",
     "productionApplicationChanged": false,
-    "liveRetestPerformedAfterFix": false
+    "liveRetestPerformedAfterFix": true
+  },
+  "freshRunThree": {
+    "status": "STOPPED_CONFIRMED_AFTER_THRESHOLD_PREPARATION_BEFORE_BID_BROADCAST",
+    "passed": [
+      "five_signins",
+      "five_fake_fundings_of_10000_each",
+      "auction_creation",
+      "seller_approvals_enabled",
+      "seller_plan_registration",
+      "three_participant_threshold_session_completion"
+    ],
+    "auction": {
+      "id": "auction-1793838584434",
+      "statusAfterStop": "open",
+      "highBid": 0,
+      "currentBid": null,
+      "leaderBidId": null
+    },
+    "fundingOperationId": "838f9a82d9d99bb008319bd5d6e8a62e04e031eba97ae24e440f4ba8fab3535a",
+    "admissionSession": {
+      "sessionId": "0b53b8a3b726e3dadbf053fd34a5381efa0ade371886c14f4e31e7473c01fed2",
+      "participants": [1, 2, 3],
+      "status": "complete"
+    },
+    "broadcastJournal": {
+      "authorizationEventId": "996b7af42352d153c46b308ccbc4d90c664dc9ec37f63a2c51ec12856134564a",
+      "phase": "prepared",
+      "recordRevision": 1,
+      "globalRevision": 6,
+      "rollbackAnchorRevision": 6,
+      "quickCheck": "ok"
+    },
+    "failure": {
+      "phase": "funding_confirmation",
+      "httpStatus": 422,
+      "effectBoundary": "No signed transaction was persisted or broadcast; no bid committed.",
+      "remainingCandidateStages": [
+        "confirmation_shape",
+        "signed_event_validation",
+        "journal_signed_transition"
+      ]
+    },
+    "failedOperationRetried": false,
+    "operationOutcomeUncertain": false,
+    "recoveryProfilePreserved": true
+  },
+  "preparedPayloadFreeDiagnostic": {
+    "deployed": false,
+    "behavior": "Reports only a fixed confirmation-stage enum and never request, event, proof, credential, key or wallet contents.",
+    "focusedTest": {
+      "status": "PASS",
+      "passed": 4,
+      "failed": 0,
+      "environment": "isolated temporary source copy using the existing cached dependency tree"
+    },
+    "typecheck": {
+      "status": "BLOCKED_BY_PRE_EXISTING_ERRORS",
+      "unrelatedLocations": [
+        "demo-friday-authority-cli.ts:149",
+        "demo-friday-authority-cli.test.ts:65",
+        "demo-friday-authority-cli.test.ts:66"
+      ]
+    }
   },
   "currentServiceHealth": {
     "checkedAt": "2026-11-05T00:23:00Z",
@@ -92,5 +155,5 @@
     "activeRunning": true,
     "restartCount": 0
   },
-  "verifiedStatus": "SIGN_IN_FUNDING_AUCTION_AND_SELLER_APPROVAL_HAVE_PASSED; BID_OUTBID_REFUND_AND_SETTLEMENT_REMAIN_UNVERIFIED"
+  "verifiedStatus": "SIGN_IN_FUNDING_AUCTION_SELLER_PLAN_AND_REAL_THRESHOLD_PREPARATION_HAVE_PASSED; BID_BROADCAST_OUTBID_REFUND_AND_SETTLEMENT_REMAIN_UNVERIFIED"
 }
