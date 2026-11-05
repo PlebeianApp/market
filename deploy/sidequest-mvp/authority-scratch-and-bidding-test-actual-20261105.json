@@ -1,0 +1,96 @@
+{
+  "schema": "PLEBEIAN_SIDEQUEST_AUTHORITY_SCRATCH_AND_BIDDING_TEST_ACTUAL_V1",
+  "recordedAt": "2026-11-05T00:23:07Z",
+  "valueProfile": "FAKE_MONEY_ONLY",
+  "authorization": {
+    "summary": "Create the missing APP authority scratch directory and test bidding with an entirely fresh fake-sat flow.",
+    "oldFailedOperationRetried": false,
+    "realFundsUsed": false
+  },
+  "scratchDirectory": {
+    "path": "/var/lib/plebeian-auctions-friday/coordinator-v3/runtime/scratch",
+    "createdOnce": true,
+    "createdAt": "2026-11-05T00:05:40.229851472Z",
+    "type": "directory",
+    "mode": "0700",
+    "uid": 999,
+    "gid": 988,
+    "serviceRestartedForCreation": false
+  },
+  "freshRunOne": {
+    "status": "STOPPED_CONFIRMED_NO_BID_COMMIT",
+    "passed": [
+      "five_signins",
+      "five_fake_fundings_of_10000_each",
+      "auction_creation",
+      "seller_approvals_enabled"
+    ],
+    "auction": {
+      "id": "auction-1793837335245",
+      "statusAfterStop": "open",
+      "highBid": 0,
+      "currentBid": null,
+      "leaderBidId": null
+    },
+    "failure": {
+      "observedAt": "2026-11-05T00:09:45Z",
+      "endpoint": "/api/friday/seller-plan/challenge",
+      "httpStatus": 429,
+      "source": "nginx zone plebeian_friday_per_ip",
+      "cause": "The five-tab single-host acceptance runner exceeded the shared per-IP burst during repeated seller-scope validation.",
+      "applicationRejection": false
+    },
+    "newAdmissionSessionCreated": false,
+    "operationOutcomeUncertain": false
+  },
+  "runnerPacingFix": {
+    "productionRateLimitsChanged": false,
+    "sameOriginRequestSpacingMilliseconds": 350,
+    "passiveIntervalsStillSuppressedOnlyForSingleHostAcceptance": true,
+    "focusedTest": {
+      "command": "node --test scripts/live-browser-request-pacing.test.mjs",
+      "status": "PASS"
+    },
+    "syntaxCheck": {
+      "command": "node --check scripts/live-browser-auction.mjs",
+      "status": "PASS"
+    }
+  },
+  "freshRunTwo": {
+    "status": "STOPPED_BEFORE_AUCTION_OR_BID",
+    "passed": [
+      "five_signins",
+      "one_fake_funding_of_10000"
+    ],
+    "failure": {
+      "role": "bidder-a",
+      "phase": "fake_funding",
+      "cause": "A synthetic click landed while a valid cold readiness sample had temporarily disabled the funding control; no second funding HTTP request was sent.",
+      "http429Observed": false
+    },
+    "auctionCreated": false,
+    "bidCreated": false,
+    "operationOutcomeUncertain": false,
+    "recoveryProfilePreserved": true
+  },
+  "stableControlFix": {
+    "scope": "single-host acceptance runner only",
+    "behavior": "Require two consecutive enabled-control observations before each synthetic funding, auction, seller-service, or bid click.",
+    "productionApplicationChanged": false,
+    "liveRetestPerformedAfterFix": false
+  },
+  "currentServiceHealth": {
+    "checkedAt": "2026-11-05T00:23:00Z",
+    "services": [
+      "plebeian-friday-authority.service",
+      "plebeian-friday-site.service",
+      "plebeian-friday-coordinator.service",
+      "plebeian-friday-observer.service",
+      "plebeian-friday-mint.service",
+      "nginx.service"
+    ],
+    "activeRunning": true,
+    "restartCount": 0
+  },
+  "verifiedStatus": "SIGN_IN_FUNDING_AUCTION_AND_SELLER_APPROVAL_HAVE_PASSED; BID_OUTBID_REFUND_AND_SETTLEMENT_REMAIN_UNVERIFIED"
+}

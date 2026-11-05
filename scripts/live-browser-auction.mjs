@@ -5,12 +5,18 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { liveBrowserRequestPacingPrelude } from "./live-browser-request-pacing.mjs";
+
 const CHROME = "/home/maximoto/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome";
 const CREDENTIALS = process.env.PLEBEIAN_DEMO_CREDENTIALS || "";
 const SITE = "https://139.162.161.233/";
 const FUNDING = 10_000;
 const BIDS = [100, 200, 300, 400];
 const RATE_SETTLE_MS = 10_000;
+// The five real users arrive from separate networks. This one-host acceptance
+// runner does not, so pace each tab's explicit same-origin reads below the
+// public per-IP limit instead of weakening that production protection.
+const SAME_ORIGIN_REQUEST_SPACING_MS = 350;
 const PROXY_SERVER = process.env.PLEBEIAN_BROWSER_PROXY || "";
 if (PROXY_SERVER && !/^socks5:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}$/.test(PROXY_SERVER)) {
   throw new Error("PLEBEIAN_BROWSER_PROXY must be a loopback SOCKS5 endpoint");
@@ -121,6 +127,16 @@ class DemoPage {
     }
     throw new Error(`${this.role}: ${label} timed out (last=${JSON.stringify(value)})`);
   }
+  async waitActionEnabled(selector, label) {
+    let consecutive = 0;
+    await this.poll(`(() => {
+      const control = document.querySelector(${JSON.stringify(selector)});
+      return Boolean(control) && control.disabled === false;
+    })()`, (enabled) => {
+      consecutive = enabled ? consecutive + 1 : 0;
+      return consecutive >= 2;
+    }, 60_000, `${label} readiness`);
+  }
   status() {
     return this.evaluate(`(() => ({
       actor: document.querySelector('#actor')?.textContent || '',
@@ -175,6 +191,11 @@ class DemoPage {
     if (before.available !== 0 || before.locked !== 0 || before.pending !== 0) {
       throw new Error(`${this.role}: fresh wallet is not empty`);
     }
+    // A valid cold readiness sample may briefly disable mutations while the
+    // next sample warms the continuity gate. Never drop a synthetic click on
+    // a disabled control and then mistake the absence of a request for a
+    // funding timeout.
+    await this.waitActionEnabled("#faucet", "fake funding");
     await this.evaluate(`(() => {
       const input = document.querySelector('#faucet-amount'); input.value = '${FUNDING}';
       document.querySelector('#faucet').click(); return true;
@@ -201,6 +222,7 @@ class DemoPage {
     })`);
   }
   async createAuction(title) {
+    await this.waitActionEnabled("#create-submit", "auction creation");
     await this.evaluate(`(() => {
       document.querySelector('#title').value = ${JSON.stringify(title)};
       document.querySelector('#description').value = 'Five-member live fake-sat browser acceptance';
@@ -245,6 +267,7 @@ class DemoPage {
   }
   async enableApprovals(title) {
     await this.waitAuctionCard(title);
+    await this.waitActionEnabled("#process-payments", "seller approval");
     const action = await this.auctionAction(title, "approval");
     if (!action.ok) throw new Error(`${this.role}: ${action.reason}`);
     await this.poll(`document.querySelector('#seller-approval-status')?.textContent || ''`,
@@ -255,6 +278,7 @@ class DemoPage {
       (value) => /Registered [1-9][0-9]* seller plan/.test(value), 75_000, "seller plan registration");
   }
   async servicePendingPlan() {
+    await this.waitActionEnabled("#process-payments", "manual seller service");
     const started = await this.evaluate(`(() => {
       const button = document.querySelector('#process-payments');
       if (!button || button.disabled) return false;
@@ -270,6 +294,7 @@ class DemoPage {
   }
   async bid(title, amount, seller) {
     await this.waitAuctionCard(title);
+    await this.waitActionEnabled("article.auction .actions button.button-primary", `${amount} bid`);
     const first = await this.auctionAction(title, "bid", amount);
     if (!first.ok) throw new Error(`${this.role}: ${first.reason}`);
     const firstResult = await this.poll(`(() => ({ message: document.querySelector('#message')?.textContent || '', label: [...document.querySelectorAll('article.auction')].find((node) => node.querySelector('h3')?.textContent === ${JSON.stringify(title)})?.querySelector('.actions button')?.textContent || '' }))()`,
@@ -280,6 +305,7 @@ class DemoPage {
       await delay(RATE_SETTLE_MS);
       await seller.servicePendingPlan();
       await delay(RATE_SETTLE_MS);
+      await this.waitActionEnabled("article.auction .actions button.button-primary", `${amount} retained bid`);
       const retry = await this.auctionAction(title, "bid", amount);
       if (!retry.ok) throw new Error(`${this.role}: retained bid retry controls missing: ${retry.reason}`);
     }
@@ -312,21 +338,9 @@ async function createPage(cdp, contextId, role, credential) {
   // acceptance runner shares one source IP, so suppress only the two passive
   // UI repaint/readiness intervals. Every mutation below still performs its
   // normal explicit refresh and all server-side limits remain unchanged.
-  await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: `(() => {
-    const nativeSetInterval = globalThis.setInterval.bind(globalThis);
-    const nativeClearInterval = globalThis.clearInterval.bind(globalThis);
-    globalThis.setInterval = (callback, delay, ...args) => {
-      if (delay === 1000) return 0;
-      if (delay !== 4000) return nativeSetInterval(callback, delay, ...args);
-      let ticks = 0; let handle = 0;
-      handle = nativeSetInterval(() => {
-        callback(...args);
-        ticks += 1;
-        if (ticks >= 2) nativeClearInterval(handle);
-      }, delay);
-      return handle;
-    };
-  })();` }, sessionId);
+  await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
+    source: liveBrowserRequestPacingPrelude(SAME_ORIGIN_REQUEST_SPACING_MS),
+  }, sessionId);
   const page = new DemoPage(cdp, sessionId, role);
   const connected = await page.open(credential);
   return { page, actor: connected.actor };
