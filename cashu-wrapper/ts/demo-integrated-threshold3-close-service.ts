@@ -60,28 +60,49 @@ export interface DemoIntegratedThreshold3CloseQueuedResult {
 	queued: DemoFridayCoordinatorRecordV2
 }
 
-function exactClosePolicy(
+export function demoIntegratedClosePolicyMismatchFields(
+	certificate: DemoCertifiedCloseV1,
+	template: DemoMaintainerExactBranchTemplate,
+	policy: DemoFrostParticipantPolicyPackage,
+	evidenceDigest: string,
+): string[] {
+	const role = certificate.cause === 'winner' ? 'winner_settlement' : 'refund'
+	const refs = [...certificate.proofStateRefs].sort()
+	const policyRefs = policy.deposits.map(({ proofStateRef }) => proofStateRef).sort()
+	return [
+		[policy.role !== role, 'role'],
+		[policy.network !== certificate.network, 'network'],
+		[policy.chainId !== certificate.chainId, 'chain'],
+		[policy.auctionId !== certificate.auctionId, 'auction'],
+		[policy.operationId !== certificate.fundingOperationId, 'operation'],
+		[policy.bidId !== certificate.fundingOperationId, 'bid'],
+		[policy.bidEventId !== certificate.fundingOperationId, 'bid_event'],
+		[policy.bidderActorId !== certificate.bidderActorId, 'bidder'],
+		[policy.outcomeHeight !== certificate.closeState.stateHeight, 'outcome_height'],
+		[policy.appStateHash !== certificate.closeState.stateAppHash, 'app_state_hash'],
+		[policy.amount !== certificate.poolAmount, 'amount'],
+		[policy.locktime !== certificate.timing.locktime, 'locktime'],
+		[policy.activeKeysetId !== certificate.activeKeysetId, 'active_keyset'],
+		[policy.inputFeePpk !== 0, 'input_fee'],
+		[policy.recipientPublicKey !== template.recipientPublicKey, 'recipient'],
+		[policy.packageDigest !== template.templateDigest, 'package'],
+		[policy.cashuSigAllDigest !== template.cashuSigAllDigest, 'cashu_sigall'],
+		[JSON.stringify(policyRefs) !== JSON.stringify(refs), 'proof_refs'],
+		[policy.certifiedClosure.evidenceDigest !== evidenceDigest, 'closure_evidence'],
+	].filter(([mismatch]) => mismatch).map(([, field]) => field as string)
+}
+
+export function assertDemoIntegratedExactClosePolicy(
 	certificate: DemoCertifiedCloseV1,
 	template: DemoMaintainerExactBranchTemplate,
 	policy: DemoFrostParticipantPolicyPackage,
 ): void {
-	const role = certificate.cause === 'winner' ? 'winner_settlement' : 'refund'
 	const evidenceDigest = demoIntegratedCloseDigest(certificate)
-	const refs = [...certificate.proofStateRefs].sort()
-	const policyRefs = policy.deposits.map(({ proofStateRef }) => proofStateRef).sort()
-	if (policy.role !== role || policy.network !== certificate.network || policy.chainId !== certificate.chainId
-		|| policy.auctionId !== certificate.auctionId || policy.operationId !== certificate.fundingOperationId
-		|| policy.bidId !== certificate.fundingOperationId || policy.bidEventId !== certificate.fundingOperationId
-		|| policy.bidderActorId !== certificate.bidderActorId
-		|| policy.outcomeHeight !== certificate.closeState.stateHeight
-		|| policy.appStateHash !== certificate.closeState.stateAppHash
-		|| policy.amount !== certificate.poolAmount || policy.locktime !== certificate.timing.locktime
-		|| policy.activeKeysetId !== certificate.activeKeysetId || policy.inputFeePpk !== 0
-		|| policy.recipientPublicKey !== template.recipientPublicKey
-		|| policy.packageDigest !== template.templateDigest || policy.cashuSigAllDigest !== template.cashuSigAllDigest
-		|| JSON.stringify(policyRefs) !== JSON.stringify(refs)
-		|| policy.certifiedClosure.evidenceDigest !== evidenceDigest) {
-		throw new Error('DEMO_INTEGRATED_T3_CLOSE_POLICY: threshold policy differs from participant-local close history')
+	const failed = demoIntegratedClosePolicyMismatchFields(certificate, template, policy, evidenceDigest)
+	if (failed.length !== 0) {
+		// Fixed field names are safe to log. Values may contain private Cashu
+		// material and therefore must never cross the process boundary.
+		throw new Error(`DEMO_INTEGRATED_T3_CLOSE_POLICY: mismatched fields: ${failed.join(',')}`)
 	}
 }
 
@@ -101,7 +122,7 @@ async function preparedDemoIntegratedThreshold3Close(
 			if (value.cause !== expectedCause) {
 				throw new Error('DEMO_INTEGRATED_TERMINAL_SERVICE: committed close chose another terminal branch')
 			}
-			exactClosePolicy(value, template, policy)
+			assertDemoIntegratedExactClosePolicy(value, template, policy)
 		},
 	})
 	const threshold = await createDemoMaintainerTerminalThreshold3ProcessComposition({
