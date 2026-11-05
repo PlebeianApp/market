@@ -8,6 +8,7 @@ import {
 	demoFridayCocoTerminalAckDigest,
 	demoFridayCocoTerminalNoticeDigest,
 } from './demo-friday-coco-terminal-exchange'
+import { DemoMaintainerRecipientPendingError } from './demo-maintainer-offline'
 
 const KEY = hexToBytes('7'.padStart(64, '0'))
 const RECIPIENT = bytesToHex(secp256k1.getPublicKey(KEY, true))
@@ -65,7 +66,7 @@ describe('Friday Coco terminal exchange', () => {
 			selectionRoot: H('6'), templateDigest: H('7'), role: 'winner_settlement',
 			operationId: notice.operationId, recipientCapabilityDigest: notice.recipientCapabilityDigest,
 			signatures: notice.signatures,
-		})).rejects.toThrow(/acknowledgement is pending/)
+		})).rejects.toBeInstanceOf(DemoMaintainerRecipientPendingError)
 		const persisted = exchange.readExact({ actor: sellerActor, fundingOperationId: notice.operationId })
 		expect(persisted?.role).toBe('winner_settlement')
 		expect(persisted?.actor).toBe(sellerActor)

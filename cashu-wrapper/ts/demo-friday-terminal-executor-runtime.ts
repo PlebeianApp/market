@@ -20,6 +20,7 @@ import {
 import type { DemoMaintainerFederationPort } from './demo-maintainer-federation'
 import {
 	createDemoMaintainerOfflineExecutor,
+	DemoMaintainerRecipientPendingError,
 	type DemoMaintainerExactBranchTemplate,
 	type DemoMaintainerOfflineIdentity,
 	type DemoMaintainerOfflineStore,
@@ -200,20 +201,28 @@ export function createDemoFridayTerminalExecutorPorts(options: {
 	const ports: DemoFridayCoordinatorPorts = {
 		async executeExact(recordValue) {
 			const held = await context(recordValue)
-			if (held.claim.schema === 'COCO_DEMO_INTEGRATED_AUTHORITY_CLAIM_V1') {
-				if (held.binding.schema !== 'COCO_DEMO_INTEGRATED_EXECUTION_ROOT_BINDING_V1') throw new Error('DEMO_FRIDAY_EXECUTOR_BINDING: V1 schema changed')
-				await executeAuthorizedDemoIntegratedOutbidReturn({
-					claim: held.claim, template: held.template, offlineIdentity: held.identity,
-					store: options.authorityStore, executor: held.executor, recoveryAudit: audit,
-					executionBinding: held.binding,
-				})
-			} else {
-				if (held.binding.schema !== 'COCO_DEMO_INTEGRATED_EXECUTION_ROOT_BINDING_V2') throw new Error('DEMO_FRIDAY_EXECUTOR_BINDING: V2 schema changed')
-				await executeAuthorizedDemoIntegratedTerminal({
-					claim: held.claim, template: held.template, offlineIdentity: held.identity,
-					store: options.authorityStore, executor: held.executor, recoveryAudit: audit,
-					executionBinding: held.binding,
-				})
+			try {
+				if (held.claim.schema === 'COCO_DEMO_INTEGRATED_AUTHORITY_CLAIM_V1') {
+					if (held.binding.schema !== 'COCO_DEMO_INTEGRATED_EXECUTION_ROOT_BINDING_V1') throw new Error('DEMO_FRIDAY_EXECUTOR_BINDING: V1 schema changed')
+					await executeAuthorizedDemoIntegratedOutbidReturn({
+						claim: held.claim, template: held.template, offlineIdentity: held.identity,
+						store: options.authorityStore, executor: held.executor, recoveryAudit: audit,
+						executionBinding: held.binding,
+					})
+				} else {
+					if (held.binding.schema !== 'COCO_DEMO_INTEGRATED_EXECUTION_ROOT_BINDING_V2') throw new Error('DEMO_FRIDAY_EXECUTOR_BINDING: V2 schema changed')
+					await executeAuthorizedDemoIntegratedTerminal({
+						claim: held.claim, template: held.template, offlineIdentity: held.identity,
+						store: options.authorityStore, executor: held.executor, recoveryAudit: audit,
+						executionBinding: held.binding,
+					})
+				}
+			} catch (error) {
+				if (!(error instanceof DemoMaintainerRecipientPendingError)) throw error
+				const lifecycle = await options.authorityStore.readLifecycle(held.claim.operationId)
+				if (lifecycle?.status !== 'recipient_pending') throw new Error('DEMO_FRIDAY_EXECUTOR_RECIPIENT: pending delivery lacks durable lifecycle')
+				const terminal = await terminalDigest(held.record)
+				return { status: 'recipient_pending', ...terminal }
 			}
 			const terminal = await terminalDigest(held.record)
 			return {
@@ -228,20 +237,28 @@ export function createDemoFridayTerminalExecutorPorts(options: {
 				&& (recovery === null || recovery.state === 'prepared' || recovery.state === 'retry_ready')) {
 				return { status: 'retry_ready' }
 			}
-			if (held.claim.schema === 'COCO_DEMO_INTEGRATED_AUTHORITY_CLAIM_V1') {
-				if (held.binding.schema !== 'COCO_DEMO_INTEGRATED_EXECUTION_ROOT_BINDING_V1') throw new Error('DEMO_FRIDAY_EXECUTOR_BINDING: V1 schema changed')
-				await recoverDemoIntegratedOutbidReturn({
-					operationId: held.claim.operationId, template: held.template, offlineIdentity: held.identity,
-					store: options.authorityStore, executor: held.executor, recoveryAudit: audit,
-					executionBinding: held.binding,
-				})
-			} else {
-				if (held.binding.schema !== 'COCO_DEMO_INTEGRATED_EXECUTION_ROOT_BINDING_V2') throw new Error('DEMO_FRIDAY_EXECUTOR_BINDING: V2 schema changed')
-				await recoverDemoIntegratedTerminal({
-					operationId: held.claim.operationId, template: held.template, offlineIdentity: held.identity,
-					store: options.authorityStore, executor: held.executor, recoveryAudit: audit,
-					executionBinding: held.binding,
-				})
+			try {
+				if (held.claim.schema === 'COCO_DEMO_INTEGRATED_AUTHORITY_CLAIM_V1') {
+					if (held.binding.schema !== 'COCO_DEMO_INTEGRATED_EXECUTION_ROOT_BINDING_V1') throw new Error('DEMO_FRIDAY_EXECUTOR_BINDING: V1 schema changed')
+					await recoverDemoIntegratedOutbidReturn({
+						operationId: held.claim.operationId, template: held.template, offlineIdentity: held.identity,
+						store: options.authorityStore, executor: held.executor, recoveryAudit: audit,
+						executionBinding: held.binding,
+					})
+				} else {
+					if (held.binding.schema !== 'COCO_DEMO_INTEGRATED_EXECUTION_ROOT_BINDING_V2') throw new Error('DEMO_FRIDAY_EXECUTOR_BINDING: V2 schema changed')
+					await recoverDemoIntegratedTerminal({
+						operationId: held.claim.operationId, template: held.template, offlineIdentity: held.identity,
+						store: options.authorityStore, executor: held.executor, recoveryAudit: audit,
+						executionBinding: held.binding,
+					})
+				}
+			} catch (error) {
+				if (!(error instanceof DemoMaintainerRecipientPendingError)) throw error
+				const lifecycle = await options.authorityStore.readLifecycle(held.claim.operationId)
+				if (lifecycle?.status !== 'recipient_pending') throw new Error('DEMO_FRIDAY_EXECUTOR_RECIPIENT: pending recovery lacks durable lifecycle')
+				const terminal = await terminalDigest(held.record)
+				return { status: 'recipient_pending', terminalResponseDigest: terminal.terminalResponseDigest }
 			}
 			const lifecycle = await options.authorityStore.readLifecycle(held.claim.operationId)
 			if (lifecycle?.status !== 'recipient_imported') return { status: 'indeterminate' }

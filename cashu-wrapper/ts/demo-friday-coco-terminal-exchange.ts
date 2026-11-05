@@ -8,7 +8,11 @@ import {
 	exactDemoFridayCocoTerminalNotice,
 	type DemoFridayCocoTerminalNoticeV1,
 } from './demo-friday-browser-coco-terminal'
-import type { DemoMaintainerExactBranchTemplate, DemoMaintainerRecipientDeliveryPort } from './demo-maintainer-offline'
+import {
+	DemoMaintainerRecipientPendingError,
+	type DemoMaintainerExactBranchTemplate,
+	type DemoMaintainerRecipientDeliveryPort,
+} from './demo-maintainer-offline'
 import type { DemoRecipientImportReceipt } from './demo-sigall-recipient'
 
 const HEX_32 = /^[0-9a-f]{64}$/
@@ -184,7 +188,7 @@ export class DemoFridayCocoTerminalExchangeSqlite {
 					amount: template.amount, recipientCapabilityDigest: request.recipientCapabilityDigest,
 					signatures: structuredClone(request.signatures),
 				}, template.recipientPublicKey)
-				if (!this.hasAck(notice.operationId)) throw new Error('DEMO_FRIDAY_COCO_TERMINAL_PENDING: recipient import acknowledgement is pending')
+				if (!this.hasAck(notice.operationId)) throw new DemoMaintainerRecipientPendingError()
 				return { imported: true, alreadyImported: true }
 			},
 		}

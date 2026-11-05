@@ -207,6 +207,15 @@ export interface DemoMaintainerFinalOutcomePort {
 	readExact(request: { scope: string; bundleDigest: string }): Promise<DemoMaintainerFinalOutcome | null>
 }
 
+/** Durable mint completion is waiting for the browser-held recipient openings to acknowledge import. */
+export class DemoMaintainerRecipientPendingError extends Error {
+	readonly code = 'DEMO_MAINTAINER_RECIPIENT_PENDING'
+	constructor() {
+		super('DEMO_MAINTAINER_RECIPIENT_PENDING: recipient import acknowledgement is pending')
+		this.name = 'DemoMaintainerRecipientPendingError'
+	}
+}
+
 /** Recipient-private implementation owns openings/unblinding/import journals. */
 export interface DemoMaintainerRecipientDeliveryPort {
 	deliverExact(request: {

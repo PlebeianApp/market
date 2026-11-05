@@ -2,6 +2,7 @@
 import { isSeparatedApplication } from './demo-friday-runtime-config'
 import {
 	SEPARATED_EXECUTOR_BINARY, SEPARATED_R10_EXECUTOR_BINARY, SEPARATED_R33_EXECUTOR_BINARY,
+	SEPARATED_R34_EXECUTOR_BINARY,
 	SEPARATED_SUCCESSOR_EXECUTOR_BINARY,
 } from './demo-friday-separated-constants'
 import { loadSeparatedServiceBinding } from './demo-friday-separated-service'
@@ -97,6 +98,7 @@ function executable(value: string): string {
 	const r20 = value === DEMO_FRIDAY_R20_TERMINAL_EXECUTOR_BINARY
 	const separated = value === SEPARATED_EXECUTOR_BINARY || value === SEPARATED_SUCCESSOR_EXECUTOR_BINARY
 		|| value === SEPARATED_R10_EXECUTOR_BINARY || value === SEPARATED_R33_EXECUTOR_BINARY
+		|| value === SEPARATED_R34_EXECUTOR_BINARY
 	if ((!legacy && !r20 && !separated) || resolve(value) !== value || value.endsWith('/') || value.includes('//')) {
 		throw new Error('DEMO_FRIDAY_COORDINATOR_CLI: executor must be a canonical Friday binary path')
 	}
@@ -274,7 +276,8 @@ async function openRuntime(args: ServeArgs | InitAnchorArgs) {
  if(args.mode==='serve' && args.executor!==SEPARATED_EXECUTOR_BINARY
 	&& args.executor!==SEPARATED_SUCCESSOR_EXECUTOR_BINARY
 	&& args.executor!==SEPARATED_R10_EXECUTOR_BINARY
-	&& args.executor!==SEPARATED_R33_EXECUTOR_BINARY) throw new Error('SEPARATED_COORDINATOR: exact approved executor required')
+	&& args.executor!==SEPARATED_R33_EXECUTOR_BINARY
+	&& args.executor!==SEPARATED_R34_EXECUTOR_BINARY) throw new Error('SEPARATED_COORDINATOR: exact approved executor required')
 	}
 	if (application.schema === 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V3') {
 		await loadDemoFridayR20ServiceBinding({ application, pins: demoFridayR20ServicePins() })
