@@ -211,7 +211,7 @@ def main() -> int:
     for service in OTHER_SERVICES:
         require_active(service)
     initial = require_active(SERVICE)
-    require_ready(ready())
+    two_advancing_ready(30)
 
     (RELEASE / "bin").mkdir(parents=True, mode=0o755)
     os.chown(RELEASE, 0, 0)
