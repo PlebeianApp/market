@@ -98,6 +98,42 @@ describe('Friday V4 broadcast journal', () => {
 		expect(journal.readExact(exact.actor_funding_authorization.id)?.phase).toBe('broadcasting')
 	})
 
+	test('classifies private-package admission failure without emitting payloads', async () => {
+		const journal = new DemoFridayV4BroadcastJournalSqlite(new Database(':memory:'), 'friday-blue')
+		const anchor = new DemoFridayV4BroadcastRollbackAnchorSqlite(new Database(':memory:'), true)
+		anchor.observeExact(journal.anchorSnapshot())
+		const exact = receipt()
+		let row = journal.claimExact(exact.actor_funding_authorization.id, exact.funding_operation_id)
+		row = journal.transitionExact(row, 'prepared', { receipt: exact })
+		row = journal.transitionExact(row, 'signed', { signed: signed(row.receipt!) })
+		row = journal.transitionExact(row, 'broadcasting')
+		row = journal.transitionExact(row, 'broadcast', { broadcast: {
+			schema: 'PLEBEIAN_FRIDAY_V4_BROADCAST_IDENTITY_V1',
+			fundingAuthorizationEventId: row.authorizationEventId, bidEventId: row.signed!.event.id,
+			fundingOperationId: row.fundingOperationId, committedHeight: 42,
+			transactionHash: row.signed!.transactionHash,
+		} })
+		anchor.observeExact(journal.anchorSnapshot())
+		const diagnostics: unknown[] = []
+		const service = createDemoFridayV4FundingAdmission({
+			prepared: {} as never, journal, journalAnchor: anchor, leader: {} as never,
+			dkgBinding: {} as never, participants: [] as never, committee: {} as never,
+			broadcaster: {} as never, broadcastRecovery: {} as never,
+			cometAdmission: { async confirmAndAdmitExact() {
+				throw new Error('DEMO_FRIDAY_V4_COMET_ADMISSION: durable private package differs from the committed receipt')
+			} },
+			nowSeconds: () => 1, onConfirmFailure: (diagnostic) => diagnostics.push(diagnostic),
+		})
+		const confirmation = { schema: 'PLEBEIAN_FRIDAY_V4_FUNDING_CONFIRMATION_V1',
+			fundingAuthorizationEventId: exact.actor_funding_authorization.id,
+			signedEvent: row.signed!.event }
+		await expect(service.confirmExact(confirmation)).rejects.toThrow(/durable private package/)
+		expect(diagnostics).toEqual([{
+			schema: 'PLEBEIAN_FRIDAY_V4_CONFIRM_FAILURE_DIAGNOSTIC_V1', stage: 'comet_admission_private_bundle',
+		}])
+		expect(journal.readExact(exact.actor_funding_authorization.id)).toEqual(row)
+	})
+
 	test('owns event/operation globally and persists an outcome-unknown broadcast boundary', () => {
 		const database = new Database(':memory:')
 		const first = new DemoFridayV4BroadcastJournalSqlite(database, 'friday-blue')

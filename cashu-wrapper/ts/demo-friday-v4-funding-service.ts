@@ -54,6 +54,19 @@ type Four<T> = [T, T, T, T]
 type Three<T> = [T, T, T]
 
 function fail(message: string): never { throw new Error(`DEMO_FRIDAY_V4_FUNDING: ${message}`) }
+function cometAdmissionFailureStage(error: unknown): DemoFridayV4ConfirmFailureStage {
+	const message = error instanceof Error ? error.message : ''
+	if (/broadcast identity differs from replay ownership|stored replay identity|stored funding operation/.test(message)) return 'comet_admission_replay'
+	if (/chain or genesis|committed block height|canonical commit|validators hash|commit (?:height|block)|authenticated state/.test(message)) return 'comet_admission_network'
+	if (/transaction hash|committed transaction|bid event|bid content|V4 receipt/.test(message)) return 'comet_admission_transaction'
+	if (/durable private package/.test(message)) return 'comet_admission_private_bundle'
+	if (/application state lacks the exact committed funding/.test(message)) return 'comet_admission_state_funding'
+	if (/state receipt differs/.test(message)) return 'comet_admission_state_receipt'
+	if (/active funding|rejected funding|funding has no active/.test(message)) return 'comet_admission_disposition'
+	if (/expired funding|funding expiry/.test(message)) return 'comet_admission_expiry'
+	if (/prepared funding|replay.*admit|markAdmitted/.test(message)) return 'comet_admission_write'
+	return 'comet_admission'
+}
 function canonical(value: unknown): string {
 	if (value === null || typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value)
 	if (typeof value === 'number') { if (!Number.isSafeInteger(value)) fail('non-safe integer'); return JSON.stringify(value) }
@@ -139,6 +152,15 @@ export type DemoFridayV4ConfirmFailureStage =
 	| 'broadcast_transition'
 	| 'broadcast_anchor'
 	| 'comet_admission'
+	| 'comet_admission_replay'
+	| 'comet_admission_network'
+	| 'comet_admission_transaction'
+	| 'comet_admission_private_bundle'
+	| 'comet_admission_state_funding'
+	| 'comet_admission_state_receipt'
+	| 'comet_admission_disposition'
+	| 'comet_admission_expiry'
+	| 'comet_admission_write'
 	| 'admitted_transition'
 	| 'admitted_anchor'
 
@@ -663,6 +685,7 @@ export function createDemoFridayV4FundingAdmission(options: {
 				stage = 'admitted_anchor'; anchor()
 				return resultFrom(row)
 			} catch (error) {
+				if (stage === 'comet_admission') stage = cometAdmissionFailureStage(error)
 				try { options.onConfirmFailure?.({ schema: 'PLEBEIAN_FRIDAY_V4_CONFIRM_FAILURE_DIAGNOSTIC_V1', stage }) }
 				catch { /* diagnostics cannot alter the protocol result */ }
 				throw error
