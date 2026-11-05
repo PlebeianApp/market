@@ -137,6 +137,19 @@ class DemoPage {
       return consecutive >= 2;
     }, 60_000, `${label} readiness`);
   }
+  async waitAuctionBidEnabled(title, label) {
+    let consecutive = 0;
+    await this.poll(`(() => {
+      const card = [...document.querySelectorAll('article.auction')]
+        .find((node) => node.querySelector('h3')?.textContent === ${JSON.stringify(title)});
+      const button = [...(card?.querySelectorAll('button') || [])]
+        .find((node) => /Authorize funded bid/.test(node.textContent || ''));
+      return Boolean(button) && button.disabled === false;
+    })()`, (enabled) => {
+      consecutive = enabled ? consecutive + 1 : 0;
+      return consecutive >= 2;
+    }, 60_000, `${label} readiness`);
+  }
   status() {
     return this.evaluate(`(() => ({
       actor: document.querySelector('#actor')?.textContent || '',
@@ -294,7 +307,7 @@ class DemoPage {
   }
   async bid(title, amount, seller) {
     await this.waitAuctionCard(title);
-    await this.waitActionEnabled("article.auction .actions button.button-primary", `${amount} bid`);
+    await this.waitAuctionBidEnabled(title, `${amount} bid`);
     const first = await this.auctionAction(title, "bid", amount);
     if (!first.ok) throw new Error(`${this.role}: ${first.reason}`);
     const firstResult = await this.poll(`(() => ({ message: document.querySelector('#message')?.textContent || '', label: [...document.querySelectorAll('article.auction')].find((node) => node.querySelector('h3')?.textContent === ${JSON.stringify(title)})?.querySelector('.actions button')?.textContent || '' }))()`,
@@ -305,7 +318,7 @@ class DemoPage {
       await delay(RATE_SETTLE_MS);
       await seller.servicePendingPlan();
       await delay(RATE_SETTLE_MS);
-      await this.waitActionEnabled("article.auction .actions button.button-primary", `${amount} retained bid`);
+      await this.waitAuctionBidEnabled(title, `${amount} retained bid`);
       const retry = await this.auctionAction(title, "bid", amount);
       if (!retry.ok) throw new Error(`${this.role}: retained bid retry controls missing: ${retry.reason}`);
     }
