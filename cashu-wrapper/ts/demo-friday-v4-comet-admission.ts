@@ -98,6 +98,23 @@ async function exactRead<T>(
 	catch (error) { throw new CometAdmissionReadFailure(stage, error) }
 }
 
+async function readFutureCommit(
+	reader: DemoParticipantConsensusReader,
+	height: number,
+	attempts: number,
+	delayMs: number,
+): ReturnType<DemoParticipantConsensusReader['readCommit']> {
+	let lastError: unknown = new Error('future commit was not observed')
+	for (let attempt = 0; attempt < attempts; attempt++) {
+		try { return await reader.readCommit(height) }
+		catch (error) {
+			lastError = error
+			if (attempt + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, delayMs))
+		}
+	}
+	throw lastError
+}
+
 export interface DemoFridayPreparedFundingAdmissionPort {
 	readStoredExact(eventId: string): ReturnType<DemoFridayPreparedFundingAdmission['readStoredExact']>
 	markAdmittedExact(commit: DemoFridayFundingAdmissionCommitV1): DemoFridayFundingReplayRecordV1
@@ -256,11 +273,20 @@ export function createDemoFridayV4CometAdmission(options: {
 	reader: DemoParticipantConsensusReader
 	genesis: DemoFridayPinnedGenesisPort
 	prepared: DemoFridayPreparedFundingAdmissionPort
+	/** H+2 is necessarily in the future when broadcast_tx_commit returns H. */
+	finalityReadAttempts?: number
+	finalityReadDelayMs?: number
 	/** Payload-free diagnostic sink; it must never alter admission behavior. */
 	onFailure?: (diagnostic: DemoFridayV4CometAdmissionFailureDiagnosticV1) => void
 }): DemoFridayV4CometAdmissionPort {
 	if (!HEX_32.test(options.genesisSha256) || !HEX_32.test(options.validatorsHash)
 		|| options.chainId.length < 1 || options.chainId.length > 160) fail('fixed network pins are malformed')
+	const finalityReadAttempts = options.finalityReadAttempts ?? 40
+	const finalityReadDelayMs = options.finalityReadDelayMs ?? 250
+	if (!Number.isSafeInteger(finalityReadAttempts) || finalityReadAttempts < 1 || finalityReadAttempts > 120
+		|| !Number.isSafeInteger(finalityReadDelayMs) || finalityReadDelayMs < 0 || finalityReadDelayMs > 1_000) {
+		fail('finality read policy is malformed')
+	}
 	return Object.freeze({
 		async confirmAndAdmitExact(inputValue: DemoFridayV4BroadcastIdentityV1) {
 			let stage: DemoFridayV4CometAdmissionFailureStage = 'identity'
@@ -271,13 +297,18 @@ export function createDemoFridayV4CometAdmission(options: {
 				stage = 'replay_ownership'
 				if (held.replay.fundingOperationId !== input.fundingOperationId) fail('broadcast identity differs from replay ownership')
 				stage = 'network_reads'
-				const [genesis, reportedChain, block, commitH, commitH1, commitH2, stateResult] = await Promise.all([
+				// broadcast_tx_commit proves H but cannot make the two future headers
+				// required by the authenticated-state join exist. Wait only on that
+				// read-only finality boundary; never rebroadcast or alter the journal.
+				const commitH2 = await exactRead('commit_h2_read', readFutureCommit(
+					options.reader, input.committedHeight + 2, finalityReadAttempts, finalityReadDelayMs,
+				))
+				const [genesis, reportedChain, block, commitH, commitH1, stateResult] = await Promise.all([
 					exactRead('genesis_read', options.genesis.readExact()),
 					exactRead('chain_read', options.reader.readChainId()),
 					exactRead('block_read', options.reader.readBlock(input.committedHeight)),
 					exactRead('commit_h_read', options.reader.readCommit(input.committedHeight)),
 					exactRead('commit_h1_read', options.reader.readCommit(input.committedHeight + 1)),
-					exactRead('commit_h2_read', options.reader.readCommit(input.committedHeight + 2)),
 					exactRead('state_read', authenticatedDemoCometState(options.reader, options.validatorsHash, input.committedHeight + 2)),
 				])
 				stage = 'network_identity'

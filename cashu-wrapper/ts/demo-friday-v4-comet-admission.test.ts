@@ -94,6 +94,7 @@ function harness(overrides: {
 	missingCommit?: number
 	blockHash?: string
 	blockTime?: number
+	finalityUnavailableReads?: number
 	rejected?: boolean
 	rejectionReason?: DemoFridayFundingAdmissionCommitV1['rejectionReason']
 	terminal?: 'payout_entitled' | 'outbid_return_entitled'
@@ -107,6 +108,7 @@ function harness(overrides: {
 	}
 	let admitted: DemoFridayFundingReplayRecordV1 | undefined
 	let admissions = 0
+	let finalityReads = 0
 	const prepared: DemoFridayPreparedFundingAdmissionPort = {
 		async readStoredExact(eventId) {
 			if (eventId !== replay.eventId) throw new Error('absent')
@@ -153,6 +155,10 @@ function harness(overrides: {
 		async readChainId() { return overrides.chain ?? 'friday-chain' },
 		async readBlock(height) { return { height, blockHash: overrides.blockHash ?? height.toString(16).padStart(64, '0'), transactions: [blockRaw] } },
 		async readCommit(height) {
+			if (height === H + 2) {
+				finalityReads++
+				if (finalityReads <= (overrides.finalityUnavailableReads ?? 0)) throw new Error('future commit unavailable')
+			}
 			if (height === overrides.missingCommit) throw new Error('commit unavailable')
 			return {
 				height, blockTime: overrides.blockTime ?? 1_100, blockHash: height.toString(16).padStart(64, '0'),
@@ -172,13 +178,15 @@ function harness(overrides: {
 		fundingAuthorizationEventId: replay.eventId, bidEventId: transaction.event.id,
 		fundingOperationId: replay.fundingOperationId, committedHeight: H, transactionHash: transaction.txHash,
 	}
-	return { receipt, transaction, prepared, reader, genesis, identity, admissions: () => admissions }
+	return { receipt, transaction, prepared, reader, genesis, identity,
+		admissions: () => admissions, finalityReads: () => finalityReads }
 }
 
 function adapter(value: ReturnType<typeof harness>, onFailure?: Parameters<typeof createDemoFridayV4CometAdmission>[0]['onFailure']) {
 	return createDemoFridayV4CometAdmission({
 		chainId: 'friday-chain', genesisSha256: GENESIS, validatorsHash: VALIDATORS,
-		reader: value.reader, genesis: value.genesis, prepared: value.prepared, onFailure,
+		reader: value.reader, genesis: value.genesis, prepared: value.prepared,
+		finalityReadAttempts: 4, finalityReadDelayMs: 1, onFailure,
 	})
 }
 
@@ -209,6 +217,13 @@ describe('Friday V4 authenticated Comet admission', () => {
 		// A new process instance re-reads the durable result; no second transition.
 		const replay = await adapter(value).confirmAndAdmitExact(value.identity)
 		expect(replay).toEqual(first)
+		expect(value.admissions()).toBe(1)
+	})
+
+	test('waits boundedly for future H+2 without rebroadcasting or changing admission identity', async () => {
+		const value = harness({ finalityUnavailableReads: 2 })
+		await expect(adapter(value).confirmAndAdmitExact(value.identity)).resolves.toMatchObject({ phase: 'admitted' })
+		expect(value.finalityReads()).toBe(3)
 		expect(value.admissions()).toBe(1)
 	})
 
