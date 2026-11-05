@@ -6,6 +6,7 @@ import {
 	createDemoFridayAuthorityHealth,
 	runDemoFridayAuthorityDrainLoop,
 } from './demo-friday-authority-runtime'
+import { DemoIntegratedCloseAuthorityRefusedError } from './demo-integrated-close-authority'
 
 const DIGEST = 'a'.repeat(64)
 
@@ -52,6 +53,50 @@ describe('fixed Friday authority runtime adapters', () => {
 			expect(await source.nextExact()).toBeNull()
 			expect(source.recoverInterruptedExact()).toBe(1)
 			expect((await source.nextExact())?.reference).toBe('terminal-held')
+		} finally { db.close(false) }
+	})
+
+	test('expires only a typed permanent cutoff and continues to the next terminal', async () => {
+		const db = new Database(':memory:')
+		try {
+			const source = new DemoFridayTrustedTerminalSqlite(db, {
+				async resolveExact(reference) {
+					if (reference.reference === 'terminal-expired') {
+						throw new DemoIntegratedCloseAuthorityRefusedError('DEMO_CLOSE_CUTOFF', 'outside MAIN')
+					}
+					return { branch: 'outbid_return', options: { captured: true } } as never
+				},
+			})
+			source.enqueueAuthenticatedExact({
+				schema: 'PLEBEIAN_FRIDAY_TERMINAL_REFERENCE_V1', reference: 'terminal-expired', identityDigest: DIGEST,
+			})
+			source.enqueueAuthenticatedExact({
+				schema: 'PLEBEIAN_FRIDAY_TERMINAL_REFERENCE_V1', reference: 'terminal-next', identityDigest: 'b'.repeat(64),
+			})
+			expect((await source.nextExact())?.reference).toBe('terminal-next')
+			expect(db.query<{ phase: string; result_json: string }, [string]>(
+				'SELECT phase, result_json FROM friday_terminal_references WHERE reference = ?',
+			).get('terminal-expired')).toEqual({
+				phase: 'expired', result_json: JSON.stringify({
+					schema: 'PLEBEIAN_FRIDAY_TERMINAL_EXPIRY_V1', code: 'DEMO_CLOSE_CUTOFF',
+				}),
+			})
+			expect(source.pendingCount()).toBe(1)
+		} finally { db.close(false) }
+	})
+
+	test('keeps an unclassified resolver failure fail-closed for restart recovery', async () => {
+		const db = new Database(':memory:')
+		try {
+			const source = new DemoFridayTrustedTerminalSqlite(db, {
+				async resolveExact() { throw new Error('unexpected resolver fault') },
+			})
+			source.enqueueAuthenticatedExact({
+				schema: 'PLEBEIAN_FRIDAY_TERMINAL_REFERENCE_V1', reference: 'terminal-fault', identityDigest: DIGEST,
+			})
+			await expect(source.nextExact()).rejects.toThrow('unexpected resolver fault')
+			expect(source.recoverInterruptedExact()).toBe(1)
+			expect(source.pendingCount()).toBe(1)
 		} finally { db.close(false) }
 	})
 

@@ -12,9 +12,19 @@ import type {
 	DemoIntegratedThreshold3QueuedTerminalResult,
 	DemoIntegratedThreshold3TerminalRequest,
 } from './demo-integrated-threshold3-terminal-service'
+import { DemoIntegratedAuthorityRefusedError } from './demo-integrated-authority'
+import { DemoIntegratedCloseAuthorityRefusedError } from './demo-integrated-close-authority'
+import { DemoIntegratedRejectedAuthorityRefusedError } from './demo-integrated-rejected-authority'
 
 const ID = /^[A-Za-z0-9_-]{1,160}$/
 const HEX_32 = /^[0-9a-f]{64}$/
+
+function permanentTerminalCutoff(error: unknown): string | null {
+	if (error instanceof DemoIntegratedCloseAuthorityRefusedError && error.code === 'DEMO_CLOSE_CUTOFF') return error.code
+	if (error instanceof DemoIntegratedRejectedAuthorityRefusedError && error.code === 'DEMO_REJECT_CUTOFF') return error.code
+	if (error instanceof DemoIntegratedAuthorityRefusedError && error.code === 'DEMO_AUTHORITY_CUTOFF') return error.code
+	return null
+}
 
 export interface DemoFridayTrustedTerminalReferenceV1 {
 	schema: 'PLEBEIAN_FRIDAY_TERMINAL_REFERENCE_V1'
@@ -69,24 +79,40 @@ export class DemoFridayTrustedTerminalSqlite implements DemoFridayTrustedTermina
 	}
 
 	async nextExact(): Promise<DemoFridayTrustedTerminalCandidateV1 | null> {
-		const row = this.database.transaction(() => {
-			const candidate = this.database.query<{ reference: string; identity_digest: string; revision: number }, []>(
-				`SELECT reference, identity_digest, revision FROM friday_terminal_references
-				 WHERE phase = 'pending' ORDER BY rowid LIMIT 1`,
-			).get()
-			if (candidate === null) return null
-			const changed = this.database.query(`UPDATE friday_terminal_references
-				SET phase = 'resolving', revision = ? WHERE reference = ? AND phase = 'pending' AND revision = ?`)
-				.run(candidate.revision + 1, candidate.reference, candidate.revision)
-			if (changed.changes !== 1) throw new Error('DEMO_FRIDAY_TERMINAL_SOURCE_CAS: reference claim changed concurrently')
-			return { reference: candidate.reference, identity_digest: candidate.identity_digest }
-		}).immediate()
-		if (row === null) return null
-		const reference: DemoFridayTrustedTerminalReferenceV1 = {
-			schema: 'PLEBEIAN_FRIDAY_TERMINAL_REFERENCE_V1', reference: row.reference,
-			identityDigest: row.identity_digest,
+		while (true) {
+			const row = this.database.transaction(() => {
+				const candidate = this.database.query<{ reference: string; identity_digest: string; revision: number }, []>(
+					`SELECT reference, identity_digest, revision FROM friday_terminal_references
+					 WHERE phase = 'pending' ORDER BY rowid LIMIT 1`,
+				).get()
+				if (candidate === null) return null
+				const changed = this.database.query(`UPDATE friday_terminal_references
+					SET phase = 'resolving', revision = ? WHERE reference = ? AND phase = 'pending' AND revision = ?`)
+					.run(candidate.revision + 1, candidate.reference, candidate.revision)
+				if (changed.changes !== 1) throw new Error('DEMO_FRIDAY_TERMINAL_SOURCE_CAS: reference claim changed concurrently')
+				return { reference: candidate.reference, identity_digest: candidate.identity_digest }
+			}).immediate()
+			if (row === null) return null
+			const reference: DemoFridayTrustedTerminalReferenceV1 = {
+				schema: 'PLEBEIAN_FRIDAY_TERMINAL_REFERENCE_V1', reference: row.reference,
+				identityDigest: row.identity_digest,
+			}
+			try {
+				return { reference: reference.reference, request: await this.resolver.resolveExact(reference) }
+			} catch (error) {
+				const code = permanentTerminalCutoff(error)
+				if (code === null) throw error
+				this.database.transaction(() => {
+					const changed = this.database.query(`UPDATE friday_terminal_references
+						SET phase = 'expired', revision = revision + 1, result_json = ?
+						WHERE reference = ? AND identity_digest = ? AND phase = 'resolving'`).run(
+						JSON.stringify({ schema: 'PLEBEIAN_FRIDAY_TERMINAL_EXPIRY_V1', code }),
+						reference.reference, reference.identityDigest,
+					)
+					if (changed.changes !== 1) throw new Error('DEMO_FRIDAY_TERMINAL_SOURCE_CAS: expiry changed concurrently')
+				}).immediate()
+			}
 		}
-		return { reference: reference.reference, request: await this.resolver.resolveExact(reference) }
 	}
 
 	async markQueuedExact(reference: string, result: DemoIntegratedThreshold3QueuedTerminalResult): Promise<void> {
