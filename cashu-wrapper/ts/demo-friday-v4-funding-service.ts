@@ -382,7 +382,13 @@ export class DemoFridayV4BroadcastJournalSqlite {
 			if (row === null) fail('broadcast journal record disappeared')
 			const current = exactRecord(JSON.parse(row.record_json) as unknown)
 			if (canonical(current) !== canonical(prior)) fail('broadcast journal changed concurrently')
-			const updated = exactRecord({ ...current, ...structuredClone(patch), phase, revision: current.revision + 1 })
+			// Return the exact representation persisted below. Nested receipt key order
+			// is part of the Nostr content bytes, so returning an insertion-ordered
+			// object here while readExact() returns canonical JSON after restart makes
+			// an otherwise valid signed challenge unverifiable.
+			const updated = exactRecord(JSON.parse(canonical({
+				...current, ...structuredClone(patch), phase, revision: current.revision + 1,
+			})) as unknown)
 			const changed = this.database.query(`UPDATE friday_v4_broadcast_journal
 				SET phase = ?, revision = ?, record_json = ?
 				WHERE authorization_event_id = ? AND phase = ? AND revision = ?`).run(

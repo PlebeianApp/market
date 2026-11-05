@@ -72,6 +72,32 @@ describe('Friday V4 broadcast journal', () => {
 		expect(journal.readExact(exact.actor_funding_authorization.id)).toEqual(row)
 	})
 
+	test('returns the canonical persisted receipt used by the signed bid challenge', async () => {
+		const journal = new DemoFridayV4BroadcastJournalSqlite(new Database(':memory:'), 'friday-blue')
+		const anchor = new DemoFridayV4BroadcastRollbackAnchorSqlite(new Database(':memory:'), true)
+		anchor.observeExact(journal.anchorSnapshot())
+		const exact = receipt()
+		let row = journal.claimExact(exact.actor_funding_authorization.id, exact.funding_operation_id)
+		row = journal.transitionExact(row, 'prepared', { receipt: exact })
+		anchor.observeExact(journal.anchorSnapshot())
+		const diagnostics: unknown[] = []
+		const service = createDemoFridayV4FundingAdmission({
+			prepared: {} as never, journal, journalAnchor: anchor, leader: {} as never,
+			dkgBinding: {} as never, participants: [] as never, committee: {} as never,
+			broadcaster: { async broadcastAndWait() { throw new Error('bounded broadcast marker') } },
+			broadcastRecovery: {} as never, cometAdmission: {} as never,
+			nowSeconds: () => 1, onConfirmFailure: (diagnostic) => diagnostics.push(diagnostic),
+		})
+		const confirmation = { schema: 'PLEBEIAN_FRIDAY_V4_FUNDING_CONFIRMATION_V1',
+			fundingAuthorizationEventId: exact.actor_funding_authorization.id,
+			signedEvent: signed(row.receipt!).event }
+		await expect(service.confirmExact(confirmation)).rejects.toThrow(/bounded broadcast marker/)
+		expect(diagnostics).toEqual([{
+			schema: 'PLEBEIAN_FRIDAY_V4_CONFIRM_FAILURE_DIAGNOSTIC_V1', stage: 'broadcast_request',
+		}])
+		expect(journal.readExact(exact.actor_funding_authorization.id)?.phase).toBe('broadcasting')
+	})
+
 	test('owns event/operation globally and persists an outcome-unknown broadcast boundary', () => {
 		const database = new Database(':memory:')
 		const first = new DemoFridayV4BroadcastJournalSqlite(database, 'friday-blue')
