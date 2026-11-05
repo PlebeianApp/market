@@ -12,6 +12,7 @@ export const SEPARATED_INSPECTOR_BINARY=`${SEPARATED_RELEASE_ROOT}/bin/coco-demo
 export const SEPARATED_EXECUTOR_BINARY=`${SEPARATED_RELEASE_ROOT}/bin/plebeian-friday-terminal-executor` as const
 export const SEPARATED_SUCCESSOR_EXECUTOR_BINARY='/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/plebeian-friday-terminal-executor' as const
 export const SEPARATED_R10_EXECUTOR_BINARY='/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-backend-r10/bin/plebeian-friday-terminal-executor' as const
+export const SEPARATED_R33_EXECUTOR_BINARY='/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-mint-seal-r33/bin/plebeian-friday-terminal-executor' as const
 
 // Dedicated private parent contains durable init/recovery locks and staging.
 export const SEPARATED_COORDINATOR_PARENT='/var/lib/plebeian-auctions-friday/coordinator-v3' as const
