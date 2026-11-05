@@ -164,10 +164,10 @@ function harness(overrides: {
 	return { receipt, transaction, prepared, reader, genesis, identity, admissions: () => admissions }
 }
 
-function adapter(value: ReturnType<typeof harness>) {
+function adapter(value: ReturnType<typeof harness>, onFailure?: Parameters<typeof createDemoFridayV4CometAdmission>[0]['onFailure']) {
 	return createDemoFridayV4CometAdmission({
 		chainId: 'friday-chain', genesisSha256: GENESIS, validatorsHash: VALIDATORS,
-		reader: value.reader, genesis: value.genesis, prepared: value.prepared,
+		reader: value.reader, genesis: value.genesis, prepared: value.prepared, onFailure,
 	})
 }
 
@@ -201,6 +201,18 @@ describe('Friday V4 authenticated Comet admission', () => {
 		const spliced = harness({ blockHash: hex('9') })
 		await expect(adapter(spliced).confirmAndAdmitExact(spliced.identity)).rejects.toThrow(/not joined to canonical commit/)
 		expect(spliced.admissions()).toBe(0)
+	})
+
+	test('reports only a fixed payload-free failure stage without changing rejection behavior', async () => {
+		const value = harness({ txMutation: (raw) => new Uint8Array([...raw, 0x20]) })
+		const diagnostics: unknown[] = []
+		await expect(adapter(value, (diagnostic) => diagnostics.push(diagnostic)).confirmAndAdmitExact(value.identity))
+			.rejects.toThrow(/transaction hash/)
+		expect(diagnostics).toEqual([{
+			schema: 'PLEBEIAN_FRIDAY_V4_COMET_ADMISSION_FAILURE_DIAGNOSTIC_V1',
+			stage: 'transaction_match',
+		}])
+		expect(value.admissions()).toBe(0)
 	})
 
 	test('rejects replay under a changed transaction identity', async () => {

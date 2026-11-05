@@ -774,6 +774,7 @@ export async function main(): Promise<void> {
 					chainId: facts.chain_id, genesisSha256: facts.genesis_sha256,
 					genesisPath: join(application.network_root, 'genesis.json'),
 				}), prepared: preparedFunding,
+				onFailure(diagnostic) { console.error(JSON.stringify(diagnostic)) },
 			}),
 			nowSeconds: () => Math.floor(Date.now() / 1_000), policyTimeoutMs: 15_000,
 			onConfirmFailure(diagnostic) { console.error(JSON.stringify(diagnostic)) },

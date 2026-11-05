@@ -55,6 +55,30 @@ export interface DemoFridayV4CometAdmissionPort {
 	confirmAndAdmitExact(value: DemoFridayV4BroadcastIdentityV1): Promise<DemoFridayFundingReplayRecordV1>
 }
 
+export type DemoFridayV4CometAdmissionFailureStage =
+	| 'identity'
+	| 'stored_package_read'
+	| 'replay_ownership'
+	| 'network_reads'
+	| 'network_identity'
+	| 'block_height'
+	| 'transaction_match'
+	| 'transaction_decode'
+	| 'commit_verification'
+	| 'block_commit_join'
+	| 'receipt_interval'
+	| 'private_bundle'
+	| 'state_funding'
+	| 'state_receipt'
+	| 'state_disposition'
+	| 'state_expiry'
+	| 'admission_write'
+
+export interface DemoFridayV4CometAdmissionFailureDiagnosticV1 {
+	schema: 'PLEBEIAN_FRIDAY_V4_COMET_ADMISSION_FAILURE_DIAGNOSTIC_V1'
+	stage: DemoFridayV4CometAdmissionFailureStage
+}
+
 export interface DemoFridayPreparedFundingAdmissionPort {
 	readStoredExact(eventId: string): ReturnType<DemoFridayPreparedFundingAdmission['readStoredExact']>
 	markAdmittedExact(commit: DemoFridayFundingAdmissionCommitV1): DemoFridayFundingReplayRecordV1
@@ -205,76 +229,101 @@ export function createDemoFridayV4CometAdmission(options: {
 	reader: DemoParticipantConsensusReader
 	genesis: DemoFridayPinnedGenesisPort
 	prepared: DemoFridayPreparedFundingAdmissionPort
+	/** Payload-free diagnostic sink; it must never alter admission behavior. */
+	onFailure?: (diagnostic: DemoFridayV4CometAdmissionFailureDiagnosticV1) => void
 }): DemoFridayV4CometAdmissionPort {
 	if (!HEX_32.test(options.genesisSha256) || !HEX_32.test(options.validatorsHash)
 		|| options.chainId.length < 1 || options.chainId.length > 160) fail('fixed network pins are malformed')
 	return Object.freeze({
 		async confirmAndAdmitExact(inputValue: DemoFridayV4BroadcastIdentityV1) {
-			const input = exactIdentity(inputValue)
-			const held = await options.prepared.readStoredExact(input.fundingAuthorizationEventId)
-			if (held.replay.fundingOperationId !== input.fundingOperationId) fail('broadcast identity differs from replay ownership')
-			const [genesis, reportedChain, block, commitH, commitH1, commitH2, stateResult] = await Promise.all([
-				options.genesis.readExact(), options.reader.readChainId(), options.reader.readBlock(input.committedHeight),
-				options.reader.readCommit(input.committedHeight), options.reader.readCommit(input.committedHeight + 1),
-				options.reader.readCommit(input.committedHeight + 2),
-				authenticatedDemoCometState(options.reader, options.validatorsHash, input.committedHeight + 2),
-			])
-			if (genesis.chainId !== options.chainId || genesis.genesisSha256 !== options.genesisSha256
-				|| reportedChain !== options.chainId || stateResult.observation.state.chain_id !== options.chainId) {
-				fail('chain or genesis identity differs from fixed pins')
-			}
-			if (block.height !== input.committedHeight) fail('committed block height differs')
-			const matching = block.transactions.filter((raw) => bytesToHex(sha256(raw)) === input.transactionHash)
-			if (matching.length !== 1) fail('committed block does not contain one exact transaction hash')
-			const { event, receipt } = exactBidTransaction(matching[0]!, input)
-			const commits = [commitH, commitH1, commitH2].map((value, index) =>
-				exactDemoCometCommit(value, input.committedHeight + index, options.validatorsHash))
-			if (block.blockHash !== commits[0]!.blockHash) fail('committed block bytes are not joined to canonical commit H')
-			if (commits[0]!.blockTime < receipt.attested_at) fail('receipt predates its attested validity interval')
-			exactPrivateBundle(held.replay, receipt, held.stored)
-			const state = stateResult.observation.state
-			const bid = state.bids?.[event.id]
-			const funding = state.integrated_fundings?.[receipt.funding_operation_id]
-			if (funding === undefined || funding.id !== receipt.funding_operation_id || funding.auction_id !== receipt.auction_id
-				|| funding.bid_id !== event.id || funding.bidder !== receipt.bidder) {
-				fail('authenticated application state lacks the exact committed funding')
-			}
-			exactReceiptEqual(funding.receipt, receipt)
-			let disposition: DemoFridayFundingAdmissionCommitV1['disposition']
-			let rejectionReason: DemoFridayFundingAdmissionCommitV1['rejectionReason']
-			if (funding.status === 'active') {
-				if (bid === undefined || bid.id !== event.id || bid.auction_id !== receipt.auction_id
-					|| bid.bidder !== receipt.bidder || bid.amount !== receipt.bid_amount
-					|| bid.integrated_funding_id !== receipt.funding_operation_id
-					|| funding.rejection_reason !== undefined) {
-					fail('authenticated active funding lacks the exact committed bid')
+			let stage: DemoFridayV4CometAdmissionFailureStage = 'identity'
+			try {
+				const input = exactIdentity(inputValue)
+				stage = 'stored_package_read'
+				const held = await options.prepared.readStoredExact(input.fundingAuthorizationEventId)
+				stage = 'replay_ownership'
+				if (held.replay.fundingOperationId !== input.fundingOperationId) fail('broadcast identity differs from replay ownership')
+				stage = 'network_reads'
+				const [genesis, reportedChain, block, commitH, commitH1, commitH2, stateResult] = await Promise.all([
+					options.genesis.readExact(), options.reader.readChainId(), options.reader.readBlock(input.committedHeight),
+					options.reader.readCommit(input.committedHeight), options.reader.readCommit(input.committedHeight + 1),
+					options.reader.readCommit(input.committedHeight + 2),
+					authenticatedDemoCometState(options.reader, options.validatorsHash, input.committedHeight + 2),
+				])
+				stage = 'network_identity'
+				if (genesis.chainId !== options.chainId || genesis.genesisSha256 !== options.genesisSha256
+					|| reportedChain !== options.chainId || stateResult.observation.state.chain_id !== options.chainId) {
+					fail('chain or genesis identity differs from fixed pins')
 				}
-				disposition = 'active'
-			} else if (funding.status === 'rejected_return_entitled') {
-				if (bid !== undefined || !['auction_not_open', 'seller_self_bid', 'late', 'below_minimum', 'stale_leader', 'funding_expired']
-					.includes(funding.rejection_reason ?? '')) {
-					fail('authenticated rejected funding lacks one exact rejection reason')
+				stage = 'block_height'
+				if (block.height !== input.committedHeight) fail('committed block height differs')
+				stage = 'transaction_match'
+				const matching = block.transactions.filter((raw) => bytesToHex(sha256(raw)) === input.transactionHash)
+				if (matching.length !== 1) fail('committed block does not contain one exact transaction hash')
+				stage = 'transaction_decode'
+				const { event, receipt } = exactBidTransaction(matching[0]!, input)
+				stage = 'commit_verification'
+				const commits = [commitH, commitH1, commitH2].map((value, index) =>
+					exactDemoCometCommit(value, input.committedHeight + index, options.validatorsHash))
+				stage = 'block_commit_join'
+				if (block.blockHash !== commits[0]!.blockHash) fail('committed block bytes are not joined to canonical commit H')
+				stage = 'receipt_interval'
+				if (commits[0]!.blockTime < receipt.attested_at) fail('receipt predates its attested validity interval')
+				stage = 'private_bundle'
+				exactPrivateBundle(held.replay, receipt, held.stored)
+				const state = stateResult.observation.state
+				const bid = state.bids?.[event.id]
+				const funding = state.integrated_fundings?.[receipt.funding_operation_id]
+				stage = 'state_funding'
+				if (funding === undefined || funding.id !== receipt.funding_operation_id || funding.auction_id !== receipt.auction_id
+					|| funding.bid_id !== event.id || funding.bidder !== receipt.bidder) {
+					fail('authenticated application state lacks the exact committed funding')
 				}
-				disposition = 'rejected_return'
-				rejectionReason = funding.rejection_reason as DemoFridayFundingAdmissionCommitV1['rejectionReason']
-			} else fail('committed funding has no active or rejected-return disposition')
-			const expiredAtCommit = commits[0]!.blockTime > receipt.expires_at
-			if (expiredAtCommit) {
-				if (disposition !== 'rejected_return' || rejectionReason !== 'funding_expired') {
-					fail('expired funding lacks the exact committed return entitlement')
+				stage = 'state_receipt'
+				exactReceiptEqual(funding.receipt, receipt)
+				let disposition: DemoFridayFundingAdmissionCommitV1['disposition']
+				let rejectionReason: DemoFridayFundingAdmissionCommitV1['rejectionReason']
+				stage = 'state_disposition'
+				if (funding.status === 'active') {
+					if (bid === undefined || bid.id !== event.id || bid.auction_id !== receipt.auction_id
+						|| bid.bidder !== receipt.bidder || bid.amount !== receipt.bid_amount
+						|| bid.integrated_funding_id !== receipt.funding_operation_id
+						|| funding.rejection_reason !== undefined) {
+						fail('authenticated active funding lacks the exact committed bid')
+					}
+					disposition = 'active'
+				} else if (funding.status === 'rejected_return_entitled') {
+					if (bid !== undefined || !['auction_not_open', 'seller_self_bid', 'late', 'below_minimum', 'stale_leader', 'funding_expired']
+						.includes(funding.rejection_reason ?? '')) {
+						fail('authenticated rejected funding lacks one exact rejection reason')
+					}
+					disposition = 'rejected_return'
+					rejectionReason = funding.rejection_reason as DemoFridayFundingAdmissionCommitV1['rejectionReason']
+				} else fail('committed funding has no active or rejected-return disposition')
+				stage = 'state_expiry'
+				const expiredAtCommit = commits[0]!.blockTime > receipt.expires_at
+				if (expiredAtCommit) {
+					if (disposition !== 'rejected_return' || rejectionReason !== 'funding_expired') {
+						fail('expired funding lacks the exact committed return entitlement')
+					}
+				} else if (rejectionReason === 'funding_expired') {
+					fail('funding expiry was not true at committed block time')
 				}
-			} else if (rejectionReason === 'funding_expired') {
-				fail('funding expiry was not true at committed block time')
+				const commit: DemoFridayFundingAdmissionCommitV1 = {
+					schema: 'PLEBEIAN_FRIDAY_FUNDING_ADMISSION_COMMIT_V1',
+					eventId: input.fundingAuthorizationEventId, bidEventId: event.id,
+					fundingOperationId: input.fundingOperationId,
+					bundleDigest: held.replay.bundleDigest, scope: held.replay.scope,
+					receiptDigest: demoIntegratedFundingV4ReceiptDigest(receipt), transactionHash: input.transactionHash,
+					committedHeight: input.committedHeight, disposition, ...(rejectionReason === undefined ? {} : { rejectionReason }),
+				}
+				stage = 'admission_write'
+				return options.prepared.markAdmittedExact(commit)
+			} catch (error) {
+				try { options.onFailure?.({ schema: 'PLEBEIAN_FRIDAY_V4_COMET_ADMISSION_FAILURE_DIAGNOSTIC_V1', stage }) }
+				catch { /* diagnostics cannot alter the protocol result */ }
+				throw error
 			}
-			const commit: DemoFridayFundingAdmissionCommitV1 = {
-				schema: 'PLEBEIAN_FRIDAY_FUNDING_ADMISSION_COMMIT_V1',
-				eventId: input.fundingAuthorizationEventId, bidEventId: event.id,
-				fundingOperationId: input.fundingOperationId,
-				bundleDigest: held.replay.bundleDigest, scope: held.replay.scope,
-				receiptDigest: demoIntegratedFundingV4ReceiptDigest(receipt), transactionHash: input.transactionHash,
-				committedHeight: input.committedHeight, disposition, ...(rejectionReason === undefined ? {} : { rejectionReason }),
-			}
-			return options.prepared.markAdmittedExact(commit)
 		},
 	})
 }
