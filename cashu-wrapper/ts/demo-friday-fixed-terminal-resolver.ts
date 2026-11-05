@@ -355,7 +355,7 @@ async function commonPolicy(options: {
 	const finality = certificate.commits[2]
 	const amount = 'displacedPoolAmount' in certificate ? certificate.displacedPoolAmount : certificate.poolAmount
 	const signedBid = await deriveDemoCometSignedBidEvidence({
-		reader: options.reader, validatorsHash: pins.validatorsHash, minimumHeight: state.stateHeight,
+		reader: options.reader, validatorsHash: pins.validatorsHash, minimumHeight: finality.height,
 		fundingOperationId: operationId,
 		deposits: template.inputs.map((proof) => ({
 			proofStateRef: bytesToHex(proofPoint(proof).toBytes(true)), amount: proof.amount, keysetId: proof.id,
