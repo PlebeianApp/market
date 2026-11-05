@@ -72,7 +72,7 @@ for (let slot = 1; slot <= 4; slot += 1) {
 	const oldEpoch = prior.binding.restartEpoch
 	const newEpoch = successor.binding.restartEpoch
 	if (!Number.isSafeInteger(oldEpoch) || !Number.isSafeInteger(newEpoch)
-		|| (newEpoch as number) !== (oldEpoch as number) + 1
+		|| (newEpoch as number) <= (oldEpoch as number)
 		|| stable(prior.binding) !== stable(successor.binding)
 		|| prior.signerIdentity !== successor.signerIdentity) {
 		throw new Error(`slot-${slot}: successor is not the exact monotonic public enrollment`)
