@@ -1,0 +1,33 @@
+[Unit]
+Description=Plebeian Friday side-quest coordinator R36 acknowledged recipient completion
+Wants=plebeian-friday-observer.service
+After=plebeian-friday-observer.service
+ConditionPathExists=/var/lib/plebeian-auctions-friday/coordinator-v3/runtime/coordinator-rpc-identity.key
+ConditionPathExists=/var/lib/plebeian-auctions-friday-anchor-separated/coordinator.sqlite3
+
+[Service]
+Type=simple
+User=plebeian-friday
+Group=plebeian-friday-public
+Slice=plebeian-friday.slice
+RuntimeDirectory=plebeian-friday-coordinator-separated
+RuntimeDirectoryMode=0700
+UMask=0077
+EnvironmentFile=/etc/plebeian-auctions-friday/friday.env
+ExecStartPre=/usr/bin/python3 -I -S -B /opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-terminal-ack-r36/bin/verify-friday-separated-target.py --environment /etc/plebeian-auctions-friday/friday.env --application ${FRIDAY_APPLICATION} --service plebeian-friday-coordinator.service
+ExecStart=/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-terminal-ack-r36/bin/plebeian-friday-coordinator serve --application ${FRIDAY_APPLICATION} --database ${FRIDAY_COORDINATOR_DB} --rollback-anchor-database ${FRIDAY_COORDINATOR_ANCHOR_DB} --executor-binary /opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-terminal-ack-r36/bin/plebeian-friday-terminal-executor
+Restart=no
+TimeoutStopSec=15s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/plebeian-auctions-friday/coordinator-v3/runtime /var/lib/plebeian-auctions-friday-anchor-separated
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=384M
+TasksMax=192
+LimitNOFILE=8192
+
+LogNamespace=plebeian-friday-separated
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200

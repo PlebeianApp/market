@@ -8,6 +8,7 @@ import {
 } from './demo-friday-coordinator-cli'
 import {
 	SEPARATED_R10_EXECUTOR_BINARY, SEPARATED_R33_EXECUTOR_BINARY, SEPARATED_R34_EXECUTOR_BINARY, SEPARATED_R35_EXECUTOR_BINARY,
+	SEPARATED_R36_EXECUTOR_BINARY,
 	SEPARATED_SUCCESSOR_EXECUTOR_BINARY,
 } from './demo-friday-separated-constants'
 import type { DemoFridayCoordinatorRecordV2 } from './demo-friday-coordinator-runtime'
@@ -77,12 +78,16 @@ describe('Friday coordinator child protocol', () => {
 		expect(demoFridayCoordinatorArgs([
 			's' + 'erve', ...common, '--executor-binary', SEPARATED_R35_EXECUTOR_BINARY,
 		])).toMatchObject({ mode: 'serve', executor: SEPARATED_R35_EXECUTOR_BINARY })
+		expect(demoFridayCoordinatorArgs([
+			's' + 'erve', ...common, '--executor-binary', SEPARATED_R36_EXECUTOR_BINARY,
+		])).toMatchObject({ mode: 'serve', executor: SEPARATED_R36_EXECUTOR_BINARY })
 		for (const path of [
 			`${SEPARATED_SUCCESSOR_EXECUTOR_BINARY}-near`,
 			`${SEPARATED_R10_EXECUTOR_BINARY}-near`,
 			`${SEPARATED_R33_EXECUTOR_BINARY}-near`,
 			`${SEPARATED_R34_EXECUTOR_BINARY}-near`,
 			`${SEPARATED_R35_EXECUTOR_BINARY}-near`,
+			`${SEPARATED_R36_EXECUTOR_BINARY}-near`,
 			'/opt/plebeian-auctions-friday/releases/r20-deploy-v1/bin/plebeian-friday-terminal-executor-near',
 			'/opt/plebeian-auctions-friday/releases/r20-deploy-v1/bin/../bin/plebeian-friday-terminal-executor',
 			'/opt/plebeian-auctions-friday/releases/r20-deploy-v2/bin/plebeian-friday-terminal-executor',

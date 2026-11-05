@@ -126,6 +126,7 @@ export function createDemoFridayTerminalExecutorPorts(options: {
 	recovery: DemoSigAllRecoveryMintStatePort
 	terminalResponse: DemoSigAllTerminalResponsePort
 	recipientFor(template: DemoMaintainerExactBranchTemplate, recipientActorId: string): DemoMaintainerRecipientDeliveryPort
+	hasRecipientAck?(operationId: string): boolean | Promise<boolean>
 	now?: () => number
 	nowSeconds?: () => number
 }): DemoFridayCoordinatorPorts {
@@ -267,8 +268,33 @@ export function createDemoFridayTerminalExecutorPorts(options: {
 		},
 		async importExact(recordValue) {
 			const held = await context(recordValue)
-			const lifecycle = await options.authorityStore.readLifecycle(held.claim.operationId)
-			if (lifecycle?.status !== 'recipient_imported') return { status: 'recipient_pending' }
+			let lifecycle = await options.authorityStore.readLifecycle(held.claim.operationId)
+			if (lifecycle?.status !== 'recipient_imported') {
+				if (lifecycle?.status !== 'recipient_pending'
+					|| options.hasRecipientAck === undefined
+					|| !await options.hasRecipientAck(held.claim.operationId)) return { status: 'recipient_pending' }
+				try {
+					if (held.claim.schema === 'COCO_DEMO_INTEGRATED_AUTHORITY_CLAIM_V1') {
+						if (held.binding.schema !== 'COCO_DEMO_INTEGRATED_EXECUTION_ROOT_BINDING_V1') throw new Error('DEMO_FRIDAY_EXECUTOR_BINDING: V1 schema changed')
+						await recoverDemoIntegratedOutbidReturn({
+							operationId: held.claim.operationId, template: held.template, offlineIdentity: held.identity,
+							store: options.authorityStore, executor: held.executor, recoveryAudit: audit,
+							executionBinding: held.binding,
+						})
+					} else {
+						if (held.binding.schema !== 'COCO_DEMO_INTEGRATED_EXECUTION_ROOT_BINDING_V2') throw new Error('DEMO_FRIDAY_EXECUTOR_BINDING: V2 schema changed')
+						await recoverDemoIntegratedTerminal({
+							operationId: held.claim.operationId, template: held.template, offlineIdentity: held.identity,
+							store: options.authorityStore, executor: held.executor, recoveryAudit: audit,
+							executionBinding: held.binding,
+						})
+					}
+				} catch (error) {
+					if (!(error instanceof DemoMaintainerRecipientPendingError)) throw error
+				}
+				lifecycle = await options.authorityStore.readLifecycle(held.claim.operationId)
+				if (lifecycle?.status !== 'recipient_imported') return { status: 'recipient_pending' }
+			}
 			const terminal = await terminalDigest(held.record)
 			return { status: 'completed', recipientImportDigest: recipientImportDigest(held.record, terminal.terminalResponseDigest) }
 		},

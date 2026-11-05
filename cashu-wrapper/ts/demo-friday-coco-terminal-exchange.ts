@@ -122,7 +122,12 @@ export class DemoFridayCocoTerminalExchangeSqlite {
 			'SELECT deployment_id,actor,notice_json FROM friday_coco_terminal_exchange WHERE operation_id = ?',
 		).get(request.fundingOperationId)
 		if (row === null) return null
-		if (row.deployment_id !== this.deploymentId || row.actor !== request.actor) fail('notice belongs to another actor or deployment')
+		if (row.deployment_id !== this.deploymentId) fail('notice belongs to another deployment')
+		// A seller and bidder may index the same funding operation while its
+		// terminal notice belongs to only one actor. Hide the other actor's row
+		// as absent so a seller can scan all plans without learning or blocking
+		// on a bidder refund.
+		if (row.actor !== request.actor) return null
 		return exactDemoFridayCocoTerminalNotice(JSON.parse(row.notice_json) as unknown)
 	}
 

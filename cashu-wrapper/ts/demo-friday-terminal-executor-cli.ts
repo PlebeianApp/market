@@ -158,6 +158,7 @@ export async function main(): Promise<void> {
 			recoveryStore: new DemoSigAllRecoverySqliteStore(recoveryDb),
 			mint: createCashuMintSigAllBranchAwarePort({ mintUrl, transportMintUrl: mintTransportUrl }), ...ports,
 			recipientFor(template, recipientActorId) { return terminalExchange.recipientFor(template, recipientActorId) },
+			hasRecipientAck(operationId) { return terminalExchange.hasAck(operationId) },
 		})
 		const durable = record(cli.identity)
 		const outcome = cli.mode === 'execute' ? await executor.executeExact(durable)

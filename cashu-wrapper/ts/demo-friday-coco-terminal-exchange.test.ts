@@ -41,10 +41,10 @@ describe('Friday Coco terminal exchange', () => {
 		expect(exchange.hasAck(notice.operationId)).toBe(true)
 	})
 
-	test('rejects an actor, receipt or acknowledgement-key substitution', () => {
+	test('hides another actor notice and rejects receipt or acknowledgement-key substitution', () => {
 		const exchange = new DemoFridayCocoTerminalExchangeSqlite(new Database(':memory:'), 'friday-blue')
 		exchange.publishExact(notice, RECIPIENT)
-		expect(() => exchange.readExact({ actor: H('3'), fundingOperationId: notice.operationId })).toThrow(/another actor/)
+		expect(exchange.readExact({ actor: H('3'), fundingOperationId: notice.operationId })).toBeNull()
 		const noticeDigest = demoFridayCocoTerminalNoticeDigest(notice)
 		const receipt = { schema: 'COCO_DEMO_RECIPIENT_IMPORT_RECEIPT_V1' as const, operationId: notice.operationId,
 			role: 'refund' as const, recipientPublicKey: RECIPIENT, amount: 12, proofCount: 2, imported: true as const }
