@@ -40,6 +40,8 @@ export interface DemoFrostProcessEnrollment {
 	processIdentity: string
 	/** Dedicated absolute state directory; it must not contain another participant's state. */
 	stateDirectory: string
+	/** Stable public identity of that directory across host-local absolute path reuse. */
+	stateDirectoryIdentity?: string
 	/** Public FROST verifying share only, never a secret key share. */
 	verifyingShare: string
 }
@@ -54,6 +56,7 @@ export interface DemoFrostObservedProcess {
 	processInstanceId: string
 	restartCounter: number
 	stateDirectory: string
+	stateDirectoryIdentity?: string
 	verifyingShare: string
 }
 
@@ -227,8 +230,30 @@ function canonicalEnrollment(enrollment: DemoFrostProcessEnrollment, index: numb
 	}
 	requireText(enrollment.processIdentity, `participants[${index}].processIdentity`)
 	requireDedicatedDirectory(enrollment.stateDirectory, `participants[${index}].stateDirectory`)
+	if (enrollment.stateDirectoryIdentity !== undefined && !HEX_32.test(enrollment.stateDirectoryIdentity)) {
+		refuse('DEMO_FROST_PROCESS_ROSTER', `participants[${index}].stateDirectoryIdentity must be exact lowercase hex`)
+	}
 	requireCompressedKey(enrollment.verifyingShare, `participants[${index}].verifyingShare`)
 	return { ...enrollment }
+}
+
+function requireDirectoryIsolation(enrollments: DemoFrostProcessEnrollment[]): void {
+	const identities = enrollments.map((participant) => participant.stateDirectoryIdentity)
+	if (identities.some((value) => value !== undefined)) {
+		if (identities.some((value) => value === undefined) || new Set(identities).size !== 4) {
+			refuse('DEMO_FROST_PROCESS_ISOLATION', 'all four public state directory identities must be present and distinct')
+		}
+		return
+	}
+	const directories = new Set(enrollments.map((participant) => participant.stateDirectory))
+	if (directories.size !== 4) refuse('DEMO_FROST_PROCESS_ISOLATION', 'all four process state directories must be distinct')
+	for (const [index, directory] of enrollments.map((participant) => participant.stateDirectory).entries()) {
+		for (const [otherIndex, other] of enrollments.map((participant) => participant.stateDirectory).entries()) {
+			if (index !== otherIndex && other.startsWith(`${directory}/`)) {
+				refuse('DEMO_FROST_PROCESS_ISOLATION', 'participant state directories must not contain one another')
+			}
+		}
+	}
 }
 
 export function demoFrostProcessRosterDigest(participants: DemoFrostProcessEnrollment[]): string {
@@ -238,6 +263,8 @@ export function demoFrostProcessRosterDigest(participants: DemoFrostProcessEnrol
 		participantId: participant.participantId,
 		processIdentity: participant.processIdentity,
 		stateDirectory: participant.stateDirectory,
+		...(participant.stateDirectoryIdentity === undefined ? {}
+			: { stateDirectoryIdentity: participant.stateDirectoryIdentity }),
 		verifyingShare: participant.verifyingShare,
 	}))))
 }
@@ -270,11 +297,13 @@ function exactPeer(
 ): DemoFrostObservedProcess {
 	exactKeys(actual, [
 		'participantId', 'processIdentity', 'processInstanceId', 'restartCounter', 'stateDirectory', 'verifyingShare',
+		...(enrollment.stateDirectoryIdentity === undefined ? [] : ['stateDirectoryIdentity']),
 	], field)
 	if (
 		actual.participantId !== enrollment.participantId ||
 		actual.processIdentity !== enrollment.processIdentity ||
 		actual.stateDirectory !== enrollment.stateDirectory ||
+		actual.stateDirectoryIdentity !== enrollment.stateDirectoryIdentity ||
 		actual.verifyingShare !== enrollment.verifyingShare
 	) {
 		refuse('DEMO_FROST_PROCESS_IDENTITY', `${field} differs from the enrolled participant process`)
@@ -292,6 +321,7 @@ function samePeer(left: DemoFrostObservedProcess, right: DemoFrostObservedProces
 		left.processInstanceId === right.processInstanceId &&
 		left.restartCounter === right.restartCounter &&
 		left.stateDirectory === right.stateDirectory &&
+		left.stateDirectoryIdentity === right.stateDirectoryIdentity &&
 		left.verifyingShare === right.verifyingShare
 }
 
@@ -436,18 +466,10 @@ export function createFourSeparatedFrostProcessPorts(options: {
 	const policyPackageDigest = demoFrostParticipantPolicyDigest(policy)
 	const enrollments = options.participants.map((participant, index) => canonicalEnrollment(participant.enrollment, index))
 	const processIdentities = new Set(enrollments.map((participant) => participant.processIdentity))
-	const directories = new Set(enrollments.map((participant) => participant.stateDirectory))
 	const verifyingShareXCoordinates = new Set(enrollments.map((participant) => participant.verifyingShare.slice(2)))
 	if (processIdentities.size !== 4) refuse('DEMO_FROST_PROCESS_ISOLATION', 'all four process identities must be distinct')
-	if (directories.size !== 4) refuse('DEMO_FROST_PROCESS_ISOLATION', 'all four process state directories must be distinct')
+	requireDirectoryIsolation(enrollments)
 	if (verifyingShareXCoordinates.size !== 4) refuse('DEMO_FROST_PROCESS_ROSTER', 'all four public verifying shares must have distinct x-coordinates')
-	for (const [index, directory] of enrollments.map((participant) => participant.stateDirectory).entries()) {
-		for (const [otherIndex, other] of enrollments.map((participant) => participant.stateDirectory).entries()) {
-			if (index !== otherIndex && other.startsWith(`${directory}/`)) {
-				refuse('DEMO_FROST_PROCESS_ISOLATION', 'participant state directories must not contain one another')
-			}
-		}
-	}
 	const rosterDigest = demoFrostProcessRosterDigest(enrollments)
 	const observedInstances = new Map<string, Map<DemoParticipantId, string>>()
 

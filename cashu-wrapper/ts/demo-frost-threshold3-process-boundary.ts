@@ -99,10 +99,12 @@ function exactBinding(actual: DemoFrostProcessBinding, expected: DemoFrostProces
 }
 
 function exactPeer(actual: DemoFrostObservedProcess, participant: DemoFrostProcessParticipant): DemoFrostObservedProcess {
-	exactKeys(actual, ['participantId', 'processIdentity', 'processInstanceId', 'restartCounter', 'stateDirectory', 'verifyingShare'], 'peer')
 	const expected = participant.enrollment
+	exactKeys(actual, ['participantId', 'processIdentity', 'processInstanceId', 'restartCounter', 'stateDirectory', 'verifyingShare',
+		...(expected.stateDirectoryIdentity === undefined ? [] : ['stateDirectoryIdentity'])], 'peer')
 	if (actual.participantId !== expected.participantId || actual.processIdentity !== expected.processIdentity
-		|| actual.stateDirectory !== expected.stateDirectory || actual.verifyingShare !== expected.verifyingShare
+		|| actual.stateDirectory !== expected.stateDirectory
+		|| actual.stateDirectoryIdentity !== expected.stateDirectoryIdentity || actual.verifyingShare !== expected.verifyingShare
 		|| actual.processInstanceId.length === 0 || !Number.isSafeInteger(actual.restartCounter) || actual.restartCounter < 0) {
 		refuse('DEMO_FROST_T3_PROCESS_IDENTITY', 'transport-attested process differs from enrollment')
 	}
@@ -112,7 +114,8 @@ function exactPeer(actual: DemoFrostObservedProcess, participant: DemoFrostProce
 function samePeer(left: DemoFrostObservedProcess, right: DemoFrostObservedProcess): boolean {
 	return left.participantId === right.participantId && left.processIdentity === right.processIdentity
 		&& left.processInstanceId === right.processInstanceId && left.restartCounter === right.restartCounter
-		&& left.stateDirectory === right.stateDirectory && left.verifyingShare === right.verifyingShare
+		&& left.stateDirectory === right.stateDirectory && left.stateDirectoryIdentity === right.stateDirectoryIdentity
+		&& left.verifyingShare === right.verifyingShare
 }
 
 async function bounded<T>(participantId: DemoParticipantId, round: string, timeoutMs: number, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
@@ -183,14 +186,20 @@ export function createDemoThreshold3SeparatedProcessPorts(options: {
 	const policyPackageDigest = demoFrostParticipantPolicyDigest(policy)
 	const enrollments = options.participants.map((participant) => ({ ...participant.enrollment }))
 	const rosterDigest = demoFrostProcessRosterDigest(enrollments)
-	if (new Set(enrollments.map((value) => value.processIdentity)).size !== 4
-		|| new Set(enrollments.map((value) => value.stateDirectory)).size !== 4
+	const directoryIdentities = enrollments.map((value) => value.stateDirectoryIdentity)
+	const usesDirectoryIdentities = directoryIdentities.some((value) => value !== undefined)
+	const directoriesAreIsolated = usesDirectoryIdentities
+		? directoryIdentities.every((value) => value !== undefined) && new Set(directoryIdentities).size === 4
+		: new Set(enrollments.map((value) => value.stateDirectory)).size === 4
+	if (new Set(enrollments.map((value) => value.processIdentity)).size !== 4 || !directoriesAreIsolated
 		|| new Set(enrollments.map((value) => value.verifyingShare.slice(2))).size !== 4) {
 		refuse('DEMO_FROST_T3_PROCESS_ISOLATION', 'four distinct process identities, directories, and verifying shares are required')
 	}
-	for (const [index, directory] of enrollments.map((value) => value.stateDirectory).entries()) {
-		for (const [otherIndex, other] of enrollments.map((value) => value.stateDirectory).entries()) {
-			if (index !== otherIndex && other.startsWith(`${directory}/`)) refuse('DEMO_FROST_T3_PROCESS_ISOLATION', 'state directories must not contain one another')
+	if (!usesDirectoryIdentities) {
+		for (const [index, directory] of enrollments.map((value) => value.stateDirectory).entries()) {
+			for (const [otherIndex, other] of enrollments.map((value) => value.stateDirectory).entries()) {
+				if (index !== otherIndex && other.startsWith(`${directory}/`)) refuse('DEMO_FROST_T3_PROCESS_ISOLATION', 'state directories must not contain one another')
+			}
 		}
 	}
 	const observedInstances = new Map<string, Map<DemoParticipantId, string>>()

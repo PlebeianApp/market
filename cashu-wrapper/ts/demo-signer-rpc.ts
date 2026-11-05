@@ -292,6 +292,8 @@ export function createDemoSignerRpcTransport(options: DemoSignerRpcTransportOpti
 		|| pinned.participantId !== options.enrollment.participantId
 		|| pinned.processIdentity !== options.enrollment.processIdentity
 		|| pinned.stateDirectory !== options.enrollment.stateDirectory
+		|| options.enrollment.stateDirectoryIdentity !== undefined
+			&& pinned.stateDirectoryIdentity !== options.enrollment.stateDirectoryIdentity
 		|| pinned.verifyingShare !== options.enrollment.verifyingShare) {
 		throw new Error('DEMO_SIGNER_RPC_ENROLLMENT: invalid signer identity or participant')
 	}

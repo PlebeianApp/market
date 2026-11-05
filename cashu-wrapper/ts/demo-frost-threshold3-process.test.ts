@@ -164,6 +164,36 @@ function request(sessionByte: number): DemoRoundOneRequest {
 }
 
 describe('concrete threshold-three process adapters', () => {
+	test('uses signed directory identities to isolate equal host-local absolute paths', () => {
+		const configured = participants({ roundTwo: 0 })
+		for (const [index, participant] of configured.entries()) {
+			const stateDirectoryIdentity = String(index + 1).padStart(64, '0')
+			participant.enrollment = { ...participant.enrollment,
+				stateDirectory: '/var/lib/plebeian-auctions-friday/frost-v3/keyset-v3/state', stateDirectoryIdentity }
+			const roundOne = participant.transport.roundOne.bind(participant.transport)
+			const roundTwo = participant.transport.roundTwo.bind(participant.transport)
+			participant.transport.roundOne = async (value, options) => {
+				const exchange = await roundOne(value, options)
+				return { ...exchange, peer: { ...exchange.peer,
+					stateDirectory: participant.enrollment.stateDirectory, stateDirectoryIdentity } }
+			}
+			participant.transport.roundTwo = async (value, options) => {
+				const exchange = await roundTwo(value, options)
+				return { ...exchange, peer: { ...exchange.peer,
+					stateDirectory: participant.enrollment.stateDirectory, stateDirectoryIdentity } }
+			}
+		}
+		expect(() => createDemoThreshold3SeparatedProcessPorts({
+			committeeKeysetId: 'threshold-three-keyset', committeeKeysetVersion: '1', requestTimeoutMs: 100,
+			policy, participants: configured,
+		})).not.toThrow()
+		configured[1].enrollment.stateDirectoryIdentity = configured[0].enrollment.stateDirectoryIdentity
+		expect(() => createDemoThreshold3SeparatedProcessPorts({
+			committeeKeysetId: 'threshold-three-keyset', committeeKeysetVersion: '1', requestTimeoutMs: 100,
+			policy, participants: configured,
+		})).toThrow(/four distinct process identities, directories, and verifying shares/)
+	})
+
 	test('durably maps authority recovery root to the concrete Rust authorization root before exposing federation', async () => {
 		const configuredParticipants = participants({ roundTwo: 0 })
 		const outbidPolicy = {

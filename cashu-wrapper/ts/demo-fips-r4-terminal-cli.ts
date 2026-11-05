@@ -353,13 +353,15 @@ export function createDemoFridayTerminalParticipants(
 			|| !schnorr.verify(hexToBytes(enrollment.signature), hexToBytes(expected), hexToBytes(participant.signerIdentity))) {
 			throw new Error('DEMO_FIPS_R4_ENROLLMENT: signer enrollment invalid')
 		}
+		const signerBinding = Object.freeze(structuredClone(enrollment.binding))
 		const heldEnrollment = {
 			participantId: participant.participantId, processIdentity: participant.signerIdentity,
-			stateDirectory: participant.stateDirectory, verifyingShare: participant.verifyingShare,
+			stateDirectory: participant.stateDirectory,
+			stateDirectoryIdentity: signerBinding.stateDirectoryIdentity,
+			verifyingShare: participant.verifyingShare,
 		}
   // One public binding feeds both transport and health. A later file change
   // cannot silently refresh health while the active transport stays pinned.
-  const signerBinding = Object.freeze(structuredClone(enrollment.binding))
 		return {
    signerBinding,
 			enrollment: heldEnrollment,
