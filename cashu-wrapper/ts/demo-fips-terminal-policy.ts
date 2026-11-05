@@ -10,8 +10,8 @@ import { createDemoCometDisplacementVerifier, createLoopbackCometReader } from '
 import { createDemoFridayFundingAbortFinalityVerifier } from './demo-friday-funding-abort-comet'
 import { type DemoDispositionSignerAnchor } from './demo-disposition-signer-anchor'
 import { demoIntegratedDisplacementFinalityDigest } from './demo-integrated-authority'
-import { demoIntegratedCloseDigest } from './demo-integrated-close-authority'
-import { demoIntegratedRejectedFundingDigest } from './demo-integrated-rejected-authority'
+import { demoIntegratedCloseFinalityDigest } from './demo-integrated-close-authority'
+import { demoIntegratedRejectedFundingFinalityDigest } from './demo-integrated-rejected-authority'
 import {
 	demoFrostParticipantPolicyDigest,
 	type DemoFrostParticipantLocalEvidence,
@@ -136,8 +136,8 @@ export function createDemoFipsTerminalPolicyPorts(options: {
 						operationId: certificate.displacedFundingOperationId,
 						bidId: certificate.displacedFundingOperationId, bidEventId: certificate.displacedFundingOperationId,
 						bidderActorId: certificate.displacedBidderActorId, role: 'refund' as const,
-						outcomeHeight: certificate.displacementState.stateHeight,
-						appStateHash: certificate.displacementState.stateAppHash,
+						outcomeHeight: certificate.commits[2].height,
+						appStateHash: certificate.commits[2].appHash,
 						amount: certificate.displacedPoolAmount, locktime: certificate.timing.locktime,
 						proofStateRefs: [...certificate.proofStateRefs], recipientPublicKey: policy.recipientPublicKey,
 					}
@@ -150,12 +150,12 @@ export function createDemoFipsTerminalPolicyPorts(options: {
 						rejectionHeight: lookup.eventHeight,
 					})
 					return {
-						evidenceDigest: demoIntegratedRejectedFundingDigest(certificate), network: certificate.network,
+						evidenceDigest: demoIntegratedRejectedFundingFinalityDigest(certificate), network: certificate.network,
 						chainId: certificate.chainId, auctionId: certificate.auctionId,
 						operationId: certificate.fundingOperationId, bidId: certificate.fundingOperationId,
 						bidEventId: certificate.fundingOperationId, bidderActorId: certificate.bidderActorId,
-						role: 'refund' as const, outcomeHeight: certificate.fundingState.stateHeight,
-						appStateHash: certificate.fundingState.stateAppHash, amount: certificate.poolAmount,
+						role: 'refund' as const, outcomeHeight: certificate.commits[2].height,
+						appStateHash: certificate.commits[2].appHash, amount: certificate.poolAmount,
 						locktime: certificate.timing.locktime, proofStateRefs: [...certificate.proofStateRefs],
 						recipientPublicKey: policy.recipientPublicKey,
 					}
@@ -166,12 +166,12 @@ export function createDemoFipsTerminalPolicyPorts(options: {
 					auctionId: policy.auctionId, closeHeight: lookup.eventHeight,
 				})
 				return {
-					evidenceDigest: demoIntegratedCloseDigest(certificate), network: certificate.network,
+					evidenceDigest: demoIntegratedCloseFinalityDigest(certificate), network: certificate.network,
 					chainId: certificate.chainId, auctionId: certificate.auctionId,
 					operationId: certificate.fundingOperationId, bidId: certificate.fundingOperationId,
 					bidEventId: certificate.fundingOperationId, bidderActorId: certificate.bidderActorId,
 					role: certificate.cause === 'winner' ? 'winner_settlement' as const : 'refund' as const,
-					outcomeHeight: certificate.closeState.stateHeight, appStateHash: certificate.closeState.stateAppHash,
+					outcomeHeight: certificate.commits[2].height, appStateHash: certificate.commits[2].appHash,
 					amount: certificate.poolAmount, locktime: certificate.timing.locktime,
 					proofStateRefs: [...certificate.proofStateRefs], recipientPublicKey: policy.recipientPublicKey,
 				}

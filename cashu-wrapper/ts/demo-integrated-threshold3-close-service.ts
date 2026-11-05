@@ -1,7 +1,7 @@
 /** Runnable winner-payout or reserve-unmet return composition after close. */
 import {
 	deriveAndAuthorizeDemoIntegratedClose,
-	demoIntegratedCloseDigest,
+	demoIntegratedCloseFinalityDigest,
 	type DemoCertifiedCloseRequestV1,
 	type DemoCertifiedCloseV1,
 	type DemoCertifiedCloseVerifierPort,
@@ -78,8 +78,8 @@ export function demoIntegratedClosePolicyMismatchFields(
 		[policy.bidId !== certificate.fundingOperationId, 'bid'],
 		[policy.bidEventId !== certificate.fundingOperationId, 'bid_event'],
 		[policy.bidderActorId !== certificate.bidderActorId, 'bidder'],
-		[policy.outcomeHeight !== certificate.closeState.stateHeight, 'outcome_height'],
-		[policy.appStateHash !== certificate.closeState.stateAppHash, 'app_state_hash'],
+		[policy.outcomeHeight !== certificate.commits[2].height, 'outcome_height'],
+		[policy.appStateHash !== certificate.commits[2].appHash, 'app_state_hash'],
 		[policy.amount !== certificate.poolAmount, 'amount'],
 		[policy.locktime !== certificate.timing.locktime, 'locktime'],
 		[policy.activeKeysetId !== certificate.activeKeysetId, 'active_keyset'],
@@ -97,7 +97,7 @@ export function assertDemoIntegratedExactClosePolicy(
 	template: DemoMaintainerExactBranchTemplate,
 	policy: DemoFrostParticipantPolicyPackage,
 ): void {
-	const evidenceDigest = demoIntegratedCloseDigest(certificate)
+	const evidenceDigest = demoIntegratedCloseFinalityDigest(certificate)
 	const failed = demoIntegratedClosePolicyMismatchFields(certificate, template, policy, evidenceDigest)
 	if (failed.length !== 0) {
 		// Fixed field names are safe to log. Values may contain private Cashu
@@ -134,8 +134,8 @@ async function preparedDemoIntegratedThreshold3Close(
 		chainId: certificate.chainId, auctionId: certificate.auctionId,
 		operationId: certificate.fundingOperationId, bidId: certificate.fundingOperationId,
 		bidEventId: certificate.fundingOperationId, bidderActorId: certificate.bidderActorId,
-		role: claim.role, amount: certificate.poolAmount, outcomeHeight: certificate.closeState.stateHeight,
-		appStateHash: certificate.closeState.stateAppHash,
+		role: claim.role, amount: certificate.poolAmount, outcomeHeight: claim.outcomeHeight,
+		appStateHash: claim.outcomeStateHash,
 		policyPackageDigest: demoFrostParticipantPolicyDigest(policy),
 		closureEvidenceDigest: policy.certifiedClosure.evidenceDigest,
 		signedBidEvidenceDigest: policy.signedBid.evidenceDigest,

@@ -160,6 +160,18 @@ function validateCertificate(value: DemoCertifiedCloseV1): DemoCertifiedCloseV1 
 
 export function demoIntegratedCloseDigest(value: DemoCertifiedCloseV1): string { return digest(validateCertificate(value)) }
 
+/**
+ * Stable terminal-policy identity for a certified close. Every participant
+ * still authenticates a current state witness; the moving witness is excluded
+ * because later valid reads observe later heights after the same final close.
+ */
+export function demoIntegratedCloseFinalityDigest(value: DemoCertifiedCloseV1): string {
+	const certificate = validateCertificate(value)
+	const { closeState: _currentObservation, ...stableFinality } = certificate
+	if (stableFinality.sellerPaymentPublicKey === undefined) delete stableFinality.sellerPaymentPublicKey
+	return digest(['COCO_DEMO_CLOSE_FINALITY_V1', stableFinality])
+}
+
 export async function deriveAndAuthorizeDemoIntegratedClose(options: {
 	request: DemoCertifiedCloseRequestV1
 	template: DemoMaintainerExactBranchTemplate
@@ -229,12 +241,13 @@ export async function deriveAndAuthorizeDemoIntegratedClose(options: {
 		|| template.committeeKeysetVersion !== receipt.committee_keyset_version) {
 		refuse('DEMO_CLOSE_ADMISSION_TEMPLATE', 'terminal template is not the exact package bound at admission')
 	}
-	const outcomeEvidenceDigest = demoIntegratedCloseDigest(certificate)
+	const outcomeEvidenceDigest = demoIntegratedCloseFinalityDigest(certificate)
+	const finality = certificate.commits[2]
 	const claim: DemoIntegratedTerminalAuthorityClaimV2 = {
 		schema: 'COCO_DEMO_INTEGRATED_TERMINAL_AUTHORITY_CLAIM_V2', operationId: receipt.funding_operation_id,
 		operationRoot: templateDigest, network: certificate.network, chainId: certificate.chainId,
 		auctionId: certificate.auctionId, bidId: receipt.funding_operation_id, successorBidId: '', cause: certificate.cause,
-		role, outcomeHeight: certificate.closeState.stateHeight, outcomeStateHash: certificate.closeState.stateAppHash,
+		role, outcomeHeight: finality.height, outcomeStateHash: finality.appHash,
 		outcomeEvidenceDigest, templateDigest, cashuSigAllDigest, outputsDigest: demoOutputsDigest(template.outputs),
 		proofStateRefs, poolAmount: certificate.poolAmount, admissionOperationId: receipt.funding_operation_id,
 		admissionReceiptDigest: demoIntegratedFundingAnyReceiptDigest(receipt), committeeKeysetId: receipt.committee_keyset_id,

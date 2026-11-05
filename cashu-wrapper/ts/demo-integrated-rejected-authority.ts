@@ -86,6 +86,13 @@ export function demoIntegratedRejectedFundingDigest(value: DemoCertifiedRejected
 	return digest(validateCertificate(value))
 }
 
+/** Stable rejected-funding identity; excludes the moving current-state witness. */
+export function demoIntegratedRejectedFundingFinalityDigest(value: DemoCertifiedRejectedFundingV1): string {
+	const certificate = validateCertificate(value)
+	const { fundingState: _currentObservation, ...stableFinality } = certificate
+	return digest(['COCO_DEMO_REJECTED_FUNDING_FINALITY_V1', stableFinality])
+}
+
 export async function deriveAndAuthorizeDemoIntegratedRejectedReturn(options: {
 	request: DemoCertifiedRejectedFundingRequestV1
 	template: DemoMaintainerExactBranchTemplate
@@ -141,13 +148,14 @@ export async function deriveAndAuthorizeDemoIntegratedRejectedReturn(options: {
 		|| template.committeeKeysetVersion !== receipt.committee_keyset_version) {
 		refuse('DEMO_REJECT_ADMISSION', 'return template is not the exact package admitted by the committee')
 	}
+	const finality = certificate.commits[2]!
 	const claim: DemoIntegratedTerminalAuthorityClaimV2 = {
 		schema: 'COCO_DEMO_INTEGRATED_TERMINAL_AUTHORITY_CLAIM_V2', operationId: certificate.fundingOperationId,
 		operationRoot: templateDigest, network: certificate.network, chainId: certificate.chainId,
 		auctionId: certificate.auctionId, bidId: certificate.fundingOperationId, successorBidId: '',
-		cause: 'rejected', role: 'refund', outcomeHeight: certificate.fundingState.stateHeight,
-		outcomeStateHash: certificate.fundingState.stateAppHash,
-		outcomeEvidenceDigest: demoIntegratedRejectedFundingDigest(certificate), templateDigest, cashuSigAllDigest,
+		cause: 'rejected', role: 'refund', outcomeHeight: finality.height,
+		outcomeStateHash: finality.appHash,
+		outcomeEvidenceDigest: demoIntegratedRejectedFundingFinalityDigest(certificate), templateDigest, cashuSigAllDigest,
 		outputsDigest: demoOutputsDigest(template.outputs), proofStateRefs, poolAmount: certificate.poolAmount,
 		admissionOperationId: certificate.fundingOperationId,
 		admissionReceiptDigest: demoIntegratedFundingV4ReceiptDigest(receipt),

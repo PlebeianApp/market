@@ -39,7 +39,7 @@ import type { DemoFrostProcessParticipant } from './demo-frost-process-boundary'
 import { admitDemoIntegratedThreshold3Bid } from './demo-integrated-admission-service'
 import { demoIntegratedTiming } from './demo-integrated-authority'
 import { DemoIntegratedAuthoritySqliteStore } from './demo-integrated-authority-sqlite'
-import { demoIntegratedCloseDigest } from './demo-integrated-close-authority'
+import { demoIntegratedCloseFinalityDigest } from './demo-integrated-close-authority'
 import { DemoMaintainerEncryptedSqliteStore, DemoSigAllRecoverySqliteStore } from './demo-integrated-private-sqlite'
 import { executeDemoIntegratedThreshold3Terminal } from './demo-integrated-threshold3-terminal-service'
 import type { DemoIntegratedRecoveryAuditPort } from './demo-integrated-outbid-return'
@@ -501,7 +501,7 @@ async function settleCase(options: {
 		auctionId: certificate.auctionId, operationId: certificate.fundingOperationId,
 		bidId: certificate.fundingOperationId, bidEventId: certificate.fundingOperationId,
 		bidderActorId: certificate.bidderActorId, role: template.role,
-		outcomeHeight: certificate.closeState.stateHeight, appStateHash: certificate.closeState.stateAppHash,
+		outcomeHeight: certificate.commits[2].height, appStateHash: certificate.commits[2].appHash,
 		amount: certificate.poolAmount, inputFee: 0, inputFeePpk: 0, mintUrl: template.mintUrl, unit: 'sat',
 		activeKeysetId: template.mintSeal.activeSatKeysetId, locktime: template.locktime,
 		bidderPublicKey: template.bidderPublicKey, committeePublicKey: template.committeePublicKey,
@@ -517,7 +517,7 @@ async function settleCase(options: {
 		actorPackageAuthorization: structuredClone(prepared.branch === 'winner_payout'
 			? record.bundle.actorWinnerAuthorization : record.bundle.actorReturnAuthorization),
 		certifiedClosure: {
-			evidenceDigest: demoIntegratedCloseDigest(certificate),
+			evidenceDigest: demoIntegratedCloseFinalityDigest(certificate),
 			evidence: { schema: 'COCO_DEMO_FROST_PARTICIPANT_LOCAL_CLOSURE_EVIDENCE_V2', source: 'participant-local', kind: 'close', eventHeight: options.closeHeight },
 		},
 		signedBid: { evidenceDigest: signedBid.evidenceDigest, evidence: { schema: 'COCO_DEMO_FROST_PARTICIPANT_LOCAL_SIGNED_BID_EVIDENCE_V1', source: 'participant-local' } },

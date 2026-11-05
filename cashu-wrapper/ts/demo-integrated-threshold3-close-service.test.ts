@@ -8,6 +8,7 @@ function fixture() {
 		fundingOperationId: 'operation', bidderActorId: 'a'.repeat(64), poolAmount: 100,
 		activeKeysetId: 'keyset', proofStateRefs: ['proof-b', 'proof-a'],
 		timing: { locktime: 500 }, closeState: { stateHeight: 10, stateAppHash: 'b'.repeat(64) },
+		commits: [{}, {}, { height: 10, appHash: 'b'.repeat(64) }],
 	} as never
 	const template = {
 		recipientPublicKey: 'recipient', templateDigest: 'c'.repeat(64), cashuSigAllDigest: 'd'.repeat(64),
@@ -27,6 +28,8 @@ function fixture() {
 describe('integrated threshold close policy diagnostics', () => {
 	test('accepts the exact policy regardless of proof reference order', () => {
 		const value = fixture()
+		expect(demoIntegratedClosePolicyMismatchFields(value.certificate, value.template, value.policy, 'evidence')).toEqual([])
+		value.certificate.closeState = { stateHeight: 99, stateAppHash: 'f'.repeat(64) }
 		expect(demoIntegratedClosePolicyMismatchFields(value.certificate, value.template, value.policy, 'evidence')).toEqual([])
 	})
 

@@ -6,7 +6,7 @@ import type {
 } from './demo-comet-rejected-funding-verifier'
 import {
 	deriveAndAuthorizeDemoIntegratedRejectedReturn,
-	demoIntegratedRejectedFundingDigest,
+	demoIntegratedRejectedFundingFinalityDigest,
 } from './demo-integrated-rejected-authority'
 import type { DemoIntegratedTerminalAuthorityStore } from './demo-integrated-authority'
 import type { DemoIntegratedRecoveryAuditPort } from './demo-integrated-outbid-return'
@@ -61,14 +61,14 @@ function exactPolicy(
 		|| policy.auctionId !== certificate.auctionId || policy.operationId !== certificate.fundingOperationId
 		|| policy.bidId !== certificate.fundingOperationId || policy.bidEventId !== certificate.fundingOperationId
 		|| policy.bidderActorId !== certificate.bidderActorId
-		|| policy.outcomeHeight !== certificate.fundingState.stateHeight
-		|| policy.appStateHash !== certificate.fundingState.stateAppHash
+		|| policy.outcomeHeight !== certificate.commits[2]!.height
+		|| policy.appStateHash !== certificate.commits[2]!.appHash
 		|| policy.amount !== certificate.poolAmount || policy.locktime !== certificate.timing.locktime
 		|| policy.activeKeysetId !== certificate.activeKeysetId || policy.inputFeePpk !== 0
 		|| policy.recipientPublicKey !== template.recipientPublicKey
 		|| policy.packageDigest !== template.templateDigest || policy.cashuSigAllDigest !== template.cashuSigAllDigest
 		|| JSON.stringify(policyRefs) !== JSON.stringify(refs)
-		|| policy.certifiedClosure.evidenceDigest !== demoIntegratedRejectedFundingDigest(certificate)) {
+		|| policy.certifiedClosure.evidenceDigest !== demoIntegratedRejectedFundingFinalityDigest(certificate)) {
 		throw new Error('DEMO_INTEGRATED_T3_REJECTED_POLICY: threshold policy differs from participant-local rejected history')
 	}
 }
@@ -92,7 +92,7 @@ export async function queueDemoIntegratedThreshold3RejectedReturn(
 		chainId: certificate.chainId, auctionId: certificate.auctionId, operationId: certificate.fundingOperationId,
 		bidId: certificate.fundingOperationId, bidEventId: certificate.fundingOperationId,
 		bidderActorId: certificate.bidderActorId, role: 'refund', amount: certificate.poolAmount,
-		outcomeHeight: certificate.fundingState.stateHeight, appStateHash: certificate.fundingState.stateAppHash,
+		outcomeHeight: claim.outcomeHeight, appStateHash: claim.outcomeStateHash,
 		policyPackageDigest: demoFrostParticipantPolicyDigest(policy),
 		closureEvidenceDigest: policy.certifiedClosure.evidenceDigest,
 		signedBidEvidenceDigest: policy.signedBid.evidenceDigest,

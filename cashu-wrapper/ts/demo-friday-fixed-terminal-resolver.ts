@@ -22,12 +22,12 @@ import type {
 	DemoFridayFundingAbortCapsuleTerminalStore,
 } from './demo-friday-funding-abort-capsule'
 import {
-	demoIntegratedCloseDigest,
+	demoIntegratedCloseFinalityDigest,
 	type DemoCertifiedCloseV1,
 } from './demo-integrated-close-authority'
-import { demoIntegratedRejectedFundingDigest } from './demo-integrated-rejected-authority'
+import { demoIntegratedRejectedFundingFinalityDigest } from './demo-integrated-rejected-authority'
 import {
-	demoIntegratedDisplacementDigest,
+	demoIntegratedDisplacementFinalityDigest,
 	type DemoCertifiedDisplacementV1,
 } from './demo-integrated-authority'
 import type { DemoIntegratedTerminalAuthorityStore } from './demo-integrated-authority'
@@ -352,8 +352,7 @@ async function commonPolicy(options: {
 		? certificate.displacedFundingOperationId : certificate.fundingOperationId
 	const bidderActorId = 'displacedBidderActorId' in certificate
 		? certificate.displacedBidderActorId : certificate.bidderActorId
-	const state = 'displacementState' in certificate ? certificate.displacementState
-		: 'fundingState' in certificate ? certificate.fundingState : certificate.closeState
+	const finality = certificate.commits[2]
 	const amount = 'displacedPoolAmount' in certificate ? certificate.displacedPoolAmount : certificate.poolAmount
 	const signedBid = await deriveDemoCometSignedBidEvidence({
 		reader: options.reader, validatorsHash: pins.validatorsHash, minimumHeight: state.stateHeight,
@@ -379,8 +378,8 @@ async function commonPolicy(options: {
 	const policy: DemoFrostParticipantPolicyPackage = {
 		schema: 'COCO_DEMO_FROST_PARTICIPANT_POLICY_V1', network: pins.network, chainId: pins.chainId,
 		auctionId: certificate.auctionId, operationId, bidId: operationId, bidEventId: operationId,
-		bidderActorId, role: template.role, outcomeHeight: state.stateHeight,
-		appStateHash: state.stateAppHash, amount, inputFee: 0, inputFeePpk: 0,
+		bidderActorId, role: template.role, outcomeHeight: finality.height,
+		appStateHash: finality.appHash, amount, inputFee: 0, inputFeePpk: 0,
 		mintUrl: template.mintUrl, unit: 'sat', activeKeysetId: template.mintSeal.activeSatKeysetId,
 		locktime: template.locktime, bidderPublicKey: template.bidderPublicKey,
 		committeePublicKey: template.committeePublicKey,
@@ -542,8 +541,10 @@ export function createDemoFridayFixedTerminalResolver(options: {
 				fail('certified outcome differs from terminal descriptor')
 			}
 			const evidenceDigest = 'displacementState' in certificate
-				? demoIntegratedDisplacementDigest(certificate)
-				: 'fundingState' in certificate ? demoIntegratedRejectedFundingDigest(certificate) : demoIntegratedCloseDigest(certificate)
+				? demoIntegratedDisplacementFinalityDigest(certificate)
+				: 'fundingState' in certificate
+					? demoIntegratedRejectedFundingFinalityDigest(certificate)
+					: demoIntegratedCloseFinalityDigest(certificate)
 			const policy = await commonPolicy({
 				template, winner: record.bundle.winner, certificate, evidenceDigest,
 				evidenceKind: 'displacementState' in certificate ? 'outbid' : 'fundingState' in certificate ? 'rejected' : 'close',

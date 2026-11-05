@@ -11,7 +11,7 @@
  */
 import {
 	deriveAndAuthorizeDemoCooperativeOutbidReturn,
-	demoIntegratedDisplacementDigest,
+	demoIntegratedDisplacementFinalityDigest,
 	type DemoCertifiedDisplacementV1,
 	type DemoCertifiedDisplacementRequestV1,
 	type DemoCertifiedDisplacementVerifierPort,
@@ -79,15 +79,15 @@ function exactOutbidPolicy(
 	template: DemoMaintainerExactBranchTemplate,
 	policy: DemoFrostParticipantPolicyPackage,
 ): void {
-	const certificateDigest = demoIntegratedDisplacementDigest(certificate)
+	const certificateDigest = demoIntegratedDisplacementFinalityDigest(certificate)
 	const proofRefs = [...certificate.proofStateRefs].sort()
 	const policyRefs = policy.deposits.map(({ proofStateRef }) => proofStateRef).sort()
 	if (policy.role !== 'refund' || policy.network !== certificate.network || policy.chainId !== certificate.chainId
 		|| policy.auctionId !== certificate.auctionId || policy.operationId !== certificate.displacedFundingOperationId
 		|| policy.bidId !== certificate.displacedFundingOperationId || policy.bidEventId !== certificate.displacedFundingOperationId
 		|| policy.bidderActorId !== certificate.displacedBidderActorId
-		|| policy.outcomeHeight !== certificate.displacementState.stateHeight
-		|| policy.appStateHash !== certificate.displacementState.stateAppHash
+		|| policy.outcomeHeight !== certificate.commits[2].height
+		|| policy.appStateHash !== certificate.commits[2].appHash
 		|| policy.amount !== certificate.displacedPoolAmount || policy.locktime !== certificate.timing.locktime
 		|| policy.activeKeysetId !== certificate.activeKeysetId || policy.inputFeePpk !== 0
 		|| policy.recipientPublicKey !== template.recipientPublicKey
@@ -126,7 +126,7 @@ async function preparedDemoIntegratedThreshold3OutbidReturn(
 		operationId: certificate.displacedFundingOperationId, bidId: certificate.displacedFundingOperationId,
 		bidEventId: certificate.displacedFundingOperationId, bidderActorId: certificate.displacedBidderActorId,
 		role: 'refund', amount: certificate.displacedPoolAmount,
-		outcomeHeight: certificate.displacementState.stateHeight, appStateHash: certificate.displacementState.stateAppHash,
+		outcomeHeight: certificate.commits[2].height, appStateHash: certificate.commits[2].appHash,
 		policyPackageDigest: demoFrostParticipantPolicyDigest(policy),
 		closureEvidenceDigest: policy.certifiedClosure.evidenceDigest,
 		signedBidEvidenceDigest: policy.signedBid.evidenceDigest,

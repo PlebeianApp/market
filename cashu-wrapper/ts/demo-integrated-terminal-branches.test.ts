@@ -11,6 +11,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 
 import { demoIntegratedTiming, type DemoIntegratedAuthorityClaim, type DemoIntegratedTerminalAuthorityClaimV2 } from './demo-integrated-authority'
+import { demoIntegratedCloseFinalityDigest } from './demo-integrated-close-authority'
 import { DemoIntegratedAuthoritySqliteStore } from './demo-integrated-authority-sqlite'
 import { createDemoCometCloseVerifier, type DemoCometCloseVerifierOptions } from './demo-comet-close-verifier'
 import type { DemoCometStateV1, DemoParticipantConsensusReader } from './demo-comet-displacement-verifier'
@@ -129,6 +130,26 @@ describe('integrated terminal branch fixtures (prepared, not yet executed in the
 		expect(certificate.cause).toBe(cause)
 		expect(certificate.commits).toHaveLength(3)
 		expect(certificate.poolAmount).toBe(2_500)
+	})
+
+	test('keeps close finality stable across later authenticated state observations', async () => {
+		const fixture = closeFixture('winner')
+		const certificate = await fixture.verifier.verifyAndDerive({
+			network: 'fake-only', chainId: 'friday-chain', genesisHash: hex('f'),
+			validatorRosterVersion: 'roster-1', auctionId: 'auction-terminal', closeHeight: fixture.height,
+		})
+		const later = structuredClone(certificate)
+		later.closeState = {
+			stateHeight: certificate.closeState.stateHeight + 5,
+			stateAppHash: hex('9'),
+			bindingCommit: {
+				height: certificate.closeState.stateHeight + 6,
+				blockTime: certificate.closeState.bindingCommit.blockTime + 5,
+				blockHash: hex('8'), appHash: hex('9'),
+			},
+		}
+		expect(later.closeState.stateAppHash).not.toBe(certificate.closeState.stateAppHash)
+		expect(demoIntegratedCloseFinalityDigest(later)).toBe(demoIntegratedCloseFinalityDigest(certificate))
 	})
 
 	test('keeps outbid, winner, and no-sale fixtures in one global proof/operation exclusion domain', async () => {
