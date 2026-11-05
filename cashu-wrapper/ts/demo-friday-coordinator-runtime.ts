@@ -49,10 +49,14 @@ export type DemoFridayRecoveryOutcome =
 	| { status: 'retry_ready' }
 	| { status: 'recipient_pending'; terminalResponseDigest: string }
 
+export type DemoFridayImportOutcome =
+	| { status: 'recipient_pending' }
+	| { status: 'completed'; recipientImportDigest: string }
+
 export interface DemoFridayCoordinatorPorts {
 	executeExact(record: Readonly<DemoFridayCoordinatorRecordV2>): Promise<DemoFridayExecutionOutcome>
 	recoverExact(record: Readonly<DemoFridayCoordinatorRecordV2>): Promise<DemoFridayRecoveryOutcome>
-	importExact(record: Readonly<DemoFridayCoordinatorRecordV2>): Promise<{ recipientImportDigest: string }>
+	importExact(record: Readonly<DemoFridayCoordinatorRecordV2>): Promise<DemoFridayImportOutcome>
 }
 
 export interface DemoFridayCoordinatorAnchorSnapshotV1 {
@@ -353,6 +357,7 @@ export function createDemoFridayCoordinatorWorker(
 			}
 			if (record.phase === 'recipient_pending') {
 				const imported = await ports.importExact(record)
+				if (imported.status === 'recipient_pending') { anchor(); return record }
 				const completed = store.transition(scope, ['recipient_pending'], (next) => {
 					next.phase = 'completed'
 					next.recipientImportDigest = exactOutcomeDigest(imported.recipientImportDigest, 'recipientImportDigest')

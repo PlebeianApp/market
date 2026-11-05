@@ -60,7 +60,7 @@ describe('persistent Friday coordinator process boundary', () => {
 		const ports: DemoFridayCoordinatorPorts = {
 			async executeExact() { executes += 1; return { status: 'mint_unknown', requestDigest: h('c') } },
 			async recoverExact() { recovers += 1; return recovers === 1 ? { status: 'indeterminate' } : { status: 'recipient_pending', terminalResponseDigest: h('d') } },
-			async importExact() { imports += 1; return { recipientImportDigest: h('e') } },
+			async importExact() { imports += 1; return { status: 'completed', recipientImportDigest: h('e') } },
 		}
 		try {
 			store.enqueueAuthorized(authorized())
@@ -70,6 +70,28 @@ describe('persistent Friday coordinator process boundary', () => {
 			expect((await worker.reconcileExact('auction-a:bid-a')).phase).toBe('recipient_pending')
 			expect((await worker.reconcileExact('auction-a:bid-a')).phase).toBe('completed')
 			expect({ executes, recovers, imports }).toEqual({ executes: 1, recovers: 2, imports: 1 })
+		} finally { db.close(false) }
+	})
+
+	test('keeps a recipient-pending operation stable until its exact browser import arrives', async () => {
+		const { db, store } = opened()
+		let imports = 0
+		try {
+			store.enqueueAuthorized(authorized())
+			const worker = createDemoFridayCoordinatorWorker(store, {
+				async executeExact() { return { status: 'recipient_pending', requestDigest: h('c'), terminalResponseDigest: h('d') } },
+				async recoverExact() { throw new Error('not reached') },
+				async importExact() {
+					imports += 1
+					return imports === 1 ? { status: 'recipient_pending' } : { status: 'completed', recipientImportDigest: h('e') }
+				},
+			})
+			expect((await worker.runExact('auction-a:bid-a')).phase).toBe('recipient_pending')
+			const pending = await worker.reconcileExact('auction-a:bid-a')
+			expect(pending.phase).toBe('recipient_pending')
+			expect(pending.revision).toBe(2)
+			expect((await worker.reconcileExact('auction-a:bid-a')).phase).toBe('completed')
+			expect(imports).toBe(2)
 		} finally { db.close(false) }
 	})
 

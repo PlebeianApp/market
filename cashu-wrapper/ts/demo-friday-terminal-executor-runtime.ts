@@ -268,9 +268,9 @@ export function createDemoFridayTerminalExecutorPorts(options: {
 		async importExact(recordValue) {
 			const held = await context(recordValue)
 			const lifecycle = await options.authorityStore.readLifecycle(held.claim.operationId)
-			if (lifecycle?.status !== 'recipient_imported') throw new Error('DEMO_FRIDAY_EXECUTOR_IMPORT: authority has no exact recipient import')
+			if (lifecycle?.status !== 'recipient_imported') return { status: 'recipient_pending' }
 			const terminal = await terminalDigest(held.record)
-			return { recipientImportDigest: recipientImportDigest(held.record, terminal.terminalResponseDigest) }
+			return { status: 'completed', recipientImportDigest: recipientImportDigest(held.record, terminal.terminalResponseDigest) }
 		},
 	}
 	return Object.freeze(ports)
