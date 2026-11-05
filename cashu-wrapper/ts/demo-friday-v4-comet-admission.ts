@@ -60,6 +60,13 @@ export type DemoFridayV4CometAdmissionFailureStage =
 	| 'stored_package_read'
 	| 'replay_ownership'
 	| 'network_reads'
+	| 'genesis_read'
+	| 'chain_read'
+	| 'block_read'
+	| 'commit_h_read'
+	| 'commit_h1_read'
+	| 'commit_h2_read'
+	| 'state_read'
 	| 'network_identity'
 	| 'block_height'
 	| 'transaction_match'
@@ -77,6 +84,18 @@ export type DemoFridayV4CometAdmissionFailureStage =
 export interface DemoFridayV4CometAdmissionFailureDiagnosticV1 {
 	schema: 'PLEBEIAN_FRIDAY_V4_COMET_ADMISSION_FAILURE_DIAGNOSTIC_V1'
 	stage: DemoFridayV4CometAdmissionFailureStage
+}
+
+class CometAdmissionReadFailure {
+	constructor(readonly stage: DemoFridayV4CometAdmissionFailureStage, readonly source: unknown) {}
+}
+
+async function exactRead<T>(
+	stage: DemoFridayV4CometAdmissionFailureStage,
+	operation: Promise<T>,
+): Promise<T> {
+	try { return await operation }
+	catch (error) { throw new CometAdmissionReadFailure(stage, error) }
 }
 
 export interface DemoFridayPreparedFundingAdmissionPort {
@@ -245,10 +264,13 @@ export function createDemoFridayV4CometAdmission(options: {
 				if (held.replay.fundingOperationId !== input.fundingOperationId) fail('broadcast identity differs from replay ownership')
 				stage = 'network_reads'
 				const [genesis, reportedChain, block, commitH, commitH1, commitH2, stateResult] = await Promise.all([
-					options.genesis.readExact(), options.reader.readChainId(), options.reader.readBlock(input.committedHeight),
-					options.reader.readCommit(input.committedHeight), options.reader.readCommit(input.committedHeight + 1),
-					options.reader.readCommit(input.committedHeight + 2),
-					authenticatedDemoCometState(options.reader, options.validatorsHash, input.committedHeight + 2),
+					exactRead('genesis_read', options.genesis.readExact()),
+					exactRead('chain_read', options.reader.readChainId()),
+					exactRead('block_read', options.reader.readBlock(input.committedHeight)),
+					exactRead('commit_h_read', options.reader.readCommit(input.committedHeight)),
+					exactRead('commit_h1_read', options.reader.readCommit(input.committedHeight + 1)),
+					exactRead('commit_h2_read', options.reader.readCommit(input.committedHeight + 2)),
+					exactRead('state_read', authenticatedDemoCometState(options.reader, options.validatorsHash, input.committedHeight + 2)),
 				])
 				stage = 'network_identity'
 				if (genesis.chainId !== options.chainId || genesis.genesisSha256 !== options.genesisSha256
@@ -320,9 +342,10 @@ export function createDemoFridayV4CometAdmission(options: {
 				stage = 'admission_write'
 				return options.prepared.markAdmittedExact(commit)
 			} catch (error) {
-				try { options.onFailure?.({ schema: 'PLEBEIAN_FRIDAY_V4_COMET_ADMISSION_FAILURE_DIAGNOSTIC_V1', stage }) }
+				const diagnosticStage = error instanceof CometAdmissionReadFailure ? error.stage : stage
+				try { options.onFailure?.({ schema: 'PLEBEIAN_FRIDAY_V4_COMET_ADMISSION_FAILURE_DIAGNOSTIC_V1', stage: diagnosticStage }) }
 				catch { /* diagnostics cannot alter the protocol result */ }
-				throw error
+				throw error instanceof CometAdmissionReadFailure ? error.source : error
 			}
 		},
 	})

@@ -215,6 +215,18 @@ describe('Friday V4 authenticated Comet admission', () => {
 		expect(value.admissions()).toBe(0)
 	})
 
+	test('identifies one failed network read while preserving the original error', async () => {
+		const value = harness({ missingCommit: H + 2 })
+		const diagnostics: unknown[] = []
+		await expect(adapter(value, (diagnostic) => diagnostics.push(diagnostic)).confirmAndAdmitExact(value.identity))
+			.rejects.toThrow(/commit unavailable/)
+		expect(diagnostics).toEqual([{
+			schema: 'PLEBEIAN_FRIDAY_V4_COMET_ADMISSION_FAILURE_DIAGNOSTIC_V1',
+			stage: 'commit_h2_read',
+		}])
+		expect(value.admissions()).toBe(0)
+	})
+
 	test('rejects replay under a changed transaction identity', async () => {
 		const value = harness()
 		await adapter(value).confirmAndAdmitExact(value.identity)
