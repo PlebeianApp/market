@@ -96,6 +96,7 @@ function harness(overrides: {
 	blockTime?: number
 	rejected?: boolean
 	rejectionReason?: DemoFridayFundingAdmissionCommitV1['rejectionReason']
+	terminal?: 'payout_entitled' | 'outbid_return_entitled'
 } = {}) {
 	const receipt = fixtureReceipt()
 	const transaction = signedTransaction(receipt)
@@ -125,9 +126,10 @@ function harness(overrides: {
 		chain_id: overrides.chain ?? 'friday-chain', height: H + 2,
 		auctions: { [receipt.auction_id]: {
 			id: receipt.auction_id, seller: hex('b'), seller_coco_payment_public_key: receipt.committee_public_key,
-			funding_mode: 'threshold_sigall_v1', status: overrides.rejected ? 'closed' : 'open',
+			funding_mode: 'threshold_sigall_v1', status: overrides.rejected || overrides.terminal === 'payout_entitled' ? 'closed' : 'open',
 			original_end_time: 1_500, end_time: 1_500,
 			...(overrides.rejected ? {} : { leader_bid_id: transaction.event.id }),
+			...(overrides.terminal === 'payout_entitled' ? { winner: receipt.bidder } : {}),
 		} },
 		bids: overrides.rejected ? {} : { [transaction.event.id]: {
 			id: transaction.event.id, auction_id: receipt.auction_id, bidder: receipt.bidder,
@@ -135,9 +137,14 @@ function harness(overrides: {
 		} },
 		integrated_fundings: { [receipt.funding_operation_id]: {
 			id: receipt.funding_operation_id, auction_id: receipt.auction_id, bid_id: transaction.event.id,
-			bidder: receipt.bidder, status: overrides.rejected ? 'rejected_return_entitled' : 'active',
+			bidder: receipt.bidder, status: overrides.rejected ? 'rejected_return_entitled' : overrides.terminal ?? 'active',
 			...(overrides.rejected ? { rejection_reason: overrides.rejectionReason ?? 'late' } : {}), receipt: receipt as never,
-		} }, integrated_displacements: {},
+		} }, integrated_displacements: overrides.terminal === 'outbid_return_entitled' ? { displacement: {
+			id: hex('8'), auction_id: receipt.auction_id, displaced_bid_id: transaction.event.id,
+			replacement_bid_id: hex('9'), displaced_funding_id: receipt.funding_operation_id,
+			replacement_funding_id: 'replacement-operation', committed_at: 1_150,
+			original_end_time: 1_500, certified_end_time: 1_500,
+		} } : {},
 	})
 	const stateBytes = () => new TextEncoder().encode(JSON.stringify(state()))
 	const stateHash = () => bytesToHex(sha256(stateBytes()))
@@ -262,6 +269,22 @@ describe('Friday V4 authenticated Comet admission', () => {
 		const replay = await adapter(value).confirmAndAdmitExact(value.identity)
 		expect(replay.admission).toMatchObject({
 			disposition: 'rejected_return', rejectionReason: 'late', bidEventId: value.transaction.event.id,
+		})
+		expect(value.admissions()).toBe(1)
+	})
+
+	test('recovers an admitted bid after its authenticated state reaches terminal payout', async () => {
+		const value = harness({ terminal: 'payout_entitled' })
+		await expect(adapter(value).confirmAndAdmitExact(value.identity)).resolves.toMatchObject({
+			phase: 'admitted', admission: { disposition: 'active', bidEventId: value.transaction.event.id },
+		})
+		expect(value.admissions()).toBe(1)
+	})
+
+	test('recovers an admitted bid after one exact authenticated displacement', async () => {
+		const value = harness({ terminal: 'outbid_return_entitled' })
+		await expect(adapter(value).confirmAndAdmitExact(value.identity)).resolves.toMatchObject({
+			phase: 'admitted', admission: { disposition: 'active', bidEventId: value.transaction.event.id },
 		})
 		expect(value.admissions()).toBe(1)
 	})

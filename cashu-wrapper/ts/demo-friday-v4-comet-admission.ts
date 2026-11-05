@@ -314,12 +314,27 @@ export function createDemoFridayV4CometAdmission(options: {
 				let disposition: DemoFridayFundingAdmissionCommitV1['disposition']
 				let rejectionReason: DemoFridayFundingAdmissionCommitV1['rejectionReason']
 				stage = 'state_disposition'
+				const exactCommittedBid = bid !== undefined && bid.id === event.id
+					&& bid.auction_id === receipt.auction_id && bid.bidder === receipt.bidder
+					&& bid.amount === receipt.bid_amount && bid.integrated_funding_id === receipt.funding_operation_id
 				if (funding.status === 'active') {
-					if (bid === undefined || bid.id !== event.id || bid.auction_id !== receipt.auction_id
-						|| bid.bidder !== receipt.bidder || bid.amount !== receipt.bid_amount
-						|| bid.integrated_funding_id !== receipt.funding_operation_id
-						|| funding.rejection_reason !== undefined) {
+					if (!exactCommittedBid || funding.rejection_reason !== undefined) {
 						fail('authenticated active funding lacks the exact committed bid')
+					}
+					disposition = 'active'
+				} else if (funding.status === 'payout_entitled') {
+					const auction = state.auctions?.[receipt.auction_id]
+					if (!exactCommittedBid || funding.rejection_reason !== undefined || auction?.status !== 'closed'
+						|| auction.leader_bid_id !== event.id || auction.winner !== receipt.bidder) {
+						fail('authenticated payout funding lacks the exact winning bid')
+					}
+					disposition = 'active'
+				} else if (funding.status === 'outbid_return_entitled') {
+					const displacements = Object.values(state.integrated_displacements ?? {}).filter((candidate) =>
+						candidate.auction_id === receipt.auction_id && candidate.displaced_bid_id === event.id
+						&& candidate.displaced_funding_id === receipt.funding_operation_id)
+					if (!exactCommittedBid || funding.rejection_reason !== undefined || displacements.length !== 1) {
+						fail('authenticated outbid funding lacks one exact displacement')
 					}
 					disposition = 'active'
 				} else if (funding.status === 'rejected_return_entitled') {
@@ -329,7 +344,7 @@ export function createDemoFridayV4CometAdmission(options: {
 					}
 					disposition = 'rejected_return'
 					rejectionReason = funding.rejection_reason as DemoFridayFundingAdmissionCommitV1['rejectionReason']
-				} else fail('committed funding has no active or rejected-return disposition')
+				} else fail('committed funding has no admissible active or rejected-return disposition')
 				stage = 'state_expiry'
 				const expiredAtCommit = commits[0]!.blockTime > receipt.expires_at
 				if (expiredAtCommit) {
