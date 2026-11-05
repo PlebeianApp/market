@@ -123,7 +123,7 @@ def require_ready(payload: dict[str, object]) -> int:
     require(payload.get("consensusAvailable") is True, "NO_CONSENSUS")
     require(payload.get("newOperationsReady") is True, "OPERATIONS_NOT_READY")
     require(payload.get("readinessReason") == "ready", "READINESS_REASON")
-    height = payload.get("observedHeight")
+    height = payload.get("lastCommittedHeight")
     require(isinstance(height, int) and height > 0, "READINESS_HEIGHT")
     return height
 
