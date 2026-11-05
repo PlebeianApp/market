@@ -330,6 +330,28 @@ class DemoPage {
       throw new Error(`${this.role}: seller plan service failed: ${result}`);
     }
   }
+  async importTerminalToBalance(expected, label) {
+    const deadline = Date.now() + 120_000;
+    let last = await this.status();
+    while (Date.now() < deadline) {
+      await this.warmRuntimeReadiness(label);
+      await this.waitActionEnabled("#process-payments", label);
+      const started = await this.evaluate(`(() => {
+        const button = document.querySelector('#process-payments');
+        if (!button || button.disabled) return false;
+        button.click(); return true;
+      })()`);
+      if (!started) throw new Error(`${this.role}: ${label} control unavailable`);
+      await delay(1_500);
+      last = await this.status();
+      const available = Number(String(last.spendable).replace(/[^0-9-]/g, ""));
+      if (available === expected) return last;
+      await delay(RATE_SETTLE_MS);
+    }
+    throw new Error(`${this.role}: ${label} timed out (last=${JSON.stringify({
+      spendable: last.spendable, refundable: last.refundable, message: last.message,
+    })})`);
+  }
   async bid(title, amount, seller) {
     await this.waitAuctionCard(title);
     await this.warmRuntimeReadiness(`${amount} bid`);
@@ -431,9 +453,7 @@ async function main() {
     for (let index = 0; index < BIDS.length; index += 1) {
       await pages[index + 1].page.bid(title, BIDS[index], pages[0].page);
       if (index > 0) {
-        await pages[index].page.refreshView();
-        await pages[index].page.poll(`document.querySelector('#spendable')?.textContent || ''`,
-          (value) => Number(String(value).replace(/[^0-9-]/g, "")) === FUNDING, 90_000, "certified outbid return");
+        await pages[index].page.importTerminalToBalance(FUNDING, "certified outbid return");
       }
       report.phases.push({ phase: `bid_${BIDS[index]}`, status: "PASS" });
       await delay(RATE_SETTLE_MS);
@@ -447,7 +467,8 @@ async function main() {
     const expected = [10_400, 10_000, 10_000, 10_000, 9_600];
     const balances = [];
     for (let index = 0; index < pages.length; index += 1) {
-      await pages[index].page.refreshView();
+      if (index === 0) await pages[index].page.importTerminalToBalance(expected[index], "seller payout import");
+      else await pages[index].page.refreshView();
       const balance = await pages[index].page.poll(`(() => {
         const number = (id) => Number((document.querySelector(id)?.textContent || '').replace(/[^0-9-]/g, ''));
         return { available: number('#spendable'), locked: number('#locked'), pending: number('#refundable') };
