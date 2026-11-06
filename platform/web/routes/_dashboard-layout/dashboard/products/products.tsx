@@ -163,7 +163,7 @@ function ProductsOverviewComponent() {
 			fuzzy: true,
 		})
 
-	const listingDraft = useExtensionCapability(PRODUCT_LISTING_DRAFT_CAPABILITY)
+	const listingDraft = useExtensionCapability(PRODUCT_LISTING_DRAFT_CAPABILITY, 'draft-listing')
 	const dashboardProductOptions = productsByPubkeyQueryOptions(user?.pubkey ?? '', true) // Include hidden products for own dashboard
 	const {
 		data: products,

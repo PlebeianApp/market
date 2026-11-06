@@ -45,9 +45,14 @@ export function useExtensionDescriptors() {
 }
 
 /** UI renders affordances by capability; the extension id is resolved from descriptors, never hard-coded. */
-export function useExtensionCapability(capability: string) {
+export function useExtensionCapability(capability: string, preferredActionName?: string) {
 	const { descriptors, isLoading } = useExtensionDescriptors()
-	const target = useMemo(() => findExtensionAction(descriptors, capability), [descriptors, capability])
+	const target = useMemo(
+		() =>
+			(preferredActionName ? findExtensionAction(descriptors, capability, { actionName: preferredActionName }) : undefined) ??
+			findExtensionAction(descriptors, capability),
+		[descriptors, capability, preferredActionName],
+	)
 	return { target, isLoading }
 }
 
@@ -78,7 +83,7 @@ export function extensionErrorMessage(error: ExtensionActionError): string {
 
 /** Calls `product.image.describe` with a NIP-98 header signed by the active user's signer. */
 export function useDescribeProductImage() {
-	const { target } = useExtensionCapability(PRODUCT_IMAGE_DESCRIBE_CAPABILITY)
+	const { target } = useExtensionCapability(PRODUCT_IMAGE_DESCRIBE_CAPABILITY, 'describe-image')
 
 	const mutation = useMutation<DescribeImageOutput, ExtensionActionError, DescribeImageInput>({
 		mutationFn: async (input) => {
@@ -290,22 +295,22 @@ export function useRemoteActionInvoke() {
  * ContextVM tool). The reply is untrusted: it is parsed, capped, and shown for review; nothing is published here.
  */
 export function useProductListingDraft() {
-	const { target } = useExtensionCapability(PRODUCT_LISTING_DRAFT_CAPABILITY)
+	const { target } = useExtensionCapability(PRODUCT_LISTING_DRAFT_CAPABILITY, 'draft-listing')
 	const mutation = useMutation<ProductListingDraft, ExtensionActionError, { imageUrl: string; notes?: string }>({
 		mutationFn: async (input) => {
 			if (!target) throw new ExtensionActionError('not_found')
-			const result = await invokeExtensionAction(
-				target.extensionId,
-				target.action.name,
-				input,
-				{ sign },
-				{ output: RemoteActionOutputSchema },
-			)
+			const result = await invokeExtensionAction(target.extensionId, target.action.name, input, { sign })
 			if (!result.ok) throw result.error
-			const draft = parseProductListingDraft(result.value.data ?? {}, PRODUCT_CATEGORIES)
+			const draft = parseProductListingDraft(listingDraftPayload(result.value), PRODUCT_CATEGORIES)
 			if (!draft.ok) throw new ExtensionActionError('invalid_output', draft.error.message)
 			return draft.value
 		},
 	})
 	return { available: Boolean(target), target, ...mutation }
+}
+
+/** Built-in actions return the draft itself; remote (ContextVM) actions wrap it as `{ text, data }`. */
+function listingDraftPayload(value: unknown): unknown {
+	if (typeof value === 'object' && value !== null && 'text' in value && 'data' in value) return (value as { data: unknown }).data
+	return value
 }

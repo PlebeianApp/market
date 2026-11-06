@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { defineActionFor, defineExtension, type ExtensionManifest } from '../../core/extensions'
 import { success } from '../../core/result'
+import { PRODUCT_LISTING_DRAFT_CAPABILITY } from '../../commerce/products/listingDraft'
+import { mockListingDraft } from './mockListing'
 
 export const PRODUCT_IMAGE_DESCRIBE_CAPABILITY = 'product.image.describe'
 export const MOCK_PROVIDER = 'mock'
@@ -38,6 +40,20 @@ export const DescribeImageOutputSchema = z.object({
 	basis: z.array(z.enum(['title', 'category', 'notes', 'filename'])),
 })
 
+export const DraftListingInputSchema = z.object({
+	imageUrl: ImageUrlSchema,
+	notes: z.string().trim().max(500).optional(),
+})
+
+export const DraftListingOutputSchema = z.object({
+	title: z.string().min(1),
+	summary: z.string(),
+	description: z.string().min(1),
+	tags: z.array(z.string()),
+	category: z.string(),
+	model: z.string(),
+})
+
 export type DescribeImageInput = z.infer<typeof DescribeImageInputSchema>
 export type DescribeImageOutput = z.infer<typeof DescribeImageOutputSchema>
 
@@ -46,8 +62,8 @@ export const productImageDescriberManifest = {
 	version: '0.1.0',
 	displayName: 'Product image describer',
 	icon: '/images/extension-product-image-describer.svg',
-	description: 'Drafts a product description from an image link and your notes. Mock-up: no image analysis.',
-	capabilities: [PRODUCT_IMAGE_DESCRIBE_CAPABILITY],
+	description: 'Drafts a product listing from a photo. Mock-up: no image analysis.',
+	capabilities: [PRODUCT_IMAGE_DESCRIBE_CAPABILITY, PRODUCT_LISTING_DRAFT_CAPABILITY],
 	runtimes: ['server'],
 	publicConfig: PublicConfigSchema,
 } satisfies ExtensionManifest<z.infer<typeof PublicConfigSchema>>
@@ -70,6 +86,16 @@ export const productImageDescriber = defineExtension({
 			rateLimit: { perPubkey: 30, windowSeconds: 3600 },
 			async handler(context, input) {
 				return success(mockDescribeImage(input, context.publicConfig.maxChars))
+			},
+		}),
+		'draft-listing': action({
+			description: 'Draft a product listing (title, description, tags, category) from a photo (mock-up, no image analysis)',
+			input: DraftListingInputSchema,
+			output: DraftListingOutputSchema,
+			auth: 'user',
+			rateLimit: { perPubkey: 30, windowSeconds: 3600 },
+			async handler(_context, input) {
+				return success(mockListingDraft(input))
 			},
 		}),
 	},

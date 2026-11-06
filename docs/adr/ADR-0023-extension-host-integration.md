@@ -711,12 +711,14 @@ asks the user to opt in once per capability before the first call.
   `parseProductListingDraft` (`sdk/commerce/products/listingDraft.ts`) requires
   a title and description, caps lengths, strips control characters, filters
   tags, and maps the category onto `PRODUCT_CATEGORIES`. **Create with AI**
-  (`/dashboard/products/products/ai`) shows the draft labelled as AI text. The
-  seller enters only the price (sats, quantity 1) and signs and publishes the
-  product. A draft never contains a price and never publishes anything. The
-  dev sandbox (`bun run dev:extensions`) serves a mock
-  `draft_product_listing` tool (`mockListingDraft`) that ignores the image
-  contents.
+  (`/dashboard/products/products/ai`) fills an editable form from the draft
+  (title, description, category, tags), labelled as AI text. The price starts
+  empty, and the seller's first shipping option is preselected. The seller
+  signs and publishes (sats, quantity 1). A draft never contains a price and
+  never publishes anything. The built-in `product-image-describer` offers this
+  capability through its `draft-listing` action (`mockListingDraft`, no image
+  analysis); the dev sandbox serves the same mock as a remote
+  `draft_product_listing` tool. Clients prefer an action named `draft-listing`.
 
 #### 7.8 Settings store prerequisite
 

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { executeExtensionAction, parseExtensionConfig, validateExtensionDefinition } from '../../core/extensions'
 import { createTestActionContext, testCaller } from '../../core/testing/extensionHost'
 import { mockDescribeImage, productImageDescriber, productImageDescriberManifest } from '.'
+import { PRODUCT_LISTING_DRAFT_CAPABILITY, parseProductListingDraft } from '../../commerce/products/listingDraft'
 
 const context = createTestActionContext({ publicConfig: { maxChars: 600 } })
 const run = (rawInput: unknown) =>
@@ -65,5 +66,25 @@ describe('product-image-describer extension', () => {
 		]) {
 			expect(await run(rawInput)).toMatchObject({ ok: false, error: { reason: 'invalid_input' } })
 		}
+	})
+})
+
+describe('product-image-describer draft-listing action', () => {
+	const draft = (rawInput: unknown) =>
+		executeExtensionAction({ actions: productImageDescriber.actions, actionName: 'draft-listing', rawInput, caller: testCaller(), context })
+
+	test('offers the listing-draft capability and returns a draft the host parser accepts', async () => {
+		expect(productImageDescriberManifest.capabilities).toContain(PRODUCT_LISTING_DRAFT_CAPABILITY)
+		const result = await draft({ imageUrl: 'https://blossom.example/abc.jpg' })
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(parseProductListingDraft(result.value, ['Bitcoin', 'Art', 'Clothing', 'Food & Drink', 'Home & Technology', 'Other']).ok).toBe(
+			true,
+		)
+		expect(result.value).not.toHaveProperty('price')
+	})
+
+	test('rejects non-http image URLs', async () => {
+		expect((await draft({ imageUrl: 'javascript:alert(1)' })).ok).toBe(false)
 	})
 })
