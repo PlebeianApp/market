@@ -16,6 +16,7 @@ import {
 } from './extension'
 import { EXTENSION_HOST_PORTS, parseEgressOrigin, type ExtensionHostPortName } from './hostPorts'
 import { parseRepositorySnapshot, type RepositorySnapshot } from './repository'
+import { parseRemoteBindingViews, type RemoteBindingView } from './bindings'
 
 export const EXTENSION_CATALOG_PATH = '/api/extensions/catalog'
 
@@ -82,8 +83,10 @@ const MAX_ENTRIES = 200
 /** Store contents: built-ins compiled into this release, plus third-party entries from configured repositories. */
 export interface ExtensionCatalog {
 	entries: readonly ExtensionCatalogEntry[]
-	/** Absent when no repository curators are configured. */
+	/** Absent when no relay is configured to read repositories from. */
 	repository?: RepositorySnapshot
+	/** Remote tool bindings (ADR-0023 §7.5) with their current state. */
+	bindings?: readonly RemoteBindingView[]
 }
 
 /** Parses an untrusted catalog response, including the optional repository snapshot. */
@@ -91,7 +94,8 @@ export function parseExtensionCatalogResponse(input: unknown): Result<ExtensionC
 	const entries = parseExtensionCatalog(input)
 	if (!entries.ok) return entries
 	const repository = isRecord(input) && input.repository !== undefined ? parseRepositorySnapshot(input.repository) : undefined
-	return success({ entries: entries.value, ...(repository ? { repository } : {}) })
+	const bindings = isRecord(input) ? parseRemoteBindingViews(input.bindings) : []
+	return success({ entries: entries.value, ...(repository ? { repository } : {}), bindings })
 }
 
 /** Parses an untrusted catalog response; malformed entries are dropped individually. */
@@ -158,9 +162,10 @@ export function removeSideloadedServer(
 	return sendAdminRequest(signer, 'DELETE', `${EXTENSION_SIDELOADS_PATH}/${encodeURIComponent(pubkey)}`, undefined, options, sideloadResult)
 }
 
-async function sendAdminRequest<Output>(
+/** NIP-98-signed admin request to an extension store endpoint; the response uses the action envelope. */
+export async function sendAdminRequest<Output>(
 	signer: Signer<SignedEventLike & NostrEventLike>,
-	method: 'GET' | 'POST' | 'DELETE',
+	method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
 	path: string,
 	body: string | undefined,
 	options: FetchExtensionCatalogOptions,

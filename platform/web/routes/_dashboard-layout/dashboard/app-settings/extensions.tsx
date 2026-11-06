@@ -4,7 +4,9 @@ import {
 	extensionErrorMessage,
 	useDescribeProductImage,
 	useExtensionCatalog,
+	useBindingMutations,
 	useExtensionDescriptors,
+	useRemoteActionInvoke,
 	useSideloadMutations,
 } from '@/queries/extensions'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
@@ -14,6 +16,7 @@ import {
 	ExtensionStoreButton,
 	ExtensionStoreDialog,
 	ImageDescribePanel,
+	RemoteActionTryPanel,
 	SettingsAccessDenied,
 	SettingsLoadingSkeleton,
 	SettingsMobileHeader,
@@ -21,7 +24,8 @@ import {
 } from '@ui/index'
 import { createFileRoute } from '@tanstack/react-router'
 import { Puzzle } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { REMOTE_EXTENSION_PREFIX } from '@sdk/core/extensions'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/extensions')({
 	component: ExtensionsComponent,
@@ -41,6 +45,21 @@ function ExtensionsComponent() {
 	const [storeOpen, setStoreOpen] = useState(false)
 	const catalog = useExtensionCatalog(currentUserPubkey, storeOpen && amIAdmin)
 	const sideload = useSideloadMutations(currentUserPubkey)
+	const bindingControls = useBindingMutations(currentUserPubkey)
+	const remoteInvoke = useRemoteActionInvoke()
+	const remoteActions = useMemo(
+		() =>
+			descriptors
+				.filter((descriptor) => descriptor.id.startsWith(REMOTE_EXTENSION_PREFIX))
+				.flatMap((descriptor) =>
+					descriptor.actions.map((action) => ({
+						extensionId: descriptor.id,
+						actionName: action.name,
+						label: `${descriptor.displayName} — ${action.name}`,
+					})),
+				),
+		[descriptors],
+	)
 
 	if (isLoading || isRoleLoading) return <SettingsLoadingSkeleton />
 	// Client-side workflow gate only; the action route enforces its own auth and roles.
@@ -59,6 +78,7 @@ function ExtensionsComponent() {
 					catalog={catalog.data}
 					registryEnvExample={REGISTRY_ENV_EXAMPLE}
 					sideload={sideload}
+					bindingControls={bindingControls}
 					isLoading={catalog.isFetching && !catalog.data}
 					errorMessage={catalog.error ? extensionErrorMessage(catalog.error) : undefined}
 					onRetry={() => void catalog.refetch()}
@@ -73,6 +93,14 @@ function ExtensionsComponent() {
 						))}
 					</div>
 				)}
+
+				<RemoteActionTryPanel
+					actions={remoteActions}
+					pending={remoteInvoke.isPending}
+					result={remoteInvoke.data}
+					errorMessage={remoteInvoke.error ? extensionErrorMessage(remoteInvoke.error) : undefined}
+					onRun={(option, input) => remoteInvoke.mutate({ extensionId: option.extensionId, actionName: option.actionName, input })}
+				/>
 
 				{describe.available && (
 					<ImageDescribePanel

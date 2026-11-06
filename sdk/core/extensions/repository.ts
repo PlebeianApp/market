@@ -1,5 +1,6 @@
 import type { NostrEventLike } from '../nostr/eventLike'
 import { verifyNostrEvent } from '../nostr/eventValidation'
+import { sha256Hex } from '../nostr/nip98'
 
 /**
  * Extension repository (ADR-0023 §7.2). A curator publishes a NIP-51 follow set (kind 30000) whose `d` tag is
@@ -24,6 +25,8 @@ export interface RepositoryTool {
 	description?: string
 	/** Top-level input property names, for display only. */
 	inputFields: readonly string[]
+	/** sha256 of the canonical JSON of the announced `inputSchema`; remote bindings pin this (ADR-0023 §7.5). */
+	inputSchemaHash: string
 	/** CEP-8 price from a `cap` tag, as advertised (untrusted display text). */
 	price?: { amount: string; unit: string }
 }
@@ -139,12 +142,14 @@ export function parseToolsList(event: unknown): { pubkey: string; tools: Reposit
 		if (!name || seen.has(name)) continue
 		seen.add(name)
 		const properties = isRecord(raw.inputSchema) && isRecord(raw.inputSchema.properties) ? Object.keys(raw.inputSchema.properties) : []
+		const inputSchemaHash = hashInputSchema(raw.inputSchema)
 		const price = prices.get(name)
 		tools.push({
 			name,
 			...(text(raw.title, MAX_NAME) ? { title: text(raw.title, MAX_NAME) } : {}),
 			...(text(raw.description, MAX_TEXT) ? { description: text(raw.description, MAX_TEXT) } : {}),
 			inputFields: properties.slice(0, 20).map((field) => field.slice(0, 60)),
+			inputSchemaHash,
 			...(price ? { price } : {}),
 		})
 	}
@@ -270,6 +275,8 @@ function parseEntry(raw: unknown): RepositoryExtensionEntry | undefined {
 						inputFields: Array.isArray(tool.inputFields)
 							? tool.inputFields.filter((field): field is string => typeof field === 'string').slice(0, 20)
 							: [],
+						inputSchemaHash:
+							typeof tool.inputSchemaHash === 'string' && /^[0-9a-f]{64}$/.test(tool.inputSchemaHash) ? tool.inputSchemaHash : '',
 						...(price ? { price: { amount: String(price.amount), unit: String(price.unit) } } : {}),
 					},
 				]
@@ -291,6 +298,23 @@ function parseEntry(raw: unknown): RepositoryExtensionEntry | undefined {
 		...(typeof raw.announcedAt === 'number' ? { announcedAt: raw.announcedAt } : {}),
 		...(text(raw.problem, MAX_TEXT) ? { problem: text(raw.problem, MAX_TEXT) } : {}),
 	}
+}
+
+/** Order-independent JSON for hashing: object keys are sorted recursively. */
+export function canonicalJson(value: unknown): string {
+	if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+	if (isRecord(value)) {
+		return `{${Object.keys(value)
+			.sort()
+			.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+			.join(',')}}`
+	}
+	return JSON.stringify(value ?? null)
+}
+
+/** A missing schema hashes like `{}`, so adding an empty schema later is not a change. */
+export function hashInputSchema(schema: unknown): string {
+	return sha256Hex(canonicalJson(schema === undefined || schema === null ? {} : schema))
 }
 
 function newestValid<Value>(events: readonly NostrEventLike[], parse: (event: NostrEventLike) => Value | undefined): Value | undefined {

@@ -1,4 +1,4 @@
-import { ImageIcon, Plus, Puzzle, ShieldCheck, Sparkles, Store, Trash2 } from 'lucide-react'
+import { ImageIcon, Link2, Plus, Puzzle, ShieldCheck, Sparkles, Store, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import type {
 	ExtensionCatalog,
@@ -6,6 +6,8 @@ import type {
 	ExtensionCatalogState,
 	ExtensionHostPortName,
 	PublicExtensionDescriptor,
+	RemoteBindingRequest,
+	RemoteBindingView,
 	RepositoryExtensionEntry,
 	RepositorySnapshot,
 } from '@sdk/core/extensions'
@@ -318,10 +320,14 @@ export function RepositoryEntryCard({
 	entry,
 	onRemove,
 	removing,
+	bindings = [],
+	bindingControls,
 }: {
 	entry: RepositoryExtensionEntry
 	onRemove?: (pubkey: string) => void
 	removing?: boolean
+	bindings?: readonly RemoteBindingView[]
+	bindingControls?: BindingControls
 }) {
 	return (
 		<li className="space-y-3 rounded-lg border p-4" data-testid={`repository-entry-${entry.serverPubkey}`}>
@@ -413,6 +419,14 @@ export function RepositoryEntryCard({
 								)}
 								{tool.description && <span className="block">{tool.description}</span>}
 								{tool.inputFields.length > 0 && <span className="block text-xs">Inputs: {tool.inputFields.join(', ')}</span>}
+								{bindings
+									.filter((binding) => binding.toolName === tool.name)
+									.map((binding) => (
+										<BindingRow key={binding.actionName} binding={binding} controls={bindingControls} />
+									))}
+								{bindingControls && entry.state === 'listed' && !tool.price && (
+									<BindToolForm serverPubkey={entry.serverPubkey} serverName={entry.name} toolName={tool.name} controls={bindingControls} />
+								)}
 							</li>
 						))}
 					</ul>
@@ -421,10 +435,283 @@ export function RepositoryEntryCard({
 
 			<p className="text-xs text-muted-foreground">
 				{entry.paid
-					? 'Paid extensions cannot be installed: paying third-party services is not supported yet.'
-					: 'Installing third-party extensions is not available yet. Listings are for review only.'}
+					? 'Paid tools cannot be bound: paying third-party services is not supported yet.'
+					: 'Bind a tool to make it callable by this marketplace. User input for a bound tool is sent to this third-party server.'}
 			</p>
 		</li>
+	)
+}
+
+export interface BindingControls {
+	onBind: (request: RemoteBindingRequest) => void
+	onUpdate: (serverPubkey: string, actionName: string, change: { enabled?: boolean; approveCurrentDefinition?: true }) => void
+	onRemove: (serverPubkey: string, actionName: string) => void
+	pending: boolean
+	errorMessage?: string
+}
+
+const BINDING_STATE_LABELS: Record<RemoteBindingView['state'], { label: string; className: string }> = {
+	installed_enabled: { label: 'Bound', className: 'border-green-600 text-green-700' },
+	installed_disabled: { label: 'Disabled', className: 'border-zinc-400 text-zinc-600' },
+	misconfigured: { label: 'Needs review', className: 'border-red-500 text-red-600' },
+	unreachable: { label: 'Unreachable', className: 'border-amber-500 text-amber-700' },
+}
+
+const toActionName = (toolName: string) =>
+	toolName
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '')
+		.replace(/^[^a-z]+/, '')
+		.slice(0, 64) || 'run'
+
+/** One bound action of a tool, with its state and admin controls. */
+export function BindingRow({ binding, controls }: { binding: RemoteBindingView; controls?: BindingControls }) {
+	const state = BINDING_STATE_LABELS[binding.state]
+	return (
+		<div
+			className="mt-2 space-y-1 rounded border bg-zinc-50 p-2 text-xs"
+			data-testid={`binding-${binding.serverPubkey}-${binding.actionName}`}
+		>
+			<div className="flex flex-wrap items-center gap-2 text-foreground">
+				<Badge variant="outline" className={state.className}>
+					{state.label}
+				</Badge>
+				<span className="font-mono">{binding.actionName}</span>
+				<span>→</span>
+				<span className="font-mono">{binding.capability}</span>
+				<span className="text-muted-foreground">
+					{binding.auth === 'admin' ? 'admins only' : 'any signed-in user'} · {binding.rateLimit.perPubkey} per{' '}
+					{formatWindow(binding.rateLimit.windowSeconds)}
+				</span>
+			</div>
+			{binding.problem && <p className="text-red-600">{binding.problem}</p>}
+			{controls && (
+				<div className="flex flex-wrap gap-2">
+					{binding.state === 'misconfigured' && (
+						<Button
+							size="sm"
+							variant="outline"
+							disabled={controls.pending}
+							onClick={() => controls.onUpdate(binding.serverPubkey, binding.actionName, { approveCurrentDefinition: true })}
+						>
+							Approve new definition
+						</Button>
+					)}
+					<Button
+						size="sm"
+						variant="outline"
+						disabled={controls.pending}
+						onClick={() => controls.onUpdate(binding.serverPubkey, binding.actionName, { enabled: !binding.enabled })}
+					>
+						{binding.enabled ? 'Disable' : 'Enable'}
+					</Button>
+					<Button
+						size="sm"
+						variant="ghost"
+						disabled={controls.pending}
+						onClick={() => controls.onRemove(binding.serverPubkey, binding.actionName)}
+						aria-label={`Remove binding ${binding.actionName}`}
+					>
+						<Trash2 className="h-4 w-4" />
+					</Button>
+				</div>
+			)}
+		</div>
+	)
+}
+
+/** Inline bind form; the server re-checks everything and pins the tool definition it currently sees. */
+export function BindToolForm({
+	serverPubkey,
+	serverName,
+	toolName,
+	controls,
+}: {
+	serverPubkey: string
+	serverName: string
+	toolName: string
+	controls: BindingControls
+}) {
+	const [open, setOpen] = useState(false)
+	const [capability, setCapability] = useState('')
+	const [actionName, setActionName] = useState(toActionName(toolName))
+	const [auth, setAuth] = useState<'user' | 'admin'>('admin')
+	const [acknowledged, setAcknowledged] = useState(false)
+
+	if (!open) {
+		return (
+			<Button size="sm" variant="outline" className="mt-2" onClick={() => setOpen(true)} data-testid={`bind-open-${toolName}`}>
+				<Link2 className="mr-1 h-4 w-4" /> Bind…
+			</Button>
+		)
+	}
+
+	const submit = (event: FormEvent) => {
+		event.preventDefault()
+		if (!acknowledged || controls.pending) return
+		controls.onBind({
+			serverPubkey,
+			toolName,
+			actionName: actionName.trim(),
+			capability: capability.trim(),
+			auth,
+			rateLimit: { perPubkey: 30, windowSeconds: 3600 },
+			acknowledgedDataFlow: true,
+		})
+	}
+
+	return (
+		<form
+			onSubmit={submit}
+			className="mt-2 space-y-2 rounded border border-dashed p-2 text-foreground"
+			data-testid={`bind-form-${toolName}`}
+		>
+			<div className="grid gap-2 md:grid-cols-2">
+				<div className="space-y-1">
+					<Label htmlFor={`bind-capability-${toolName}`}>Capability</Label>
+					<Input
+						id={`bind-capability-${toolName}`}
+						placeholder="e.g. shipping.quote"
+						value={capability}
+						onChange={(event) => setCapability(event.target.value)}
+						required
+					/>
+				</div>
+				<div className="space-y-1">
+					<Label htmlFor={`bind-action-${toolName}`}>Action name</Label>
+					<Input id={`bind-action-${toolName}`} value={actionName} onChange={(event) => setActionName(event.target.value)} required />
+				</div>
+			</div>
+			<div className="space-y-1">
+				<Label htmlFor={`bind-auth-${toolName}`}>Who may call it</Label>
+				<select
+					id={`bind-auth-${toolName}`}
+					className="h-9 w-full rounded-md border bg-white px-2 text-sm"
+					value={auth}
+					onChange={(event) => setAuth(event.target.value === 'user' ? 'user' : 'admin')}
+				>
+					<option value="admin">Admins only</option>
+					<option value="user">Any signed-in user</option>
+				</select>
+				<p className="text-xs text-muted-foreground">30 calls per hour per caller.</p>
+			</div>
+			<label className="flex items-start gap-2 text-xs">
+				<input
+					type="checkbox"
+					checked={acknowledged}
+					onChange={(event) => setAcknowledged(event.target.checked)}
+					data-testid="bind-consent"
+				/>
+				<span>
+					I understand that input sent to this action goes to the third-party server <strong>{serverName}</strong>, and that its replies are
+					shown as untrusted text.
+				</span>
+			</label>
+			<div className="flex gap-2">
+				<Button type="submit" size="sm" disabled={!acknowledged || controls.pending || !capability.trim()} data-testid="bind-submit">
+					{controls.pending ? 'Binding…' : 'Bind tool'}
+				</Button>
+				<Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+					Cancel
+				</Button>
+			</div>
+		</form>
+	)
+}
+
+export interface RemoteActionOption {
+	extensionId: string
+	actionName: string
+	label: string
+}
+
+export interface RemoteActionTryPanelProps {
+	actions: readonly RemoteActionOption[]
+	onRun: (option: RemoteActionOption, input: Record<string, unknown>) => void
+	pending: boolean
+	result?: { text: string; data?: Record<string, unknown> }
+	errorMessage?: string
+}
+
+/** Admin test bench for bound remote actions; replies are untrusted and rendered as plain text. */
+export function RemoteActionTryPanel({ actions, onRun, pending, result, errorMessage }: RemoteActionTryPanelProps) {
+	const [selected, setSelected] = useState(0)
+	const [input, setInput] = useState('{}')
+	const [inputError, setInputError] = useState<string>()
+	if (actions.length === 0) return null
+
+	const submit = (event: FormEvent) => {
+		event.preventDefault()
+		let parsed: unknown
+		try {
+			parsed = JSON.parse(input)
+		} catch {
+			parsed = undefined
+		}
+		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+			setInputError('Input must be a JSON object')
+			return
+		}
+		setInputError(undefined)
+		onRun(actions[Math.min(selected, actions.length - 1)], parsed as Record<string, unknown>)
+	}
+
+	return (
+		<Card data-testid="remote-action-panel">
+			<CardHeader>
+				<CardTitle className="flex items-center gap-2 text-lg">
+					<Link2 className="h-5 w-5" /> Try a remote action
+				</CardTitle>
+				<CardDescription>Calls a bound third-party tool through this marketplace, signed with your Nostr key.</CardDescription>
+			</CardHeader>
+			<CardContent>
+				<form onSubmit={submit} className="space-y-3">
+					<div className="space-y-1">
+						<Label htmlFor="remote-action-select">Action</Label>
+						<select
+							id="remote-action-select"
+							className="h-9 w-full rounded-md border bg-white px-2 text-sm"
+							value={selected}
+							onChange={(event) => setSelected(Number(event.target.value))}
+						>
+							{actions.map((option, index) => (
+								<option key={`${option.extensionId}/${option.actionName}`} value={index}>
+									{option.label}
+								</option>
+							))}
+						</select>
+					</div>
+					<div className="space-y-1">
+						<Label htmlFor="remote-action-input">Input (JSON object)</Label>
+						<Textarea
+							id="remote-action-input"
+							className="font-mono text-xs"
+							rows={4}
+							value={input}
+							onChange={(event) => setInput(event.target.value)}
+						/>
+					</div>
+					<Button type="submit" disabled={pending} data-testid="remote-action-run">
+						{pending ? 'Running…' : 'Run'}
+					</Button>
+				</form>
+				{(inputError || errorMessage) && (
+					<p role="alert" className="mt-3 text-sm text-red-600">
+						{inputError ?? errorMessage}
+					</p>
+				)}
+				{result && (
+					<div className="mt-3 space-y-2 rounded-lg border bg-zinc-50 p-3 text-sm" data-testid="remote-action-result">
+						<Badge variant="outline" className="border-sky-500 text-sky-700">
+							Third-party reply — untrusted
+						</Badge>
+						{result.text && <p className="whitespace-pre-wrap">{result.text}</p>}
+						{result.data && <pre className="overflow-x-auto text-xs">{JSON.stringify(result.data, null, 2)}</pre>}
+					</div>
+				)}
+			</CardContent>
+		</Card>
 	)
 }
 
@@ -469,10 +756,14 @@ export function RepositorySection({
 	repository,
 	registryEnvExample,
 	sideload,
+	bindings = [],
+	bindingControls,
 }: {
 	repository: RepositorySnapshot | undefined
 	registryEnvExample: string
 	sideload?: SideloadControls
+	bindings?: readonly RemoteBindingView[]
+	bindingControls?: BindingControls
 }) {
 	if (!repository) {
 		return (
@@ -499,6 +790,11 @@ export function RepositorySection({
 					<span className="font-mono">{repository.relays.join(', ')}</span>.
 				</p>
 			)}
+			{bindingControls?.errorMessage && (
+				<p role="alert" className="text-sm text-red-600" data-testid="binding-error">
+					{bindingControls.errorMessage}
+				</p>
+			)}
 			{repository.problem && (
 				<p role="alert" className="text-sm text-red-600">
 					{repository.problem}
@@ -519,7 +815,14 @@ export function RepositorySection({
 			) : (
 				<ul className="space-y-3">
 					{repository.entries.map((entry) => (
-						<RepositoryEntryCard key={entry.serverPubkey} entry={entry} onRemove={sideload?.onRemove} removing={sideload?.pending} />
+						<RepositoryEntryCard
+							key={entry.serverPubkey}
+							entry={entry}
+							onRemove={sideload?.onRemove}
+							removing={sideload?.pending}
+							bindings={bindings.filter((binding) => binding.serverPubkey === entry.serverPubkey)}
+							bindingControls={bindingControls}
+						/>
 					))}
 				</ul>
 			)}
@@ -536,6 +839,7 @@ export interface ExtensionStoreDialogProps {
 	onRetry: () => void
 	registryEnvExample: string
 	sideload?: SideloadControls
+	bindingControls?: BindingControls
 }
 
 /**
@@ -551,6 +855,7 @@ export function ExtensionStoreDialog({
 	onRetry,
 	registryEnvExample,
 	sideload,
+	bindingControls,
 }: ExtensionStoreDialogProps) {
 	const repositoryCount = catalog?.repository?.entries.length ?? 0
 	return (
@@ -587,7 +892,13 @@ export function ExtensionStoreDialog({
 							</TabsTrigger>
 						</TabsList>
 						<TabsContent value="repository" className="pt-3">
-							<RepositorySection repository={catalog.repository} registryEnvExample={registryEnvExample} sideload={sideload} />
+							<RepositorySection
+								repository={catalog.repository}
+								registryEnvExample={registryEnvExample}
+								sideload={sideload}
+								bindings={catalog.bindings}
+								bindingControls={bindingControls}
+							/>
 						</TabsContent>
 						<TabsContent value="builtin" className="pt-3">
 							{catalog.entries.length === 0 ? (

@@ -101,6 +101,10 @@ export function createRepositoryLoader(options: RepositoryLoaderOptions) {
 	}
 
 	return {
+		/** Last loaded snapshot without any relay I/O; public endpoints use this. */
+		peek(): RepositorySnapshot | undefined {
+			return cached
+		},
 		/** Drops the cache, e.g. after an admin sideloads or removes a server. */
 		invalidate() {
 			generation++

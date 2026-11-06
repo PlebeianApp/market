@@ -5,9 +5,12 @@ import { relayPoolAdapter } from '@sdk/core/nostr-io'
 import {
 	describeCatalogEntry,
 	EXTENSION_CATALOG_PATH,
+	EXTENSION_BINDINGS_PATH,
 	EXTENSION_SIDELOADS_PATH,
+	parseRemoteExtensionId,
 	type AnyExtensionDefinition,
 	type ExtensionCatalog,
+	type RemoteBindingView,
 } from '@sdk/core/extensions'
 import { createExtensionActionHandler, createExtensionCatalogHandler, EXTENSION_ACTION_ROUTE } from '../extensions/actionRoute'
 import { BUILTIN_EXTENSIONS } from '../extensions/builtins'
@@ -16,7 +19,17 @@ import { HttpAuthReplayCache } from '../extensions/nip98'
 import { buildExtensionHost, type ExtensionPortUsage } from '../extensions/ports/host'
 import { createMemoryKeyValueStorage } from '../extensions/ports/storage'
 import { ExtensionRateLimiter } from '../extensions/rateLimiter'
-import { createRepositoryLoader, readRepositoryConfig } from '../extensions/repository'
+import { createBindingHandlers } from '../extensions/bindingRoutes'
+import {
+	createContextVmToolCaller,
+	createRemoteTarget,
+	describeRemoteBindings,
+	evaluateBindings,
+	resolveClientKey,
+	type RemoteActionTarget,
+	type RemoteToolCaller,
+} from '../extensions/remoteBindings'
+import { createRepositoryLoader, readRepositoryConfig, REPOSITORY_CACHE_TTL_MS } from '../extensions/repository'
 import { createSideloadHandlers } from '../extensions/sideloadRoutes'
 import { DEFAULT_EXTENSIONS_STATE_PATH, SqliteExtensionStateStore, type ExtensionStateStore } from '../extensions/stateStore'
 import { ExtensionRegistry, type PublicExtensionDescriptor } from '../extensions/registry'
@@ -29,6 +42,15 @@ interface ExtensionRuntimeState {
 	problems: Map<string, string>
 	repository: ReturnType<typeof createRepositoryLoader>
 	stateStore: ExtensionStateStore
+	/** Remote binding runtime (ADR-0023 §7.5). */
+	remote: {
+		getCaller: () => RemoteToolCaller | undefined
+		close: () => Promise<void>
+		lastFailureAt: Map<string, number>
+		refreshTimer: ReturnType<typeof setInterval>
+		/** Set when remote calls cannot be made at all, e.g. an invalid client key. */
+		problem?: string
+	}
 }
 
 // Kept on globalThis so a hot reload of the entrypoint stops the previous registry instead of leaking it.
@@ -48,7 +70,33 @@ export function getExtensionRegistry(): ExtensionRegistry | undefined {
 
 /** Client-safe descriptors for `/api/config`; empty until extensions start or when none are enabled. */
 export function getPublicExtensionDescriptors(): PublicExtensionDescriptor[] {
-	return getExtensionRegistry()?.getPublicDescriptors() ?? []
+	const state = globalState[STATE_KEY]
+	if (!state) return []
+	return [...state.registry.getPublicDescriptors(), ...describeRemoteBindings(remoteBindingViews(state), state.repository.peek())]
+}
+
+/** Binding states from the cached snapshot only; no relay I/O, so it is safe for public endpoints. */
+function remoteBindingViews(state: ExtensionRuntimeState): RemoteBindingView[] {
+	const views = evaluateBindings(state.stateStore.listBindings(), state.repository.peek(), state.remote.lastFailureAt, Date.now())
+	if (!state.remote.problem) return views
+	return views.map((view) => (view.state === 'installed_enabled' ? { ...view, state: 'unreachable', problem: state.remote.problem } : view))
+}
+
+function getRemoteTarget(extensionId: string, actionName: string): RemoteActionTarget | undefined {
+	const state = globalState[STATE_KEY]
+	const serverPubkey = parseRemoteExtensionId(extensionId)
+	if (!state || !serverPubkey) return undefined
+	const view = remoteBindingViews(state).find(
+		(item) => item.serverPubkey === serverPubkey && item.actionName === actionName && item.state === 'installed_enabled',
+	)
+	const caller = view && state.remote.getCaller()
+	if (!view || !caller) return undefined
+	return createRemoteTarget(
+		view,
+		caller,
+		(pubkey) => state.remote.lastFailureAt.set(pubkey, Date.now()),
+		(pubkey) => state.remote.lastFailureAt.delete(pubkey),
+	)
 }
 
 export function getExtensionPortUsage(id: string): ExtensionPortUsage | undefined {
@@ -80,7 +128,8 @@ export async function startExtensions(
 		getRelayPort: sharedRelayPort,
 		getSideloads: () => stateStore.listSideloads().map((record) => record.pubkey),
 	})
-	globalState[STATE_KEY] = { registry, usage, problems, repository, stateStore }
+	const remote = startRemoteBindings(env, repositoryConfig.relays, stateStore, repository)
+	globalState[STATE_KEY] = { registry, usage, problems, repository, stateStore, remote }
 
 	const config = readExtensionEnvConfig(definitions, env)
 	for (const error of config.errors) {
@@ -135,6 +184,8 @@ export async function stopExtensions(): Promise<void> {
 	const state = globalState[STATE_KEY]
 	if (!state) return
 	globalState[STATE_KEY] = undefined
+	clearInterval(state.remote.refreshTimer)
+	await state.remote.close().catch(() => undefined)
 	state.stateStore.close()
 	await state.registry.stop().catch((error) => console.error('[extensions] stop failed:', error instanceof Error ? error.message : error))
 }
@@ -155,6 +206,54 @@ function sharedRelayPort(): NostrRelayPort {
 }
 
 /**
+ * Remote calls sign with `EXTENSIONS_CLIENT_KEY`, never the app key. The ContextVM client is created on first
+ * use, and while bindings exist the repository is refreshed in the background so pins and descriptors stay current.
+ */
+function startRemoteBindings(
+	env: Readonly<Record<string, string | undefined>>,
+	relays: readonly string[],
+	stateStore: ExtensionStateStore,
+	repository: ReturnType<typeof createRepositoryLoader>,
+): ExtensionRuntimeState['remote'] {
+	let problem: string | undefined
+	let clientKey: ReturnType<typeof resolveClientKey> | undefined
+	try {
+		clientKey = resolveClientKey(env.EXTENSIONS_CLIENT_KEY)
+	} catch (error) {
+		problem = 'EXTENSIONS_CLIENT_KEY is invalid, so remote extensions cannot be called'
+		console.error(`[extensions] ${error instanceof Error ? error.message : 'Invalid EXTENSIONS_CLIENT_KEY'}`)
+	}
+
+	if (clientKey && stateStore.listBindings().length > 0) {
+		const note = clientKey.ephemeral ? ' (ephemeral: set EXTENSIONS_CLIENT_KEY for a stable key)' : ''
+		console.log(`[extensions] remote bindings call servers as ${clientKey.pubkey}${note}`)
+	}
+
+	let caller: RemoteToolCaller | undefined
+	const refresh = () => {
+		if (stateStore.listBindings().length > 0) void repository.getSnapshot()
+	}
+	refresh()
+	const refreshTimer = setInterval(refresh, REPOSITORY_CACHE_TTL_MS)
+	refreshTimer.unref?.()
+
+	return {
+		getCaller: () => {
+			if (!clientKey || relays.length === 0) return undefined
+			caller ??= createContextVmToolCaller({ privateKeyHex: clientKey.privateKeyHex, relays })
+			return caller
+		},
+		close: async () => {
+			await caller?.close()
+			caller = undefined
+		},
+		lastFailureAt: new Map(),
+		refreshTimer,
+		...(problem ? { problem } : {}),
+	}
+}
+
+/**
  * Admin store listing: every built-in with its state, plus third-party entries from configured repositories.
  * Config values are never included.
  */
@@ -168,7 +267,7 @@ export async function getExtensionCatalog(): Promise<ExtensionCatalog> {
 		return describeCatalogEntry(definition, { state: status, envPrefix: extensionEnvPrefix(id), ...(problem ? { problem } : {}) })
 	})
 	const repository = await state.repository.getSnapshot()
-	return { entries, ...(repository ? { repository } : {}) }
+	return { entries, ...(repository ? { repository } : {}), bindings: remoteBindingViews(state) }
 }
 
 /**
@@ -206,7 +305,22 @@ const sideloads = createSideloadHandlers({
 	onChange: () => globalState[STATE_KEY]?.repository.invalidate(),
 })
 
+const bindings = createBindingHandlers({
+	store: () => {
+		const state = globalState[STATE_KEY]
+		if (!state) throw new Error('Extensions are not started')
+		return state.stateStore
+	},
+	getSnapshot: async () => globalState[STATE_KEY]?.repository.getSnapshot(),
+	isAdmin: (pubkey) => getEventHandler().isAdmin(pubkey),
+	replayCache,
+	acceptedOrigins,
+	onChange: () => undefined,
+})
+
 export const extensionRoutes: BunRoutes = {
+	[EXTENSION_BINDINGS_PATH]: { POST: bindings.create },
+	[`${EXTENSION_BINDINGS_PATH}/:server/:action`]: { PATCH: bindings.update, DELETE: bindings.remove },
 	[EXTENSION_SIDELOADS_PATH]: { POST: sideloads.add },
 	[`${EXTENSION_SIDELOADS_PATH}/:pubkey`]: { DELETE: sideloads.remove },
 	[EXTENSION_CATALOG_PATH]: {
@@ -220,6 +334,7 @@ export const extensionRoutes: BunRoutes = {
 	[EXTENSION_ACTION_ROUTE]: {
 		POST: createExtensionActionHandler({
 			getRegistry: getExtensionRegistry,
+			getRemoteTarget,
 			isAdmin: (pubkey) => getEventHandler().isAdmin(pubkey),
 			replayCache,
 			rateLimiter,

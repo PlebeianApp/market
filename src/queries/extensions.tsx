@@ -5,6 +5,12 @@ import {
 	invokeExtensionAction,
 	parsePublicExtensionDescriptors,
 	addSideloadedServer,
+	createRemoteBinding,
+	deleteRemoteBinding,
+	RemoteActionOutputSchema,
+	updateRemoteBinding,
+	type RemoteActionOutput,
+	type RemoteBindingRequest,
 	ExtensionActionError,
 	fetchExtensionCatalog,
 	removeSideloadedServer,
@@ -20,7 +26,7 @@ import {
 import { sign } from '@/lib/nostr/io'
 import type { PublicAppConfig } from '@/lib/instance-config'
 import { useConfigQuery } from './config'
-import { extensionKeys } from './queryKeyFactory'
+import { configKeys, extensionKeys } from './queryKeyFactory'
 
 /** `/api/config` is untrusted: descriptors are parsed, and malformed entries are dropped. */
 export function selectExtensionDescriptors(config: Pick<PublicAppConfig, 'extensions'> | undefined): PublicExtensionDescriptor[] {
@@ -142,4 +148,67 @@ export function useSideloadMutations(pubkey: string | undefined) {
 		pending: add.isPending || remove.isPending,
 		errorMessage: error ? (error.reason === 'invalid_input' ? error.message : extensionErrorMessage(error)) : undefined,
 	}
+}
+
+/** Admin bind/update/remove for remote tools. On success the store and public config are refetched. */
+export function useBindingMutations(pubkey: string | undefined) {
+	const queryClient = useQueryClient()
+	const refresh = () => {
+		void queryClient.invalidateQueries({ queryKey: extensionKeys.catalog(pubkey ?? '') })
+		void queryClient.invalidateQueries({ queryKey: configKeys.all })
+	}
+	const unwrap = async <Value,>(promise: Promise<{ ok: true; value: Value } | { ok: false; error: ExtensionActionError }>) => {
+		const result = await promise
+		if (!result.ok) throw result.error
+		return result.value
+	}
+
+	const bind = useMutation<unknown, ExtensionActionError, RemoteBindingRequest>({
+		mutationFn: (request) => unwrap(createRemoteBinding({ sign }, request)),
+		onSuccess: refresh,
+	})
+	const update = useMutation<
+		unknown,
+		ExtensionActionError,
+		{ serverPubkey: string; actionName: string; change: { enabled?: boolean; approveCurrentDefinition?: true } }
+	>({
+		mutationFn: ({ serverPubkey, actionName, change }) => unwrap(updateRemoteBinding({ sign }, serverPubkey, actionName, change)),
+		onSuccess: refresh,
+	})
+	const remove = useMutation<unknown, ExtensionActionError, { serverPubkey: string; actionName: string }>({
+		mutationFn: ({ serverPubkey, actionName }) => unwrap(deleteRemoteBinding({ sign }, serverPubkey, actionName)),
+		onSuccess: refresh,
+	})
+
+	const reset = () => [bind, update, remove].forEach((mutation) => mutation.reset())
+	const error = bind.error ?? update.error ?? remove.error
+	return {
+		onBind: (request: RemoteBindingRequest) => {
+			reset()
+			bind.mutate(request)
+		},
+		onUpdate: (serverPubkey: string, actionName: string, change: { enabled?: boolean; approveCurrentDefinition?: true }) => {
+			reset()
+			update.mutate({ serverPubkey, actionName, change })
+		},
+		onRemove: (serverPubkey: string, actionName: string) => {
+			reset()
+			remove.mutate({ serverPubkey, actionName })
+		},
+		pending: bind.isPending || update.isPending || remove.isPending,
+		errorMessage: error ? (error.reason === 'invalid_input' ? error.message : extensionErrorMessage(error)) : undefined,
+	}
+}
+
+/** Calls any action and returns the remote output envelope (text plus optional data). */
+export function useRemoteActionInvoke() {
+	return useMutation<RemoteActionOutput, ExtensionActionError, { extensionId: string; actionName: string; input: Record<string, unknown> }>(
+		{
+			mutationFn: async ({ extensionId, actionName, input }) => {
+				const result = await invokeExtensionAction(extensionId, actionName, input, { sign }, { output: RemoteActionOutputSchema })
+				if (!result.ok) throw result.error
+				return result.value
+			},
+		},
+	)
 }

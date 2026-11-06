@@ -597,8 +597,54 @@ asks the user to opt in once per capability before the first call.
       and the time. It never stores secrets.
     - A change invalidates the repository cache. A relay read started before
       the change cannot overwrite the newer listing.
-  - The tab is browse-only. Paid entries are marked as not installable, and
-    binding remote tools (7.5) is not implemented.
+  - **Remote bindings (7.5).** These are implemented as follows:
+    - **Binding.** Each unpaid tool of a listed server can be bound
+      (`POST /api/extensions/bindings`, NIP-98, admin-only). The admin chooses
+      a capability, an action name, and a role (`user` or `admin`), and
+      confirms the data-flow notice. The default rate limit is 30 calls per
+      hour per caller.
+    - **Pinning.** Platform takes the pin from its own fresh snapshot:
+      sha256 of the canonical JSON (keys sorted) of the tool's announced
+      `inputSchema`. It never takes the pin from the request.
+    - **Managing.** `PATCH /api/extensions/bindings/:server/:action` enables or
+      disables a binding, or approves the currently announced definition.
+      `DELETE` removes it.
+    - **Storage.** Bindings live in the same SQLite file as sideloads, up to
+      50, with public identifiers only.
+    - **States.** A binding's state is computed on every read:
+      - `installed_disabled` when switched off;
+      - `misconfigured` when the server is no longer listed, the tool is gone
+        or now priced, or the schema hash changed;
+      - `unreachable` when there is no valid announcement, no snapshot has been
+        loaded yet, or a call failed in the last 2 minutes;
+      - otherwise `installed_enabled`.
+
+      Only `installed_enabled` bindings are callable or advertised.
+
+    - **Advertising.** `/api/config` advertises enabled bindings as
+      descriptors with id `remote.<server-pubkey>`, computed from the cached
+      snapshot only, so the public endpoint never triggers relay reads. While
+      bindings exist, Platform refreshes the repository in the background
+      every 5 minutes.
+    - **Calls.** Calls go through the same action route: `404`, then NIP-98,
+      then the per-pubkey rate limit, then a JSON-object input check, then the
+      role check.
+      - Platform then calls the tool as a ContextVM client signed with
+        `EXTENSIONS_CLIENT_KEY` (hex or nsec; a per-process key with a
+        warning if unset), never the app key.
+      - Each server gets its own explicit relay pool from the repository
+        relays, so there is no relay discovery, and one server's failure
+        cannot affect another.
+      - There is a 30-second timeout.
+    - **Results.** Results become `{ text, data? }`: text content only,
+      control characters stripped, text capped at 4000 characters and
+      structured data at 16 KB. A remote tool error becomes `extension_failed`
+      without its text.
+    - **Admin UI.** The admin page has a "Try a remote action" panel that calls
+      bindings through the real route.
+
+  - Paid tools cannot be bound.
+
 - **Built-in tab.** It shows every extension compiled into this release.
 - Each entry (`ExtensionCatalogEntry`, `sdk/core/extensions/catalog.ts`) shows:
   - logo, short description (manifest `description`, at most 120 characters),
@@ -608,8 +654,8 @@ asks the user to opt in once per capability before the first call.
     private-safe reason;
   - the `EXTENSION_<ID>_` variables that enable it.
 - Config values are never included. Every entry is `managedBy: 'environment'`.
-- Remote bindings, `needs_setup`, `installed_disabled`, `unreachable`, and
-  installing from the store are not implemented. The SQLite file above is a
+- `needs_setup`, enabling or disabling built-ins from the store, and storing
+  private settings are not implemented. The SQLite file above is a
   first, secret-free piece of the 7.8 settings store; storing private values
   there still needs the encryption and key-management decision.
 

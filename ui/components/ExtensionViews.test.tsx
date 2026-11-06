@@ -7,7 +7,9 @@ import {
 	ExtensionsEmptyState,
 	ExtensionStoreButton,
 	ExtensionStoreEntry,
+	BindingRow,
 	ImageDescribePanel,
+	RemoteActionTryPanel,
 	RepositoryEntryCard,
 	RepositorySection,
 } from './ExtensionViews'
@@ -137,6 +139,7 @@ describe('repository views', () => {
 				title: 'Get a quote',
 				description: 'Rates for a parcel',
 				inputFields: ['weight'],
+				inputSchemaHash: 'd'.repeat(64),
 				price: { amount: '10', unit: 'sats' },
 			},
 		],
@@ -150,7 +153,7 @@ describe('repository views', () => {
 		expect(markup).toContain('Paid')
 		expect(markup).toContain('10 sats')
 		expect(markup).toContain('rel="noopener noreferrer nofollow"')
-		expect(markup).toContain('Paid extensions cannot be installed')
+		expect(markup).toContain('Paid tools cannot be bound')
 		expect(markup).toContain(`title="${curator}"`)
 	})
 
@@ -228,5 +231,70 @@ describe('sideload views', () => {
 		expect(markup).toContain('Enter a server pubkey as 64-character hex or npub')
 		expect(markup).toContain('No registries are configured')
 		expect(markup).toContain('Sideloaded')
+	})
+})
+
+describe('remote binding views', () => {
+	const server = 'e'.repeat(64)
+	const controls = { onBind: () => {}, onUpdate: () => {}, onRemove: () => {}, pending: false }
+	const tool = { name: 'quote', inputFields: [], inputSchemaHash: 'f'.repeat(64) }
+	const entry = {
+		serverPubkey: server,
+		listedBy: [],
+		sideloaded: true,
+		state: 'listed' as const,
+		name: 'Rates',
+		tools: [tool],
+		paid: false,
+		encrypted: false,
+	}
+	const binding = {
+		serverPubkey: server,
+		serverName: 'Rates',
+		toolName: 'quote',
+		actionName: 'get-quote',
+		capability: 'shipping.quote',
+		auth: 'user' as const,
+		rateLimit: { perPubkey: 30, windowSeconds: 3600 },
+		enabled: true,
+		state: 'misconfigured' as const,
+		problem: 'The tool definition changed since it was reviewed.',
+	}
+
+	test('unbound unpaid tools offer Bind; bound ones show state and controls', () => {
+		expect(renderToStaticMarkup(<RepositoryEntryCard entry={entry} bindingControls={controls} />)).toContain(
+			'data-testid="bind-open-quote"',
+		)
+		const bound = renderToStaticMarkup(<RepositoryEntryCard entry={entry} bindings={[binding]} bindingControls={controls} />)
+		expect(bound).toContain('Needs review')
+		expect(bound).toContain('Approve new definition')
+		expect(bound).toContain('shipping.quote')
+		expect(
+			renderToStaticMarkup(<RepositoryEntryCard entry={{ ...entry, state: 'unavailable' }} bindingControls={controls} />),
+		).not.toContain('bind-open-')
+	})
+
+	test('enabled bindings offer Disable without Approve', () => {
+		const markup = renderToStaticMarkup(
+			<BindingRow binding={{ ...binding, state: 'installed_enabled', problem: undefined }} controls={controls} />,
+		)
+		expect(markup).toContain('Bound')
+		expect(markup).toContain('Disable')
+		expect(markup).not.toContain('Approve')
+	})
+
+	test('try panel renders only with actions and labels replies as untrusted', () => {
+		expect(renderToStaticMarkup(<RemoteActionTryPanel actions={[]} pending={false} onRun={() => {}} />)).toBe('')
+		const markup = renderToStaticMarkup(
+			<RemoteActionTryPanel
+				actions={[{ extensionId: `remote.${server}`, actionName: 'get-quote', label: 'Rates — get-quote' }]}
+				pending={false}
+				onRun={() => {}}
+				result={{ text: '<i>1200</i> sats', data: { sats: 1200 } }}
+			/>,
+		)
+		expect(markup).toContain('Third-party reply — untrusted')
+		expect(markup).toContain('&lt;i&gt;1200&lt;/i&gt; sats')
+		expect(markup).toContain('Rates — get-quote')
 	})
 })

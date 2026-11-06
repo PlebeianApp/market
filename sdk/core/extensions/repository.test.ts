@@ -5,6 +5,7 @@ import {
 	CONTEXTVM_SERVER_ANNOUNCEMENT_KIND,
 	CONTEXTVM_TOOLS_LIST_KIND,
 	EXTENSION_REGISTRY_D_TAG,
+	hashInputSchema,
 	parseRegistryList,
 	parseRepositorySnapshot,
 	parseToolsList,
@@ -80,9 +81,10 @@ describe('extension repository', () => {
 				title: 'Get a quote',
 				description: 'Rates for a parcel',
 				inputFields: ['weight', 'country'],
+				inputSchemaHash: hashInputSchema({ type: 'object', properties: { weight: {}, country: {} } }),
 				price: { amount: '10', unit: 'sats' },
 			},
-			{ name: 'track', inputFields: [] },
+			{ name: 'track', inputFields: [], inputSchemaHash: hashInputSchema({ type: 'object' }) },
 		])
 	})
 

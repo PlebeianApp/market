@@ -86,6 +86,7 @@ export { describeExtension, findExtensionAction, parsePublicExtensionAction, par
 export type { ExtensionActionTarget, PublicExtensionDescriptor } from './descriptors'
 export {
 	addSideloadedServer,
+	sendAdminRequest,
 	describeCatalogEntry,
 	EXTENSION_SIDELOADS_PATH,
 	removeSideloadedServer,
@@ -104,6 +105,8 @@ export type {
 } from './catalog'
 export {
 	buildRepositorySnapshot,
+	canonicalJson,
+	hashInputSchema,
 	collectRegistryServers,
 	CONTEXTVM_SERVER_ANNOUNCEMENT_KIND,
 	CONTEXTVM_TOOLS_LIST_KIND,
@@ -121,3 +124,18 @@ export type {
 	RepositorySnapshot,
 	RepositoryTool,
 } from './repository'
+export {
+	createRemoteBinding,
+	deleteRemoteBinding,
+	EXTENSION_BINDINGS_PATH,
+	parseRemoteBindingRequest,
+	parseRemoteBindingViews,
+	parseRemoteExtensionId,
+	REMOTE_BINDING_STATES,
+	REMOTE_EXTENSION_PREFIX,
+	RemoteActionOutputSchema,
+	remoteExtensionId,
+	toRemoteActionOutput,
+	updateRemoteBinding,
+} from './bindings'
+export type { RemoteActionOutput, RemoteBindingRequest, RemoteBindingState, RemoteBindingView } from './bindings'
