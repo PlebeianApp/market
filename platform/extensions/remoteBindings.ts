@@ -131,7 +131,7 @@ function bindingProblem(
 ): { state: 'misconfigured' | 'unreachable'; message: string } | undefined {
 	if (!snapshot) return { state: 'unreachable', message: 'The repository listing has not been loaded yet' }
 	const entry = snapshot.entries.find((item) => item.serverPubkey === record.serverPubkey)
-	if (!entry) return { state: 'misconfigured', message: 'The server is no longer listed by a registry or sideloaded' }
+	if (!entry || !entry.added) return { state: 'misconfigured', message: 'The extension is no longer added to this marketplace' }
 	if (entry.state !== 'listed') return { state: 'unreachable', message: entry.problem ?? 'The server has no valid announcement' }
 	const tool = entry.tools.find((item) => item.name === record.toolName)
 	if (!tool) return { state: 'misconfigured', message: 'The server no longer announces this tool' }

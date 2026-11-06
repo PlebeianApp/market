@@ -1,19 +1,25 @@
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { PublicExtensionDescriptor } from '@sdk/core/extensions'
+import type { PublicExtensionDescriptor, SuggestedBinding } from '@sdk/core/extensions'
 import {
+	AcceptBindingsSummary,
+	BindingRow,
 	ExtensionCard,
 	ExtensionLogo,
 	ExtensionsEmptyState,
 	ExtensionStoreButton,
 	ExtensionStoreEntry,
-	BindingRow,
+	ExtensionTile,
 	ImageDescribePanel,
+	pendingSuggestedBindings,
 	RemoteActionTryPanel,
 	RepositoryEntryCard,
 	RepositorySection,
+	suggestableTools,
 } from './ExtensionViews'
 import { SettingsPageHeader } from './OperatorSettingsViews'
+
+const suggestion: SuggestedBinding = { actionName: 'get-quote', capability: 'shipping.quote', auth: 'user', source: 'server' }
 
 const descriptor: PublicExtensionDescriptor = {
 	id: 'product-image-describer',
@@ -50,7 +56,28 @@ describe('extension views', () => {
 	})
 
 	test('empty state explains how operators enable extensions', () => {
-		expect(renderToStaticMarkup(<ExtensionsEmptyState envExample="EXTENSION_X_ENABLED=true" />)).toContain('EXTENSION_X_ENABLED=true')
+		expect(renderToStaticMarkup(<ExtensionsEmptyState />)).toContain('No extensions added yet.')
+	})
+
+	test('extension tile renders inside the given link with kind, subtitle, and warning', () => {
+		const markup = renderToStaticMarkup(
+			<ExtensionTile
+				name="Dummy Image Describer"
+				icon="https://cdn.example/logo.svg"
+				kind="external"
+				description="Drafts product descriptions"
+				subtitle="2 actions"
+				warning="Needs review"
+				testId="extension-tile-x"
+				link={<a href="/dashboard/app-settings/extensions/remote.abc" />}
+			/>,
+		)
+		expect(markup).toMatch(/^<a href="\/dashboard\/app-settings\/extensions\/remote\.abc"/)
+		expect(markup).toContain('data-testid="extension-tile-x"')
+		expect(markup).toContain('External')
+		expect(markup).toContain('2 actions')
+		expect(markup).toContain('Drafts product descriptions')
+		expect(markup).toContain('Needs review')
 	})
 
 	test('describe panel labels mock output and renders it as text, not HTML', () => {
@@ -69,7 +96,7 @@ describe('extension views', () => {
 })
 
 describe('extension store views', () => {
-	const entry = {
+	const builtin = {
 		id: 'product-image-describer',
 		version: '0.1.0',
 		displayName: 'Product image describer',
@@ -84,206 +111,257 @@ describe('extension store views', () => {
 		state: 'available',
 		managedBy: 'environment',
 		envPrefix: 'EXTENSION_PRODUCT_IMAGE_DESCRIBER_',
+		canEnable: false,
 	} as const
 
-	test('store entry shows logo, state, permissions, and how to enable', () => {
-		const markup = renderToStaticMarkup(<ExtensionStoreEntry entry={entry} />)
+	test('built-in entry is one compact row with logo, state, ports, and the enable variable', () => {
+		const markup = renderToStaticMarkup(
+			<ExtensionStoreEntry entry={{ ...builtin, hostPorts: ['http'], egress: ['https://api.example'] }} />,
+		)
 		expect(markup).toContain('src="/images/extension-product-image-describer.svg"')
 		expect(markup).toContain('Available')
-		expect(markup).toContain('No relay, network, or storage access.')
+		expect(markup).toContain('>http<')
 		expect(markup).toContain('EXTENSION_PRODUCT_IMAGE_DESCRIBER_ENABLED=true')
+		expect(markup).toContain('>Drafts a description.<')
+		expect(renderToStaticMarkup(<ExtensionStoreEntry entry={{ ...builtin, state: 'installed_enabled' }} />)).not.toContain('ENABLED=true')
+		expect(
+			renderToStaticMarkup(<ExtensionStoreEntry entry={{ ...builtin, state: 'misconfigured', problem: 'invalid private config' }} />),
+		).toContain('invalid private config')
 	})
 
-	test('enabled entries omit enable instructions; misconfigured ones show the problem', () => {
-		expect(renderToStaticMarkup(<ExtensionStoreEntry entry={{ ...entry, state: 'installed_enabled' }} />)).not.toContain('To enable')
-		const broken = renderToStaticMarkup(
-			<ExtensionStoreEntry
-				entry={{
-					...entry,
-					state: 'misconfigured',
-					problem: 'invalid private config',
-					hostPorts: ['http'],
-					egress: ['https://api.example'],
-				}}
-			/>,
+	test('admins can disable enabled built-ins and enable those that need no secrets', () => {
+		const controls = { onToggle: () => {}, pending: false }
+		const enabled = renderToStaticMarkup(
+			<ExtensionStoreEntry entry={{ ...builtin, state: 'installed_enabled', canEnable: true }} controls={controls} />,
 		)
-		expect(broken).toContain('Needs attention')
-		expect(broken).toContain('invalid private config')
-		expect(broken).toContain('https://api.example')
+		expect(enabled).toContain('data-testid="builtin-toggle-product-image-describer"')
+		expect(enabled).toContain('Disable')
+		const disabled = renderToStaticMarkup(
+			<ExtensionStoreEntry entry={{ ...builtin, state: 'installed_disabled', canEnable: true }} controls={controls} />,
+		)
+		expect(disabled).toContain('Disabled')
+		expect(disabled).toContain('>Enable<')
+		expect(disabled).not.toContain('ENABLED=true')
+		const needsSecrets = renderToStaticMarkup(<ExtensionStoreEntry entry={{ ...builtin, canEnable: false }} controls={controls} />)
+		expect(needsSecrets).not.toContain('builtin-toggle-')
+		expect(needsSecrets).toContain('EXTENSION_PRODUCT_IMAGE_DESCRIBER_ENABLED=true')
 	})
 
 	test('header renders top-right actions', () => {
 		const markup = renderToStaticMarkup(
-			<SettingsPageHeader icon={() => null} title="Extensions" description="d" actions={<ExtensionStoreButton onClick={() => {}} />} />,
+			<SettingsPageHeader
+				icon={() => null}
+				title="Extensions"
+				description="d"
+				actions={
+					<ExtensionStoreButton>
+						<a href="/dashboard/app-settings/extension-store" />
+					</ExtensionStoreButton>
+				}
+			/>,
 		)
 		expect(markup).toContain('Extension store')
-		expect(markup).toContain('justify-between')
+		expect(markup).toContain('href="/dashboard/app-settings/extension-store"')
 	})
 })
 
-describe('repository views', () => {
-	const server = 'a'.repeat(64)
-	const curator = 'b'.repeat(64)
-	const entry = {
-		serverPubkey: server,
-		listedBy: [curator],
-		sideloaded: false,
-		state: 'listed' as const,
-		name: 'Shipping rates',
-		about: 'Live carrier rates',
-		website: 'https://rates.example/',
-		version: '2.1.0',
-		tools: [
-			{
-				name: 'quote',
-				title: 'Get a quote',
-				description: 'Rates for a parcel',
-				inputFields: ['weight'],
-				inputSchemaHash: 'd'.repeat(64),
-				price: { amount: '10', unit: 'sats' },
-			},
-		],
-		paid: true,
-		encrypted: true,
-	}
+const server = 'e'.repeat(64)
+const serverControls = {
+	onAdd: () => {},
+	onRemove: () => {},
+	pending: false,
+	errorMessage: 'Enter a server pubkey as 64-character hex or npub',
+}
+const bindingControls = {
+	onBind: async () => true,
+	onBindMany: async () => true,
+	onUpdate: () => {},
+	onRemove: () => {},
+	pending: false,
+}
+const tools = [
+	{
+		name: 'describe_product_image',
+		inputFields: [],
+		inputSchemaHash: 'a'.repeat(64),
+		suggestedBinding: suggestion,
+		description: 'Long description',
+	},
+	{
+		name: 'suggest_tags',
+		inputFields: [],
+		inputSchemaHash: 'b'.repeat(64),
+		suggestedBinding: { actionName: 'suggest-tags', capability: 'tool.suggest.tags', auth: 'admin' as const, source: 'derived' as const },
+	},
+	{
+		name: 'premium',
+		inputFields: [],
+		inputSchemaHash: 'c'.repeat(64),
+		suggestedBinding: suggestion,
+		price: { amount: '100', unit: 'sats' },
+	},
+]
+const entry = {
+	serverPubkey: server,
+	listedBy: ['d'.repeat(64)],
+	added: true,
+	sideloaded: false,
+	state: 'listed' as const,
+	name: 'Dummy',
+	about: 'About text',
+	website: 'https://dummy.example/',
+	tools,
+	paid: true,
+	encrypted: false,
+}
+const binding = (change: Record<string, unknown> = {}) => ({
+	serverPubkey: server,
+	serverName: 'Dummy',
+	toolName: 'describe_product_image',
+	actionName: 'get-quote',
+	capability: 'shipping.quote',
+	auth: 'user' as const,
+	rateLimit: { perPubkey: 30, windowSeconds: 3600 },
+	enabled: true,
+	state: 'installed_enabled' as const,
+	...change,
+})
 
-	test('repository entry is labelled third-party and paid, links safely, and is not installable', () => {
-		const markup = renderToStaticMarkup(<RepositoryEntryCard entry={entry} />)
-		expect(markup).toContain('Third-party')
-		expect(markup).toContain('Paid')
-		expect(markup).toContain('10 sats')
-		expect(markup).toContain('rel="noopener noreferrer nofollow"')
-		expect(markup).toContain('Paid tools cannot be bound')
-		expect(markup).toContain(`title="${curator}"`)
+describe('repository entry', () => {
+	test('Add on a listed extension offers its suggestions for the add dialog', () => {
+		expect(suggestableTools({ ...entry, added: false }, []).map((tool) => tool.name)).toEqual(['describe_product_image', 'suggest_tags'])
+		expect(suggestableTools({ ...entry, added: false, state: 'unavailable' }, [])).toEqual([])
 	})
 
-	test('section explains how to add registries and surfaces relay problems', () => {
-		expect(
-			renderToStaticMarkup(<RepositorySection repository={undefined} registryEnvExample="EXTENSIONS_REGISTRY_CURATORS=npub1…" />),
-		).toContain('EXTENSIONS_REGISTRY_CURATORS=npub1…')
+	test('not added: only the Add button, no tools or suggestions', () => {
+		const markup = renderToStaticMarkup(
+			<RepositoryEntryCard entry={{ ...entry, added: false }} serverControls={serverControls} bindingControls={bindingControls} />,
+		)
+		expect(markup).toContain(`data-testid="repository-add-${server}"`)
+		expect(markup).not.toContain('accept-all-')
+		expect(markup).not.toContain('suggested-binding-')
+		expect(markup).not.toContain('describe_product_image')
+	})
+
+	test('added: one Accept suggested button for all unpaid tools; long text stays out of the page', () => {
+		const markup = renderToStaticMarkup(
+			<RepositoryEntryCard entry={entry} serverControls={serverControls} bindingControls={bindingControls} />,
+		)
+		expect(markup).toContain(`data-testid="accept-all-${server}"`)
+		expect(markup).toContain('Accept suggested (2)')
+		expect(markup).toContain('data-testid="suggested-binding-describe_product_image"')
+		expect(markup).toContain('data-testid="suggested-binding-suggest_tags"')
+		expect(markup).not.toContain('accept-binding-')
+		expect(markup).not.toContain('suggested-binding-premium')
+		expect(markup).toContain('100 sats')
+		expect(markup).toContain('rel="noopener noreferrer nofollow"')
+		expect(markup).toContain('>About text<')
+		expect(markup).not.toContain('>Long description<')
+		expect(markup).toContain('Paid')
+	})
+
+	test('bound tools show a compact binding instead of a suggestion; removal is blocked while bound', () => {
+		const markup = renderToStaticMarkup(
+			<RepositoryEntryCard entry={entry} serverControls={serverControls} bindings={[binding()]} bindingControls={bindingControls} />,
+		)
+		expect(markup).toContain('Bound')
+		expect(markup).not.toContain('suggested-binding-describe_product_image')
+		expect(markup).toContain('Accept suggested (1)')
+		expect(markup).toContain('title="Remove its bindings first"')
+	})
+
+	test('a suggestion whose action name is taken is not offered for bulk accept', () => {
+		const taken = binding({ toolName: 'other', actionName: 'get-quote' })
+		expect(pendingSuggestedBindings(entry, [taken]).map((tool) => tool.name)).toEqual(['suggest_tags'])
+		expect(pendingSuggestedBindings({ ...entry, added: false }, [])).toEqual([])
+	})
+
+	test('sideloaded and unavailable entries are labelled', () => {
+		const markup = renderToStaticMarkup(
+			<RepositoryEntryCard
+				entry={{ ...entry, listedBy: [], sideloaded: true, state: 'unavailable', problem: 'No server announcement found' }}
+				serverControls={serverControls}
+			/>,
+		)
+		expect(markup).toContain('Sideloaded')
+		expect(markup).toContain('Unavailable')
+		expect(markup).toContain('title="No server announcement found"')
+	})
+})
+
+describe('binding row', () => {
+	test('needs-review bindings show the reason and Approve; enabled ones a pause control', () => {
+		const review = renderToStaticMarkup(
+			<BindingRow binding={binding({ state: 'misconfigured', problem: 'The tool definition changed' })} controls={bindingControls} />,
+		)
+		expect(review).toContain('Needs review')
+		expect(review).toContain('The tool definition changed')
+		expect(review).toContain('Approve')
+		const enabled = renderToStaticMarkup(<BindingRow binding={binding()} controls={bindingControls} />)
+		expect(enabled).toContain('aria-label="Disable get-quote"')
+		expect(enabled).not.toContain('Approve')
+	})
+})
+
+describe('repository section', () => {
+	test('add-server form, short status lines, and binding errors', () => {
 		const markup = renderToStaticMarkup(
 			<RepositorySection
-				registryEnvExample=""
+				registryEnvExample="EXTENSIONS_REGISTRY_CURATORS=npub1…"
+				servers={serverControls}
+				bindingControls={{ ...bindingControls, errorMessage: 'Remove failed' }}
 				repository={{
-					sideloaded: [],
-					curators: [curator],
-					relays: ['wss://relay.example'],
+					curators: [],
+					relays: ['wss://app.example'],
+					added: [],
 					entries: [],
-					missingRegistries: [curator],
+					missingRegistries: ['d'.repeat(64)],
 					fetchedAt: 0,
 					problem: 'Could not read',
 				}}
 			/>,
 		)
+		expect(markup).toContain('data-testid="add-server-form"')
+		expect(markup).toContain('Enter a server pubkey as 64-character hex or npub')
+		expect(markup).toContain('No registries configured.')
+		expect(markup).toContain('1 registry list(s) not found.')
 		expect(markup).toContain('Could not read')
-		expect(markup).toContain('No registry list found for')
-		expect(markup).toContain('No extensions are listed yet')
+		expect(markup).toContain('Remove failed')
+		expect(markup).toContain('No extensions yet.')
+	})
+
+	test('without a relay, explains the setting', () => {
+		expect(
+			renderToStaticMarkup(<RepositorySection repository={undefined} registryEnvExample="EXTENSIONS_REGISTRY_RELAYS=wss://x" />),
+		).toContain('EXTENSIONS_REGISTRY_RELAYS=wss://x')
 	})
 })
 
-describe('sideload views', () => {
-	const server = 'c'.repeat(64)
-	const controls = {
-		onAdd: () => {},
-		onRemove: () => {},
-		pending: false,
-		errorMessage: 'Enter a server pubkey as 64-character hex or npub',
-	}
-	const sideloaded = {
-		serverPubkey: server,
-		listedBy: [],
-		sideloaded: true,
-		state: 'unavailable' as const,
-		name: 'cccccccc…',
-		tools: [],
-		paid: false,
-		encrypted: false,
-		problem: 'No server announcement found on the configured relays',
-	}
-
-	test('sideloaded entries are labelled and removable', () => {
-		const markup = renderToStaticMarkup(<RepositoryEntryCard entry={sideloaded} onRemove={() => {}} />)
-		expect(markup).toContain('Sideloaded')
-		expect(markup).toContain('added by an admin of this marketplace')
-		expect(markup).toContain(`data-testid="repository-remove-${server}"`)
-		expect(markup).not.toContain('listed by')
-		expect(renderToStaticMarkup(<RepositoryEntryCard entry={{ ...sideloaded, sideloaded: false }} onRemove={() => {}} />)).not.toContain(
-			'repository-remove-',
-		)
-	})
-
-	test('section shows the sideload form and registry setup hint with no curators', () => {
+describe('accept bindings confirmation', () => {
+	test('summary lists each binding and who may call it, with the data-flow notice', () => {
 		const markup = renderToStaticMarkup(
-			<RepositorySection
-				registryEnvExample="EXTENSIONS_REGISTRY_CURATORS=npub1…"
-				sideload={controls}
-				repository={{
-					curators: [],
-					relays: ['wss://app.example'],
-					sideloaded: [server],
-					entries: [sideloaded],
-					missingRegistries: [],
-					fetchedAt: 0,
-				}}
+			<AcceptBindingsSummary
+				serverName="Dummy Image Describer"
+				items={[
+					{ toolName: 'describe_product_image', suggestion },
+					{
+						toolName: 'suggest_tags',
+						suggestion: { actionName: 'suggest-tags', capability: 'tool.suggest.tags', auth: 'admin', source: 'derived' },
+					},
+				]}
 			/>,
 		)
-		expect(markup).toContain('data-testid="sideload-form"')
-		expect(markup).toContain('Enter a server pubkey as 64-character hex or npub')
-		expect(markup).toContain('No registries are configured')
-		expect(markup).toContain('Sideloaded')
+		expect(markup).toContain('describe_product_image')
+		expect(markup).toContain('shipping.quote')
+		expect(markup).toContain('Any signed-in user')
+		expect(markup).toContain('Admins only')
+		expect(markup).toContain('Dummy Image Describer')
+		expect(markup).toContain('replies are untrusted')
 	})
 })
 
-describe('remote binding views', () => {
-	const server = 'e'.repeat(64)
-	const controls = { onBind: () => {}, onUpdate: () => {}, onRemove: () => {}, pending: false }
-	const tool = { name: 'quote', inputFields: [], inputSchemaHash: 'f'.repeat(64) }
-	const entry = {
-		serverPubkey: server,
-		listedBy: [],
-		sideloaded: true,
-		state: 'listed' as const,
-		name: 'Rates',
-		tools: [tool],
-		paid: false,
-		encrypted: false,
-	}
-	const binding = {
-		serverPubkey: server,
-		serverName: 'Rates',
-		toolName: 'quote',
-		actionName: 'get-quote',
-		capability: 'shipping.quote',
-		auth: 'user' as const,
-		rateLimit: { perPubkey: 30, windowSeconds: 3600 },
-		enabled: true,
-		state: 'misconfigured' as const,
-		problem: 'The tool definition changed since it was reviewed.',
-	}
-
-	test('unbound unpaid tools offer Bind; bound ones show state and controls', () => {
-		expect(renderToStaticMarkup(<RepositoryEntryCard entry={entry} bindingControls={controls} />)).toContain(
-			'data-testid="bind-open-quote"',
-		)
-		const bound = renderToStaticMarkup(<RepositoryEntryCard entry={entry} bindings={[binding]} bindingControls={controls} />)
-		expect(bound).toContain('Needs review')
-		expect(bound).toContain('Approve new definition')
-		expect(bound).toContain('shipping.quote')
-		expect(
-			renderToStaticMarkup(<RepositoryEntryCard entry={{ ...entry, state: 'unavailable' }} bindingControls={controls} />),
-		).not.toContain('bind-open-')
-	})
-
-	test('enabled bindings offer Disable without Approve', () => {
-		const markup = renderToStaticMarkup(
-			<BindingRow binding={{ ...binding, state: 'installed_enabled', problem: undefined }} controls={controls} />,
-		)
-		expect(markup).toContain('Bound')
-		expect(markup).toContain('Disable')
-		expect(markup).not.toContain('Approve')
-	})
-
-	test('try panel renders only with actions and labels replies as untrusted', () => {
+describe('remote action try panel', () => {
+	test('renders only with actions and labels replies as untrusted', () => {
 		expect(renderToStaticMarkup(<RemoteActionTryPanel actions={[]} pending={false} onRun={() => {}} />)).toBe('')
 		const markup = renderToStaticMarkup(
 			<RemoteActionTryPanel
@@ -295,6 +373,5 @@ describe('remote binding views', () => {
 		)
 		expect(markup).toContain('Third-party reply — untrusted')
 		expect(markup).toContain('&lt;i&gt;1200&lt;/i&gt; sats')
-		expect(markup).toContain('Rates — get-quote')
 	})
 })

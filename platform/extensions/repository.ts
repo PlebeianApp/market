@@ -55,8 +55,8 @@ export interface RepositoryLoaderOptions {
 	curators: readonly string[]
 	relays: readonly string[]
 	getRelayPort: () => NostrRelayPort
-	/** Server pubkeys sideloaded by admins; read on every load. */
-	getSideloads?: () => readonly string[]
+	/** Server pubkeys added by admins; read on every load. */
+	getAddedServers?: () => readonly string[]
 	ttlMs?: number
 	nowMs?: () => number
 }
@@ -72,8 +72,8 @@ export function createRepositoryLoader(options: RepositoryLoaderOptions) {
 	let inFlight: Promise<RepositorySnapshot> | undefined
 
 	const load = async (): Promise<RepositorySnapshot> => {
-		const sideloaded = [...(options.getSideloads?.() ?? [])]
-		const base = { curators: options.curators, relays: options.relays, sideloaded }
+		const added = [...(options.getAddedServers?.() ?? [])]
+		const base = { curators: options.curators, relays: options.relays, added }
 		try {
 			const port = options.getRelayPort()
 			const registryEvents =
@@ -84,7 +84,7 @@ export function createRepositoryLoader(options: RepositoryLoaderOptions) {
 							options.relays,
 						)
 			const listed = [...collectRegistryServers(options.curators, registryEvents).listedBy.keys()]
-			const servers = [...new Set([...sideloaded, ...listed])].slice(0, MAX_LISTED_SERVERS)
+			const servers = [...new Set([...added, ...listed])].slice(0, MAX_LISTED_SERVERS)
 			const announcementEvents =
 				servers.length === 0
 					? []
@@ -105,14 +105,14 @@ export function createRepositoryLoader(options: RepositoryLoaderOptions) {
 		peek(): RepositorySnapshot | undefined {
 			return cached
 		},
-		/** Drops the cache, e.g. after an admin sideloads or removes a server. */
+		/** Drops the cache, e.g. after an admin adds or removes a server. */
 		invalidate() {
 			generation++
 			cached = undefined
 			lastAttemptAt = -Infinity
 			inFlight = undefined
 		},
-		/** `undefined` only when no relay is configured; with no sources, an empty snapshot lets admins sideload. */
+		/** `undefined` only when no relay is configured; with no sources, an empty snapshot lets admins add servers by pubkey. */
 		async getSnapshot(): Promise<RepositorySnapshot | undefined> {
 			if (options.relays.length === 0) return undefined
 			if (cached && now() - lastAttemptAt < (cached.problem ? REPOSITORY_RETRY_MS : ttl)) return cached

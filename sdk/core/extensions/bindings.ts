@@ -2,14 +2,11 @@ import { ValidationError } from '../errors'
 import type { NostrEventLike } from '../nostr/eventLike'
 import type { Signer, SignedEventLike } from '../ports/signer'
 import { failure, success, type Result } from '../result'
-import {
-	EXTENSION_ACTION_AUTH,
-	ExtensionActionError,
-	isValidExtensionActionName,
-	type ExtensionActionAuth,
-	type ExtensionActionRateLimit,
-} from './actions'
+import { EXTENSION_ACTION_AUTH, ExtensionActionError, type ExtensionActionAuth, type ExtensionActionRateLimit } from './actions'
 import { sendAdminRequest, type FetchExtensionCatalogOptions } from './catalog'
+import { actionNameProblem, capabilityProblem } from './names'
+
+export { actionNameProblem, CAPABILITY_FORMAT_HINT, capabilityProblem } from './names'
 
 /**
  * Remote bindings (ADR-0023 §7.5): an admin maps one tool of a repository ContextVM server to a capability.
@@ -21,7 +18,6 @@ export const MAX_REMOTE_TEXT = 4_000
 export const MAX_REMOTE_DATA_BYTES = 16_000
 
 const HEX_PUBKEY = /^[0-9a-f]{64}$/
-const CAPABILITY = /^[a-z0-9]+(?:[.:-][a-z0-9]+)*$/
 const DEFAULT_RATE_LIMIT: ExtensionActionRateLimit = { perPubkey: 30, windowSeconds: 3600 }
 const MAX_RATE_PER_PUBKEY = 1_000
 const MAX_WINDOW_SECONDS = 86_400
@@ -54,12 +50,10 @@ export function parseRemoteBindingRequest(input: unknown): Result<RemoteBindingR
 	if (typeof serverPubkey !== 'string' || !HEX_PUBKEY.test(serverPubkey))
 		return failure(new ValidationError('Unknown server', ['serverPubkey']))
 	if (typeof toolName !== 'string' || !toolName || toolName.length > 100) return failure(new ValidationError('Unknown tool', ['toolName']))
-	if (typeof actionName !== 'string' || !isValidExtensionActionName(actionName)) {
-		return failure(new ValidationError('Action name must be lowercase kebab-case, e.g. get-quote', ['actionName']))
-	}
-	if (typeof capability !== 'string' || capability.length > 100 || !CAPABILITY.test(capability)) {
-		return failure(new ValidationError('Capability must look like shipping.quote', ['capability']))
-	}
+	const actionProblem = typeof actionName === 'string' ? actionNameProblem(actionName) : 'Enter an action name'
+	if (actionProblem) return failure(new ValidationError(actionProblem, ['actionName']))
+	const capabilityError = typeof capability === 'string' ? capabilityProblem(capability) : 'Enter a capability'
+	if (capabilityError) return failure(new ValidationError(capabilityError, ['capability']))
 	if (typeof auth !== 'string' || !(EXTENSION_ACTION_AUTH as readonly string[]).includes(auth)) {
 		return failure(new ValidationError('Choose who may call this action', ['auth']))
 	}
@@ -73,8 +67,8 @@ export function parseRemoteBindingRequest(input: unknown): Result<RemoteBindingR
 	return success({
 		serverPubkey,
 		toolName,
-		actionName,
-		capability,
+		actionName: actionName as string,
+		capability: capability as string,
 		auth: auth as ExtensionActionAuth,
 		rateLimit: limit,
 		acknowledgedDataFlow: true,
@@ -179,6 +173,22 @@ const bindingPath = (serverPubkey: string, actionName: string) =>
 /** Admin-only: bind a repository tool. */
 export function createRemoteBinding(signer: AdminSigner, request: RemoteBindingRequest, options: FetchExtensionCatalogOptions = {}) {
 	return sendAdminRequest(signer, 'POST', EXTENSION_BINDINGS_PATH, JSON.stringify(request), options, bindingResult)
+}
+
+const batchResult = {
+	parse(value: unknown): { created: number } {
+		if (!isRecord(value) || !Array.isArray(value.created)) throw new ValidationError('Invalid binding response')
+		return { created: value.created.length }
+	},
+}
+
+/** Admin-only: create several bindings in one signed request. The server stores all of them or none. */
+export function createRemoteBindings(
+	signer: AdminSigner,
+	requests: readonly RemoteBindingRequest[],
+	options: FetchExtensionCatalogOptions = {},
+) {
+	return sendAdminRequest(signer, 'POST', EXTENSION_BINDINGS_PATH, JSON.stringify({ bindings: requests }), options, batchResult)
 }
 
 /** Admin-only: enable/disable a binding, or approve its current tool definition after a change. */

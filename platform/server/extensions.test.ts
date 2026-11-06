@@ -54,3 +54,33 @@ describe('extension store catalog states', () => {
 		expect((await getExtensionCatalog()).entries).toEqual([])
 	})
 })
+
+describe('built-in enable/disable at runtime', () => {
+	test('disabling stops the extension and removes it from public descriptors; enabling restores it', async () => {
+		const { z } = await import('zod')
+		const { defineExtension } = await import('@sdk/core/extensions')
+		const { startExtensions, stopExtensions, getExtensionCatalog, getPublicExtensionDescriptors, setBuiltinEnabled } =
+			await import('./extensions')
+		const open = defineExtension({
+			manifest: {
+				id: 'open',
+				version: '1.0.0',
+				displayName: 'Open',
+				capabilities: ['x.y'],
+				runtimes: ['server'],
+				publicConfig: z.object({}),
+			},
+		})
+		await startExtensions([open], { EXTENSION_OPEN_ENABLED: 'true', EXTENSIONS_STATE_PATH: ':memory:' })
+		expect(getPublicExtensionDescriptors().map((descriptor) => descriptor.id)).toEqual(['open'])
+
+		expect(await setBuiltinEnabled('open', false, 'a'.repeat(64))).toBeUndefined()
+		expect(getPublicExtensionDescriptors()).toEqual([])
+		expect((await getExtensionCatalog()).entries[0]).toMatchObject({ state: 'installed_disabled', canEnable: true })
+
+		expect(await setBuiltinEnabled('open', true, 'a'.repeat(64))).toBeUndefined()
+		expect(getPublicExtensionDescriptors().map((descriptor) => descriptor.id)).toEqual(['open'])
+		expect(await setBuiltinEnabled('missing', true, 'a'.repeat(64))).toBe('Unknown extension')
+		await stopExtensions()
+	})
+})

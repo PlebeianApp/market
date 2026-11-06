@@ -47,6 +47,7 @@ describe('extension catalog', () => {
 			state: 'available',
 			managedBy: 'environment',
 			envPrefix: 'EXTENSION_AI_HELPER_',
+			canEnable: false,
 		})
 	})
 

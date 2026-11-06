@@ -1,3 +1,5 @@
+import { useExtensionCapability } from '@/queries/extensions'
+import { PRODUCT_LISTING_DRAFT_CAPABILITY } from '@sdk/commerce/products'
 import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
 import { publishShareProductNote } from '@/publish/shareNotes'
 import { Media } from '@ui/components/Media'
@@ -15,7 +17,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Trash } from 'lucide-react'
+import { Sparkles, Trash } from 'lucide-react'
 import { useEffect, useState, useMemo } from 'react'
 import { TooltipButton } from '@ui/components/TooltipButton'
 import { DashboardProductDetails, DashboardProductTrigger } from '@ui/components/DashboardProductListItem'
@@ -155,8 +157,13 @@ function ProductsOverviewComponent() {
 		matchRoute({
 			to: '/dashboard/products/products/new',
 			fuzzy: true,
+		}) ||
+		matchRoute({
+			to: '/dashboard/products/products/ai',
+			fuzzy: true,
 		})
 
+	const listingDraft = useExtensionCapability(PRODUCT_LISTING_DRAFT_CAPABILITY)
 	const dashboardProductOptions = productsByPubkeyQueryOptions(user?.pubkey ?? '', true) // Include hidden products for own dashboard
 	const {
 		data: products,
@@ -265,6 +272,16 @@ function ProductsOverviewComponent() {
 					>
 						<span className="w-5 h-5 i-product" /> Add A Product
 					</Button>
+					{listingDraft.target && (
+						<Button
+							variant="outline"
+							onClick={() => navigate({ to: '/dashboard/products/products/ai' })}
+							data-testid="create-with-ai-button"
+							className="flex items-center gap-2 px-4 py-2 font-semibold text-sm"
+						>
+							<Sparkles className="h-4 w-4" /> Create with AI
+						</Button>
+					)}
 				</div>
 			</div>
 			<div className="space-y-6 p-4 lg:p-6">
@@ -289,6 +306,16 @@ function ProductsOverviewComponent() {
 					>
 						<span className="w-5 h-5 i-product" /> Add A Product
 					</Button>
+					{listingDraft.target && (
+						<Button
+							variant="outline"
+							onClick={() => navigate({ to: '/dashboard/products/products/ai' })}
+							data-testid="create-with-ai-button-mobile"
+							className="flex justify-center items-center gap-2 w-full"
+						>
+							<Sparkles className="h-4 w-4" /> Create with AI
+						</Button>
+					)}
 				</div>
 
 				<div>

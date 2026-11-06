@@ -8,7 +8,7 @@ import {
 	type ExtensionActionTransport,
 	type PublicExtensionActionDescriptor,
 } from './actions'
-import { isValidExtensionIcon, type AnyExtensionDefinition } from './extension'
+import { isValidExtensionIcon, MAX_DESCRIPTION_LENGTH, type AnyExtensionDefinition } from './extension'
 
 /** Client-safe view of an enabled extension, as published in `/api/config`. Never carries private config. */
 export interface PublicExtensionDescriptor {
@@ -16,6 +16,8 @@ export interface PublicExtensionDescriptor {
 	version: string
 	displayName: string
 	icon?: string
+	/** One-line summary of what the extension does (manifest `description`). */
+	description?: string
 	capabilities: readonly string[]
 	config: unknown
 	actions: readonly PublicExtensionActionDescriptor[]
@@ -29,6 +31,7 @@ export function describeExtension(definition: AnyExtensionDefinition, publicConf
 		version: manifest.version,
 		displayName: manifest.displayName,
 		...(manifest.icon ? { icon: manifest.icon } : {}),
+		...(manifest.description ? { description: manifest.description } : {}),
 		capabilities: [...manifest.capabilities],
 		config: publicConfig,
 		actions: describeExtensionActions(definition.actions),
@@ -85,7 +88,7 @@ export function findExtensionAction(
 
 function parseDescriptor(input: unknown): PublicExtensionDescriptor | undefined {
 	if (!isRecord(input)) return undefined
-	const { id, version, displayName, icon, capabilities, config, actions } = input
+	const { id, version, displayName, icon, description, capabilities, config, actions } = input
 	if (typeof id !== 'string' || !EXTENSION_ID.test(id)) return undefined
 	if (typeof version !== 'string' || version.length > 64) return undefined
 	if (!Array.isArray(capabilities) || !capabilities.every((value) => typeof value === 'string' && CAPABILITY.test(value))) return undefined
@@ -97,6 +100,7 @@ function parseDescriptor(input: unknown): PublicExtensionDescriptor | undefined 
 		displayName: typeof displayName === 'string' && displayName.trim() ? displayName.slice(0, MAX_TEXT) : id,
 		// An invalid icon is dropped rather than failing the descriptor; UI falls back to a placeholder.
 		...(typeof icon === 'string' && isValidExtensionIcon(icon) ? { icon } : {}),
+		...(typeof description === 'string' && description.trim() ? { description: description.trim().slice(0, MAX_DESCRIPTION_LENGTH) } : {}),
 		capabilities: [...capabilities],
 		config: config ?? {},
 		actions: parsedActions as PublicExtensionActionDescriptor[],

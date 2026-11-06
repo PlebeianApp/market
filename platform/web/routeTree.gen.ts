@@ -40,6 +40,7 @@ import { Route as DashboardLayoutDashboardOrdersOrderIdRouteImport } from './rou
 import { Route as DashboardLayoutDashboardAppSettingsTeamRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/team'
 import { Route as DashboardLayoutDashboardAppSettingsFeaturedItemsRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/featured-items'
 import { Route as DashboardLayoutDashboardAppSettingsExtensionsRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/extensions'
+import { Route as DashboardLayoutDashboardAppSettingsExtensionStoreRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/extension-store'
 import { Route as DashboardLayoutDashboardAppSettingsBlacklistsRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/blacklists'
 import { Route as DashboardLayoutDashboardAppSettingsAppMiscelleneousRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/app-miscelleneous'
 import { Route as DashboardLayoutDashboardAccountYourPurchasesRouteImport } from './routes/_dashboard-layout/dashboard/account/your-purchases'
@@ -52,10 +53,12 @@ import { Route as DashboardLayoutDashboardAccountNetworkRouteImport } from './ro
 import { Route as DashboardLayoutDashboardAccountMakingPaymentsRouteImport } from './routes/_dashboard-layout/dashboard/account/making-payments'
 import { Route as DashboardLayoutDashboardSalesMessagesPubkeyRouteImport } from './routes/_dashboard-layout/dashboard/sales/messages/$pubkey'
 import { Route as DashboardLayoutDashboardProductsProductsNewRouteImport } from './routes/_dashboard-layout/dashboard/products/products/new'
+import { Route as DashboardLayoutDashboardProductsProductsAiRouteImport } from './routes/_dashboard-layout/dashboard/products/products/ai'
 import { Route as DashboardLayoutDashboardProductsProductsProductIdRouteImport } from './routes/_dashboard-layout/dashboard/products/products/$productId'
 import { Route as DashboardLayoutDashboardProductsCollectionsNewRouteImport } from './routes/_dashboard-layout/dashboard/products/collections/new'
 import { Route as DashboardLayoutDashboardProductsCollectionsCollectionIdRouteImport } from './routes/_dashboard-layout/dashboard/products/collections/$collectionId'
 import { Route as DashboardLayoutDashboardProductsAuctionsAuctionIdRouteImport } from './routes/_dashboard-layout/dashboard/products/auctions.$auctionId'
+import { Route as DashboardLayoutDashboardAppSettingsExtensionsExtensionIdRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/extensions.$extensionId'
 
 const SetupRoute = SetupRouteImport.update({
 	id: '/setup',
@@ -211,6 +214,11 @@ const DashboardLayoutDashboardAppSettingsExtensionsRoute = DashboardLayoutDashbo
 	path: '/dashboard/app-settings/extensions',
 	getParentRoute: () => DashboardLayoutRoute,
 } as any)
+const DashboardLayoutDashboardAppSettingsExtensionStoreRoute = DashboardLayoutDashboardAppSettingsExtensionStoreRouteImport.update({
+	id: '/dashboard/app-settings/extension-store',
+	path: '/dashboard/app-settings/extension-store',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 const DashboardLayoutDashboardAppSettingsBlacklistsRoute = DashboardLayoutDashboardAppSettingsBlacklistsRouteImport.update({
 	id: '/dashboard/app-settings/blacklists',
 	path: '/dashboard/app-settings/blacklists',
@@ -271,6 +279,11 @@ const DashboardLayoutDashboardProductsProductsNewRoute = DashboardLayoutDashboar
 	path: '/new',
 	getParentRoute: () => DashboardLayoutDashboardProductsProductsRoute,
 } as any)
+const DashboardLayoutDashboardProductsProductsAiRoute = DashboardLayoutDashboardProductsProductsAiRouteImport.update({
+	id: '/ai',
+	path: '/ai',
+	getParentRoute: () => DashboardLayoutDashboardProductsProductsRoute,
+} as any)
 const DashboardLayoutDashboardProductsProductsProductIdRoute = DashboardLayoutDashboardProductsProductsProductIdRouteImport.update({
 	id: '/$productId',
 	path: '/$productId',
@@ -292,6 +305,12 @@ const DashboardLayoutDashboardProductsAuctionsAuctionIdRoute = DashboardLayoutDa
 	path: '/$auctionId',
 	getParentRoute: () => DashboardLayoutDashboardProductsAuctionsRoute,
 } as any)
+const DashboardLayoutDashboardAppSettingsExtensionsExtensionIdRoute =
+	DashboardLayoutDashboardAppSettingsExtensionsExtensionIdRouteImport.update({
+		id: '/$extensionId',
+		path: '/$extensionId',
+		getParentRoute: () => DashboardLayoutDashboardAppSettingsExtensionsRoute,
+	} as any)
 
 export interface FileRoutesByFullPath {
 	'/': typeof IndexRoute
@@ -321,7 +340,8 @@ export interface FileRoutesByFullPath {
 	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	'/dashboard/app-settings/blacklists': typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
-	'/dashboard/app-settings/extensions': typeof DashboardLayoutDashboardAppSettingsExtensionsRoute
+	'/dashboard/app-settings/extension-store': typeof DashboardLayoutDashboardAppSettingsExtensionStoreRoute
+	'/dashboard/app-settings/extensions': typeof DashboardLayoutDashboardAppSettingsExtensionsRouteWithChildren
 	'/dashboard/app-settings/featured-items': typeof DashboardLayoutDashboardAppSettingsFeaturedItemsRoute
 	'/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
@@ -334,10 +354,12 @@ export interface FileRoutesByFullPath {
 	'/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
 	'/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
 	'/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
+	'/dashboard/app-settings/extensions/$extensionId': typeof DashboardLayoutDashboardAppSettingsExtensionsExtensionIdRoute
 	'/dashboard/products/auctions/$auctionId': typeof DashboardLayoutDashboardProductsAuctionsAuctionIdRoute
 	'/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
 	'/dashboard/products/collections/new': typeof DashboardLayoutDashboardProductsCollectionsNewRoute
 	'/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
+	'/dashboard/products/products/ai': typeof DashboardLayoutDashboardProductsProductsAiRoute
 	'/dashboard/products/products/new': typeof DashboardLayoutDashboardProductsProductsNewRoute
 	'/dashboard/sales/messages/$pubkey': typeof DashboardLayoutDashboardSalesMessagesPubkeyRoute
 }
@@ -369,7 +391,8 @@ export interface FileRoutesByTo {
 	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	'/dashboard/app-settings/blacklists': typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
-	'/dashboard/app-settings/extensions': typeof DashboardLayoutDashboardAppSettingsExtensionsRoute
+	'/dashboard/app-settings/extension-store': typeof DashboardLayoutDashboardAppSettingsExtensionStoreRoute
+	'/dashboard/app-settings/extensions': typeof DashboardLayoutDashboardAppSettingsExtensionsRouteWithChildren
 	'/dashboard/app-settings/featured-items': typeof DashboardLayoutDashboardAppSettingsFeaturedItemsRoute
 	'/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
@@ -382,10 +405,12 @@ export interface FileRoutesByTo {
 	'/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
 	'/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
 	'/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
+	'/dashboard/app-settings/extensions/$extensionId': typeof DashboardLayoutDashboardAppSettingsExtensionsExtensionIdRoute
 	'/dashboard/products/auctions/$auctionId': typeof DashboardLayoutDashboardProductsAuctionsAuctionIdRoute
 	'/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
 	'/dashboard/products/collections/new': typeof DashboardLayoutDashboardProductsCollectionsNewRoute
 	'/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
+	'/dashboard/products/products/ai': typeof DashboardLayoutDashboardProductsProductsAiRoute
 	'/dashboard/products/products/new': typeof DashboardLayoutDashboardProductsProductsNewRoute
 	'/dashboard/sales/messages/$pubkey': typeof DashboardLayoutDashboardSalesMessagesPubkeyRoute
 }
@@ -419,7 +444,8 @@ export interface FileRoutesById {
 	'/_dashboard-layout/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/_dashboard-layout/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	'/_dashboard-layout/dashboard/app-settings/blacklists': typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
-	'/_dashboard-layout/dashboard/app-settings/extensions': typeof DashboardLayoutDashboardAppSettingsExtensionsRoute
+	'/_dashboard-layout/dashboard/app-settings/extension-store': typeof DashboardLayoutDashboardAppSettingsExtensionStoreRoute
+	'/_dashboard-layout/dashboard/app-settings/extensions': typeof DashboardLayoutDashboardAppSettingsExtensionsRouteWithChildren
 	'/_dashboard-layout/dashboard/app-settings/featured-items': typeof DashboardLayoutDashboardAppSettingsFeaturedItemsRoute
 	'/_dashboard-layout/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/_dashboard-layout/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
@@ -432,10 +458,12 @@ export interface FileRoutesById {
 	'/_dashboard-layout/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
 	'/_dashboard-layout/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
 	'/_dashboard-layout/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
+	'/_dashboard-layout/dashboard/app-settings/extensions/$extensionId': typeof DashboardLayoutDashboardAppSettingsExtensionsExtensionIdRoute
 	'/_dashboard-layout/dashboard/products/auctions/$auctionId': typeof DashboardLayoutDashboardProductsAuctionsAuctionIdRoute
 	'/_dashboard-layout/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
 	'/_dashboard-layout/dashboard/products/collections/new': typeof DashboardLayoutDashboardProductsCollectionsNewRoute
 	'/_dashboard-layout/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
+	'/_dashboard-layout/dashboard/products/products/ai': typeof DashboardLayoutDashboardProductsProductsAiRoute
 	'/_dashboard-layout/dashboard/products/products/new': typeof DashboardLayoutDashboardProductsProductsNewRoute
 	'/_dashboard-layout/dashboard/sales/messages/$pubkey': typeof DashboardLayoutDashboardSalesMessagesPubkeyRoute
 }
@@ -469,6 +497,7 @@ export interface FileRouteTypes {
 		| '/dashboard/account/your-purchases'
 		| '/dashboard/app-settings/app-miscelleneous'
 		| '/dashboard/app-settings/blacklists'
+		| '/dashboard/app-settings/extension-store'
 		| '/dashboard/app-settings/extensions'
 		| '/dashboard/app-settings/featured-items'
 		| '/dashboard/app-settings/team'
@@ -482,10 +511,12 @@ export interface FileRouteTypes {
 		| '/dashboard/sales/circular-economy'
 		| '/dashboard/sales/messages'
 		| '/dashboard/sales/sales'
+		| '/dashboard/app-settings/extensions/$extensionId'
 		| '/dashboard/products/auctions/$auctionId'
 		| '/dashboard/products/collections/$collectionId'
 		| '/dashboard/products/collections/new'
 		| '/dashboard/products/products/$productId'
+		| '/dashboard/products/products/ai'
 		| '/dashboard/products/products/new'
 		| '/dashboard/sales/messages/$pubkey'
 	fileRoutesByTo: FileRoutesByTo
@@ -517,6 +548,7 @@ export interface FileRouteTypes {
 		| '/dashboard/account/your-purchases'
 		| '/dashboard/app-settings/app-miscelleneous'
 		| '/dashboard/app-settings/blacklists'
+		| '/dashboard/app-settings/extension-store'
 		| '/dashboard/app-settings/extensions'
 		| '/dashboard/app-settings/featured-items'
 		| '/dashboard/app-settings/team'
@@ -530,10 +562,12 @@ export interface FileRouteTypes {
 		| '/dashboard/sales/circular-economy'
 		| '/dashboard/sales/messages'
 		| '/dashboard/sales/sales'
+		| '/dashboard/app-settings/extensions/$extensionId'
 		| '/dashboard/products/auctions/$auctionId'
 		| '/dashboard/products/collections/$collectionId'
 		| '/dashboard/products/collections/new'
 		| '/dashboard/products/products/$productId'
+		| '/dashboard/products/products/ai'
 		| '/dashboard/products/products/new'
 		| '/dashboard/sales/messages/$pubkey'
 	id:
@@ -566,6 +600,7 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout/dashboard/account/your-purchases'
 		| '/_dashboard-layout/dashboard/app-settings/app-miscelleneous'
 		| '/_dashboard-layout/dashboard/app-settings/blacklists'
+		| '/_dashboard-layout/dashboard/app-settings/extension-store'
 		| '/_dashboard-layout/dashboard/app-settings/extensions'
 		| '/_dashboard-layout/dashboard/app-settings/featured-items'
 		| '/_dashboard-layout/dashboard/app-settings/team'
@@ -579,10 +614,12 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout/dashboard/sales/circular-economy'
 		| '/_dashboard-layout/dashboard/sales/messages'
 		| '/_dashboard-layout/dashboard/sales/sales'
+		| '/_dashboard-layout/dashboard/app-settings/extensions/$extensionId'
 		| '/_dashboard-layout/dashboard/products/auctions/$auctionId'
 		| '/_dashboard-layout/dashboard/products/collections/$collectionId'
 		| '/_dashboard-layout/dashboard/products/collections/new'
 		| '/_dashboard-layout/dashboard/products/products/$productId'
+		| '/_dashboard-layout/dashboard/products/products/ai'
 		| '/_dashboard-layout/dashboard/products/products/new'
 		| '/_dashboard-layout/dashboard/sales/messages/$pubkey'
 	fileRoutesById: FileRoutesById
@@ -825,6 +862,13 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardAppSettingsExtensionsRouteImport
 			parentRoute: typeof DashboardLayoutRoute
 		}
+		'/_dashboard-layout/dashboard/app-settings/extension-store': {
+			id: '/_dashboard-layout/dashboard/app-settings/extension-store'
+			path: '/dashboard/app-settings/extension-store'
+			fullPath: '/dashboard/app-settings/extension-store'
+			preLoaderRoute: typeof DashboardLayoutDashboardAppSettingsExtensionStoreRouteImport
+			parentRoute: typeof DashboardLayoutRoute
+		}
 		'/_dashboard-layout/dashboard/app-settings/blacklists': {
 			id: '/_dashboard-layout/dashboard/app-settings/blacklists'
 			path: '/dashboard/app-settings/blacklists'
@@ -909,6 +953,13 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardProductsProductsNewRouteImport
 			parentRoute: typeof DashboardLayoutDashboardProductsProductsRoute
 		}
+		'/_dashboard-layout/dashboard/products/products/ai': {
+			id: '/_dashboard-layout/dashboard/products/products/ai'
+			path: '/ai'
+			fullPath: '/dashboard/products/products/ai'
+			preLoaderRoute: typeof DashboardLayoutDashboardProductsProductsAiRouteImport
+			parentRoute: typeof DashboardLayoutDashboardProductsProductsRoute
+		}
 		'/_dashboard-layout/dashboard/products/products/$productId': {
 			id: '/_dashboard-layout/dashboard/products/products/$productId'
 			path: '/$productId'
@@ -937,8 +988,27 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardProductsAuctionsAuctionIdRouteImport
 			parentRoute: typeof DashboardLayoutDashboardProductsAuctionsRoute
 		}
+		'/_dashboard-layout/dashboard/app-settings/extensions/$extensionId': {
+			id: '/_dashboard-layout/dashboard/app-settings/extensions/$extensionId'
+			path: '/$extensionId'
+			fullPath: '/dashboard/app-settings/extensions/$extensionId'
+			preLoaderRoute: typeof DashboardLayoutDashboardAppSettingsExtensionsExtensionIdRouteImport
+			parentRoute: typeof DashboardLayoutDashboardAppSettingsExtensionsRoute
+		}
 	}
 }
+
+interface DashboardLayoutDashboardAppSettingsExtensionsRouteChildren {
+	DashboardLayoutDashboardAppSettingsExtensionsExtensionIdRoute: typeof DashboardLayoutDashboardAppSettingsExtensionsExtensionIdRoute
+}
+
+const DashboardLayoutDashboardAppSettingsExtensionsRouteChildren: DashboardLayoutDashboardAppSettingsExtensionsRouteChildren = {
+	DashboardLayoutDashboardAppSettingsExtensionsExtensionIdRoute: DashboardLayoutDashboardAppSettingsExtensionsExtensionIdRoute,
+}
+
+const DashboardLayoutDashboardAppSettingsExtensionsRouteWithChildren = DashboardLayoutDashboardAppSettingsExtensionsRoute._addFileChildren(
+	DashboardLayoutDashboardAppSettingsExtensionsRouteChildren,
+)
 
 interface DashboardLayoutDashboardProductsAuctionsRouteChildren {
 	DashboardLayoutDashboardProductsAuctionsAuctionIdRoute: typeof DashboardLayoutDashboardProductsAuctionsAuctionIdRoute
@@ -968,11 +1038,13 @@ const DashboardLayoutDashboardProductsCollectionsRouteWithChildren = DashboardLa
 
 interface DashboardLayoutDashboardProductsProductsRouteChildren {
 	DashboardLayoutDashboardProductsProductsProductIdRoute: typeof DashboardLayoutDashboardProductsProductsProductIdRoute
+	DashboardLayoutDashboardProductsProductsAiRoute: typeof DashboardLayoutDashboardProductsProductsAiRoute
 	DashboardLayoutDashboardProductsProductsNewRoute: typeof DashboardLayoutDashboardProductsProductsNewRoute
 }
 
 const DashboardLayoutDashboardProductsProductsRouteChildren: DashboardLayoutDashboardProductsProductsRouteChildren = {
 	DashboardLayoutDashboardProductsProductsProductIdRoute: DashboardLayoutDashboardProductsProductsProductIdRoute,
+	DashboardLayoutDashboardProductsProductsAiRoute: DashboardLayoutDashboardProductsProductsAiRoute,
 	DashboardLayoutDashboardProductsProductsNewRoute: DashboardLayoutDashboardProductsProductsNewRoute,
 }
 
@@ -1005,7 +1077,8 @@ interface DashboardLayoutRouteChildren {
 	DashboardLayoutDashboardAccountYourPurchasesRoute: typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute: typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	DashboardLayoutDashboardAppSettingsBlacklistsRoute: typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
-	DashboardLayoutDashboardAppSettingsExtensionsRoute: typeof DashboardLayoutDashboardAppSettingsExtensionsRoute
+	DashboardLayoutDashboardAppSettingsExtensionStoreRoute: typeof DashboardLayoutDashboardAppSettingsExtensionStoreRoute
+	DashboardLayoutDashboardAppSettingsExtensionsRoute: typeof DashboardLayoutDashboardAppSettingsExtensionsRouteWithChildren
 	DashboardLayoutDashboardAppSettingsFeaturedItemsRoute: typeof DashboardLayoutDashboardAppSettingsFeaturedItemsRoute
 	DashboardLayoutDashboardAppSettingsTeamRoute: typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	DashboardLayoutDashboardOrdersOrderIdRoute: typeof DashboardLayoutDashboardOrdersOrderIdRoute
@@ -1033,7 +1106,8 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
 	DashboardLayoutDashboardAccountYourPurchasesRoute: DashboardLayoutDashboardAccountYourPurchasesRoute,
 	DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute: DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute,
 	DashboardLayoutDashboardAppSettingsBlacklistsRoute: DashboardLayoutDashboardAppSettingsBlacklistsRoute,
-	DashboardLayoutDashboardAppSettingsExtensionsRoute: DashboardLayoutDashboardAppSettingsExtensionsRoute,
+	DashboardLayoutDashboardAppSettingsExtensionStoreRoute: DashboardLayoutDashboardAppSettingsExtensionStoreRoute,
+	DashboardLayoutDashboardAppSettingsExtensionsRoute: DashboardLayoutDashboardAppSettingsExtensionsRouteWithChildren,
 	DashboardLayoutDashboardAppSettingsFeaturedItemsRoute: DashboardLayoutDashboardAppSettingsFeaturedItemsRoute,
 	DashboardLayoutDashboardAppSettingsTeamRoute: DashboardLayoutDashboardAppSettingsTeamRoute,
 	DashboardLayoutDashboardOrdersOrderIdRoute: DashboardLayoutDashboardOrdersOrderIdRoute,

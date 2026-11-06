@@ -65,6 +65,15 @@ describe('extension descriptors', () => {
 		expect(parsePublicExtensionDescriptors({}).ok).toBe(false)
 	})
 
+	test('carries the manifest description and caps it', () => {
+		const good = describeExtension(extension, {})
+		const result = parsePublicExtensionDescriptors([
+			{ ...good, description: '  Does a thing  ' },
+			{ ...good, id: 'long', description: 'x'.repeat(500) },
+		])
+		expect(result.ok && result.value.map((descriptor) => descriptor.description?.length)).toEqual([12, 120])
+	})
+
 	test('keeps valid icons and drops unsafe ones without dropping the descriptor', () => {
 		const good = describeExtension(extension, {})
 		const [withIcon, unsafeIcon] = [

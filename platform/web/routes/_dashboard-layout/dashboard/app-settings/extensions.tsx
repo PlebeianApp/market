@@ -1,115 +1,96 @@
 import { useConfigQuery } from '@/queries/config'
 import { useUserRole } from '@/queries/app-settings'
-import {
-	extensionErrorMessage,
-	useDescribeProductImage,
-	useExtensionCatalog,
-	useBindingMutations,
-	useExtensionDescriptors,
-	useRemoteActionInvoke,
-	useSideloadMutations,
-} from '@/queries/extensions'
+import { useExtensionCatalog, useExtensionDescriptors } from '@/queries/extensions'
 import { useDashboardTitle } from '@platform/web/routes/_dashboard-layout'
 import {
-	ExtensionCard,
 	ExtensionsEmptyState,
 	ExtensionStoreButton,
-	ExtensionStoreDialog,
-	ImageDescribePanel,
-	RemoteActionTryPanel,
+	ExtensionTile,
 	SettingsAccessDenied,
 	SettingsLoadingSkeleton,
 	SettingsMobileHeader,
 	SettingsPageHeader,
 } from '@ui/index'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { Puzzle } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { REMOTE_EXTENSION_PREFIX } from '@sdk/core/extensions'
+import { REMOTE_EXTENSION_PREFIX, remoteExtensionId } from '@sdk/core/extensions'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/extensions')({
 	component: ExtensionsComponent,
 })
 
-const header = { icon: Puzzle, title: 'Extensions', description: 'Extensions enabled on this marketplace' }
-const ENV_EXAMPLE = 'EXTENSION_PRODUCT_IMAGE_DESCRIBER_ENABLED=true'
-const REGISTRY_ENV_EXAMPLE =
-	'EXTENSIONS_REGISTRY_CURATORS=npub1…\n# optional, defaults to the app relay\nEXTENSIONS_REGISTRY_RELAYS=wss://relay.example'
+const header = { icon: Puzzle, title: 'Extensions', description: 'Extensions added to this marketplace' }
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
 
 function ExtensionsComponent() {
 	useDashboardTitle('Extensions')
+	const matchRoute = useMatchRoute()
+	const onExtensionPage = matchRoute({ to: '/dashboard/app-settings/extensions/$extensionId', fuzzy: true })
 	const { data: config } = useConfigQuery()
 	const { amIAdmin, currentUserPubkey, isLoading: isRoleLoading } = useUserRole(config?.appPublicKey)
 	const { descriptors, isLoading } = useExtensionDescriptors()
-	const describe = useDescribeProductImage()
-	const [storeOpen, setStoreOpen] = useState(false)
-	const catalog = useExtensionCatalog(currentUserPubkey, storeOpen && amIAdmin)
-	const sideload = useSideloadMutations(currentUserPubkey)
-	const bindingControls = useBindingMutations(currentUserPubkey)
-	const remoteInvoke = useRemoteActionInvoke()
-	const remoteActions = useMemo(
-		() =>
-			descriptors
-				.filter((descriptor) => descriptor.id.startsWith(REMOTE_EXTENSION_PREFIX))
-				.flatMap((descriptor) =>
-					descriptor.actions.map((action) => ({
-						extensionId: descriptor.id,
-						actionName: action.name,
-						label: `${descriptor.displayName} — ${action.name}`,
-					})),
-				),
-		[descriptors],
-	)
+	// The catalog lists added external extensions, including ones without bindings yet.
+	const catalog = useExtensionCatalog(currentUserPubkey, amIAdmin && !onExtensionPage)
 
+	if (onExtensionPage) return <Outlet />
 	if (isLoading || isRoleLoading) return <SettingsLoadingSkeleton />
-	// Client-side workflow gate only; the action route enforces its own auth and roles.
+	// Client-side workflow gate only; every extension endpoint enforces its own auth and roles.
 	if (!amIAdmin) return <SettingsAccessDenied header={header} message="Only marketplace admins can view extensions." />
 
-	const storeButton = <ExtensionStoreButton onClick={() => setStoreOpen(true)} />
+	const builtins = descriptors.filter((descriptor) => !descriptor.id.startsWith(REMOTE_EXTENSION_PREFIX))
+	const bindings = catalog.data?.bindings ?? []
+	const external = (catalog.data?.repository?.entries ?? []).filter((entry) => entry.added)
+
+	const storeButton = (
+		<ExtensionStoreButton>
+			<Link to="/dashboard/app-settings/extension-store" />
+		</ExtensionStoreButton>
+	)
 
 	return (
 		<div>
 			<SettingsPageHeader {...header} actions={storeButton} />
-			<div className="space-y-6 p-4 lg:p-8">
+			<div className="space-y-4 p-4 lg:p-8">
 				<SettingsMobileHeader {...header} actions={storeButton} />
-				<ExtensionStoreDialog
-					open={storeOpen}
-					onOpenChange={setStoreOpen}
-					catalog={catalog.data}
-					registryEnvExample={REGISTRY_ENV_EXAMPLE}
-					sideload={sideload}
-					bindingControls={bindingControls}
-					isLoading={catalog.isFetching && !catalog.data}
-					errorMessage={catalog.error ? extensionErrorMessage(catalog.error) : undefined}
-					onRetry={() => void catalog.refetch()}
-				/>
 
-				{descriptors.length === 0 ? (
-					<ExtensionsEmptyState envExample={ENV_EXAMPLE} />
+				{builtins.length === 0 && external.length === 0 && !catalog.isFetching ? (
+					<ExtensionsEmptyState />
 				) : (
-					<div className="grid gap-4 xl:grid-cols-2" data-testid="extension-list">
-						{descriptors.map((descriptor) => (
-							<ExtensionCard key={descriptor.id} descriptor={descriptor} />
+					<div className="grid gap-3 md:grid-cols-2" data-testid="extension-list">
+						{builtins.map((descriptor) => (
+							<ExtensionTile
+								key={descriptor.id}
+								name={descriptor.displayName}
+								icon={descriptor.icon}
+								kind="built-in"
+								description={descriptor.description}
+								subtitle={plural(descriptor.actions.length, 'action')}
+								testId={`extension-tile-${descriptor.id}`}
+								link={<Link to="/dashboard/app-settings/extensions/$extensionId" params={{ extensionId: descriptor.id }} />}
+							/>
 						))}
+						{external.map((entry) => {
+							const own = bindings.filter((binding) => binding.serverPubkey === entry.serverPubkey)
+							const needsReview = own.some((binding) => binding.state === 'misconfigured' || binding.state === 'unreachable')
+							const id = remoteExtensionId(entry.serverPubkey)
+							return (
+								<ExtensionTile
+									key={id}
+									name={entry.name}
+									icon={entry.picture}
+									kind="external"
+									description={entry.about}
+									subtitle={own.length === 0 ? 'No actions yet' : plural(own.length, 'action')}
+									warning={entry.state === 'unavailable' ? 'Unavailable' : needsReview ? 'Needs review' : undefined}
+									testId={`extension-tile-${id}`}
+									link={<Link to="/dashboard/app-settings/extensions/$extensionId" params={{ extensionId: id }} />}
+								/>
+							)
+						})}
 					</div>
 				)}
-
-				<RemoteActionTryPanel
-					actions={remoteActions}
-					pending={remoteInvoke.isPending}
-					result={remoteInvoke.data}
-					errorMessage={remoteInvoke.error ? extensionErrorMessage(remoteInvoke.error) : undefined}
-					onRun={(option, input) => remoteInvoke.mutate({ extensionId: option.extensionId, actionName: option.actionName, input })}
-				/>
-
-				{describe.available && (
-					<ImageDescribePanel
-						pending={describe.isPending}
-						result={describe.data}
-						errorMessage={describe.error ? extensionErrorMessage(describe.error) : undefined}
-						onDescribe={(request) => describe.mutate(request)}
-					/>
-				)}
+				{catalog.isFetching && !catalog.data && <p className="text-sm text-muted-foreground">Loading external extensions…</p>}
 			</div>
 		</div>
 	)

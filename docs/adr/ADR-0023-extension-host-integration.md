@@ -515,9 +515,11 @@ something is broken, not merely unfinished.
    `misconfigured` without affecting the others.
 6. `/api/config` descriptors update, so capability-gated UI appears.
 
-Environment variables keep authority (ADR-018). If `EXTENSION_<ID>_*` is set,
-the extension is `env_managed`. The store displays it but cannot change it, and
-stored settings for that id are ignored.
+Environment variables keep authority over configuration and secrets (ADR-018).
+An admin can still switch a built-in off in the store, overriding
+`EXTENSION_<ID>_ENABLED`. An admin can switch one on if the environment
+configures it or if it needs no private config. The override is stored without
+any config values and is applied immediately, without a restart.
 
 On boot after a release, stored settings are revalidated against the new
 schemas. An extension whose stored settings no longer parse enters
@@ -560,10 +562,12 @@ asks the user to opt in once per capability before the first call.
 - It is client-side preference state. It is not a payment, it is not published
   to relays by this ADR, and the server does not require it.
 
-#### 7.7 Current implementation (read-only repository and built-ins)
+#### 7.7 Current implementation (repository and built-ins)
 
-- The Extensions admin page (`/dashboard/app-settings/extensions`) has an
-  **Extension store** button at the top right. It opens the read-only store.
+- The store is its own admin page, `/dashboard/app-settings/extension-store`,
+  shown in the dashboard content panel and listed in the admin navigation. The
+  Extensions page (`/dashboard/app-settings/extensions`) links to it from an
+  **Extension store** button at the top right.
 - The store reads `GET /api/extensions/catalog`. The request is authenticated
   with NIP-98 (a signed `GET` with no payload), and non-admins get `404`, so
   public visitors cannot see the store.
@@ -584,21 +588,49 @@ asks the user to opt in once per capability before the first call.
     _Third-party_ and, if any tool is priced, _Paid_.
   - Listed servers with no valid announcement show as _Unavailable_ with the
     failed constraint. Curators with no list are reported.
-  - **Sideload.** An admin can add a ContextVM server by hex pubkey or npub
-    (`POST /api/extensions/sideloads`) and remove it
-    (`DELETE /api/extensions/sideloads/:pubkey`). Both are NIP-98-authenticated
-    and admin-only, and non-admins get `404`.
-    - The entry is labelled _Sideloaded_ and described only by the server's own
-      signed announcements, exactly like registry entries. Sideloading lists a
-      server for review; it grants the server nothing.
-    - Sideloads persist in a `bun:sqlite` file (`EXTENSIONS_STATE_PATH`,
-      default `./data/extensions.sqlite`, git-ignored), capped at 50 servers.
-      The file stores only the server pubkey, the admin pubkey that added it,
-      and the time. It never stores secrets.
+  - **Adding a server (required before binding).** An admin adds an
+    extension to the marketplace before any of its tools can be bound.
+    - Registry entries have **Add to marketplace**. A server that no trusted
+      registry lists can be added by hex pubkey or npub; that is a sideload,
+      labelled _Sideloaded_.
+    - Both use `POST /api/extensions/servers`, and
+      `DELETE /api/extensions/servers/:pubkey` removes a server. Both are
+      NIP-98-authenticated and admin-only, and non-admins get `404`.
+    - Removal is refused while the server still has bindings.
+    - Every entry is described only by the server's own signed announcements.
+      Adding a server makes its tools bindable; it grants the server nothing by
+      itself.
+    - Added servers persist in a `bun:sqlite` file (`EXTENSIONS_STATE_PATH`,
+      default `./data/extensions.sqlite`, git-ignored), capped at 50. The file
+      stores only the server pubkey, the admin pubkey that added it, and the
+      time. It never stores secrets. Rows from the earlier `sideloads` table
+      are migrated into it automatically.
     - A change invalidates the repository cache. A relay read started before
       the change cannot overwrite the newer listing.
   - **Remote bindings (7.5).** These are implemented as follows:
-    - **Binding.** Each unpaid tool of a listed server can be bound
+    - **Suggested bindings.** Every unpaid, unbound tool of an added server
+      comes with a ready-to-accept binding: an action name, a capability, and a
+      role.
+      - A tool may propose its own in its MCP `_meta` under
+        `market.plebeian/binding`, as `{ actionName, capability, auth }`. A
+        valid proposal is labelled "proposed by the extension".
+      - Otherwise, or if the proposal is invalid, the marketplace derives one
+        from the tool name (`describe_product_image` becomes
+        `describe-product-image` → `tool.describe.product.image`) with role
+        `admin`.
+      - The admin accepts all of an extension's suggestions at once with
+        **Accept suggested (N)**. A dialog lists each binding (tool →
+        capability, role) with the data-flow notice. Confirming sends one
+        signed request (`POST /api/extensions/bindings` with
+        `{ bindings: [...] }`, up to 20).
+      - The server validates and pins every binding first and stores all of
+        them or none: an invalid tool, a duplicate action name, an existing
+        action, or the binding limit rejects the whole batch.
+      - A single tool can still be edited and bound on its own through its
+        edit control.
+      - A suggestion is never applied without that click. A suggestion whose
+        action name is already bound must be customized.
+    - **Binding.** Each unpaid tool of an added, listed server can be bound
       (`POST /api/extensions/bindings`, NIP-98, admin-only). The admin chooses
       a capability, an action name, and a role (`user` or `admin`), and
       confirms the data-flow notice. The default rate limit is 30 calls per
@@ -609,11 +641,11 @@ asks the user to opt in once per capability before the first call.
     - **Managing.** `PATCH /api/extensions/bindings/:server/:action` enables or
       disables a binding, or approves the currently announced definition.
       `DELETE` removes it.
-    - **Storage.** Bindings live in the same SQLite file as sideloads, up to
+    - **Storage.** Bindings live in the same SQLite file as added servers, up to
       50, with public identifiers only.
     - **States.** A binding's state is computed on every read:
       - `installed_disabled` when switched off;
-      - `misconfigured` when the server is no longer listed, the tool is gone
+      - `misconfigured` when the server is no longer added or listed, the tool is gone
         or now priced, or the schema hash changed;
       - `unreachable` when there is no valid announcement, no snapshot has been
         loaded yet, or a call failed in the last 2 minutes;
@@ -640,12 +672,26 @@ asks the user to opt in once per capability before the first call.
       control characters stripped, text capped at 4000 characters and
       structured data at 16 KB. A remote tool error becomes `extension_failed`
       without its text.
-    - **Admin UI.** The admin page has a "Try a remote action" panel that calls
-      bindings through the real route.
+    - **Admin UI.** Each added extension has its own page
+      (`/dashboard/app-settings/extensions/<id>`) with a "Try a remote action"
+      panel that calls its bindings through the real route.
 
   - Paid tools cannot be bound.
 
-- **Built-in tab.** It shows every extension compiled into this release.
+- **Built-in tab.** It shows every extension compiled into this release, with
+  **Enable**/**Disable** for admins (`PATCH /api/extensions/builtins/:id`,
+  NIP-98, admin-only).
+  - Overrides persist in the state file (`builtin_overrides`: id, on/off, who,
+    when).
+  - The registry is stopped, reconfigured, and restarted, so the change takes
+    effect at once.
+  - A disabled built-in shows as `installed_disabled` and disappears from
+    `/api/config`.
+- **Add with bindings.** **Add** on a listed external extension opens a dialog
+  with its suggested bindings. **Add & accept (N)** sends one request
+  (`POST /api/extensions/servers` with `{ server, bindings }`) that adds the
+  server and its bindings in one transaction, all or none. **Add only** adds
+  the server alone.
 - Each entry (`ExtensionCatalogEntry`, `sdk/core/extensions/catalog.ts`) shows:
   - logo, short description (manifest `description`, at most 120 characters),
     capabilities, and actions;
@@ -658,6 +704,19 @@ asks the user to opt in once per capability before the first call.
   private settings are not implemented. The SQLite file above is a
   first, secret-free piece of the 7.8 settings store; storing private values
   there still needs the encryption and key-management decision.
+- **Listing drafts (`product.listing.draft`).** A bound remote action with this
+  capability (`auth: 'user'`) takes `{ imageUrl, notes? }` and returns a draft
+  in `data`: title, summary, description, tags, category, and an optional model
+  label. The host treats the draft as untrusted:
+  `parseProductListingDraft` (`sdk/commerce/products/listingDraft.ts`) requires
+  a title and description, caps lengths, strips control characters, filters
+  tags, and maps the category onto `PRODUCT_CATEGORIES`. **Create with AI**
+  (`/dashboard/products/products/ai`) shows the draft labelled as AI text. The
+  seller enters only the price (sats, quantity 1) and signs and publishes the
+  product. A draft never contains a price and never publishes anything. The
+  dev sandbox (`bun run dev:extensions`) serves a mock
+  `draft_product_listing` tool (`mockListingDraft`) that ignores the image
+  contents.
 
 #### 7.8 Settings store prerequisite
 
@@ -758,8 +817,10 @@ capabilities in `/api/config`.
   drafts a description from the image URL filename and the seller's fields,
   with no host ports, no egress, and no image analysis, and labels its output
   `mock: true`. It is off unless `EXTENSION_PRODUCT_IMAGE_DESCRIBER_ENABLED` is
-  set. The admin page `/dashboard/app-settings/extensions` lists enabled
-  extensions with their logos and lets an admin try the action. With no
+  set. The admin page `/dashboard/app-settings/extensions` lists every added
+  extension (enabled built-ins and added external ones) as a clickable tile;
+  each tile opens that extension's page, where its details and try panel
+  live. With no
   extension enabled, instance behaviour is unchanged. The
   storage port is in-memory, and rate limits reset on restart. The product
   form slot, ContextVM tool registration, the store, and the reference

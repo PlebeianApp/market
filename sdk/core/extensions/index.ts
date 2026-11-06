@@ -85,11 +85,13 @@ export type { ContextVmCallTool, ContextVmToolResult, ExtensionActionToolDescrip
 export { describeExtension, findExtensionAction, parsePublicExtensionAction, parsePublicExtensionDescriptors } from './descriptors'
 export type { ExtensionActionTarget, PublicExtensionDescriptor } from './descriptors'
 export {
-	addSideloadedServer,
+	addExtensionServer,
 	sendAdminRequest,
 	describeCatalogEntry,
-	EXTENSION_SIDELOADS_PATH,
-	removeSideloadedServer,
+	EXTENSION_BUILTINS_PATH,
+	EXTENSION_SERVERS_PATH,
+	removeExtensionServer,
+	setBuiltinExtensionEnabled,
 	EXTENSION_CATALOG_PATH,
 	EXTENSION_CATALOG_STATES,
 	fetchExtensionCatalog,
@@ -104,6 +106,7 @@ export type {
 	FetchExtensionCatalogOptions,
 } from './catalog'
 export {
+	BINDING_SUGGESTION_META_KEY,
 	buildRepositorySnapshot,
 	canonicalJson,
 	hashInputSchema,
@@ -116,6 +119,7 @@ export {
 	parseRepositorySnapshot,
 	parseServerAnnouncement,
 	parseToolsList,
+	suggestBinding,
 } from './repository'
 export type {
 	BuildRepositoryParams,
@@ -123,9 +127,14 @@ export type {
 	RepositoryExtensionEntry,
 	RepositorySnapshot,
 	RepositoryTool,
+	SuggestedBinding,
 } from './repository'
 export {
+	actionNameProblem,
+	CAPABILITY_FORMAT_HINT,
+	capabilityProblem,
 	createRemoteBinding,
+	createRemoteBindings,
 	deleteRemoteBinding,
 	EXTENSION_BINDINGS_PATH,
 	parseRemoteBindingRequest,

@@ -1,6 +1,8 @@
 import type { NostrEventLike } from '../nostr/eventLike'
 import { verifyNostrEvent } from '../nostr/eventValidation'
 import { sha256Hex } from '../nostr/nip98'
+import type { ExtensionActionAuth } from './actions'
+import { actionNameProblem, capabilityProblem, MAX_CAPABILITY_LENGTH, toolNameWords } from './names'
 
 /**
  * Extension repository (ADR-0023 §7.2). A curator publishes a NIP-51 follow set (kind 30000) whose `d` tag is
@@ -19,6 +21,20 @@ const MAX_TOOLS = 100
 const MAX_TEXT = 300
 const MAX_NAME = 100
 
+/** `_meta` key a ContextVM tool may use to propose how marketplaces bind it (ADR-0023 §7.5). */
+export const BINDING_SUGGESTION_META_KEY = 'market.plebeian/binding'
+
+/**
+ * A ready-to-accept binding for a tool. `server` means the tool proposed it in its `_meta`; `derived` means the
+ * marketplace derived it from the tool name, and then only admins may call it until an admin chooses otherwise.
+ */
+export interface SuggestedBinding {
+	actionName: string
+	capability: string
+	auth: ExtensionActionAuth
+	source: 'server' | 'derived'
+}
+
 export interface RepositoryTool {
 	name: string
 	title?: string
@@ -27,6 +43,7 @@ export interface RepositoryTool {
 	inputFields: readonly string[]
 	/** sha256 of the canonical JSON of the announced `inputSchema`; remote bindings pin this (ADR-0023 §7.5). */
 	inputSchemaHash: string
+	suggestedBinding: SuggestedBinding
 	/** CEP-8 price from a `cap` tag, as advertised (untrusted display text). */
 	price?: { amount: string; unit: string }
 }
@@ -41,7 +58,9 @@ export interface RepositoryExtensionEntry {
 	serverPubkey: string
 	/** Curator pubkeys whose registry lists this server. */
 	listedBy: readonly string[]
-	/** Added directly by an admin of this instance by pubkey (ADR-0023 §7.2). */
+	/** Added to this marketplace by an admin. Only added servers can have tools bound (ADR-0023 §7.5). */
+	added: boolean
+	/** Added by pubkey without any trusted registry listing it (ADR-0023 §7.2). */
 	sideloaded: boolean
 	state: RepositoryEntryState
 	name: string
@@ -60,8 +79,8 @@ export interface RepositoryExtensionEntry {
 export interface RepositorySnapshot {
 	curators: readonly string[]
 	relays: readonly string[]
-	/** Server pubkeys sideloaded by admins of this instance. */
-	sideloaded: readonly string[]
+	/** Server pubkeys added to this marketplace by admins (from a registry or sideloaded). */
+	added: readonly string[]
 	entries: readonly RepositoryExtensionEntry[]
 	/** Curators with no valid registry list on the operator's relays. */
 	missingRegistries: readonly string[]
@@ -150,6 +169,7 @@ export function parseToolsList(event: unknown): { pubkey: string; tools: Reposit
 			...(text(raw.description, MAX_TEXT) ? { description: text(raw.description, MAX_TEXT) } : {}),
 			inputFields: properties.slice(0, 20).map((field) => field.slice(0, 60)),
 			inputSchemaHash,
+			suggestedBinding: suggestBinding(name, raw._meta),
 			...(price ? { price } : {}),
 		})
 	}
@@ -162,8 +182,8 @@ export interface BuildRepositoryParams {
 	/** Untrusted events from the operator's relays. */
 	registryEvents: readonly NostrEventLike[]
 	announcementEvents: readonly NostrEventLike[]
-	/** Server pubkeys added directly by admins; shown even if no registry lists them. */
-	sideloaded?: readonly string[]
+	/** Server pubkeys added by admins; shown even if no registry lists them. */
+	added?: readonly string[]
 	nowMs: number
 }
 
@@ -185,12 +205,13 @@ export function collectRegistryServers(curators: readonly string[], registryEven
 /** Pure: builds repository entries from registry lists and announcements. Unlisted servers are ignored. */
 export function buildRepositorySnapshot(params: BuildRepositoryParams): RepositorySnapshot {
 	const { listedBy, missingRegistries } = collectRegistryServers(params.curators, params.registryEvents)
-	const sideloaded = [...new Set((params.sideloaded ?? []).filter((pubkey) => HEX_PUBKEY.test(pubkey)))]
-	for (const pubkey of sideloaded) if (!listedBy.has(pubkey)) listedBy.set(pubkey, [])
+	const added = [...new Set((params.added ?? []).filter((pubkey) => HEX_PUBKEY.test(pubkey)))]
+	for (const pubkey of added) if (!listedBy.has(pubkey)) listedBy.set(pubkey, [])
 
 	const entries: RepositoryExtensionEntry[] = []
 	for (const [serverPubkey, curators] of listedBy) {
-		const isSideloaded = sideloaded.includes(serverPubkey)
+		const isAdded = added.includes(serverPubkey)
+		const flags = { added: isAdded, sideloaded: isAdded && curators.length === 0 }
 		const own = params.announcementEvents.filter((event) => event.pubkey === serverPubkey)
 		const announcement = newestValid(own, (event) => {
 			const parsed = parseServerAnnouncement(event)
@@ -206,7 +227,7 @@ export function buildRepositorySnapshot(params: BuildRepositoryParams): Reposito
 			entries.push({
 				serverPubkey,
 				listedBy: curators,
-				sideloaded: isSideloaded,
+				...flags,
 				state: 'unavailable',
 				name: `${serverPubkey.slice(0, 8)}…`,
 				tools,
@@ -222,7 +243,7 @@ export function buildRepositorySnapshot(params: BuildRepositoryParams): Reposito
 		entries.push({
 			serverPubkey,
 			listedBy: curators,
-			sideloaded: isSideloaded,
+			...flags,
 			state: 'listed',
 			name: announcement.name ?? `${serverPubkey.slice(0, 8)}…`,
 			...(announcement.about ? { about: announcement.about } : {}),
@@ -237,7 +258,7 @@ export function buildRepositorySnapshot(params: BuildRepositoryParams): Reposito
 	}
 
 	entries.sort((a, b) => Number(b.state === 'listed') - Number(a.state === 'listed') || a.name.localeCompare(b.name))
-	return { curators: [...params.curators], relays: [...params.relays], sideloaded, entries, missingRegistries, fetchedAt: params.nowMs }
+	return { curators: [...params.curators], relays: [...params.relays], added, entries, missingRegistries, fetchedAt: params.nowMs }
 }
 
 /** Parses an untrusted repository snapshot from the catalog response. Malformed entries are dropped. */
@@ -254,8 +275,8 @@ export function parseRepositorySnapshot(input: unknown): RepositorySnapshot | un
 		return entry ? [entry] : []
 	})
 	const problem = text(input.problem, MAX_TEXT)
-	const sideloaded = hexList(input.sideloaded)
-	return { curators, relays, sideloaded, entries, missingRegistries, fetchedAt: input.fetchedAt, ...(problem ? { problem } : {}) }
+	const added = hexList(input.added)
+	return { curators, relays, added, entries, missingRegistries, fetchedAt: input.fetchedAt, ...(problem ? { problem } : {}) }
 }
 
 function parseEntry(raw: unknown): RepositoryExtensionEntry | undefined {
@@ -277,6 +298,7 @@ function parseEntry(raw: unknown): RepositoryExtensionEntry | undefined {
 							: [],
 						inputSchemaHash:
 							typeof tool.inputSchemaHash === 'string' && /^[0-9a-f]{64}$/.test(tool.inputSchemaHash) ? tool.inputSchemaHash : '',
+						suggestedBinding: parseSuggestedBinding(tool.suggestedBinding) ?? suggestBinding(text(tool.name, MAX_NAME)!, undefined),
 						...(price ? { price: { amount: String(price.amount), unit: String(price.unit) } } : {}),
 					},
 				]
@@ -285,7 +307,8 @@ function parseEntry(raw: unknown): RepositoryExtensionEntry | undefined {
 	return {
 		serverPubkey: raw.serverPubkey,
 		listedBy: hexList(raw.listedBy),
-		sideloaded: raw.sideloaded === true,
+		added: raw.added === true,
+		sideloaded: raw.added === true && raw.sideloaded === true,
 		state: raw.state,
 		name,
 		...(text(raw.about, MAX_TEXT) ? { about: text(raw.about, MAX_TEXT) } : {}),
@@ -298,6 +321,31 @@ function parseEntry(raw: unknown): RepositoryExtensionEntry | undefined {
 		...(typeof raw.announcedAt === 'number' ? { announcedAt: raw.announcedAt } : {}),
 		...(text(raw.problem, MAX_TEXT) ? { problem: text(raw.problem, MAX_TEXT) } : {}),
 	}
+}
+
+/** Uses a valid proposal from the tool's `_meta`; otherwise derives one from the tool name. */
+export function suggestBinding(toolName: string, meta: unknown): SuggestedBinding {
+	const proposed = isRecord(meta) ? meta[BINDING_SUGGESTION_META_KEY] : undefined
+	if (isRecord(proposed)) {
+		const actionName = typeof proposed.actionName === 'string' ? proposed.actionName : ''
+		const capability = typeof proposed.capability === 'string' ? proposed.capability : ''
+		const auth = proposed.auth === 'user' || proposed.auth === 'admin' ? proposed.auth : 'admin'
+		if (!actionNameProblem(actionName) && !capabilityProblem(capability)) return { actionName, capability, auth, source: 'server' }
+	}
+	const words = toolNameWords(toolName)
+	const actionWords = words.length > 0 && /^[a-z]/.test(words[0]) ? words : ['run', ...words]
+	const actionName = actionWords.join('-').slice(0, 64).replace(/-+$/, '')
+	const capability = ['tool', ...words].join('.').slice(0, MAX_CAPABILITY_LENGTH).replace(/\.+$/, '')
+	return { actionName, capability, auth: 'admin', source: 'derived' }
+}
+
+function parseSuggestedBinding(value: unknown): SuggestedBinding | undefined {
+	if (!isRecord(value) || (value.source !== 'server' && value.source !== 'derived')) return undefined
+	const { actionName, capability, auth } = value
+	if (typeof actionName !== 'string' || actionNameProblem(actionName)) return undefined
+	if (typeof capability !== 'string' || capabilityProblem(capability)) return undefined
+	if (auth !== 'user' && auth !== 'admin') return undefined
+	return { actionName, capability, auth, source: value.source }
 }
 
 /** Order-independent JSON for hashing: object keys are sorted recursively. */

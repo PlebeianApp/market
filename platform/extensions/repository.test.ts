@@ -98,7 +98,7 @@ describe('repository loader', () => {
 	test('without curators it returns an empty snapshot without reading relays; without relays it is disabled', async () => {
 		const { port, calls } = fakeRelayPort()
 		const empty = await createRepositoryLoader({ curators: [], relays: ['wss://a.example'], getRelayPort: () => port }).getSnapshot()
-		expect(empty).toMatchObject({ entries: [], sideloaded: [] })
+		expect(empty).toMatchObject({ entries: [], added: [] })
 		expect(await createRepositoryLoader({ curators: [curator], relays: [], getRelayPort: () => port }).getSnapshot()).toBeUndefined()
 		expect(calls).toHaveLength(0)
 	})
@@ -110,7 +110,7 @@ describe('repository loader', () => {
 			curators: [],
 			relays: ['wss://a.example'],
 			getRelayPort: () => port,
-			getSideloads: () => sideloads,
+			getAddedServers: () => sideloads,
 			nowMs: () => 0,
 		})
 		expect((await loader.getSnapshot())?.entries).toEqual([])
@@ -118,7 +118,9 @@ describe('repository loader', () => {
 		expect((await loader.getSnapshot())?.entries).toEqual([])
 		loader.invalidate()
 		const snapshot = await loader.getSnapshot()
-		expect(snapshot?.entries.map((entry) => [entry.name, entry.sideloaded, entry.listedBy])).toEqual([['Rates', true, []]])
+		expect(snapshot?.entries.map((entry) => [entry.name, entry.added, entry.sideloaded, entry.listedBy])).toEqual([
+			['Rates', true, true, []],
+		])
 		expect(calls.at(-1)).toEqual({ filters: { kinds: [11316, 11317], authors: [server] }, relays: ['wss://a.example'] })
 	})
 
@@ -132,7 +134,7 @@ describe('repository loader', () => {
 			curators: [curator],
 			relays: ['wss://a.example'],
 			getRelayPort: () => slowPort,
-			getSideloads: () => sideloads,
+			getAddedServers: () => sideloads,
 			nowMs: () => 0,
 		})
 		const stale = loader.getSnapshot()
@@ -141,7 +143,7 @@ describe('repository loader', () => {
 		const fresh = loader.getSnapshot()
 		release()
 		await stale
-		expect((await fresh)?.sideloaded).toEqual([server])
-		expect((await loader.getSnapshot())?.sideloaded).toEqual([server])
+		expect((await fresh)?.added).toEqual([server])
+		expect((await loader.getSnapshot())?.added).toEqual([server])
 	})
 })

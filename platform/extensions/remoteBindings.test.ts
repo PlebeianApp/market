@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import {
 	createRemoteBinding,
+	createRemoteBindings,
 	deleteRemoteBinding,
 	hashInputSchema,
+	suggestBinding,
 	updateRemoteBinding,
 	type ExtensionActionFetch,
 	type RepositoryExtensionEntry,
@@ -37,6 +39,7 @@ const signerFor = (key: Uint8Array) => ({ sign: async (template: Parameters<type
 const entry = (tools: RepositoryExtensionEntry['tools']): RepositoryExtensionEntry => ({
 	serverPubkey: server,
 	listedBy: [],
+	added: true,
 	sideloaded: true,
 	state: 'listed',
 	name: 'Rates',
@@ -44,11 +47,16 @@ const entry = (tools: RepositoryExtensionEntry['tools']): RepositoryExtensionEnt
 	paid: tools.some((tool) => tool.price),
 	encrypted: false,
 })
-const quoteTool = { name: 'quote', inputFields: ['weight'], inputSchemaHash: hashInputSchema(quoteSchema) }
+const quoteTool = {
+	name: 'quote',
+	inputFields: ['weight'],
+	inputSchemaHash: hashInputSchema(quoteSchema),
+	suggestedBinding: suggestBinding('quote', undefined),
+}
 const snapshotWith = (entries: RepositoryExtensionEntry[]): RepositorySnapshot => ({
 	curators: [],
 	relays: ['wss://app.example'],
-	sideloaded: [server],
+	added: [server],
 	entries,
 	missingRegistries: [],
 	fetchedAt: 0,
@@ -79,7 +87,7 @@ describe('binding state', () => {
 		expect(state([record()])).toEqual([['installed_enabled', undefined]])
 		expect(state([record({ enabled: false })])).toEqual([['installed_disabled', undefined]])
 		expect(state([record({ inputSchemaHash: 'f'.repeat(64) })])[0][0]).toBe('misconfigured')
-		expect(state([record()], snapshotWith([]))[0]).toEqual(['misconfigured', 'The server is no longer listed by a registry or sideloaded'])
+		expect(state([record()], snapshotWith([]))[0]).toEqual(['misconfigured', 'The extension is no longer added to this marketplace'])
 		expect(state([record()], snapshotWith([entry([{ ...quoteTool, price: { amount: '1', unit: 'sats' } }])]))[0][0]).toBe('misconfigured')
 		expect(state([record()], snapshotWith([{ ...entry([quoteTool]), state: 'unavailable' }]))[0][0]).toBe('unreachable')
 		expect(evaluateBindings([record()], undefined, new Map(), NOW_MS)[0].state).toBe('unreachable')
@@ -161,10 +169,20 @@ describe('remote target', () => {
 describe('binding routes', () => {
 	function setup(
 		snapshot: RepositorySnapshot | undefined = snapshotWith([
-			entry([quoteTool, { name: 'paid', inputFields: [], inputSchemaHash: hashInputSchema({}), price: { amount: '5', unit: 'sats' } }]),
+			entry([
+				quoteTool,
+				{
+					name: 'paid',
+					inputFields: [],
+					inputSchemaHash: hashInputSchema({}),
+					suggestedBinding: suggestBinding('paid', undefined),
+					price: { amount: '5', unit: 'sats' },
+				},
+			]),
 		]),
 	) {
 		const store = new SqliteExtensionStateStore(':memory:')
+		store.addServer({ pubkey: server, addedBy: admin, addedAt: 0 })
 		let current = snapshot
 		const handlers = createBindingHandlers({
 			store: () => store,
@@ -215,6 +233,53 @@ describe('binding routes', () => {
 			}),
 		])
 		expect(await createRemoteBinding(signerFor(adminKey), bind, options())).toMatchObject({ ok: false, error: { reason: 'invalid_input' } })
+	})
+
+	test('accepts several suggestions in one request, all or none', async () => {
+		const twoTools = snapshotWith([
+			entry([
+				quoteTool,
+				{ name: 'track', inputFields: [], inputSchemaHash: hashInputSchema({}), suggestedBinding: suggestBinding('track', undefined) },
+			]),
+		])
+		const { store, options } = setup(twoTools)
+		const track = { ...bind, toolName: 'track', actionName: 'track', capability: 'shipping.track' }
+
+		expect(await createRemoteBindings(signerFor(adminKey), [bind, { ...track, toolName: 'missing' }], options())).toMatchObject({
+			ok: false,
+			error: { reason: 'invalid_input', message: expect.stringContaining('missing: ') },
+		})
+		expect(store.listBindings()).toEqual([])
+
+		expect(await createRemoteBindings(signerFor(adminKey), [bind, { ...track, actionName: 'get-quote' }], options())).toMatchObject({
+			ok: false,
+			error: { message: expect.stringContaining('Two bindings use the action name get-quote') },
+		})
+		expect(store.listBindings()).toEqual([])
+
+		expect(await createRemoteBindings(signerFor(adminKey), [bind, track], options())).toEqual({ ok: true, value: { created: 2 } })
+		expect(store.listBindings().map((record) => record.actionName)).toEqual(['get-quote', 'track'])
+
+		expect(await createRemoteBindings(signerFor(adminKey), [{ ...bind, actionName: 'other' }, track], options())).toMatchObject({
+			ok: false,
+			error: { message: 'This server already has an action named track' },
+		})
+		expect(store.listBindings()).toHaveLength(2)
+	})
+
+	test('refuses tools of servers that were not added first', async () => {
+		const { store, options } = setup()
+		store.removeServer(server)
+		expect(await createRemoteBinding(signerFor(adminKey), bind, options())).toMatchObject({
+			ok: false,
+			error: { reason: 'invalid_input', message: 'Add this extension to the marketplace before binding its tools' },
+		})
+		expect(store.listBindings()).toEqual([])
+	})
+
+	test('a binding stops when its server is no longer added', () => {
+		const notAdded = snapshotWith([{ ...entry([quoteTool]), added: false, sideloaded: false }])
+		expect(evaluateBindings([record()], notAdded, new Map(), NOW_MS)[0]).toMatchObject({ state: 'misconfigured' })
 	})
 
 	test('refuses paid, unknown, and unlisted tools, and non-admins', async () => {

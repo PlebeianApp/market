@@ -20,11 +20,8 @@ import { parseRemoteBindingViews, type RemoteBindingView } from './bindings'
 
 export const EXTENSION_CATALOG_PATH = '/api/extensions/catalog'
 
-/**
- * Store install states (ADR-0023 §7.3) that the current env-managed runtime can produce. `needs_setup`,
- * `installed_disabled`, and `unreachable` arrive with the settings store and remote bindings.
- */
-export const EXTENSION_CATALOG_STATES = ['available', 'installed_enabled', 'misconfigured'] as const
+/** Store install states (ADR-0023 §7.3) for built-ins. `installed_disabled` means an admin switched it off. */
+export const EXTENSION_CATALOG_STATES = ['available', 'installed_enabled', 'installed_disabled', 'misconfigured'] as const
 export type ExtensionCatalogState = (typeof EXTENSION_CATALOG_STATES)[number]
 
 /** Who controls an entry's configuration. Only the environment exists today. */
@@ -47,13 +44,15 @@ export interface ExtensionCatalogEntry {
 	managedBy: ExtensionManagedBy
 	/** Environment variable prefix that configures this extension, e.g. `EXTENSION_FOO_`. */
 	envPrefix: string
+	/** Whether an admin can switch it on from the store (configured in the environment, or no private config). */
+	canEnable: boolean
 	/** Safe, admin-facing reason for `misconfigured`. Never contains private values. */
 	problem?: string
 }
 
 export function describeCatalogEntry(
 	definition: AnyExtensionDefinition,
-	status: { state: ExtensionCatalogState; envPrefix: string; problem?: string },
+	status: { state: ExtensionCatalogState; envPrefix: string; canEnable?: boolean; problem?: string },
 ): ExtensionCatalogEntry {
 	const { manifest } = definition
 	return {
@@ -71,6 +70,7 @@ export function describeCatalogEntry(
 		state: status.state,
 		managedBy: 'environment',
 		envPrefix: status.envPrefix,
+		canEnable: status.canEnable ?? false,
 		...(status.problem ? { problem: status.problem.slice(0, 300) } : {}),
 	}
 }
@@ -134,32 +134,55 @@ export function fetchExtensionCatalog(
 	})
 }
 
-export const EXTENSION_SIDELOADS_PATH = '/api/extensions/sideloads'
+export const EXTENSION_SERVERS_PATH = '/api/extensions/servers'
+export const EXTENSION_BUILTINS_PATH = '/api/extensions/builtins'
 
-const sideloadResult = {
+const serverResult = {
 	parse(value: unknown): { pubkey: string } {
 		if (!isRecord(value) || typeof value.pubkey !== 'string' || !/^[0-9a-f]{64}$/.test(value.pubkey))
-			throw new ValidationError('Invalid sideload response')
+			throw new ValidationError('Invalid server response')
 		return { pubkey: value.pubkey }
 	},
 }
 
-/** Admin-only: sideload a ContextVM server by hex pubkey or npub. The server validates and normalizes it. */
-export function addSideloadedServer(
+/**
+ * Admin-only: add a ContextVM server to this marketplace by hex pubkey or npub, whether a registry lists it or not
+ * (unlisted servers are sideloaded). A server must be added before any of its tools can be bound.
+ */
+export function addExtensionServer(
 	signer: Signer<SignedEventLike & NostrEventLike>,
 	server: string,
 	options: FetchExtensionCatalogOptions = {},
+	/** Bindings to accept together with the add, in one request; the server stores all or none. */
+	bindings?: readonly unknown[],
 ): Promise<Result<{ pubkey: string }, ExtensionActionError>> {
-	return sendAdminRequest(signer, 'POST', EXTENSION_SIDELOADS_PATH, JSON.stringify({ server: server.trim() }), options, sideloadResult)
+	const body = JSON.stringify({ server: server.trim(), ...(bindings ? { bindings } : {}) })
+	return sendAdminRequest(signer, 'POST', EXTENSION_SERVERS_PATH, body, options, serverResult)
 }
 
-/** Admin-only: remove a sideloaded server. */
-export function removeSideloadedServer(
+/** Admin-only: switch a built-in extension on or off. The choice is stored server-side and applied immediately. */
+export function setBuiltinExtensionEnabled(
+	signer: Signer<SignedEventLike & NostrEventLike>,
+	id: string,
+	enabled: boolean,
+	options: FetchExtensionCatalogOptions = {},
+): Promise<Result<{ id: string; enabled: boolean }, ExtensionActionError>> {
+	return sendAdminRequest(signer, 'PATCH', `${EXTENSION_BUILTINS_PATH}/${encodeURIComponent(id)}`, JSON.stringify({ enabled }), options, {
+		parse(value) {
+			if (!isRecord(value) || typeof value.id !== 'string' || typeof value.enabled !== 'boolean')
+				throw new ValidationError('Invalid response')
+			return { id: value.id, enabled: value.enabled }
+		},
+	})
+}
+
+/** Admin-only: remove an added server. Refused while the server still has bindings. */
+export function removeExtensionServer(
 	signer: Signer<SignedEventLike & NostrEventLike>,
 	pubkey: string,
 	options: FetchExtensionCatalogOptions = {},
 ): Promise<Result<{ pubkey: string }, ExtensionActionError>> {
-	return sendAdminRequest(signer, 'DELETE', `${EXTENSION_SIDELOADS_PATH}/${encodeURIComponent(pubkey)}`, undefined, options, sideloadResult)
+	return sendAdminRequest(signer, 'DELETE', `${EXTENSION_SERVERS_PATH}/${encodeURIComponent(pubkey)}`, undefined, options, serverResult)
 }
 
 /** NIP-98-signed admin request to an extension store endpoint; the response uses the action envelope. */
@@ -230,6 +253,7 @@ function parseEntry(input: unknown): ExtensionCatalogEntry | undefined {
 		state: state as ExtensionCatalogState,
 		managedBy: 'environment',
 		envPrefix,
+		canEnable: input.canEnable === true,
 		...(typeof problem === 'string' && problem ? { problem: problem.slice(0, 300) } : {}),
 	}
 }

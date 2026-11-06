@@ -9,6 +9,7 @@ import {
 	parseRegistryList,
 	parseRepositorySnapshot,
 	parseToolsList,
+	suggestBinding,
 } from './repository'
 
 const curatorKey = generateSecretKey()
@@ -43,6 +44,7 @@ const toolList = sign(serverKey, CONTEXTVM_TOOLS_LIST_KIND, [['cap', 'tool:quote
 			title: 'Get a quote',
 			description: 'Rates for a parcel',
 			inputSchema: { type: 'object', properties: { weight: {}, country: {} } },
+			_meta: { 'market.plebeian/binding': { actionName: 'get-quote', capability: 'shipping.quote', auth: 'user' } },
 		},
 		{ name: 'track', inputSchema: { type: 'object' } },
 		{ name: 'quote' },
@@ -82,10 +84,45 @@ describe('extension repository', () => {
 				description: 'Rates for a parcel',
 				inputFields: ['weight', 'country'],
 				inputSchemaHash: hashInputSchema({ type: 'object', properties: { weight: {}, country: {} } }),
+				suggestedBinding: { actionName: 'get-quote', capability: 'shipping.quote', auth: 'user', source: 'server' },
 				price: { amount: '10', unit: 'sats' },
 			},
-			{ name: 'track', inputFields: [], inputSchemaHash: hashInputSchema({ type: 'object' }) },
+			{
+				name: 'track',
+				inputFields: [],
+				inputSchemaHash: hashInputSchema({ type: 'object' }),
+				suggestedBinding: { actionName: 'track', capability: 'tool.track', auth: 'admin', source: 'derived' },
+			},
 		])
+	})
+
+	test('suggests bindings from tool _meta, falling back to the tool name when absent or invalid', () => {
+		const meta = (binding: unknown) => ({ 'market.plebeian/binding': binding })
+		expect(
+			suggestBinding('describe_product_image', meta({ actionName: 'describe-image', capability: 'product.image.describe', auth: 'user' })),
+		).toEqual({
+			actionName: 'describe-image',
+			capability: 'product.image.describe',
+			auth: 'user',
+			source: 'server',
+		})
+		expect(suggestBinding('describeProductImage', undefined)).toEqual({
+			actionName: 'describe-product-image',
+			capability: 'tool.describe.product.image',
+			auth: 'admin',
+			source: 'derived',
+		})
+		expect(suggestBinding('describe_product_image', meta({ actionName: 'Describe Image', capability: 'x' }))).toMatchObject({
+			source: 'derived',
+		})
+		expect(suggestBinding('quote', meta({ actionName: 'get-quote', capability: 'Shipping Quote', auth: 'user' }))).toMatchObject({
+			source: 'derived',
+		})
+		expect(suggestBinding('quote', meta({ actionName: 'get-quote', capability: 'shipping.quote', auth: 'root' }))).toMatchObject({
+			source: 'server',
+			auth: 'admin',
+		})
+		expect(suggestBinding('2fa_check', undefined)).toMatchObject({ actionName: 'run-2fa-check', capability: 'tool.2fa.check' })
 	})
 
 	test('builds entries from the newest registry list and the servers’ own announcements', () => {
@@ -116,23 +153,26 @@ describe('extension repository', () => {
 		expect(unavailable.problem).toBe('No server announcement found on the configured relays')
 	})
 
-	test('sideloaded servers appear without a registry and are marked; registry-listed ones keep their curators', () => {
+	test('added servers appear without a registry; only unlisted ones count as sideloaded', () => {
 		const snapshot = buildRepositorySnapshot({
 			curators: [curator],
 			relays: [],
 			registryEvents: [registry([server])],
 			announcementEvents: [announcement],
-			sideloaded: [server, silentServer, 'not-hex'],
+			added: [server, silentServer, 'not-hex'],
 			nowMs: 0,
 		})
-		expect(snapshot.sideloaded).toEqual([server, silentServer])
-		expect(snapshot.entries.map((entry) => [entry.serverPubkey, entry.sideloaded, entry.listedBy, entry.state])).toEqual([
-			[server, true, [curator], 'listed'],
-			[silentServer, true, [], 'unavailable'],
+		expect(snapshot.added).toEqual([server, silentServer])
+		expect(snapshot.entries.map((entry) => [entry.serverPubkey, entry.added, entry.sideloaded, entry.listedBy, entry.state])).toEqual([
+			[server, true, false, [curator], 'listed'],
+			[silentServer, true, true, [], 'unavailable'],
 		])
 		const wire = parseRepositorySnapshot(JSON.parse(JSON.stringify(snapshot)))
-		expect(wire?.entries.map((entry) => entry.sideloaded)).toEqual([true, true])
-		expect(wire?.sideloaded).toEqual([server, silentServer])
+		expect(wire?.entries.map((entry) => [entry.added, entry.sideloaded])).toEqual([
+			[true, false],
+			[true, true],
+		])
+		expect(wire?.added).toEqual([server, silentServer])
 	})
 
 	test('servers that no registry lists are ignored', () => {

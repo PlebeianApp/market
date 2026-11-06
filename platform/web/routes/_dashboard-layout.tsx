@@ -58,6 +58,11 @@ const backButtonRoutes: Record<string, { parentPath: string; parentTitle: string
 		parentPath: '', // Empty path signals to use browser history
 		parentTitle: 'Orders',
 	},
+	// Dynamic route for an added extension's page
+	'/dashboard/app-settings/extensions/': {
+		parentPath: '/dashboard/app-settings/extensions',
+		parentTitle: '🧩 Extensions',
+	},
 	// Dynamic route for message details
 	'/dashboard/sales/messages/': {
 		parentPath: '/dashboard/sales/messages',
@@ -90,6 +95,11 @@ function getBackButtonInfo(currentPath: string): { parentPath: string; parentTit
 	// Check for order detail pages (pattern: /dashboard/orders/[orderId])
 	if (currentPath.startsWith('/dashboard/orders/') && currentPath !== '/dashboard/orders') {
 		return backButtonRoutes['/dashboard/orders/']
+	}
+
+	// Check for extension pages (pattern: /dashboard/app-settings/extensions/[extensionId])
+	if (currentPath.startsWith('/dashboard/app-settings/extensions/') && currentPath !== '/dashboard/app-settings/extensions/') {
+		return backButtonRoutes['/dashboard/app-settings/extensions/']
 	}
 
 	// Check for message detail pages (pattern: /dashboard/sales/messages/[pubkey])
@@ -470,6 +480,7 @@ function DashboardLayout() {
 												location.pathname === '/dashboard/app-settings/blacklists' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/featured-items' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/extensions' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/app-settings/extension-store' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/about' && 'p-0 lg:p-0',
 											)}
 										>
@@ -496,6 +507,7 @@ function DashboardLayout() {
 												location.pathname !== '/dashboard/app-settings/blacklists' &&
 												location.pathname !== '/dashboard/app-settings/featured-items' &&
 												location.pathname !== '/dashboard/app-settings/extensions' &&
+												location.pathname !== '/dashboard/app-settings/extension-store' &&
 												location.pathname !== '/dashboard/account/network' &&
 												location.pathname !== '/dashboard/about' &&
 												location.pathname !== '/dashboard/account/preferences' &&
@@ -517,6 +529,7 @@ function DashboardLayout() {
 														location.pathname !== '/dashboard/app-settings/blacklists' &&
 														location.pathname !== '/dashboard/app-settings/featured-items' &&
 														location.pathname !== '/dashboard/app-settings/extensions' &&
+														location.pathname !== '/dashboard/app-settings/extension-store' &&
 														location.pathname !== '/dashboard/sales/circular-economy' &&
 														location.pathname !== '/dashboard/products/products' &&
 														location.pathname !== '/dashboard/products/auctions' &&

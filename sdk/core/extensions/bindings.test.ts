@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import {
+	actionNameProblem,
+	CAPABILITY_FORMAT_HINT,
+	capabilityProblem,
 	parseRemoteBindingRequest,
 	parseRemoteBindingViews,
 	parseRemoteExtensionId,
@@ -41,6 +44,21 @@ describe('remote binding contract', () => {
 		expect(bad({ rateLimit: { perPubkey: 5, windowSeconds: 999_999 } })).toBe(false)
 		expect(bad({ acknowledgedDataFlow: false })).toBe(false)
 		expect(bad({ serverPubkey: 'npub1x' })).toBe(false)
+	})
+
+	test('capability and action name checks explain what is wrong', () => {
+		for (const ok of ['product.image.describe', 'shipping.quote', 'dev:echo', 'a1-b2']) expect(capabilityProblem(ok)).toBeUndefined()
+		for (const bad of ['Product.Image', 'product image', 'product_image.describe', '.leading', 'trailing.', 'a..b']) {
+			expect(capabilityProblem(bad)).toBe(CAPABILITY_FORMAT_HINT)
+		}
+		expect(capabilityProblem('')).toBe('Enter a capability')
+		expect(capabilityProblem('a'.repeat(101))).toContain('at most 100')
+		expect(actionNameProblem('get-quote')).toBeUndefined()
+		expect(actionNameProblem('Get Quote')).toContain('e.g. get-quote')
+		expect(parseRemoteBindingRequest({ ...request, capability: 'Product Image' })).toMatchObject({
+			ok: false,
+			error: { message: CAPABILITY_FORMAT_HINT },
+		})
 	})
 
 	test('pin hash ignores key order but notices real changes', () => {

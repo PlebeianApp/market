@@ -6,7 +6,8 @@ import {
 	describeCatalogEntry,
 	EXTENSION_CATALOG_PATH,
 	EXTENSION_BINDINGS_PATH,
-	EXTENSION_SIDELOADS_PATH,
+	EXTENSION_BUILTINS_PATH,
+	EXTENSION_SERVERS_PATH,
 	parseRemoteExtensionId,
 	type AnyExtensionDefinition,
 	type ExtensionCatalog,
@@ -20,6 +21,8 @@ import { buildExtensionHost, type ExtensionPortUsage } from '../extensions/ports
 import { createMemoryKeyValueStorage } from '../extensions/ports/storage'
 import { ExtensionRateLimiter } from '../extensions/rateLimiter'
 import { createBindingHandlers } from '../extensions/bindingRoutes'
+import { resolveBuiltinSettings } from '../extensions/builtinSettings'
+import { adminError, adminOk, authenticateAdminRequest, parseJsonBody } from '../extensions/adminAuth'
 import {
 	createContextVmToolCaller,
 	createRemoteTarget,
@@ -30,7 +33,7 @@ import {
 	type RemoteToolCaller,
 } from '../extensions/remoteBindings'
 import { createRepositoryLoader, readRepositoryConfig, REPOSITORY_CACHE_TTL_MS } from '../extensions/repository'
-import { createSideloadHandlers } from '../extensions/sideloadRoutes'
+import { createServerHandlers } from '../extensions/serverRoutes'
 import { DEFAULT_EXTENSIONS_STATE_PATH, SqliteExtensionStateStore, type ExtensionStateStore } from '../extensions/stateStore'
 import { ExtensionRegistry, type PublicExtensionDescriptor } from '../extensions/registry'
 import type { BunRoutes } from './http/types'
@@ -42,6 +45,13 @@ interface ExtensionRuntimeState {
 	problems: Map<string, string>
 	repository: ReturnType<typeof createRepositoryLoader>
 	stateStore: ExtensionStateStore
+	/** Built-in configuration inputs, kept so admin enable/disable can reapply them without a restart. */
+	builtins: {
+		definitions: readonly AnyExtensionDefinition[]
+		envConfig: ReturnType<typeof readExtensionEnvConfig>
+		disabledByAdmin: Set<string>
+		enableable: Set<string>
+	}
 	/** Remote binding runtime (ADR-0023 §7.5). */
 	remote: {
 		getCaller: () => RemoteToolCaller | undefined
@@ -126,49 +136,22 @@ export async function startExtensions(
 		curators: repositoryConfig.curators,
 		relays: repositoryConfig.relays,
 		getRelayPort: sharedRelayPort,
-		getSideloads: () => stateStore.listSideloads().map((record) => record.pubkey),
+		getAddedServers: () => stateStore.listAddedServers().map((record) => record.pubkey),
 	})
 	const remote = startRemoteBindings(env, repositoryConfig.relays, stateStore, repository)
-	globalState[STATE_KEY] = { registry, usage, problems, repository, stateStore, remote }
-
-	const config = readExtensionEnvConfig(definitions, env)
-	for (const error of config.errors) {
-		console.error(`[extensions] ${error.id} disabled: ${error.message}`)
-		problems.set(error.id, error.message)
+	const envConfig = readExtensionEnvConfig(definitions, env)
+	for (const error of envConfig.errors) console.error(`[extensions] ${error.id} disabled: ${error.message}`)
+	const state: ExtensionRuntimeState = {
+		registry,
+		usage,
+		problems,
+		repository,
+		stateStore,
+		remote,
+		builtins: { definitions, envConfig, disabledByAdmin: new Set(), enableable: new Set() },
 	}
-	const configured = registry.configure(config.settings)
-	if (!configured.ok) {
-		for (const error of configured.error) console.error(`[extensions] configuration rejected: ${error.message}`)
-		return
-	}
-
-	const policyFor = (id: string): ExtensionEnvPolicy | undefined => config.policies.get(id)
-	const failures = await registry.start('server', {
-		isolateFailures: true,
-		createHost: (definition, privateConfig, signal) => {
-			const built = buildExtensionHost(
-				definition.manifest,
-				privateConfig,
-				{
-					relayUrls: RELAY_URL ? [RELAY_URL] : [],
-					getRelayPort: sharedRelayPort,
-					storage,
-					allowLocalhostEgress: determineStage() !== 'production',
-					grantedPorts: (id) => policyFor(id)?.hostPorts,
-					operatorEgress: (id) => policyFor(id)?.egress,
-				},
-				signal,
-			)
-			usage.set(definition.manifest.id, built.usage)
-			return built.host
-		},
-	})
-	for (const failure of failures) {
-		const name = failure.error instanceof Error ? failure.error.name : typeof failure.error
-		console.error(`[extensions] ${failure.id} failed to start (${name}); it stays disabled`)
-		usage.delete(failure.id)
-		problems.set(failure.id, `Failed to start (${name}). See the server log.`)
-	}
+	globalState[STATE_KEY] = state
+	await applyBuiltins(state)
 
 	const running = registry.getPublicDescriptors()
 	if (running.length > 0) {
@@ -199,6 +182,68 @@ function hookShutdown() {
 			void stopExtensions().finally(() => process.exit(signal === 'SIGINT' ? 130 : 143))
 		})
 	}
+}
+
+/**
+ * (Re)configures and starts built-in extensions from the environment plus admin overrides. Running extensions are
+ * stopped first; a bad extension is logged by id and stays off, it never blocks the marketplace.
+ */
+async function applyBuiltins(state: ExtensionRuntimeState): Promise<void> {
+	const { registry, usage, problems, builtins } = state
+	await registry.stop().catch((error) => console.error('[extensions] stop failed:', error instanceof Error ? error.message : error))
+	usage.clear()
+	problems.clear()
+	for (const error of builtins.envConfig.errors) problems.set(error.id, error.message)
+
+	const resolution = resolveBuiltinSettings(builtins.definitions, builtins.envConfig, state.stateStore.listBuiltinOverrides())
+	builtins.disabledByAdmin = resolution.disabledByAdmin
+	builtins.enableable = resolution.enableable
+	for (const [id, message] of resolution.problems) problems.set(id, message)
+
+	const configured = registry.configure(resolution.settings)
+	if (!configured.ok) {
+		for (const error of configured.error) console.error(`[extensions] configuration rejected: ${error.message}`)
+		return
+	}
+
+	const policyFor = (id: string): ExtensionEnvPolicy | undefined => builtins.envConfig.policies.get(id)
+	const failures = await registry.start('server', {
+		isolateFailures: true,
+		createHost: (definition, privateConfig, signal) => {
+			const built = buildExtensionHost(
+				definition.manifest,
+				privateConfig,
+				{
+					relayUrls: RELAY_URL ? [RELAY_URL] : [],
+					getRelayPort: sharedRelayPort,
+					storage,
+					allowLocalhostEgress: determineStage() !== 'production',
+					grantedPorts: (id) => policyFor(id)?.hostPorts,
+					operatorEgress: (id) => policyFor(id)?.egress,
+				},
+				signal,
+			)
+			usage.set(definition.manifest.id, built.usage)
+			return built.host
+		},
+	})
+	for (const failure of failures) {
+		const name = failure.error instanceof Error ? failure.error.name : typeof failure.error
+		console.error(`[extensions] ${failure.id} failed to start (${name}); it stays disabled`)
+		usage.delete(failure.id)
+		problems.set(failure.id, `Failed to start (${name}). See the server log.`)
+	}
+}
+
+/** Admin switch for a built-in extension. Returns an error message when the change is not possible. */
+export async function setBuiltinEnabled(id: string, enabled: boolean, adminPubkey: string): Promise<string | undefined> {
+	const state = globalState[STATE_KEY]
+	if (!state) return 'Extensions are not started'
+	if (!state.builtins.definitions.some((definition) => definition.manifest.id === id)) return 'Unknown extension'
+	if (enabled && !state.builtins.enableable.has(id)) return 'Needs private settings in the server environment'
+	state.stateStore.setBuiltinOverride(id, enabled, adminPubkey, Math.floor(Date.now() / 1000))
+	await applyBuiltins(state)
+	return undefined
 }
 
 function sharedRelayPort(): NostrRelayPort {
@@ -263,8 +308,19 @@ export async function getExtensionCatalog(): Promise<ExtensionCatalog> {
 	const entries = state.registry.getDefinitions().map((definition) => {
 		const id = definition.manifest.id
 		const problem = state.problems.get(id)
-		const status = state.registry.isEnabled(id) ? 'installed_enabled' : problem ? 'misconfigured' : 'available'
-		return describeCatalogEntry(definition, { state: status, envPrefix: extensionEnvPrefix(id), ...(problem ? { problem } : {}) })
+		const status = state.registry.isEnabled(id)
+			? 'installed_enabled'
+			: state.builtins.disabledByAdmin.has(id)
+				? 'installed_disabled'
+				: problem
+					? 'misconfigured'
+					: 'available'
+		return describeCatalogEntry(definition, {
+			state: status,
+			envPrefix: extensionEnvPrefix(id),
+			canEnable: state.builtins.enableable.has(id),
+			...(problem ? { problem } : {}),
+		})
 	})
 	const repository = await state.repository.getSnapshot()
 	return { entries, ...(repository ? { repository } : {}), bindings: remoteBindingViews(state) }
@@ -293,7 +349,8 @@ export function resolveAcceptedOrigins(
 
 const acceptedOrigins = (request: Request) => resolveAcceptedOrigins(request, determineStage(), process.env.INSTANCE_SITE_URL)
 
-const sideloads = createSideloadHandlers({
+const servers = createServerHandlers({
+	getSnapshot: async () => globalState[STATE_KEY]?.repository.getSnapshot(),
 	store: () => {
 		const state = globalState[STATE_KEY]
 		if (!state) throw new Error('Extensions are not started')
@@ -318,11 +375,27 @@ const bindings = createBindingHandlers({
 	onChange: () => undefined,
 })
 
+const builtinAuth = { isAdmin: (pubkey: string) => getEventHandler().isAdmin(pubkey), replayCache, acceptedOrigins }
+
+/** `PATCH /api/extensions/builtins/:id` with `{ enabled }`: admin enable/disable of a built-in (NIP-98, 404 otherwise). */
+async function updateBuiltin(request: Request & { params?: Record<string, string> }): Promise<Response> {
+	const auth = await authenticateAdminRequest(request, builtinAuth)
+	if (!auth.ok) return auth.response
+	const enabled = (parseJsonBody(auth.body) as { enabled?: unknown } | undefined)?.enabled
+	if (typeof enabled !== 'boolean') return adminError('invalid_input', 'enabled must be true or false')
+	const id = request.params?.id ?? ''
+	const problem = await setBuiltinEnabled(id, enabled, auth.pubkey)
+	if (problem === 'Unknown extension') return adminError('not_found')
+	if (problem) return adminError('invalid_input', problem)
+	return adminOk({ id, enabled })
+}
+
 export const extensionRoutes: BunRoutes = {
+	[`${EXTENSION_BUILTINS_PATH}/:id`]: { PATCH: updateBuiltin },
 	[EXTENSION_BINDINGS_PATH]: { POST: bindings.create },
 	[`${EXTENSION_BINDINGS_PATH}/:server/:action`]: { PATCH: bindings.update, DELETE: bindings.remove },
-	[EXTENSION_SIDELOADS_PATH]: { POST: sideloads.add },
-	[`${EXTENSION_SIDELOADS_PATH}/:pubkey`]: { DELETE: sideloads.remove },
+	[EXTENSION_SERVERS_PATH]: { POST: servers.add },
+	[`${EXTENSION_SERVERS_PATH}/:pubkey`]: { DELETE: servers.remove },
 	[EXTENSION_CATALOG_PATH]: {
 		GET: createExtensionCatalogHandler({
 			getCatalog: getExtensionCatalog,

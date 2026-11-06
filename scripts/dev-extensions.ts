@@ -3,7 +3,7 @@
  *
  * Starts three dummy ContextVM extension servers on the local relay, and publishes a registry list (NIP-51 kind 30000,
  * d=plebeian-extension-registry) signed by a local curator key. Use it to manually test the Extension store:
- * registries, sideloading, Paid labels, remote bindings, schema pins, and unreachable servers.
+ * registries, adding servers (and sideloading), Paid labels, remote bindings, schema pins, and unreachable servers.
  *
  *   bun run dev:extensions                         # start servers + publish registry (keeps running)
  *   bun run dev:extensions --schema-v2             # same, but describe_product_image announces a changed schema
@@ -19,8 +19,13 @@ import { bytesToHex, hexToBytes } from 'nostr-tools/utils'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { z } from 'zod'
-import { EXTENSION_REGISTRY_D_TAG, EXTENSION_REGISTRY_LIST_KIND } from '@sdk/core/extensions'
+import { BINDING_SUGGESTION_META_KEY, EXTENSION_REGISTRY_D_TAG, EXTENSION_REGISTRY_LIST_KIND } from '@sdk/core/extensions'
 import { mockDescribeImage } from '@sdk/extensions/product-image-describer'
+import { mockListingDraft } from '@sdk/extensions/product-image-describer/mockListing'
+import { PRODUCT_LISTING_DRAFT_CAPABILITY } from '@sdk/commerce/products'
+
+/** Simulated model latency, so the UI's "AI is working" state is visible. */
+const MOCK_AI_DELAY_MS = 1_500
 
 const RELAY = process.env.APP_RELAY_URL || 'ws://localhost:10547'
 const KEYS_PATH = './data/extensions-dev/keys.json'
@@ -98,7 +103,14 @@ type ToolResult = { content: { type: 'text'; text: string }[]; structuredContent
 function tool<Args>(
 	server: McpServer,
 	name: string,
-	config: { title: string; description: string; inputSchema: Record<string, unknown>; outputSchema?: Record<string, unknown> },
+	config: {
+		title: string
+		description: string
+		inputSchema: Record<string, unknown>
+		outputSchema?: Record<string, unknown>
+		/** Proposed marketplace binding, shown in the Extension store as a one-click "Accept". */
+		_meta?: Record<string, unknown>
+	},
 	handler: (args: Args) => Promise<ToolResult>,
 ) {
 	server.registerTool(name, config as never, handler as never)
@@ -131,10 +143,41 @@ const SERVERS: ServerSpec[] = [
 					description: 'Returns a draft description for a product image link.',
 					inputSchema,
 					outputSchema: { description: z.string(), mock: z.boolean(), provider: z.string() },
+					_meta: {
+						[BINDING_SUGGESTION_META_KEY]: { actionName: 'describe-image', capability: 'product.image.describe', auth: 'user' },
+					},
 				},
 				async (args: { imageUrl: string; title?: string; notes?: string }) => {
 					const draft = mockDescribeImage({ imageUrl: args.imageUrl, title: args.title, notes: args.notes }, 600)
 					return text(draft.description, { description: draft.description, mock: true, provider: 'dummy-contextvm' })
+				},
+			)
+			tool(
+				server,
+				'draft_product_listing',
+				{
+					title: 'Draft product listing',
+					description: 'Mock AI: returns a title, summary, description, tags, and category for a product photo. Never sets a price.',
+					inputSchema: {
+						imageUrl: z.string().url().describe('Public http(s) link to the product photo'),
+						notes: z.string().max(500).optional().describe('Optional seller notes'),
+					},
+					outputSchema: {
+						title: z.string(),
+						summary: z.string(),
+						description: z.string(),
+						tags: z.array(z.string()),
+						category: z.string(),
+						model: z.string(),
+					},
+					_meta: {
+						[BINDING_SUGGESTION_META_KEY]: { actionName: 'draft-listing', capability: PRODUCT_LISTING_DRAFT_CAPABILITY, auth: 'user' },
+					},
+				},
+				async (args: { imageUrl: string; notes?: string }) => {
+					await new Promise((resolve) => setTimeout(resolve, MOCK_AI_DELAY_MS))
+					const draft = mockListingDraft(args)
+					return text(`${draft.title}\n\n${draft.description}`, { ...draft })
 				},
 			)
 			tool(
@@ -182,7 +225,12 @@ const SERVERS: ServerSpec[] = [
 			tool(
 				server,
 				'echo',
-				{ title: 'Echo', description: 'Returns the message.', inputSchema: { message: z.string().max(500) } },
+				{
+					title: 'Echo',
+					description: 'Returns the message.',
+					inputSchema: { message: z.string().max(500) },
+					_meta: { [BINDING_SUGGESTION_META_KEY]: { actionName: 'echo', capability: 'dev.echo', auth: 'admin' } },
+				},
 				async ({ message }: { message: string }) => text(message, { message }),
 			)
 			tool(
@@ -222,7 +270,7 @@ async function main() {
 	console.log(`Curator npub:     ${npubOf(keys.curator)}`)
 	console.log(`Registry event:   ${registryEventId} (kind ${EXTENSION_REGISTRY_LIST_KIND}, d=${EXTENSION_REGISTRY_D_TAG})`)
 	for (const spec of SERVERS) {
-		const where = spec.key === 'sideload' ? 'NOT listed (sideload it)' : 'listed'
+		const where = spec.key === 'sideload' ? 'NOT listed (add it by npub = sideload)' : 'listed (Add to marketplace)'
 		console.log(`${spec.name.padEnd(22)} ${npubOf(keys[spec.key])}  [${where}]`)
 	}
 	console.log('\nAdd to .env, then restart the app:')
