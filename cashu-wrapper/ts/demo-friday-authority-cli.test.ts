@@ -9,6 +9,7 @@ import {
 	demoFridayAuthorityParticipantBinary,
 	ensureDemoFridayAuthorityScratch,
 	initializeDemoFridayAuthorityStores,
+	initializeDemoFridayAuctionPayoutStores,
 	initializeDemoFridaySellerPlanStores,
 	type DemoFridayAuthorityStorePaths,
 } from './demo-friday-authority-cli'
@@ -27,6 +28,7 @@ function authorityPaths(root: string): DemoFridayAuthorityStorePaths {
 		fundingAbortSessions: join(state, 'funding-abort-sessions.sqlite3'),
 		admissionSessions: join(state, 'admission-sessions.sqlite3'), terminalExchange: join(state, 'terminal-exchange.sqlite3'),
 		sellerPlan: join(state, 'seller-plan.sqlite3'), sellerPlanAnchor: join(anchor, 'seller-plan.sqlite3'),
+		auctionPayout: join(state, 'auction-payout.sqlite3'), auctionPayoutAnchor: join(anchor, 'auction-payout.sqlite3'),
 	}
 }
 
@@ -49,6 +51,9 @@ describe('fixed Friday authority CLI', () => {
 		expect(demoFridayAuthorityArgs([
 			'init-state', '--application', '/etc/plebeian-auctions-friday/application.json',
 		])).toEqual({ mode: 'init-state', application: '/etc/plebeian-auctions-friday/application.json' })
+		expect(demoFridayAuthorityArgs([
+			'init-auction-payout', '--application', '/etc/plebeian-auctions-friday/application.json',
+		])).toEqual({ mode: 'init-auction-payout', application: '/etc/plebeian-auctions-friday/application.json' })
 		expect(() => demoFridayAuthorityArgs([
 			'serve', '--application', '/tmp/plebeian-friday-fips-lab.fake/application.json',
 		])).toThrow(/fixed live application path/)
@@ -60,10 +65,13 @@ describe('fixed Friday authority CLI', () => {
 		try {
 			expect(await ensureDemoFridayAuthorityScratch(scratch)).toBe(scratch)
 			const metadata = await stat(scratch)
+			const uid = process.getuid?.()
+			const gid = process.getgid?.()
+			if (uid === undefined || gid === undefined) throw new Error('POSIX uid/gid are required by this test')
 			expect(metadata.isDirectory()).toBe(true)
 			expect(metadata.mode & 0o777).toBe(0o700)
-			expect(metadata.uid).toBe(process.getuid())
-			expect(metadata.gid).toBe(process.getgid())
+			expect(metadata.uid).toBe(uid)
+			expect(metadata.gid).toBe(gid)
 			expect(await ensureDemoFridayAuthorityScratch(scratch)).toBe(scratch)
 		} finally { await rm(root, { recursive: true, force: true }) }
 	})
@@ -146,6 +154,25 @@ describe('fixed Friday authority CLI', () => {
 				.rejects.toThrow()
 			// A refusal never truncates or rewrites the already-enrolled store.
 			expect((await readFile(databasePath)).byteLength).toBeGreaterThan(0)
+		} finally { await rm(root, { recursive: true, force: true }) }
+	})
+
+	test('initializes one exact empty auction-payout registry and independent rollback anchor', async () => {
+		const root = await mkdtemp(join(tmpdir(), 'friday-auction-payout-init.'))
+		const databasePath = join(root, 'auction-payout.sqlite3')
+		const anchorPath = join(root, 'auction-payout-anchor.sqlite3')
+		try {
+			await initializeDemoFridayAuctionPayoutStores({ databasePath, anchorPath,
+				deploymentId: 'friday-deployment-1' })
+			expect((await stat(databasePath)).mode & 0o777).toBe(0o600)
+			expect((await stat(anchorPath)).mode & 0o777).toBe(0o600)
+			const database = new Database(databasePath, { create: false, readonly: true, strict: true })
+			try {
+				expect(database.query('SELECT deployment_id,global_revision FROM friday_auction_payout_metadata WHERE id=1').get())
+					.toEqual({ deployment_id: 'friday-deployment-1', global_revision: 0 })
+			} finally { database.close(false) }
+			await expect(initializeDemoFridayAuctionPayoutStores({ databasePath, anchorPath,
+				deploymentId: 'friday-deployment-1' })).rejects.toThrow()
 		} finally { await rm(root, { recursive: true, force: true }) }
 	})
 })

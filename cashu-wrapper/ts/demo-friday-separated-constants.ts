@@ -16,6 +16,7 @@ export const SEPARATED_R33_EXECUTOR_BINARY='/opt/plebeian-auctions-friday/releas
 export const SEPARATED_R34_EXECUTOR_BINARY='/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-recipient-pending-r34/bin/plebeian-friday-terminal-executor' as const
 export const SEPARATED_R35_EXECUTOR_BINARY='/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-import-pending-r35/bin/plebeian-friday-terminal-executor' as const
 export const SEPARATED_R36_EXECUTOR_BINARY='/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-terminal-ack-r36/bin/plebeian-friday-terminal-executor' as const
+export const SEPARATED_R38_EXECUTOR_BINARY='/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-seller-patch-r38/bin/plebeian-friday-terminal-executor' as const
 
 // Dedicated private parent contains durable init/recovery locks and staging.
 export const SEPARATED_COORDINATOR_PARENT='/var/lib/plebeian-auctions-friday/coordinator-v3' as const

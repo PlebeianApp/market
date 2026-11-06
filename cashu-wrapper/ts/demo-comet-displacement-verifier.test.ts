@@ -53,6 +53,7 @@ function fixture() {
 		auctions: {
 			auction: {
 				id: 'auction', funding_mode: 'threshold_sigall_v1', status: 'open', leader_bid_id: eventId,
+				seller: xOnly(9),
 				seller_coco_payment_public_key: compressed(9),
 			},
 		},
@@ -180,7 +181,7 @@ describe('participant-local Comet displacement derivation', () => {
 		const admission = createDemoCometAdmissionConsensus(reader, { network: 'fips-demo', chainId: 'demo-chain', validatorsHash })
 		await expect(admission.readCommittedLeader({ network: 'fips-demo', chainId: 'demo-chain', auctionId: 'auction' }))
 			.resolves.toMatchObject({
-				leaderBidId: eventId, sellerPaymentPublicKey: compressed(9), height: 42,
+				leaderBidId: eventId, sellerActor: xOnly(9), sellerPaymentPublicKey: compressed(9), height: 42,
 				evidenceDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 			})
 		await expect(admission.readCommittedLeader({ network: 'other', chainId: 'demo-chain', auctionId: 'auction' }))

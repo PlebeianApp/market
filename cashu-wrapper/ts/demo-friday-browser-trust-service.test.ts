@@ -64,7 +64,7 @@ function intent(now = 1_000, overrides: Partial<DemoFridaySellerPlanIntentConten
 	return signed(demoFridaySellerPlanIntentUnsignedEvent(bidderActor, now, content), bidderSecret)
 }
 
-function fixture() {
+function fixture(auctionPayout?: Parameters<typeof createDemoFridayBrowserTrustService>[0]['auctionPayout']) {
 	let now = 1_000
 	let auction: DemoFridayAuthenticatedAuctionV1 = {
 		schema: 'PLEBEIAN_FRIDAY_AUTHENTICATED_AUCTION_V1', authNetworkId: deployment.authNetworkId,
@@ -76,6 +76,7 @@ function fixture() {
 	const service = createDemoFridayBrowserTrustService({
 		deployment: { async readExact() { return structuredClone(deployment) } },
 		auctions: { async readExact() { return structuredClone(auction) } }, registry, nowSeconds: () => now,
+		...(auctionPayout === undefined ? {} : { auctionPayout }),
 	})
 	return { service, setNow(value: number) { now = value }, setAuction(value: DemoFridayAuthenticatedAuctionV1) { auction = structuredClone(value) }, getAuction() { return structuredClone(auction) } }
 }
@@ -101,6 +102,45 @@ async function registerPlan(subject: ReturnType<typeof fixture>) {
 }
 
 describe('Friday fixed browser trust service', () => {
+	test('registered auction payout unblocks a bid without a per-bid seller plan', async () => {
+		const outputs = [{ amount: 600, id: keyset.id, B_: compressed(91) }]
+		const capability = { schema: 'COCO_DEMO_RECIPIENT_CAPABILITY_V1' as const, network: deployment.authNetworkId,
+			chainId: deployment.chainId, auctionId: 'auction-1', operationId: 'catalog-1',
+			role: 'winner_settlement' as const, mintUrl: deployment.canonicalMintUrl, unit: 'sat' as const,
+			recipientPublicKey: sellerPaymentPublicKey, outputsDigest: '1'.repeat(64), signature: '2'.repeat(128) }
+		const authorization = { schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_AUTHORIZATION_ENVELOPE_V1' as const,
+			authorizationDigest: '3'.repeat(64),
+			authorization: { auctionId: 'auction-1', recipientCatalog: { capability } },
+			sellerAuthorization: { id: '4'.repeat(64) } }
+		const selection = { schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_SELECTION_V1' as const,
+			authorizationDigest: authorization.authorizationDigest, auctionId: 'auction-1',
+			fundingOperationId: 'funding-1', bidderActor, bidAmount: 600, replacesBidId: '', outputs,
+			selectionDigest: '5'.repeat(64) }
+		const selections: unknown[] = [], assertions: unknown[] = []
+		const subject = fixture({
+			async readExact() { return structuredClone(authorization) as never },
+			async selectExact(request) { selections.push(structuredClone(request)); return structuredClone(selection) as never },
+			async assertRegisteredSelectionExact(request) { assertions.push(structuredClone(request)) },
+		})
+		await subject.service.issueSellerPlanChallengeExact(intent())
+		expect(await subject.service.readSellerPlanExact({ sellerActor, auctionId: 'auction-1',
+			fundingOperationId: 'funding-1' })).toBeNull()
+		const trusted = await subject.service.readAuctionFundingExact({
+			auctionId: 'auction-1', fundingOperationId: 'funding-1', fullPoolAmount: 600,
+		})
+		expect(trusted.winnerRequest).toEqual({ capability, outputs } as never)
+		expect(trusted.winnerAuctionPayout).toEqual({ authorization, selection, keyset } as never)
+		expect(selections).toEqual([{ auctionId: 'auction-1', fundingOperationId: 'funding-1',
+			bidderActor, bidAmount: 600, replacesBidId: '' }])
+		await subject.service.assertRegisteredWinnerExact({
+			auctionId: 'auction-1', fundingOperationId: 'funding-1', bidderActor, bidAmount: 600,
+			winnerRequest: trusted.winnerRequest, auctionPayout: trusted.winnerAuctionPayout,
+		})
+		expect(assertions).toEqual([{ auctionId: 'auction-1', fundingOperationId: 'funding-1',
+			bidderActor, bidAmount: 600, winnerRequest: trusted.winnerRequest,
+			auctionPayout: trusted.winnerAuctionPayout, authorization, selection, keyset }])
+	})
+
 	test('derives challenge and trusted funding only from signed intent, fixed deployment, and authenticated auction', async () => {
 		const subject = fixture()
 		const envelope = await registerPlan(subject)

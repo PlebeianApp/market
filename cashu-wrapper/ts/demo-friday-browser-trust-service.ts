@@ -22,6 +22,7 @@ import {
 } from './demo-friday-browser-coco-seller-plan'
 import type { DemoFridaySignedNostrBidV1, DemoFridayUnsignedNostrBidV1 } from './demo-friday-browser-payment-state'
 import type { DemoRecipientCoordinatorRequest } from './demo-sigall-recipient'
+import type { DemoFridayAuctionPayoutAuthorityPort } from './demo-friday-auction-payout-runtime'
 import {
 	demoDenominationKeyDigest,
 	demoOutputsDigest,
@@ -123,6 +124,11 @@ export interface DemoFridayBrowserTrustService {
 		bidderActor: string
 		bidAmount: number
 		winnerRequest: DemoRecipientCoordinatorRequest
+		auctionPayout?: {
+			authorization: import('./demo-friday-auction-payout-authorization').DemoFridayAuctionPayoutAuthorizationEnvelopeV1
+			selection: import('./demo-friday-auction-payout-authorization').DemoFridayAuctionPayoutSelectionV1
+			keyset: import('./demo-sigall-recipient').DemoRecipientKeyset
+		}
 	}): Promise<void>
 }
 
@@ -385,6 +391,8 @@ export function createDemoFridayBrowserTrustService(options: {
 	deployment: DemoFridayTrustedDeploymentReaderPort
 	auctions: DemoFridayAuthenticatedAuctionReaderPort
 	registry: DemoFridaySellerPlanRegistryPort
+	auctionPayout?: Pick<DemoFridayAuctionPayoutAuthorityPort,
+		'readExact' | 'selectExact' | 'assertRegisteredSelectionExact'>
 	nowSeconds: () => number
 }): DemoFridayBrowserTrustService {
 	const deployment = async () => exactDeployment(await options.deployment.readExact())
@@ -467,6 +475,27 @@ export function createDemoFridayBrowserTrustService(options: {
 			if (!ID.test(request.auctionId) || !ID.test(request.fundingOperationId)
 				|| !Number.isSafeInteger(request.fullPoolAmount) || request.fullPoolAmount < 1) refuse('trusted auction request is malformed')
 			const trustedDeployment = await deployment(), record = recordFor(request.fundingOperationId)
+			if (options.auctionPayout !== undefined) {
+				const selection = await options.auctionPayout.selectExact({
+					auctionId: request.auctionId, fundingOperationId: request.fundingOperationId,
+					bidderActor: record.challenge.bidderActor, bidAmount: request.fullPoolAmount,
+					replacesBidId: record.intent.replacesBidId,
+				})
+				if (selection !== null) {
+					const authorization = await options.auctionPayout.readExact(request.auctionId)
+					if (authorization === null) refuse('auction payout authorization disappeared after selection')
+					const auction = exactAuction(await options.auctions.readExact(request.auctionId), request.auctionId, trustedDeployment)
+					return {
+						schema: 'PLEBEIAN_FRIDAY_TRUSTED_AUCTION_FUNDING_V1' as const,
+						auctionId: request.auctionId, sellerPaymentPublicKey: auction.sellerPaymentPublicKey,
+						leaderBidId: auction.leaderBidId, leaderActor: auction.leaderActor,
+						leaderBidAmount: auction.leaderBidAmount,
+						winnerRequest: { capability: structuredClone(authorization.authorization.recipientCatalog.capability),
+							outputs: structuredClone(selection.outputs) },
+						winnerAuctionPayout: { authorization, selection, keyset: structuredClone(trustedDeployment.keyset) },
+					}
+				}
+			}
 			if (record.envelope === null || record.deploymentDigest !== digest(trustedDeployment)
 				|| record.challenge.auctionId !== request.auctionId || record.challenge.bidAmount !== request.fullPoolAmount
 				|| options.nowSeconds() > record.challenge.expiresAt) refuse('seller plan is absent, expired, or belongs to another request')
@@ -483,8 +512,19 @@ export function createDemoFridayBrowserTrustService(options: {
 				winnerRequest: structuredClone(record.envelope.plan.recipientPlan) }
 		},
 		async assertRegisteredWinnerExact(request: { auctionId: string; fundingOperationId: string; bidderActor: string;
-			bidAmount: number; winnerRequest: DemoRecipientCoordinatorRequest }) {
+			bidAmount: number; winnerRequest: DemoRecipientCoordinatorRequest; auctionPayout?: {
+				authorization: import('./demo-friday-auction-payout-authorization').DemoFridayAuctionPayoutAuthorizationEnvelopeV1
+				selection: import('./demo-friday-auction-payout-authorization').DemoFridayAuctionPayoutSelectionV1
+				keyset: import('./demo-sigall-recipient').DemoRecipientKeyset
+			} }) {
 			if (!HEX_32.test(request.bidderActor)) refuse('prepared funding bidder is malformed')
+			if (request.auctionPayout !== undefined) {
+				if (options.auctionPayout === undefined) refuse('auction payout path is not configured')
+				await options.auctionPayout.assertRegisteredSelectionExact({
+					...request, ...request.auctionPayout,
+				})
+				return
+			}
 			const trustedDeployment = await deployment(), record = recordFor(request.fundingOperationId)
 			if (record.envelope === null || record.deploymentDigest !== digest(trustedDeployment)
 				|| record.challenge.auctionId !== request.auctionId || record.challenge.bidderActor !== request.bidderActor

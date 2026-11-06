@@ -167,6 +167,8 @@ export interface DemoFridayBrowserPaymentOperationV1 {
 	winnerRecipientPublicKey: string
 	winnerRecipientCapabilityDigest: string
 	winnerOutputsDigest: string
+	winnerAuctionAuthorizationDigest?: string
+	winnerAuctionSelectionDigest?: string
 	keysetId: string
 	denominationKeyDigest: string
 	denominationAmounts: number[]
@@ -240,6 +242,8 @@ export interface DemoFridayBrowserPaymentOperationInput extends DemoFridayBrowse
 	winnerRecipientPublicKey: string
 	winnerRecipientCapabilityDigest: string
 	winnerOutputsDigest: string
+	winnerAuctionAuthorizationDigest?: string
+	winnerAuctionSelectionDigest?: string
 	keysetId: string
 	denominationKeyDigest: string
 	denominationAmounts: number[]
@@ -388,6 +392,9 @@ function validateRecord(value: DemoFridayBrowserPaymentOperationV1): DemoFridayB
 		|| ((value.replacesBidId === '') !== (value.priorLeaderActor === ''))
 		|| !COMPRESSED_KEY.test(value.winnerRecipientPublicKey)
 		|| !HEX_32.test(value.winnerRecipientCapabilityDigest) || !HEX_32.test(value.winnerOutputsDigest)
+		|| ((value.winnerAuctionAuthorizationDigest === undefined) !== (value.winnerAuctionSelectionDigest === undefined))
+		|| (value.winnerAuctionAuthorizationDigest !== undefined && (!HEX_32.test(value.winnerAuctionAuthorizationDigest)
+			|| !HEX_32.test(value.winnerAuctionSelectionDigest!)))
 		|| typeof value.keysetId !== 'string' || value.keysetId.length < 1
 		|| !COMPRESSED_KEY.test(value.mintPublicKey) || typeof value.mintServerVersion !== 'string' || value.mintServerVersion.length < 1
 		|| !HEX_32.test(value.denominationKeyDigest) || !Array.isArray(value.denominationAmounts)
@@ -538,6 +545,9 @@ export function createDemoFridayBrowserPaymentOperation(
 		|| ((input.replacesBidId === '') !== (input.priorLeaderActor === ''))
 		|| !COMPRESSED_KEY.test(input.winnerRecipientPublicKey)
 		|| !HEX_32.test(input.winnerRecipientCapabilityDigest) || !HEX_32.test(input.winnerOutputsDigest)
+		|| ((input.winnerAuctionAuthorizationDigest === undefined) !== (input.winnerAuctionSelectionDigest === undefined))
+		|| (input.winnerAuctionAuthorizationDigest !== undefined && (!HEX_32.test(input.winnerAuctionAuthorizationDigest)
+			|| !HEX_32.test(input.winnerAuctionSelectionDigest!)))
 		|| typeof input.keysetId !== 'string' || input.keysetId.length < 1
 		|| !COMPRESSED_KEY.test(input.mintPublicKey) || typeof input.mintServerVersion !== 'string' || input.mintServerVersion.length < 1
 		|| !HEX_32.test(input.denominationKeyDigest) || input.denominationAmounts.length < 1
@@ -560,6 +570,10 @@ export function createDemoFridayBrowserPaymentOperation(
 		priorLeaderActor: input.priorLeaderActor, winnerRecipientPublicKey: input.winnerRecipientPublicKey,
 		winnerRecipientCapabilityDigest: input.winnerRecipientCapabilityDigest,
 		winnerOutputsDigest: input.winnerOutputsDigest,
+		...(input.winnerAuctionAuthorizationDigest === undefined ? {} : {
+			winnerAuctionAuthorizationDigest: input.winnerAuctionAuthorizationDigest,
+			winnerAuctionSelectionDigest: input.winnerAuctionSelectionDigest,
+		}),
 		denominationKeyDigest: input.denominationKeyDigest,
 		denominationAmounts: [...input.denominationAmounts].sort((a, b) => a - b), mintNuts: [...input.mintNuts].sort((a, b) => a - b),
 		inputFeePpk: input.inputFeePpk, committeeKeysetId: input.committeeKeysetId,
@@ -585,6 +599,8 @@ function sameIdentity(left: DemoFridayBrowserPaymentOperationV1, right: DemoFrid
 		&& left.winnerRecipientPublicKey === right.winnerRecipientPublicKey
 		&& left.winnerRecipientCapabilityDigest === right.winnerRecipientCapabilityDigest
 		&& left.winnerOutputsDigest === right.winnerOutputsDigest
+		&& left.winnerAuctionAuthorizationDigest === right.winnerAuctionAuthorizationDigest
+		&& left.winnerAuctionSelectionDigest === right.winnerAuctionSelectionDigest
 		&& left.keysetId === right.keysetId && JSON.stringify(left.lock) === JSON.stringify(right.lock)
 		&& left.denominationKeyDigest === right.denominationKeyDigest
 		&& JSON.stringify(left.denominationAmounts) === JSON.stringify(right.denominationAmounts)

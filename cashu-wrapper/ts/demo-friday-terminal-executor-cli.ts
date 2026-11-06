@@ -36,6 +36,11 @@ import { createCashuMintSigAllBranchAwarePort } from './demo-sigall-live-mint'
 import { createPinnedMintTransportFetch } from './coco-rail'
 import { DemoFridayCocoTerminalExchangeSqlite } from './demo-friday-coco-terminal-exchange'
 import { demoFridayR20ServicePins, loadDemoFridayR20ServiceBinding } from './demo-friday-r20-service-binding'
+import {
+	claimDemoFridayAuctionPayoutWinnerExact,
+	DemoFridayAuctionPayoutRegistrySqlite,
+	DemoFridayAuctionPayoutRollbackAnchorSqlite,
+} from './demo-friday-auction-payout-runtime'
 
 const HEX_32 = /^[0-9a-f]{64}$/
 type Mode = 'execute' | 'recover' | 'import'
@@ -144,6 +149,13 @@ export async function main(): Promise<void> {
 	const privateDb = new Database(join(application.coordinator_root, 'private.sqlite3'), { create: false, strict: true })
 	const recoveryDb = new Database(join(application.coordinator_root, 'recovery.sqlite3'), { create: false, strict: true })
 	const terminalExchangeDb = new Database(join(application.coordinator_root, 'terminal-exchange.sqlite3'), { create: false, strict: true })
+	const auctionPayoutDb = new Database(join(application.coordinator_root, 'auction-payout.sqlite3'), { create: false, strict: true })
+	const auctionPayoutAnchorPath = isSeparatedApplication(application)
+		? '/var/lib/plebeian-auctions-friday-anchor-separated/auction-payout.sqlite3'
+		: application.schema === 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V2'
+			? '/var/lib/plebeian-auctions-friday-anchor/auction-payout.sqlite3'
+			: '/var/lib/plebeian-auctions-friday-anchor-r20/auction-payout.sqlite3'
+	const auctionPayoutAnchorDb = new Database(auctionPayoutAnchorPath, { create: false, strict: true })
 	try {
 		const mintUrl = demoFridayMintIdentityUrl(application)
 		const mintTransportUrl = demoFridayMintUrl(application)
@@ -151,6 +163,8 @@ export async function main(): Promise<void> {
 		const ports = createDemoFridayLiveRecoveryPorts(mintUrl, mintFetch)
 		const terminalExchange = new DemoFridayCocoTerminalExchangeSqlite(terminalExchangeDb, application.deployment_id)
 		const abortCapsules = new DemoFundingAbortCapsuleEncryptedSqliteStore(privateDb, key)
+		const payoutRegistry = new DemoFridayAuctionPayoutRegistrySqlite(auctionPayoutDb,
+			application.deployment_id, new DemoFridayAuctionPayoutRollbackAnchorSqlite(auctionPayoutAnchorDb))
 		const executor = createDemoFridayTerminalExecutorPorts({
 			authorityStore: new DemoIntegratedAuthoritySqliteStore(authorityDb),
 			offlineStore: new DemoMaintainerEncryptedSqliteStore(privateDb, key),
@@ -159,6 +173,9 @@ export async function main(): Promise<void> {
 			mint: createCashuMintSigAllBranchAwarePort({ mintUrl, transportMintUrl: mintTransportUrl }), ...ports,
 			recipientFor(template, recipientActorId) { return terminalExchange.recipientFor(template, recipientActorId) },
 			hasRecipientAck(operationId) { return terminalExchange.hasAck(operationId) },
+			auctionPayout: { async claimWinnerExact(request) {
+				return claimDemoFridayAuctionPayoutWinnerExact({ registry: payoutRegistry, ...request })
+			} },
 		})
 		const durable = record(cli.identity)
 		const outcome = cli.mode === 'execute' ? await executor.executeExact(durable)
@@ -168,7 +185,8 @@ export async function main(): Promise<void> {
 			schema: 'PLEBEIAN_FRIDAY_EXECUTOR_RESULT_V1', identity: demoFridayExecutorIdentity(durable), outcome,
 		})}\n`)
 	} finally {
-		key.fill(0); terminalExchangeDb.close(false); recoveryDb.close(false); privateDb.close(false); authorityDb.close(false)
+		key.fill(0); auctionPayoutAnchorDb.close(false); auctionPayoutDb.close(false)
+		terminalExchangeDb.close(false); recoveryDb.close(false); privateDb.close(false); authorityDb.close(false)
 	}
 }
 

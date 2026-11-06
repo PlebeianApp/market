@@ -98,6 +98,7 @@ async function makeTemplate(options: {
 	operation: Parameters<DemoFridayBrowserExactEnvelopeBuilderPort['buildExact']>[0]['operation']
 	inputs: CashuProof[]
 	request: Parameters<DemoFridayBrowserExactEnvelopeBuilderPort['buildExact']>[0]['winnerRequest']
+	auctionPayout?: Parameters<DemoFridayBrowserExactEnvelopeBuilderPort['buildExact']>[0]['winnerAuctionPayout']
 	participants: DemoCommitteeParticipant[]
 	signing: DemoFridayOperationBoundSigningV1
 }): Promise<DemoMaintainerExactBranchTemplate> {
@@ -108,8 +109,10 @@ async function makeTemplate(options: {
 		refuse('operation does not use the approved maximum-end emergency timing policy')
 	}
 	const recipientPublicKey = options.request.capability.recipientPublicKey
+	const auctionPayout = options.role === 'winner_settlement' ? options.auctionPayout : undefined
 	const template: DemoMaintainerExactBranchTemplate = {
-		schema: 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V2', role: options.role,
+		schema: auctionPayout === undefined ? 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V2'
+			: 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3', role: options.role,
 		network: operation.authNetworkId, chainId: operation.chainId, auctionId: operation.auctionId,
 		operationId: operation.fundingOperationId, bidId: operation.fundingOperationId,
 		bidEventId: operation.fundingOperationId, bidderActorId: operation.actor,
@@ -117,6 +120,11 @@ async function makeTemplate(options: {
 		locktime: operation.locktime, validUntil: maximumEndTime, closeTime: maximumEndTime,
 		settlementWindowSeconds: SETTLEMENT_WINDOW_SECONDS,
 		sellerPaymentPublicKey: operation.winnerRecipientPublicKey, recipientPublicKey,
+		...(auctionPayout === undefined ? {} : {
+			auctionPayoutAuthorization: structuredClone(auctionPayout.authorization),
+			auctionPayoutSelection: structuredClone(auctionPayout.selection),
+			auctionPayoutKeyset: structuredClone(auctionPayout.keyset),
+		}),
 		bidderPublicKey: operation.paymentPublicKey, refundPublicKey: operation.refundPublicKey,
 		committeePublicKey: operation.committeePublicKey,
 		committeeKeysetId: operation.committeeKeysetId,
@@ -189,13 +197,15 @@ export function createDemoFridayBrowserExactEnvelopeBuilder(options: {
 			const operation = input.operation
 			if (!Number.isSafeInteger(input.nowSeconds) || input.nowSeconds < 1
 				|| operation.winnerRecipientPublicKey !== input.winnerRequest.capability.recipientPublicKey
+				|| operation.winnerAuctionAuthorizationDigest !== input.winnerAuctionPayout?.authorization.authorizationDigest
+				|| operation.winnerAuctionSelectionDigest !== input.winnerAuctionPayout?.selection.selectionDigest
 				|| operation.refundPublicKey !== input.refundRequest.capability.recipientPublicKey
 				|| input.refundDelivery.intent.recipientPublicKey !== operation.refundPublicKey) {
 				refuse('recipient plans or preparation time differ from the persisted operation')
 			}
 			const inputs = exactInputs(input.lockedToken, input.keyset, operation.fullPoolAmount)
 			const winner = await makeTemplate({ role: 'winner_settlement', operation, inputs,
-				request: input.winnerRequest, participants, signing: input.signing })
+				request: input.winnerRequest, auctionPayout: input.winnerAuctionPayout, participants, signing: input.signing })
 			const refund = await makeTemplate({ role: 'refund', operation, inputs,
 				request: input.refundRequest, participants, signing: input.signing })
 			const winnerAuthorization = await input.signing.signTemplateAuthorization({

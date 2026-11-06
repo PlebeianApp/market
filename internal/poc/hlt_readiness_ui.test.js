@@ -120,17 +120,15 @@ test('ordinary fetch failure preserves the existing recovery controller while ad
   f.failure(true); await f.advance(); await f.refresh();
   assert.equal(f.get('faucet').disabled, true); assert.ok(f.run('state.friday')); assert.ok(f.imports() > before);
 });
-test('seller consent is revoked on readiness loss/restoration and release identity change', async t => {
-  const f = await fixture();
-  if (!f.run('typeof stopSellerApprovals === "function"')) { t.skip('Runs on the separately frozen CFG/PAY compatibility overlay.'); return; }
-  await f.run('connect()');
-  f.run('state.sellerAuctions.add("a1"); state.approvalAbort = new AbortController(); globalThis.oldApproval = state.approvalAbort;');
-  const revision = f.run('state.approvalRevision'); f.available(false); await f.advance(); await f.refresh();
-  assert.equal(f.run('oldApproval.signal.aborted'), true); assert.equal(f.run('state.sellerAuctions.size'), 0);
-  assert.ok(f.run('state.approvalRevision') > revision);
-  f.available(true); await f.advance(); await f.refresh(); assert.equal(f.run('state.sellerAuctions.size'), 0);
-  f.run('state.sellerAuctions.add("a1");'); f.pins.deployment_id = 'another'; await f.advance(); await f.refresh();
-  assert.equal(f.run('state.sellerAuctions.size'), 0); assert.equal(f.run('state.friday'), null);
+test('readiness loss cannot create seller approval state and release identity change still disconnects', async () => {
+  const f = await fixture(); await f.run('connect()');
+  assert.equal(f.run('"sellerAuctions" in state || "approvalAbort" in state || "approvalRevision" in state'), false);
+  f.available(false); await f.advance(); await f.refresh();
+  assert.equal(f.get('create-submit').disabled, true); assert.ok(f.run('state.friday'));
+  f.available(true); await f.advance(); await f.refresh();
+  assert.equal(f.get('create-submit').disabled, false);
+  f.pins.deployment_id = 'another'; await f.advance(); await f.refresh();
+  assert.equal(f.run('state.friday'), null); assert.equal(f.run('state.actor'), '');
 });
 
 test('automatic identity invalidation retains the tab-local signer for explicit reconnect', async () => {

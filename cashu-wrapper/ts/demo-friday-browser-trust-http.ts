@@ -1,3 +1,4 @@
+import { createFridayTrustReadTransport } from './demo-friday-trust-read-transport'
 /** Same-origin HTTP mappings for the browser's fixed trusted-read ports. */
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js'
@@ -18,6 +19,16 @@ import type {
 	DemoFridaySellerWinnerPlanPublicV1,
 } from './demo-friday-browser-coco-seller-plan'
 import type { DemoFridaySignedNostrBidV1 } from './demo-friday-browser-payment-state'
+import {
+	verifyDemoFridayAuctionPayoutSelectionStatic,
+	type DemoFridayAuctionPayoutAuthorizationEnvelopeV1,
+	type DemoFridayAuctionPayoutSelectionV1,
+} from './demo-friday-auction-payout-authorization'
+import type { DemoRecipientCoordinatorRequest, DemoRecipientKeyset } from './demo-sigall-recipient'
+import type {
+	DemoFridayAuctionPayoutAuthorityPort,
+	DemoFridayAuctionPayoutWinnerClaimV1,
+} from './demo-friday-auction-payout-runtime'
 import { demoDenominationKeyDigest, demoOutputsDigest } from './demo-sigall-settlement'
 
 const HEX_32 = /^[0-9a-f]{64}$/
@@ -55,18 +66,18 @@ function canonical(value: unknown): string {
 	return `{${Object.keys(valueRecord).sort().map((key) => `${JSON.stringify(key)}:${canonical(valueRecord[key])}`).join(',')}}`
 }
 
-async function exactJson(response: Response): Promise<unknown> {
-	if (!response.ok || response.headers.get('content-type')?.split(';')[0] !== 'application/json') refuse(`trusted endpoint returned HTTP ${response.status}`)
+async function exactJson(response: Response, path: string): Promise<unknown> {
+	if (!response.ok || response.headers.get('content-type')?.split(';')[0] !== 'application/json') refuse(`trusted endpoint ${path} returned HTTP ${response.status}`)
 	return response.json() as Promise<unknown>
 }
 
 function poster(options: { origin: string; fetchImpl?: DemoBrowserFetch }) {
 	const origin = exactOrigin(options.origin)
-	const fetchImpl = options.fetchImpl ?? fetch
+	const fetchImpl = createFridayTrustReadTransport(origin, options.fetchImpl ?? fetch)
 	return async (path: string, body: unknown) => exactJson(await fetchImpl(`${origin}${path}`, {
 		method: 'POST', redirect: 'error', credentials: 'same-origin',
 		headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body),
-	}))
+	}), path)
 }
 
 function exactKeyset(value: unknown) {
@@ -117,7 +128,7 @@ function exactDeployment(value: unknown): DemoFridayTrustedBrowserDeploymentV1 {
 	return structuredClone(value) as DemoFridayTrustedBrowserDeploymentV1
 }
 
-function exactWinnerRequest(value: unknown) {
+function exactWinnerRequest(value: unknown, allowCatalogCapability = false): DemoRecipientCoordinatorRequest {
 	const raw = record(value, 'winner request')
 	exactKeys(raw, ['capability', 'outputs'], 'winner request')
 	const capability = record(raw.capability, 'winner capability')
@@ -134,20 +145,41 @@ function exactWinnerRequest(value: unknown) {
 		if (!Number.isSafeInteger(output.amount) || Number(output.amount) < 1 || !ID.test(String(output.id)) || !POINT.test(String(output.B_))) refuse('winner output is malformed')
 		return { amount: Number(output.amount), id: String(output.id), B_: String(output.B_) }
 	})
-	if (capability.outputsDigest !== demoOutputsDigest(outputs)) refuse('winner outputs differ from capability')
-	return { capability: structuredClone(capability), outputs }
+	if (!allowCatalogCapability && capability.outputsDigest !== demoOutputsDigest(outputs)) refuse('winner outputs differ from capability')
+	return { capability: structuredClone(capability) as unknown as DemoRecipientCoordinatorRequest['capability'], outputs }
 }
 
 function exactAuction(value: unknown): DemoFridayTrustedAuctionFundingV1 {
 	const raw = record(value, 'auction funding')
-	exactKeys(raw, ['schema', 'auctionId', 'sellerPaymentPublicKey', 'leaderBidId', 'leaderActor', 'leaderBidAmount', 'winnerRequest'], 'auction funding')
+	exactKeys(raw, ['schema', 'auctionId', 'sellerPaymentPublicKey', 'leaderBidId', 'leaderActor', 'leaderBidAmount', 'winnerRequest',
+		...(raw.winnerAuctionPayout === undefined ? [] : ['winnerAuctionPayout'])], 'auction funding')
 	if (raw.schema !== 'PLEBEIAN_FRIDAY_TRUSTED_AUCTION_FUNDING_V1' || !ID.test(String(raw.auctionId))
 		|| !POINT.test(String(raw.sellerPaymentPublicKey))
 		|| typeof raw.leaderBidId !== 'string' || typeof raw.leaderActor !== 'string' || !Number.isSafeInteger(raw.leaderBidAmount)
 		|| ((raw.leaderBidId === '') !== (raw.leaderActor === '')) || ((raw.leaderBidId === '') !== (raw.leaderBidAmount === 0))
 		|| (raw.leaderBidId !== '' && (!HEX_32.test(raw.leaderBidId) || !HEX_32.test(raw.leaderActor) || Number(raw.leaderBidAmount) < 1))) refuse('auction funding identity is malformed')
+	if (raw.winnerAuctionPayout === undefined) {
+		return { schema: raw.schema, auctionId: String(raw.auctionId), sellerPaymentPublicKey: String(raw.sellerPaymentPublicKey), leaderBidId: raw.leaderBidId,
+			leaderActor: raw.leaderActor, leaderBidAmount: Number(raw.leaderBidAmount), winnerRequest: exactWinnerRequest(raw.winnerRequest) as never }
+	}
+	const payout = record(raw.winnerAuctionPayout, 'auction payout binding')
+	exactKeys(payout, ['authorization', 'selection', 'keyset'], 'auction payout binding')
+	const authorization = structuredClone(payout.authorization) as DemoFridayAuctionPayoutAuthorizationEnvelopeV1
+	const selection = structuredClone(payout.selection) as DemoFridayAuctionPayoutSelectionV1
+	const keyset = structuredClone(payout.keyset) as DemoRecipientKeyset
+	verifyDemoFridayAuctionPayoutSelectionStatic(selection, { authorization, keyset, observedAt: selection.selectedAt })
+	const winnerRequest = exactWinnerRequest(raw.winnerRequest, true)
+	// exactWinnerRequest() deliberately rebuilds each output after validating it,
+	// while the server's canonical JSON serializer emits object keys in sorted
+	// order.  Object key order is not part of either signed canonical digest, so
+	// compare canonical bytes here instead of insertion-order JSON.stringify().
+	if (canonical(winnerRequest.outputs) !== canonical(selection.outputs)
+		|| canonical(winnerRequest.capability) !== canonical(authorization.authorization.recipientCatalog.capability)) {
+		refuse('auction catalog winner request differs from its exact selection')
+	}
 	return { schema: raw.schema, auctionId: String(raw.auctionId), sellerPaymentPublicKey: String(raw.sellerPaymentPublicKey), leaderBidId: raw.leaderBidId,
-		leaderActor: raw.leaderActor, leaderBidAmount: Number(raw.leaderBidAmount), winnerRequest: exactWinnerRequest(raw.winnerRequest) as never }
+		leaderActor: raw.leaderActor, leaderBidAmount: Number(raw.leaderBidAmount), winnerRequest,
+		winnerAuctionPayout: { authorization, selection, keyset } }
 }
 
 function exactChallenge(value: unknown): DemoFridaySellerWinnerPlanChallengeV1 {
@@ -199,6 +231,89 @@ export function createDemoFridayBrowserTrustedDeploymentHttp(options: { origin: 
 	} })
 }
 
+/** Seller-side same-origin transport for the one-prompt auction authorization. */
+export function createDemoFridayBrowserAuctionPayoutHttp(options: {
+	origin: string
+	fetchImpl?: DemoBrowserFetch
+}): Pick<DemoFridayAuctionPayoutAuthorityPort, 'registerExact' | 'readExact' | 'readWinnerExact'> {
+	const post = poster(options)
+	const envelope = (value: unknown): DemoFridayAuctionPayoutAuthorizationEnvelopeV1 => {
+		const raw = record(value, 'auction payout authorization')
+		exactKeys(raw, ['schema', 'authorizationDigest', 'authorization', 'sellerAuthorization'], 'auction payout authorization')
+		if (raw.schema !== 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_AUTHORIZATION_ENVELOPE_V1'
+			|| !HEX_32.test(String(raw.authorizationDigest)) || raw.authorization === null
+			|| typeof raw.authorization !== 'object' || Array.isArray(raw.authorization)
+			|| raw.sellerAuthorization === null || typeof raw.sellerAuthorization !== 'object'
+			|| Array.isArray(raw.sellerAuthorization)) refuse('auction payout authorization is malformed')
+		return structuredClone(value) as DemoFridayAuctionPayoutAuthorizationEnvelopeV1
+	}
+	return Object.freeze({
+		async registerExact(value) {
+			return envelope(await post('/api/friday/auction-payout/register', value))
+		},
+		async readExact(auctionId) {
+			if (!ID.test(auctionId)) refuse('auction payout read identity is malformed')
+			const raw = record(await post('/api/friday/auction-payout/read', {
+				schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_READ_V1', auctionId,
+			}), 'auction payout read result')
+			exactKeys(raw, ['schema', 'authorization'], 'auction payout read result')
+			if (raw.schema !== 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_READ_RESULT_V1') refuse('auction payout read schema differs')
+			return raw.authorization === null ? null : envelope(raw.authorization)
+		},
+		async readWinnerExact(auctionId) {
+			if (!ID.test(auctionId)) refuse('auction payout winner identity is malformed')
+			const raw = record(await post('/api/friday/auction-payout/winner', {
+				schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_READ_V1', auctionId,
+			}), 'auction payout winner result')
+			exactKeys(raw, ['schema', 'winner'], 'auction payout winner result')
+			if (raw.schema !== 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_READ_RESULT_V1') {
+				refuse('auction payout winner result schema differs')
+			}
+			if (raw.winner === null) return null
+			const winner = record(raw.winner, 'auction payout winner claim')
+			exactKeys(winner, ['schema', 'auctionId', 'authorizationDigest', 'fundingOperationId',
+				'selectionDigest', 'selection', 'outcomeHeight', 'closedAt'], 'auction payout winner claim')
+			const selection = record(winner.selection, 'auction payout winner selection')
+			exactKeys(selection, ['schema', 'authorizationDigest', 'catalogOperationId', 'auctionId',
+				'fundingOperationId', 'bidderActor', 'bidAmount', 'replacesBidId', 'stateHeight', 'appHash',
+				'selectedAt', 'selectedIndexes', 'outputs', 'recipientPublicKey', 'selectionDigest'],
+				'auction payout winner selection')
+			if (winner.schema !== 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_CLAIM_V1'
+				|| winner.auctionId !== auctionId || !HEX_32.test(String(winner.authorizationDigest))
+				|| !ID.test(String(winner.fundingOperationId)) || !HEX_32.test(String(winner.selectionDigest))
+				|| !Number.isSafeInteger(winner.outcomeHeight) || Number(winner.outcomeHeight) < 1
+				|| !Number.isSafeInteger(winner.closedAt) || Number(winner.closedAt) < 1
+				|| selection.schema !== 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_SELECTION_V1'
+				|| selection.auctionId !== auctionId || selection.authorizationDigest !== winner.authorizationDigest
+				|| selection.fundingOperationId !== winner.fundingOperationId
+				|| selection.selectionDigest !== winner.selectionDigest
+				|| !HEX_32.test(String(selection.authorizationDigest))
+				|| !HEX_32.test(String(selection.catalogOperationId)) || !ID.test(String(selection.fundingOperationId))
+				|| !HEX_32.test(String(selection.bidderActor))
+				|| !Number.isSafeInteger(selection.bidAmount) || Number(selection.bidAmount) < 1
+				|| (selection.replacesBidId !== '' && !HEX_32.test(String(selection.replacesBidId)))
+				|| !Number.isSafeInteger(selection.stateHeight) || Number(selection.stateHeight) < 1
+				|| !HEX_32.test(String(selection.appHash))
+				|| !Number.isSafeInteger(selection.selectedAt) || Number(selection.selectedAt) < 1
+				|| !Array.isArray(selection.selectedIndexes) || selection.selectedIndexes.length < 1
+				|| selection.selectedIndexes.some((index) => !Number.isSafeInteger(index) || Number(index) < 0)
+				|| new Set(selection.selectedIndexes).size !== selection.selectedIndexes.length
+				|| !Array.isArray(selection.outputs) || selection.outputs.length !== selection.selectedIndexes.length
+				|| selection.outputs.some((output) => {
+					const held = record(output, 'auction payout winner output')
+					return JSON.stringify(Object.keys(held).sort()) !== JSON.stringify(['B_', 'amount', 'id'])
+						|| !Number.isSafeInteger(held.amount) || Number(held.amount) < 1
+						|| !ID.test(String(held.id)) || !POINT.test(String(held.B_))
+				})
+				|| !POINT.test(String(selection.recipientPublicKey))
+				|| !HEX_32.test(String(selection.selectionDigest))) {
+				refuse('auction payout winner claim is malformed')
+			}
+			return structuredClone(winner) as unknown as DemoFridayAuctionPayoutWinnerClaimV1
+		},
+	})
+}
+
 export function createDemoFridayBrowserTrustedAuctionFundingHttp(options: { origin: string; fetchImpl?: DemoBrowserFetch }): DemoFridayTrustedAuctionFundingPort {
 	const post = poster(options)
 	return Object.freeze({ async readExact(request: Parameters<DemoFridayTrustedAuctionFundingPort['readExact']>[0]) {
@@ -206,7 +321,10 @@ export function createDemoFridayBrowserTrustedAuctionFundingHttp(options: { orig
 		const result = exactAuction(await post('/api/friday/auction-funding/read', {
 			schema: 'PLEBEIAN_FRIDAY_TRUSTED_AUCTION_FUNDING_READ_V1', ...request,
 		}))
-		if (result.auctionId !== request.auctionId || result.winnerRequest.capability.operationId !== request.fundingOperationId
+		if (result.auctionId !== request.auctionId
+			|| (result.winnerAuctionPayout === undefined && result.winnerRequest.capability.operationId !== request.fundingOperationId)
+			|| (result.winnerAuctionPayout !== undefined
+				&& result.winnerAuctionPayout.selection.fundingOperationId !== request.fundingOperationId)
 			|| result.winnerRequest.outputs.reduce((sum, output) => sum + output.amount, 0) !== request.fullPoolAmount) refuse('auction read response differs from the exact request')
 		return result
 	} })

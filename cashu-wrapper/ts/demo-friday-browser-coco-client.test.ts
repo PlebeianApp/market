@@ -9,8 +9,12 @@ import {
 	demoFridayAdmissionStatusDigest,
 	type DemoFridayFundingAdmissionStatusV1,
 } from './demo-friday-browser-coco-client'
+import { prepareDemoFridayAuctionPayoutAuthorization, selectDemoFridayAuctionPayout } from './demo-friday-auction-payout-authorization'
+import type { DemoFridaySellerOpeningRefV1 } from './demo-friday-browser-coco-seller-plan'
 import { createDemoFridayBrowserPaymentOperation } from './demo-friday-browser-payment-state'
+import type { DemoRecipientPrivateRecord } from './demo-sigall-recipient'
 import { buildDemoSigAllSecret, demoDenominationKeyDigest, demoOutputsDigest, demoRecipientCapabilityDigest } from './demo-sigall-settlement'
+import { createDemoFridayPaymentSignerFromSecret } from './poc-demo-browser-signer'
 
 const privateKey = (value: number) => hexToBytes(value.toString(16).padStart(64, '0'))
 const actor = bytesToHex(schnorr.getPublicKey(privateKey(1)))
@@ -46,10 +50,10 @@ function winnerRequest() {
 	)) }, outputs }
 }
 
-function preWalletClient(auctionValue: unknown, opened: { value: boolean }) {
+function preWalletClient(auctionValue: unknown, opened: { value: boolean }, trustedDeployment = deployment) {
 	let walletLockHeld = false
 	return createDemoFridayBrowserCocoClient({
-		deployment: { async readExact() { return deployment } },
+		deployment: { async readExact() { return trustedDeployment } },
 		auction: { async readExact() { return structuredClone(auctionValue) as never } },
 		walletFactory: { async openExact() {
 			if (!walletLockHeld) throw new Error('wallet-opened-without-lock')
@@ -86,6 +90,73 @@ function operationFixture() {
 }
 
 describe('Friday browser Coco client composition gates', () => {
+	test('accepts canonical-equivalent payout output and capability key order before opening Coco', async () => {
+		const sellerSecret = privateKey(13), sellerActor = bytesToHex(schnorr.getPublicKey(sellerSecret))
+		const recipient = createDemoFridayPaymentSignerFromSecret(privateKey(3))
+		const rows = new Map<string, DemoRecipientPrivateRecord<DemoFridaySellerOpeningRefV1>>()
+		const now = Math.floor(Date.now() / 1_000)
+		const payoutKeyset = { ...keyset, keys: { '1': compressed(18), '2': compressed(19), ...keyset.keys } }
+		const payoutDeployment = structuredClone(deployment)
+		payoutDeployment.keyset = payoutKeyset
+		payoutDeployment.mintSnapshot.denominationKeyDigest = demoDenominationKeyDigest(payoutKeyset.keys)
+		payoutDeployment.mintSnapshot.denominationAmounts = [1, 2, 4, 8]
+		try {
+			const sign = (unsigned: { pubkey: string; created_at: number; kind: number; tags: string[][]; content: string }) => {
+				const id = bytesToHex(sha256(new TextEncoder().encode(JSON.stringify([
+					0, unsigned.pubkey, unsigned.created_at, unsigned.kind, unsigned.tags, unsigned.content,
+				]))))
+				return { ...structuredClone(unsigned), id, sig: bytesToHex(schnorr.sign(hexToBytes(id), sellerSecret)) }
+			}
+			const authorization = await prepareDemoFridayAuctionPayoutAuthorization({
+				scope: {
+					schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_SCOPE_V1', authNetworkId: deployment.authNetworkId,
+					chainId: deployment.chainId, auctionId: fundingRequest.auctionId, sellerActor,
+					sellerPaymentPublicKey: await recipient.getPublicKey(), canonicalMintUrl: mintUrl,
+					activeSatKeysetId: payoutKeyset.id, denominationKeyDigest: demoDenominationKeyDigest(payoutKeyset.keys),
+					startingBid: 1, minIncrement: 1, reserve: 0, originalEndTime: now + 3_600,
+					maximumEndTime: now + 5_400, maximumPayout: 12, validFrom: now, validUntil: now + 6_300,
+				},
+				keyset: payoutKeyset,
+				journal: {
+					async runExclusive<T>(_scope: string, run: () => Promise<T>): Promise<T> { return run() },
+					async load(scope) { return structuredClone(rows.get(scope) ?? null) },
+					async savePrepared(scope, record) { rows.set(scope, structuredClone(record)) },
+					async markImported() { throw new Error('unused') },
+				},
+				recipientKey: recipient,
+				nostr: { async getPublicKey() { return sellerActor }, async signEvent(value) { return sign(value) } },
+				nowSeconds: now,
+			})
+			const selection = selectDemoFridayAuctionPayout({
+				authorization, keyset: payoutKeyset, nowSeconds: now,
+				auction: {
+					auctionId: fundingRequest.auctionId, sellerActor,
+					sellerPaymentPublicKey: await recipient.getPublicKey(), status: 'open', startingBid: 1,
+					minIncrement: 1, reserve: 0, originalEndTime: now + 3_600, endTime: now + 3_600,
+					leaderBidId: fundingRequest.replacesBidId, leaderActor, leaderBidAmount: 10,
+					stateHeight: 20, appHash: 'a'.repeat(64),
+				},
+				request: { auctionId: fundingRequest.auctionId, fundingOperationId: fundingRequest.fundingOperationId,
+					bidderActor: actor, bidAmount: fundingRequest.fullPoolAmount,
+					replacesBidId: fundingRequest.replacesBidId },
+			})
+			const reorderedOutputs = selection.outputs.map((output) => ({ B_: output.B_, id: output.id, amount: output.amount }))
+			const capability = authorization.authorization.recipientCatalog.capability
+			const reorderedCapability = Object.fromEntries(Object.entries(capability).reverse())
+			const opened = { value: false }
+			await expect(preWalletClient({
+				schema: 'PLEBEIAN_FRIDAY_TRUSTED_AUCTION_FUNDING_V1', auctionId: fundingRequest.auctionId,
+				leaderBidId: fundingRequest.replacesBidId, leaderActor, leaderBidAmount: 10,
+				sellerPaymentPublicKey: await recipient.getPublicKey(),
+				winnerRequest: { capability: reorderedCapability, outputs: reorderedOutputs },
+				winnerAuctionPayout: { authorization, selection: { ...selection, outputs: reorderedOutputs }, keyset: payoutKeyset },
+			}, opened, payoutDeployment).prepareAndFinalize(fundingRequest)).rejects.toThrow('wallet-opened')
+			expect(opened.value).toBe(true)
+		} finally {
+			recipient.dispose()
+		}
+	})
+
 	test('skips an indexed seller plan that has no bidder refund operation', async () => {
 		let terminalReads = 0
 		const client = createDemoFridayBrowserCocoClient({ deployment: {} as never, auction: {} as never,

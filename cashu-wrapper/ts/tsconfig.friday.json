@@ -4,6 +4,10 @@
 		"noEmit": true
 	},
 	"include": [
+		"demo-friday-auction-payout-freshness.test.ts",
+		"demo-friday-auction-payout-authorization.test.ts",
+		"demo-friday-auction-payout-runtime.test.ts",
+		"demo-friday-browser-auction-payout-import.test.ts",
 		"coco-rail.ts",
 		"poc-coordinator.ts",
 		"friday-funding.ts",
@@ -177,6 +181,7 @@
 		"demo-friday-runtime-config.test.ts",
 		"demo-friday-coordinator-runtime.ts",
 		"demo-friday-coordinator-runtime.test.ts",
+		"demo-friday-legacy-recipient-pending.test.ts",
 		"demo-friday-coordinator-rollback-anchor.ts",
 		"demo-friday-coordinator-rollback-anchor.test.ts",
 		"demo-friday-authorized-terminal-queue.ts",

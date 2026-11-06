@@ -347,6 +347,48 @@ describe('fixed Friday authority API', () => {
 			'plan:funding-1', 'register', 'auction:funding-1'])
 	})
 
+	test('maps auction payout registration and read-only winner discovery only to the captured authority', async () => {
+		const calls: Array<{ method: string; value: unknown }> = []
+		const authorization = { schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_AUTHORIZATION_ENVELOPE_V1',
+			authorizationDigest: 'a'.repeat(64), authorization: { auctionId: 'auction-1' },
+			sellerAuthorization: { id: 'b'.repeat(64) } } as never
+		const winner = { schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_CLAIM_V1', auctionId: 'auction-1',
+			authorizationDigest: 'a'.repeat(64), fundingOperationId: 'funding-1',
+			selectionDigest: 'c'.repeat(64) } as never
+		const service = createDemoFridayFixedAuthorityService({
+			readiness: { async readExact() { return { ready: true, reason: 'test_fixture', height: 42 } } },
+			publicOrigin: 'https://172.105.64.142', authNetworkId: 'friday-demo', chainId: 'friday-chain',
+			mintUrl: 'https://172.105.64.142', nowSeconds: () => 1_100,
+			terminalSource: { async nextExact() { return null }, async markQueuedExact() {} },
+			terminalRuntime: { async queueTerminal() { throw new Error('must not run') } },
+			health: { async readExact() { return { deploymentId: 'friday-blue', quarantined: false,
+				queuePending: 0, lastCommittedHeight: 42 } } },
+			auctionPayout: {
+				async registerExact(value) { calls.push({ method: 'register', value }); return authorization },
+				async readExact(value) { calls.push({ method: 'read', value }); return authorization },
+				async readWinnerExact(value) { calls.push({ method: 'winner', value }); return winner },
+			},
+		})
+		const post = (path: string, body: unknown) => service.handle(new Request(`http://127.0.0.1:8181${path}`, {
+			method: 'POST', headers: { origin: 'https://172.105.64.142', 'content-type': 'application/json' },
+			body: JSON.stringify(body),
+		}))
+		expect((await post('/api/friday/auction-payout/register', authorization)).status).toBe(201)
+		expect(await (await post('/api/friday/auction-payout/read', {
+			schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_READ_V1', auctionId: 'auction-1',
+		})).json()).toEqual({ schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_READ_RESULT_V1', authorization })
+		expect(await (await post('/api/friday/auction-payout/winner', {
+			schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_READ_V1', auctionId: 'auction-1',
+		})).json()).toEqual({ schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_READ_RESULT_V1', winner })
+		expect(calls).toEqual([
+			{ method: 'register', value: authorization }, { method: 'read', value: 'auction-1' },
+			{ method: 'winner', value: 'auction-1' },
+		])
+		expect((await post('/api/friday/auction-payout/read', {
+			schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_READ_V1', auctionId: 'auction-1',
+		})).status).toBe(422)
+	})
+
 	test('rejects an oversized streamed body before JSON processing', async () => {
 		const held = fixture()
 		const response = await held.service.handle(new Request('http://127.0.0.1:8181/api/friday/funding', {

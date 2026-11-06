@@ -34,11 +34,32 @@
     if (!Number.isSafeInteger(maximum) || maximum < 1 || amount > maximum) return { ok: false, reason: `Runtime policy allows at most ${formatSats(maximum)} fake sats per request.` };
     return { ok: true, amount };
   }
+  function bidAmount(raw, minimum) {
+    const value = String(raw ?? "");
+    if (!/^[1-9][0-9]*$/.test(value)) return { ok: false, reason: "Enter a positive whole-number bid." };
+    const amount = Number(value);
+    if (!Number.isSafeInteger(amount)) return { ok: false, reason: "Bid exceeds the safe integer range." };
+    if (!Number.isSafeInteger(minimum) || minimum < 1) return { ok: false, reason: "Committed bid minimum is unavailable." };
+    if (amount < minimum) return { ok: false, reason: `Bid must be at least ${formatSats(minimum)} fake sats.` };
+    return { ok: true, amount };
+  }
+  function imageURL(raw) {
+    const value = String(raw ?? "").trim();
+    if (value === "") return { ok: true, url: "" };
+    if (value.length > 512) return { ok: false, reason: "Image URL may not exceed 512 characters." };
+    let parsed;
+    try { parsed = new URL(value); }
+    catch { return { ok: false, reason: "Image URL is invalid." }; }
+    if (parsed.protocol !== "https:" || !parsed.hostname || parsed.username || parsed.password || parsed.hash) {
+      return { ok: false, reason: "Image URL must be HTTPS, contain no credentials, and contain no fragment." };
+    }
+    return { ok: true, url: value };
+  }
   function scopeKey(actor, deployment) { return actor && deployment ? `${deployment}\u0000${actor}` : ""; }
   function validatorEvidence(validator) {
     const observed = String(validator?.observation || "").includes("canonical commit signature observed");
     if (!observed) return { state: "unknown", label: "Signature unknown", detail: validator?.online ? "RPC reachable · signature not evaluated" : "RPC unavailable · signature unknown" };
     return validator.online ? { state: "observed", label: "Signed commit", detail: `Commit ${formatSats(validator.canonical_commit_height)}` } : { state: "absent", label: "Signature absent", detail: "No signature in observed commit" };
   }
-  return { formatSats, formatTime, countdown, minimumBid, filterAuctions, fundingAmount, scopeKey, validatorEvidence };
+  return { formatSats, formatTime, countdown, minimumBid, filterAuctions, fundingAmount, bidAmount, imageURL, scopeKey, validatorEvidence };
 });

@@ -415,6 +415,11 @@ export class DemoFridayPreparedFundingAdmission {
 			bidderActor: string
 			bidAmount: number
 			winnerRequest: { capability: DemoMaintainerExactTemplateBundle['winner']['recipientCapability']; outputs: DemoMaintainerExactTemplateBundle['winner']['outputs'] }
+			auctionPayout?: {
+				authorization: NonNullable<DemoMaintainerExactTemplateBundle['winner']['auctionPayoutAuthorization']>
+				selection: NonNullable<DemoMaintainerExactTemplateBundle['winner']['auctionPayoutSelection']>
+				keyset: NonNullable<DemoMaintainerExactTemplateBundle['winner']['auctionPayoutKeyset']>
+			}
 		}): Promise<void> }
 	}) {}
 
@@ -435,6 +440,13 @@ export class DemoFridayPreparedFundingAdmission {
 			bidAmount: verified.bundle.winner.amount,
 			winnerRequest: { capability: structuredClone(verified.bundle.winner.recipientCapability),
 				outputs: structuredClone(verified.bundle.winner.outputs) },
+			...(verified.bundle.winner.schema !== 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3' ? {} : {
+				auctionPayout: {
+					authorization: structuredClone(verified.bundle.winner.auctionPayoutAuthorization!),
+					selection: structuredClone(verified.bundle.winner.auctionPayoutSelection!),
+					keyset: structuredClone(verified.bundle.winner.auctionPayoutKeyset!),
+				},
+			}),
 		})
 		let replay = this.options.replay.claimExact(verified)
 		this.#anchor()

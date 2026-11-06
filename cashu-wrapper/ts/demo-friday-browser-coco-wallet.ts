@@ -1,3 +1,4 @@
+import { createFridayMintReadTransport } from './demo-friday-mint-read-transport'
 /**
  * Browser-owned Coco v2 wallet boundary for the Friday fake-money flow.
  *
@@ -356,7 +357,9 @@ export async function openDemoFridayBrowserCocoWallet(options: {
 			: inherited ? AbortSignal.any([options.signal, inherited]) : options.signal
 		return mintFetch(input, { ...init, ...(signal ? { signal } : {}) })
 	}) as typeof fetch
-	const boundedFetch = createOriginBoundMintFetch(mintUrl, cancellableFetch, { allowLoopbackHttp })
+	const boundedFetch = createFridayMintReadTransport(
+		createOriginBoundMintFetch(mintUrl, cancellableFetch, { allowLoopbackHttp }),
+	)
 	const domain = await (options.openDomain ?? openWalletDomain)({
 		account: { accountId: options.actor, environmentId: options.environmentId }, seedStore,
 		repositoryName: options.repositoryName ?? `plebeian-friday-coco-${options.environmentId}-${options.actor}`,

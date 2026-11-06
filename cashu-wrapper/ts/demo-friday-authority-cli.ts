@@ -16,6 +16,7 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import { hasValidDleq } from '@cashu/cashu-ts'
 
 import { authenticatedDemoCometState, createLoopbackCometReader, createPinnedObserverCometReader } from './demo-comet-displacement-verifier'
+import { createDemoFridayFreshPayoutStateReader, DEMO_FRIDAY_AUCTION_PAYOUT_READ_TIMEOUT_MS, demoFridayAuctionPayoutFreshnessPolicyFromEnv } from './demo-friday-auction-payout-freshness'
 import { createLoopbackCometBidBroadcaster, createLoopbackCometTxRecovery } from './demo-comet-bid-consensus'
 import { runDemoFridayAuthorityProcess } from './demo-friday-authority-process'
 import {
@@ -63,6 +64,11 @@ import { DemoFridayCocoTerminalExchangeSqlite } from './demo-friday-coco-termina
 import {
 	createDemoFridayBrowserTrustService,
 } from './demo-friday-browser-trust-service'
+import {
+	createDemoFridayAuctionPayoutAuthority,
+	DemoFridayAuctionPayoutRegistrySqlite,
+	DemoFridayAuctionPayoutRollbackAnchorSqlite,
+} from './demo-friday-auction-payout-runtime'
 import {
 	DemoFridaySellerPlanRollbackAnchorSqlite,
 	DemoFridaySellerPlanSqlite,
@@ -155,8 +161,9 @@ export async function ensureDemoFridayAuthorityScratch(path: string): Promise<st
 		if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
 	}
 	const metadata = await lstat(path)
+	const uid = process.getuid?.(), gid = process.getgid?.()
 	if (!metadata.isDirectory() || metadata.isSymbolicLink() || (metadata.mode & 0o777) !== 0o700
-		|| metadata.uid !== process.getuid() || metadata.gid !== process.getgid()) {
+		|| uid === undefined || gid === undefined || metadata.uid !== uid || metadata.gid !== gid) {
 		throw new Error('DEMO_FRIDAY_AUTHORITY_CLI: scratch parent must be a runtime-owned 0700 directory')
 	}
 	return path
@@ -165,17 +172,17 @@ export async function ensureDemoFridayAuthorityScratch(path: string): Promise<st
 function anchorPaths(schema: 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V2' | 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V3' | 'PLEBEIAN_FRIDAY_SEPARATED_APPLICATION_V1') {
 	if (schema === 'PLEBEIAN_FRIDAY_SEPARATED_APPLICATION_V1') {
 	 const root = '/var/lib/plebeian-auctions-friday-anchor-separated'
-	 return { coordinator:`${root}/coordinator.sqlite3`,fundingReplay:`${root}/funding-replay.sqlite3`,fundingBroadcast:`${root}/funding-broadcast.sqlite3`,fundingAbort:`${root}/funding-abort.sqlite3`,sellerPlan:`${root}/seller-plan.sqlite3` }
+	 return { coordinator:`${root}/coordinator.sqlite3`,fundingReplay:`${root}/funding-replay.sqlite3`,fundingBroadcast:`${root}/funding-broadcast.sqlite3`,fundingAbort:`${root}/funding-abort.sqlite3`,sellerPlan:`${root}/seller-plan.sqlite3`,auctionPayout:`${root}/auction-payout.sqlite3` }
 	}
 	if (schema === 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V2') return {
 		coordinator: FRIDAY_LIVE_COORDINATOR_ANCHOR, fundingReplay: FRIDAY_LIVE_FUNDING_REPLAY_ANCHOR,
 		fundingBroadcast: FRIDAY_LIVE_FUNDING_BROADCAST_ANCHOR, fundingAbort: FRIDAY_LIVE_FUNDING_ABORT_ANCHOR,
-		sellerPlan: FRIDAY_LIVE_SELLER_PLAN_ANCHOR,
+		sellerPlan: FRIDAY_LIVE_SELLER_PLAN_ANCHOR, auctionPayout: '/var/lib/plebeian-auctions-friday-anchor/auction-payout.sqlite3',
 	}
 	return {
 		coordinator: FRIDAY_R20_COORDINATOR_ANCHOR, fundingReplay: FRIDAY_R20_FUNDING_REPLAY_ANCHOR,
 		fundingBroadcast: FRIDAY_R20_FUNDING_BROADCAST_ANCHOR, fundingAbort: FRIDAY_R20_FUNDING_ABORT_ANCHOR,
-		sellerPlan: FRIDAY_R20_SELLER_PLAN_ANCHOR,
+		sellerPlan: FRIDAY_R20_SELLER_PLAN_ANCHOR, auctionPayout: '/var/lib/plebeian-auctions-friday-anchor-r20/auction-payout.sqlite3',
 	}
 }
 
@@ -194,13 +201,13 @@ function exactKeys(value: object, keys: string[]): void {
 }
 
 export interface DemoFridayAuthorityArgs {
-	mode: 'serve' | 'init-state' | 'init-seller-plan'
+	mode: 'serve' | 'init-state' | 'init-seller-plan' | 'init-auction-payout'
 	application: string
 }
 
 export function demoFridayAuthorityArgs(argv = process.argv.slice(2)): DemoFridayAuthorityArgs {
-	if (argv.length !== 3 || !['serve', 'init-state', 'init-seller-plan'].includes(argv[0] ?? '') || argv[1] !== '--application') {
-		throw new Error('usage: plebeian-friday-authority serve|init-state|init-seller-plan --application /etc/plebeian-auctions-friday/application.json')
+	if (argv.length !== 3 || !['serve', 'init-state', 'init-seller-plan', 'init-auction-payout'].includes(argv[0] ?? '') || argv[1] !== '--application') {
+		throw new Error('usage: plebeian-friday-authority serve|init-state|init-seller-plan|init-auction-payout --application /etc/plebeian-auctions-friday/application.json')
 	}
 	const application = exactDemoFridayApplicationInputPath(argv[2]!)
 	if (application !== `${FRIDAY_LIVE_CONFIG_ROOT}/application.json`) {
@@ -228,6 +235,8 @@ export interface DemoFridayAuthorityStorePaths {
 	terminalExchange: string
 	sellerPlan: string
 	sellerPlanAnchor: string
+	auctionPayout: string
+	auctionPayoutAnchor: string
 }
 
 /**
@@ -294,13 +303,43 @@ export async function initializeDemoFridayAuthorityStores(options: {
 		new DemoFridayCocoTerminalExchangeSqlite(databases.terminalExchange, options.deploymentId)
 		const sellerAnchor = new DemoFridaySellerPlanRollbackAnchorSqlite(databases.sellerPlanAnchor, true)
 		const seller = new DemoFridaySellerPlanSqlite(databases.sellerPlan, options.deploymentId, sellerAnchor)
+		const payoutAnchor = new DemoFridayAuctionPayoutRollbackAnchorSqlite(databases.auctionPayoutAnchor, true)
+		const payout = new DemoFridayAuctionPayoutRegistrySqlite(databases.auctionPayout, options.deploymentId, payoutAnchor)
 		if (coordinator.anchorSnapshot().globalRevision !== 0 || replay.anchorSnapshot().globalRevision !== 0
-			|| broadcast.anchorSnapshot().globalRevision !== 0 || seller.anchorSnapshot().globalRevision !== 0) {
+			|| broadcast.anchorSnapshot().globalRevision !== 0 || seller.anchorSnapshot().globalRevision !== 0
+			|| payout.anchorSnapshot().globalRevision !== 0) {
 			throw new Error('DEMO_FRIDAY_AUTHORITY_CLI: initialized authority state is not empty')
 		}
 	} finally {
 		emptyPrivateKey.fill(0)
 		for (const database of Object.values(databases).reverse()) database.close(false)
+	}
+}
+
+/** Create the auction-scoped payout registry and its rollback anchor once for an existing deployment. */
+export async function initializeDemoFridayAuctionPayoutStores(options: {
+	databasePath: string
+	anchorPath: string
+	deploymentId: string
+}): Promise<void> {
+	const reservations: Awaited<ReturnType<typeof open>>[] = []
+	try {
+		reservations.push(await open(options.databasePath, 'wx', 0o600))
+		reservations.push(await open(options.anchorPath, 'wx', 0o600))
+	} finally {
+		for (const reservation of reservations.reverse()) await reservation.close()
+	}
+	const database = new Database(options.databasePath, { create: false, strict: true })
+	const anchorDatabase = new Database(options.anchorPath, { create: false, strict: true })
+	try {
+		const registry = new DemoFridayAuctionPayoutRegistrySqlite(database, options.deploymentId,
+			new DemoFridayAuctionPayoutRollbackAnchorSqlite(anchorDatabase, true))
+		if (registry.anchorSnapshot().globalRevision !== 0) {
+			throw new Error('DEMO_FRIDAY_AUTHORITY_CLI: initialized auction payout state is not empty')
+		}
+	} finally {
+		anchorDatabase.close(false)
+		database.close(false)
 	}
 }
 
@@ -444,6 +483,14 @@ export async function main(): Promise<void> {
 		})
 		return
 	}
+	if (cli.mode === 'init-auction-payout') {
+		await initializeDemoFridayAuctionPayoutStores({
+			databasePath: join(application.coordinator_root, 'auction-payout.sqlite3'),
+			anchorPath: anchors.auctionPayout,
+			deploymentId: application.deployment_id,
+		})
+		return
+	}
 	if (cli.mode === 'init-state') {
 		const root = application.coordinator_root
 		await initializeDemoFridayAuthorityStores({
@@ -460,6 +507,7 @@ export async function main(): Promise<void> {
 				admissionSessions: join(root, 'admission-sessions.sqlite3'),
 				terminalExchange: join(root, 'terminal-exchange.sqlite3'), sellerPlan: join(root, 'seller-plan.sqlite3'),
 				sellerPlanAnchor: anchors.sellerPlan,
+				auctionPayout: join(root, 'auction-payout.sqlite3'), auctionPayoutAnchor: anchors.auctionPayout,
 			},
 		})
 		return
@@ -523,9 +571,11 @@ export async function main(): Promise<void> {
 	const terminalExchangeDb = new Database(join(root, 'terminal-exchange.sqlite3'), { create: false, strict: true })
 	const sellerPlanDb = new Database(join(root, 'seller-plan.sqlite3'), { create: false, strict: true })
 	const sellerPlanAnchorDb = new Database(anchors.sellerPlan, { create: false, strict: true })
+	const auctionPayoutDb = new Database(join(root, 'auction-payout.sqlite3'), { create: false, strict: true })
+	const auctionPayoutAnchorDb = new Database(anchors.auctionPayout, { create: false, strict: true })
 	try {
 		const reader = makeReader(
-   ((input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(5_000), redirect: 'error' })) as typeof fetch)
+   ((input, init) => fetch(input, { ...init, redirect: 'error' })) as typeof fetch)
 		const offlineStore = new DemoMaintainerEncryptedSqliteStore(privateDb, key)
 		const abortCapsules = new DemoFundingAbortCapsuleEncryptedSqliteStore(privateDb, key)
 		const authorityStore = new DemoIntegratedAuthoritySqliteStore(authorityDb)
@@ -580,6 +630,46 @@ export async function main(): Promise<void> {
 					],
 				}
 			  }
+		const liveDeployment = await readLiveDeployment()
+		const payoutRegistry = new DemoFridayAuctionPayoutRegistrySqlite(auctionPayoutDb,
+			application.deployment_id, new DemoFridayAuctionPayoutRollbackAnchorSqlite(auctionPayoutAnchorDb))
+		const readFreshPayoutState = createDemoFridayFreshPayoutStateReader({
+			reader, chainId: facts.chain_id, validatorsHash: facts.validators_hash,
+			policy: demoFridayAuctionPayoutFreshnessPolicyFromEnv(process.env),
+			readTimeoutMs: DEMO_FRIDAY_AUCTION_PAYOUT_READ_TIMEOUT_MS,
+		})
+		const auctionPayout = createDemoFridayAuctionPayoutAuthority({
+			keyset: liveDeployment.keyset,
+			registry: payoutRegistry,
+			auctions: { async readExact(auctionId) {
+				const observed = await readFreshPayoutState()
+				const auction = observed.observation.state.auctions?.[auctionId]
+				if (auction === undefined || auction.id !== auctionId || auction.status !== 'open'
+					|| auction.funding_mode !== 'threshold_sigall_v1' || typeof auction.seller !== 'string'
+					|| !/^[0-9a-f]{64}$/.test(auction.seller)
+					|| !/^(?:02|03)[0-9a-f]{64}$/.test(auction.seller_coco_payment_public_key ?? '')
+					|| !Number.isSafeInteger(auction.starting_bid) || auction.starting_bid! < 1
+					|| !Number.isSafeInteger(auction.min_increment) || auction.min_increment! < 1
+					|| !Number.isSafeInteger(auction.reserve) || auction.reserve! < 0
+					|| !Number.isSafeInteger(auction.original_end_time) || !Number.isSafeInteger(auction.end_time)) {
+					throw new Error('DEMO_FRIDAY_AUTHORITY_CLI: authenticated payout auction is absent or malformed')
+				}
+				const leaderBidId = auction.leader_bid_id ?? ''
+				const bid = leaderBidId === '' ? undefined : observed.observation.state.bids?.[leaderBidId]
+				if (leaderBidId !== '' && (bid === undefined || bid.id !== leaderBidId || bid.auction_id !== auctionId
+					|| !/^[0-9a-f]{64}$/.test(bid.bidder) || !Number.isSafeInteger(bid.amount) || bid.amount < 1)) {
+					throw new Error('DEMO_FRIDAY_AUTHORITY_CLI: authenticated payout leader is malformed')
+				}
+				return {
+					auctionId, sellerActor: auction.seller, sellerPaymentPublicKey: auction.seller_coco_payment_public_key!,
+					status: 'open' as const, startingBid: auction.starting_bid!, minIncrement: auction.min_increment!,
+					reserve: auction.reserve!, originalEndTime: auction.original_end_time!, endTime: auction.end_time!,
+					leaderBidId, leaderActor: bid?.bidder ?? '', leaderBidAmount: bid?.amount ?? 0,
+					stateHeight: observed.observation.queryHeight, appHash: observed.observation.appHash,
+				}
+			} },
+			nowSeconds: () => Math.floor(Date.now() / 1_000),
+		})
   const browserTrust = createDemoFridayBrowserTrustService({
    deployment: { readExact: () => readLiveDeployment() },
 			auctions: { async readExact(auctionId) {
@@ -612,6 +702,7 @@ export async function main(): Promise<void> {
 				}
 			} },
 			registry: sellerPlanRegistry,
+			auctionPayout,
 			nowSeconds: () => Math.floor(Date.now() / 1_000),
 		})
 		const recovery = createDemoFridayLiveRecoveryPorts(mintUrl, mintFetch)
@@ -857,10 +948,11 @@ export async function main(): Promise<void> {
 		await runDemoFridayAuthorityProcess({
 			publicOrigin: authorityConfig.public_origin, authNetworkId: facts.chain_id, chainId: facts.chain_id,
 			mintUrl, nowSeconds: () => Math.floor(Date.now() / 1_000), terminalSource, terminalRuntime,
-			health, readiness, readinessPins: healthPins, readinessConfigSha256: healthConfig === undefined ? undefined : process.env.POC_FRIDAY_HEALTH_PINS_SHA256, degradedRecovery, fundingAdmission, terminalExchange, browserTrust, fundingAbort, recoveryOnly, signal: stop.signal,
+			health, readiness, readinessPins: healthPins, readinessConfigSha256: healthConfig === undefined ? undefined : process.env.POC_FRIDAY_HEALTH_PINS_SHA256, degradedRecovery, fundingAdmission, terminalExchange, browserTrust, auctionPayout, fundingAbort, recoveryOnly, signal: stop.signal,
 		})
 	} finally {
 		key.fill(0); coordinatorSecret.fill(0)
+		auctionPayoutAnchorDb.close(false); auctionPayoutDb.close(false)
 		sellerPlanAnchorDb.close(false); sellerPlanDb.close(false)
 		terminalExchangeDb.close(false)
 		fundingAbortSessionDb.close(false); fundingAbortAnchorDb.close(false); fundingAbortDb.close(false)

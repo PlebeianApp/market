@@ -77,14 +77,16 @@ export function createDemoFipsAdmissionParticipant(options: {
 				const authenticated = await authenticatedDemoCometState(reader, pins.validatorsHash, 1)
 				if (authenticated.observation.state.chain_id !== pins.chainId) throw new Error('DEMO_FIPS_ADMISSION_CONSENSUS: state chain differs from enrollment')
 				const auction = authenticated.observation.state.auctions?.[request.auctionId]
+				const sellerActor = auction?.seller
 				const sellerPaymentPublicKey = auction?.seller_coco_payment_public_key ?? ''
 				return {
-					leaderBidId: auction?.leader_bid_id ?? '', sellerPaymentPublicKey,
+					leaderBidId: auction?.leader_bid_id ?? '',
+					...(sellerActor === undefined ? {} : { sellerActor }), sellerPaymentPublicKey,
 					height: authenticated.observation.queryHeight,
 					evidenceDigest: digest([
 						'COCO_DEMO_FIPS_ADMISSION_CONSENSUS_V1', pins.network, pins.chainId, pins.validatorsHash,
 						pins.participantId, request.auctionId, authenticated.observation.queryHeight,
-						authenticated.observation.appHash, auction?.leader_bid_id ?? '', sellerPaymentPublicKey,
+						authenticated.observation.appHash, auction?.leader_bid_id ?? '', sellerActor ?? '', sellerPaymentPublicKey,
 					]),
 				}
 			},

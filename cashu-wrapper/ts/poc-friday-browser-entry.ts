@@ -19,9 +19,18 @@ import { createDemoFridayBrowserExactEnvelopeBuilder } from './demo-friday-brows
 import {
 	createDemoFridayBrowserSellerPlanHttp,
 	createDemoFridayBrowserSellerPlanIntentHttp,
+	createDemoFridayBrowserAuctionPayoutHttp,
 	createDemoFridayBrowserTrustedAuctionFundingHttp,
 	createDemoFridayBrowserTrustedDeploymentHttp,
 } from './demo-friday-browser-trust-http'
+import {
+	createDemoFridayAuctionPayoutBrowserController,
+} from './demo-friday-auction-payout-runtime'
+import type {
+	DemoFridayAuctionPayoutAuthorizationEnvelopeV1,
+	DemoFridayAuctionPayoutScopeV1,
+} from './demo-friday-auction-payout-authorization'
+import { importDemoFridayAuctionPayoutWinner } from './demo-friday-browser-auction-payout-import'
 import {
 	demoFridaySellerPlanIntentUnsignedEvent,
 	type DemoFridaySellerPlanIntentContentV1,
@@ -52,6 +61,10 @@ import {
 const HEX_32 = /^[0-9a-f]{64}$/
 const ID = /^[A-Za-z0-9_-]{1,160}$/
 const STORAGE_KEY = 'plebeian-friday-browser-public-operations-v1'
+// Browser time is not authoritative. A bounded grace makes ordinary small
+// client-clock skew fail closed without turning stale discovery into a
+// permanent blocker. The server still independently rejects late registration.
+const PRELOCK_RECOVERY_EXPIRY_GRACE_SECONDS = 60
 
 export type ExternalSigner = {
 	getPublicKey(): Promise<string>
@@ -77,11 +90,36 @@ interface PublicSellerOperationV1 {
 	fundingOperationId: string
 }
 
+interface PublicAuctionPayoutV1 {
+	schema: 'PLEBEIAN_FRIDAY_BROWSER_AUCTION_PAYOUT_V1'
+	actor: string
+	environmentId: string
+	auctionId: string
+	authorizationDigest: string
+}
+
+interface PublicPendingFaucetV1 {
+	actor: string
+	environmentId: string
+	fundingOperationId: string
+	amount: number
+	policyDigest?: string
+}
+
 interface PublicStateV1 {
 	schema: 'PLEBEIAN_FRIDAY_BROWSER_PUBLIC_STATE_V1'
 	pendingBids: PublicPendingBidV1[]
 	sellerOperations: PublicSellerOperationV1[]
-	pendingFaucet?: { actor: string; environmentId: string; fundingOperationId: string; amount: number; policyDigest?: string }
+	auctionPayouts?: PublicAuctionPayoutV1[]
+	pendingFaucet?: PublicPendingFaucetV1
+}
+
+interface PublicStateV2 {
+	schema: 'PLEBEIAN_FRIDAY_BROWSER_PUBLIC_STATE_V2'
+	pendingBids: PublicPendingBidV1[]
+	sellerOperations: PublicSellerOperationV1[]
+	auctionPayouts?: PublicAuctionPayoutV1[]
+	pendingFaucets: PublicPendingFaucetV1[]
 }
 
 function refuse(message: string): never { throw new Error(`PLEBEIAN_FRIDAY_BROWSER: ${message}`) }
@@ -117,11 +155,22 @@ function exactFakeFundingPolicy(value: DemoFridayFakeFundingPolicyV1): DemoFrida
 	return Object.freeze({ ...value })
 }
 
-function exactPublicState(parsed: unknown): PublicStateV1 {
+function malformedPendingFaucet(entry: PublicPendingFaucetV1): boolean {
+	return !HEX_32.test(entry.actor) || !ID.test(entry.environmentId) || !ID.test(entry.fundingOperationId)
+		|| !Number.isSafeInteger(entry.amount) || entry.amount < 1 || entry.amount > Number.MAX_SAFE_INTEGER
+		|| (entry.policyDigest !== undefined && !HEX_32.test(entry.policyDigest))
+}
+
+function exactPublicState(parsed: unknown): PublicStateV2 {
 	if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) refuse('public operation index is malformed')
-	const value = parsed as PublicStateV1
-	if (value.schema !== 'PLEBEIAN_FRIDAY_BROWSER_PUBLIC_STATE_V1'
-		|| !Array.isArray(value.pendingBids) || !Array.isArray(value.sellerOperations)) refuse('public operation index schema differs')
+	const value = parsed as PublicStateV1 | PublicStateV2
+	if (!['PLEBEIAN_FRIDAY_BROWSER_PUBLIC_STATE_V1', 'PLEBEIAN_FRIDAY_BROWSER_PUBLIC_STATE_V2'].includes(value.schema)
+		|| !Array.isArray(value.pendingBids) || !Array.isArray(value.sellerOperations)
+		|| (value.auctionPayouts !== undefined && !Array.isArray(value.auctionPayouts))) refuse('public operation index schema differs')
+	const pendingFaucets = value.schema === 'PLEBEIAN_FRIDAY_BROWSER_PUBLIC_STATE_V1'
+		? (value.pendingFaucet === undefined ? [] : [value.pendingFaucet])
+		: value.pendingFaucets
+	if (!Array.isArray(pendingFaucets)) refuse('public operation index schema differs')
 	if (value.pendingBids.some((entry) => entry.schema !== 'PLEBEIAN_FRIDAY_BROWSER_PENDING_BID_V1'
 		|| !HEX_32.test(entry.actor) || !ID.test(entry.environmentId) || !HEX_32.test(entry.sellerActor)
 		|| !ID.test(entry.auctionId) || !ID.test(entry.fundingOperationId)
@@ -133,25 +182,37 @@ function exactPublicState(parsed: unknown): PublicStateV1 {
 		|| value.sellerOperations.some((entry) => entry.schema !== 'PLEBEIAN_FRIDAY_BROWSER_SELLER_OPERATION_V1'
 			|| !HEX_32.test(entry.actor) || !ID.test(entry.environmentId) || !ID.test(entry.auctionId)
 			|| !ID.test(entry.fundingOperationId))
-		|| (value.pendingFaucet !== undefined && (!HEX_32.test(value.pendingFaucet.actor)
-			|| !ID.test(value.pendingFaucet.environmentId) || !ID.test(value.pendingFaucet.fundingOperationId)
-			|| !Number.isSafeInteger(value.pendingFaucet.amount) || value.pendingFaucet.amount < 1
-			|| value.pendingFaucet.amount > Number.MAX_SAFE_INTEGER
-			|| (value.pendingFaucet.policyDigest !== undefined
-				&& !HEX_32.test(value.pendingFaucet.policyDigest))))) refuse('public operation index contains a malformed entry')
-	return structuredClone(value)
+		|| (value.auctionPayouts ?? []).some((entry) => entry.schema !== 'PLEBEIAN_FRIDAY_BROWSER_AUCTION_PAYOUT_V1'
+			|| !HEX_32.test(entry.actor) || !ID.test(entry.environmentId) || !ID.test(entry.auctionId)
+			|| !HEX_32.test(entry.authorizationDigest))
+		|| pendingFaucets.some(malformedPendingFaucet)) refuse('public operation index contains a malformed entry')
+	const owners = new Set<string>(), operations = new Set<string>()
+	for (const entry of pendingFaucets) {
+		const owner = `${entry.environmentId}\u0000${entry.actor}`
+		if (owners.has(owner) || operations.has(entry.fundingOperationId)) {
+			refuse('public operation index contains duplicate fake funding recovery')
+		}
+		owners.add(owner); operations.add(entry.fundingOperationId)
+	}
+	return {
+		schema: 'PLEBEIAN_FRIDAY_BROWSER_PUBLIC_STATE_V2',
+		pendingBids: structuredClone(value.pendingBids),
+		sellerOperations: structuredClone(value.sellerOperations),
+		...(value.auctionPayouts === undefined ? {} : { auctionPayouts: structuredClone(value.auctionPayouts) }),
+		pendingFaucets: structuredClone(pendingFaucets),
+	}
 }
 
 export function validateDemoFridayBrowserPublicState(value: unknown): void { exactPublicState(value) }
 
-function readPublicState(): PublicStateV1 {
+function readPublicState(): PublicStateV2 {
 	const raw = globalThis.localStorage.getItem(STORAGE_KEY)
-	if (raw === null) return { schema: 'PLEBEIAN_FRIDAY_BROWSER_PUBLIC_STATE_V1', pendingBids: [], sellerOperations: [] }
+	if (raw === null) return { schema: 'PLEBEIAN_FRIDAY_BROWSER_PUBLIC_STATE_V2', pendingBids: [], sellerOperations: [], pendingFaucets: [] }
 	let parsed: unknown
 	try { parsed = JSON.parse(raw) } catch { return refuse('public operation index is not JSON') }
 	return exactPublicState(parsed)
 }
-function writePublicState(state: PublicStateV1): void { globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) }
+function writePublicState(state: PublicStateV2): void { globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) }
 
 function nostr(external: ExternalSigner): DemoFridayNostrSignerPort {
 	return Object.freeze({
@@ -198,11 +259,27 @@ export interface PlebeianFridayBrowserController {
 	sellerPaymentPublicKey(): Promise<string>
 	balance(): Promise<{ available: number; reserved: number; locked: number; pending: number; unresolved: number; total: number }>
 	fundFake(amount: number): Promise<{ operationId: string; state: 'finalized'; balance: number }>
+	authorizeAuctionPayout(request: Omit<DemoFridayAuctionPayoutScopeV1,
+		'schema' | 'authNetworkId' | 'chainId' | 'sellerActor' | 'sellerPaymentPublicKey'
+		| 'canonicalMintUrl' | 'activeSatKeysetId' | 'denominationKeyDigest' | 'validFrom'>):
+		Promise<DemoFridayAuctionPayoutAuthorizationEnvelopeV1>
+	readAuctionPayout(auctionId: string): Promise<DemoFridayAuctionPayoutAuthorizationEnvelopeV1 | null>
 	placeBid(request: Omit<DemoFridayBrowserFundingRequestV1, 'fundingOperationId'>): Promise<
 		{ status: 'seller_plan_pending'; fundingOperationId: string; sellerActor: string; expiresAt: number }
 		| { status: 'prepared' | 'admitted' | 'rejected_return' | 'unknown'; fundingOperationId: string; committedHeight?: number }
 	>
 	serviceSellerPlans(control?: Omit<DemoFridaySellerApprovalControl, 'expectedChallenge'> & { auctionIds?: string[]; deploymentPins?: DemoFridayR20AcceptancePinsV1 }): Promise<{ registered: number; operations: string[] }>
+	expiredPrelockPending(): Promise<Array<{
+		auctionId: string
+		fundingOperationId: string
+		bidAmount: number
+		expiresAt: number
+	}>>
+	discardExpiredPrelockPending(fundingOperationId: string): Promise<{
+		status: 'discarded_prelock'
+		auctionId: string
+		fundingOperationId: string
+	}>
 	importAvailable(): Promise<{ refunds: number; winnerPayments: number }>
 	cancelPending(fundingOperationId: string, reason?: 'prebroadcast_client_abandonment' | 'prebroadcast_service_failure'):
 		Promise<DemoFridayBrowserAbortResultV1>
@@ -215,19 +292,20 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 	const publicOrigin = origin()
 	const signer = nostr(externalSigner)
 	const state = createDemoFridayBrowserPaymentState()
-	const updatePublicState = <T>(change: (value: PublicStateV1) => Promise<T> | T): Promise<T> =>
+	const updatePublicState = <T>(change: (value: PublicStateV2) => Promise<T> | T): Promise<T> =>
 		state.runPublicIndexExclusive(async () => {
 			const value = readPublicState(), result = await change(value)
 			writePublicState(value)
 			return result
 		})
-	const snapshotPublicState = (): Promise<PublicStateV1> =>
+	const snapshotPublicState = (): Promise<PublicStateV2> =>
 		state.runPublicIndexExclusive(async () => readPublicState())
 	const walletFactory = createDemoFridayBrowserCocoWalletFactory({ browserOrigin: publicOrigin })
 	const deployment = createDemoFridayBrowserTrustedDeploymentHttp({ origin: publicOrigin })
 	const auction = createDemoFridayBrowserTrustedAuctionFundingHttp({ origin: publicOrigin })
 	const plans = createDemoFridayBrowserSellerPlanHttp({ origin: publicOrigin })
 	const intent = createDemoFridayBrowserSellerPlanIntentHttp({ origin: publicOrigin })
+	const auctionPayout = createDemoFridayBrowserAuctionPayoutHttp({ origin: publicOrigin })
 	const terminal = createDemoFridayBrowserAuthorityTerminalHttp({ origin: publicOrigin })
 	const admission = createDemoFridayBrowserAuthorityFundingHttp({ origin: publicOrigin })
 	const abortAuthority = createDemoFridayBrowserAuthorityFundingAbortHttp({ origin: publicOrigin })
@@ -293,11 +371,9 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 		fundingPolicy: () => fundingPolicy,
 		async pendingFakeFunding() {
 			const [owner, trusted, value] = await Promise.all([actor(), deployment.readExact(), snapshotPublicState()])
-			const pending = value.pendingFaucet
+			const pending = value.pendingFaucets.find((entry) => entry.actor === owner
+				&& entry.environmentId === trusted.environmentId)
 			if (pending === undefined) return null
-			if (pending.actor !== owner || pending.environmentId !== trusted.environmentId) {
-				refuse('pending fake funding belongs to another actor or deployment')
-			}
 			return { amount: pending.amount, operationId: pending.fundingOperationId,
 				policyDigest: pending.policyDigest ?? LEGACY_FAKE_FUNDING_POLICY.digest }
 		},
@@ -307,29 +383,68 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 			if (!Number.isSafeInteger(amount) || amount < 1 || amount > fundingPolicy.maxPerRequest) refuse('fake funding amount is invalid')
 			const [trusted, owner] = await Promise.all([deployment.readExact(), actor()])
 			const held = await updatePublicState((publicState) => {
-				if (publicState.pendingFaucet !== undefined) {
-					if (publicState.pendingFaucet.actor !== owner || publicState.pendingFaucet.environmentId !== trusted.environmentId
-						|| publicState.pendingFaucet.amount !== amount
-						|| (publicState.pendingFaucet.policyDigest ?? LEGACY_FAKE_FUNDING_POLICY.digest) !== fundingPolicy.digest) {
+				const pending = publicState.pendingFaucets.find((entry) => entry.actor === owner
+					&& entry.environmentId === trusted.environmentId)
+				if (pending !== undefined) {
+					if (pending.amount !== amount
+						|| (pending.policyDigest ?? LEGACY_FAKE_FUNDING_POLICY.digest) !== fundingPolicy.digest) {
 						refuse('an unresolved fake funding operation must recover under its original amount and policy')
 					}
-					return structuredClone(publicState.pendingFaucet)
+					return structuredClone(pending)
 				}
-				publicState.pendingFaucet = { actor: owner, environmentId: trusted.environmentId,
+				const created = { actor: owner, environmentId: trusted.environmentId,
 					fundingOperationId: `faucet-${freshOperationId()}`, amount, policyDigest: fundingPolicy.digest }
-				return structuredClone(publicState.pendingFaucet)
+				publicState.pendingFaucets.push(created)
+				return structuredClone(created)
 			})
 			const result = await walletUse((wallet) => wallet.fundFake({ amount, operationId: held.fundingOperationId,
 				environmentId: held.environmentId,
 				browserWalletAdvisoryMaxResultingBalance: fundingPolicy.browserWalletAdvisoryMaxResultingBalance,
 				policy: fundingPolicy, journal: state }), held.actor)
 			await updatePublicState((publicState) => {
-				if (publicState.pendingFaucet?.fundingOperationId !== held.fundingOperationId) {
+				const matches = publicState.pendingFaucets.filter((entry) => entry.actor === held.actor
+					&& entry.environmentId === held.environmentId && entry.fundingOperationId === held.fundingOperationId)
+				if (matches.length !== 1) {
 					refuse('fake funding discovery changed before finalization')
 				}
-				delete publicState.pendingFaucet
+				publicState.pendingFaucets = publicState.pendingFaucets
+					.filter((entry) => entry.fundingOperationId !== held.fundingOperationId)
 			})
 			return result
+		},
+		async authorizeAuctionPayout(request: Parameters<PlebeianFridayBrowserController['authorizeAuctionPayout']>[0]) {
+			const [trusted, owner] = await Promise.all([deployment.readExact(), actor()])
+			const registered = await walletUse(async (wallet) => {
+				const controller = createDemoFridayAuctionPayoutBrowserController({
+					keyset: trusted.keyset, journal: state, recipientKey: wallet.sellerRecipientKey,
+					nostr: signer, authority: auctionPayout,
+				})
+				return controller.authorizeAuctionExact({
+					...structuredClone(request), schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_SCOPE_V1',
+					authNetworkId: trusted.authNetworkId, chainId: trusted.chainId,
+					sellerActor: owner, sellerPaymentPublicKey: await wallet.sellerRecipientKey.getPublicKey(),
+					canonicalMintUrl: trusted.canonicalMintUrl, activeSatKeysetId: trusted.keyset.id,
+					denominationKeyDigest: trusted.mintSnapshot.denominationKeyDigest,
+				})
+			}, owner)
+			await updatePublicState((publicState) => {
+				publicState.auctionPayouts ??= []
+				const prior = publicState.auctionPayouts.find((entry) => entry.actor === owner
+					&& entry.environmentId === trusted.environmentId && entry.auctionId === request.auctionId)
+				if (prior !== undefined && prior.authorizationDigest !== registered.authorizationDigest) {
+					refuse('auction already retains another payout authorization')
+				}
+				if (prior === undefined) publicState.auctionPayouts.push({
+					schema: 'PLEBEIAN_FRIDAY_BROWSER_AUCTION_PAYOUT_V1', actor: owner,
+					environmentId: trusted.environmentId, auctionId: request.auctionId,
+					authorizationDigest: registered.authorizationDigest,
+				})
+			})
+			return registered
+		},
+		async readAuctionPayout(auctionId: string) {
+			if (!ID.test(auctionId)) refuse('auction payout identity is invalid')
+			return auctionPayout.readExact(auctionId)
 		},
 		async placeBid(requestValue: Omit<DemoFridayBrowserFundingRequestV1, 'fundingOperationId'>) {
 			if (!ID.test(requestValue.auctionId) || !Number.isSafeInteger(requestValue.bidAmount)
@@ -367,9 +482,11 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 				return structuredClone(held)
 			})
 			const exactPending = pending ?? refuse('pending bid did not persist')
-			const registered = await plans.readExact({ sellerActor: exactPending.sellerActor,
+			const registeredPayout = await auctionPayout.readExact(exactPending.auctionId)
+			const registered = registeredPayout === null ? await plans.readExact({ sellerActor: exactPending.sellerActor,
 				auctionId: exactPending.auctionId, fundingOperationId: exactPending.fundingOperationId })
-			if (registered === null) return { status: 'seller_plan_pending' as const,
+				: null
+			if (registeredPayout === null && registered === null) return { status: 'seller_plan_pending' as const,
 				fundingOperationId: exactPending.fundingOperationId, sellerActor: exactPending.sellerActor, expiresAt: exactPending.expiresAt }
 			const result = await (await client()).prepareAndFinalize({
 				auctionId: exactPending.auctionId, fundingOperationId: exactPending.fundingOperationId,
@@ -433,6 +550,72 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 			}
 			return { registered: registered.length, operations: registered }
 		},
+		async expiredPrelockPending() {
+			const [owner, trusted, publicState] = await Promise.all([
+				actor(), deployment.readExact(), snapshotPublicState(),
+			])
+			return publicState.pendingBids
+				.filter((entry) => entry.actor === owner && entry.environmentId === trusted.environmentId
+					&& entry.admitted === undefined
+					&& entry.expiresAt + PRELOCK_RECOVERY_EXPIRY_GRACE_SECONDS < nowSeconds())
+				.map((entry) => ({ auctionId: entry.auctionId,
+					fundingOperationId: entry.fundingOperationId, bidAmount: entry.bidAmount,
+					expiresAt: entry.expiresAt }))
+		},
+		async discardExpiredPrelockPending(fundingOperationId: string) {
+			if (!ID.test(fundingOperationId)) refuse('expired pre-lock funding operation is invalid')
+			// Keep the public discovery index locked while the exact operation lock is
+			// acquired. A retry in another tab cannot create private payment state in
+			// the gap between the no-state proof and removal of this public pointer.
+			return state.runPublicIndexExclusive(async () => {
+				const [owner, trusted] = await Promise.all([actor(), deployment.readExact()])
+				const before = readPublicState()
+				const matches = before.pendingBids.filter((entry) => entry.fundingOperationId === fundingOperationId)
+				if (matches.length !== 1) refuse('expired pre-lock operation is not uniquely retained')
+				const pending = structuredClone(matches[0]!)
+				if (pending.actor !== owner || pending.environmentId !== trusted.environmentId) {
+					refuse('expired pre-lock operation belongs to another actor or deployment')
+				}
+				if (pending.admitted !== undefined) refuse('admitted operation requires terminal recovery')
+				if (pending.expiresAt + PRELOCK_RECOVERY_EXPIRY_GRACE_SECONDS >= nowSeconds()) {
+					refuse('pre-lock seller authorization has not passed its recovery grace')
+				}
+				const identity = { actor: pending.actor, environmentId: pending.environmentId,
+					fundingOperationId: pending.fundingOperationId }
+				return state.runOperationExclusive(identity, async () => {
+					if (await state.loadOperation(identity) !== null) {
+						refuse('durable payment state exists; use signed cancellation or terminal recovery')
+					}
+					if (await state.loadFundingAbort(identity) !== null) {
+						refuse('a cancellation journal exists; recover that exact cancellation')
+					}
+					// Re-bind the signer and deployment after every private-state read. The
+					// seller registry read is deliberately last: a registered plan must win
+					// over local cleanup even if it appeared while this control was open.
+					const [currentOwner, currentTrusted] = await Promise.all([actor(), deployment.readExact()])
+					if (currentOwner !== owner || currentTrusted.environmentId !== trusted.environmentId) {
+						refuse('actor or deployment changed during expired pre-lock recovery')
+					}
+					if (pending.expiresAt + PRELOCK_RECOVERY_EXPIRY_GRACE_SECONDS >= nowSeconds()) {
+						refuse('pre-lock seller authorization recovery grace changed')
+					}
+					const registered = await plans.readExact({ sellerActor: pending.sellerActor,
+						auctionId: pending.auctionId, fundingOperationId: pending.fundingOperationId })
+					if (registered !== null) refuse('seller authorization is registered; retry the exact bid')
+					const current = readPublicState()
+					const currentMatches = current.pendingBids.filter((entry) => entry.fundingOperationId === fundingOperationId)
+					if (currentMatches.length !== 1 || JSON.stringify(currentMatches[0]) !== JSON.stringify(pending)) {
+						refuse('expired pre-lock discovery changed during recovery')
+					}
+					const count = current.pendingBids.length
+					current.pendingBids = current.pendingBids.filter((entry) => entry.fundingOperationId !== fundingOperationId)
+					if (current.pendingBids.length !== count - 1) refuse('expired pre-lock removal was not exact')
+					writePublicState(current)
+					return { status: 'discarded_prelock' as const, auctionId: pending.auctionId,
+						fundingOperationId: pending.fundingOperationId }
+				})
+			})
+		},
 		async importAvailable() {
 			const [owner, trusted] = await Promise.all([actor(), deployment.readExact()])
 			const publicState = await snapshotPublicState()
@@ -471,17 +654,40 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 					if (imported.alreadyImported !== true) winnerPayments += 1
 				}
 			}
+			const completedAuctionPayouts = new Set<string>()
+			for (const payout of (publicState.auctionPayouts ?? []).filter((entry) => entry.actor === owner
+				&& entry.environmentId === trusted.environmentId)) {
+				const [authorization, winner] = await Promise.all([
+					auctionPayout.readExact(payout.auctionId), auctionPayout.readWinnerExact(payout.auctionId),
+				])
+				if (authorization === null || winner === null) continue
+				if (authorization.authorizationDigest !== payout.authorizationDigest
+					|| winner.authorizationDigest !== payout.authorizationDigest) {
+					refuse('auction payout discovery differs from the retained authorization')
+				}
+				const imported = await walletUse((wallet) => importDemoFridayAuctionPayoutWinner({
+					actor: owner, environmentId: trusted.environmentId, authorization, winner,
+					keyset: trusted.keyset, state, wallet, terminal,
+				}), owner)
+				if (imported !== null) {
+					completedAuctionPayouts.add(`${payout.environmentId}\u0000${payout.auctionId}`)
+					if (imported.alreadyImported !== true) winnerPayments += 1
+				}
+			}
 			// A terminal client returns only after the recipient import and its
 			// canonical acknowledgement are durable.  That is the sole automatic
 			// deletion boundary for the public discovery index; expiry and missing
 			// RPC responses never remove an unresolved operation.
-			if (completedRefunds.size > 0 || completedWinners.size > 0) {
+			if (completedRefunds.size > 0 || completedWinners.size > 0 || completedAuctionPayouts.size > 0) {
 				await updatePublicState((current) => {
 					current.pendingBids = current.pendingBids.filter((entry) => !completedRefunds.has(
 						`${entry.environmentId}\u0000${entry.fundingOperationId}`,
 					))
 					current.sellerOperations = current.sellerOperations.filter((entry) => !completedWinners.has(
 						`${entry.environmentId}\u0000${entry.fundingOperationId}`,
+					))
+					current.auctionPayouts = (current.auctionPayouts ?? []).filter((entry) => !completedAuctionPayouts.has(
+						`${entry.environmentId}\u0000${entry.auctionId}`,
 					))
 				})
 			}

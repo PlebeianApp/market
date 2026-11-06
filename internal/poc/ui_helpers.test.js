@@ -14,6 +14,25 @@ test("funding input is explicit, integer, safe, and policy bounded", () => {
   assert.equal(ui.fundingAmount("100001", 100_000).ok, false);
 });
 
+test("bid drafts accept only safe decimal integers at the committed minimum", () => {
+  assert.deepEqual(ui.bidAmount("3000", 3000), { ok: true, amount: 3000 });
+  for (const value of ["", "0", "-1", "2999", "3.5", "3e3", " 3000 ", "9007199254740992"]) {
+    assert.equal(ui.bidAmount(value, 3000).ok, false, value);
+  }
+  assert.equal(ui.bidAmount("3000", null).ok, false);
+});
+
+test("auction images allow bounded credential-free HTTPS URLs only", () => {
+  assert.deepEqual(ui.imageURL(""), { ok: true, url: "" });
+  assert.deepEqual(ui.imageURL(" https://fastly.picsum.photos/id/1/400/300.jpg?x=1 "),
+    { ok: true, url: "https://fastly.picsum.photos/id/1/400/300.jpg?x=1" });
+  for (const value of [
+    "http://example.com/item.jpg", "data:image/png;base64,AA==", "javascript:alert(1)",
+    "//example.com/item.jpg", "https://user:password@example.com/item.jpg", "https://example.com/item.jpg#fragment",
+  ]) assert.equal(ui.imageURL(value).ok, false, value);
+  assert.equal(ui.imageURL(`https://example.com/${"a".repeat(500)}`).ok, false);
+});
+
 test("funding policy golden matches the Go and TypeScript canonical contract", () => {
   const canonical = '{"max_per_request":10000,"max_resulting_balance":50000,"schema":"PLEBEIAN_FRIDAY_R20_FAKE_FUNDING_POLICY_V1"}';
   assert.equal(crypto.createHash("sha256").update(canonical).digest("hex"),
@@ -58,4 +77,7 @@ test("deployable UI is R20-only and contains no preset business values", () => {
   assert.doesNotMatch(app, /\/api\/admin\/offline/);
   assert.doesNotMatch(app, /fundFake\(10000\)/);
   assert.doesNotMatch(app, /POST[^\n]*\/api\/close/);
+  const nginx = fs.readFileSync(path.join(__dirname, "../../deploy/sidequest-mvp/nginx-public-demo-active-r2.conf"), "utf8");
+  assert.match(nginx, /img-src 'self' data: https:/);
+  assert.doesNotMatch(nginx, /img-src[^;]*\*/);
 });

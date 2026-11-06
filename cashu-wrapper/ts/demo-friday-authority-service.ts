@@ -22,6 +22,7 @@ import type {
 	DemoFridayCocoTerminalExchangeSqlite,
 } from './demo-friday-coco-terminal-exchange'
 import type { DemoFridayBrowserTrustService } from './demo-friday-browser-trust-service'
+import type { DemoFridayAuctionPayoutAuthorityPort } from './demo-friday-auction-payout-runtime'
 import type {
 	DemoFridayBrowserAbortPreparationV1,
 	DemoFridayBrowserAbortStatusV1,
@@ -149,6 +150,8 @@ export function createDemoFridayFixedAuthorityService(options: {
 	terminalExchange?: Pick<DemoFridayCocoTerminalExchangeSqlite, 'readExact' | 'acknowledgeExact'>
 	/** Omit to keep every trusted browser-read and seller-plan route fail-closed. */
 	browserTrust?: DemoFridayBrowserTrustService
+	/** Omit to keep auction-scoped offline seller authorization disabled. */
+	auctionPayout?: Pick<DemoFridayAuctionPayoutAuthorityPort, 'registerExact' | 'readExact' | 'readWinnerExact'>
 	/** Omit until FundingAbortV1 has exact consensus/FROST/Coco adapters. */
 	fundingAbort?: DemoFridayBrowserFundingAbortServicePort
 	/**
@@ -224,6 +227,9 @@ export function createDemoFridayFixedAuthorityService(options: {
 			const readSellerPlan = url.pathname === '/api/friday/seller-plan/read'
 			const registerSellerPlan = url.pathname === '/api/friday/seller-plan/register'
 			const readAuctionFunding = url.pathname === '/api/friday/auction-funding/read'
+			const registerAuctionPayout = url.pathname === '/api/friday/auction-payout/register'
+			const readAuctionPayout = url.pathname === '/api/friday/auction-payout/read'
+			const readAuctionPayoutWinner = url.pathname === '/api/friday/auction-payout/winner'
 			const prepareAbort = url.pathname === '/api/friday/funding-abort/prepare'
 			const registerAbortCapsule = url.pathname === '/api/friday/funding-abort/capsule'
 			const requestAbort = url.pathname === '/api/friday/funding-abort/request'
@@ -232,6 +238,7 @@ export function createDemoFridayFixedAuthorityService(options: {
 			const browserTrustRoute = readDeployment || issueSellerIntent || readSellerChallenge || listSellerChallenges
 				|| readSellerPlan || registerSellerPlan || readAuctionFunding
 			if ((!prepareFunding && !confirmFunding && !recoverFunding && !readTerminal && !ackTerminal
+				&& !registerAuctionPayout && !readAuctionPayout && !readAuctionPayoutWinner
 				&& !browserTrustRoute && !abortRoute)
 				|| request.method !== 'POST') return json(404, { error: 'not_found' })
 			if (request.headers.get('origin') !== publicOrigin || request.headers.get('content-type')?.split(';')[0] !== 'application/json') {
@@ -242,12 +249,12 @@ export function createDemoFridayFixedAuthorityService(options: {
 			catch { return json(422, { error: 'funding_authorization_rejected' }) }
    // Read/recovery APIs do not acquire new funding authority. Every degraded
    // mutation below must independently prove an existing durable operation.
-   if (options.recoveryOnly === undefined && (prepareFunding || issueSellerIntent || confirmFunding || registerSellerPlan)) {
+   if (options.recoveryOnly === undefined && (prepareFunding || issueSellerIntent || confirmFunding || registerSellerPlan || registerAuctionPayout)) {
     let ready = false
     try { ready = options.recoveryOnly === undefined && (await options.readiness?.readExact())?.ready === true }
     catch { /* dependency errors fail closed */ }
     if (!ready) {
-     if (prepareFunding || issueSellerIntent) return json(503, { error: 'new_operations_unready' })
+     if (prepareFunding || issueSellerIntent || registerAuctionPayout) return json(503, { error: 'new_operations_unready' })
      try {
       if (options.degradedRecovery === undefined) throw new Error('no recovery classifier')
       await options.degradedRecovery.assertRecordedExact(confirmFunding ? 'funding_confirm' : 'seller_register', body)
@@ -255,7 +262,7 @@ export function createDemoFridayFixedAuthorityService(options: {
     }
    }
 			if (options.recoveryOnly !== undefined) {
-				if (prepareFunding || issueSellerIntent) {
+				if (prepareFunding || issueSellerIntent || registerAuctionPayout) {
 					return json(409, { error: 'recovery_only_new_operation_disabled' })
 				}
 				let action: DemoFridayRecoveryOnlyAction | undefined
@@ -275,6 +282,22 @@ export function createDemoFridayFixedAuthorityService(options: {
 					try { await options.recoveryOnly.assertRecordedExact(action, body) }
 					catch { return json(409, { error: 'recovery_only_operation_not_recorded' }) }
 				}
+			}
+			if (registerAuctionPayout || readAuctionPayout || readAuctionPayoutWinner) {
+				if (options.auctionPayout === undefined) return json(503, { error: 'auction_payout_disabled' })
+				try {
+					if (registerAuctionPayout) return json(201, await options.auctionPayout.registerExact(
+						body as import('./demo-friday-auction-payout-authorization').DemoFridayAuctionPayoutAuthorizationEnvelopeV1))
+					const raw = body as Record<string, unknown>
+					if (readAuctionPayoutWinner) {
+						if (raw?.schema !== 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_READ_V1') throw new Error('auction payout winner read schema differs')
+						return json(200, { schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_READ_RESULT_V1',
+							winner: await options.auctionPayout.readWinnerExact(String(raw.auctionId)) })
+					}
+					if (raw?.schema !== 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_READ_V1') throw new Error('auction payout read schema differs')
+					return json(200, { schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_READ_RESULT_V1',
+						authorization: await options.auctionPayout.readExact(String(raw.auctionId)) })
+				} catch { return json(422, { error: 'auction_payout_rejected' }) }
 			}
 			if (abortRoute) {
 				if (options.fundingAbort === undefined) return json(503, { error: 'funding_abort_disabled' })

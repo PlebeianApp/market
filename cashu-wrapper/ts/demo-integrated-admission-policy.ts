@@ -62,7 +62,14 @@ export interface DemoIntegratedAdmissionConsensusPort {
 		network: string
 		chainId: string
 		auctionId: string
-	}): Promise<{ leaderBidId: string; sellerPaymentPublicKey: string; height: number; evidenceDigest: string }>
+	}): Promise<{
+		leaderBidId: string
+		/** Nostr seller actor committed in the participant's authenticated auction state. */
+		sellerActor?: string
+		sellerPaymentPublicKey: string
+		height: number
+		evidenceDigest: string
+	}>
 }
 
 export interface DemoIntegratedAdmissionPolicyEvidenceV1 {
@@ -142,9 +149,13 @@ export async function preflightDemoIntegratedAdmission(options: {
 	const inputTotal = winner.inputs.reduce((sum, proof) => sum + proof.amount, 0)
 	const readConsensus = () => options.consensus.readCommittedLeader({ network: winner.network, chainId: winner.chainId, auctionId: winner.auctionId })
 	const committed = await (options.context ? options.context.observe(readConsensus) : readConsensus())
+	const v3SellerAuthorization = winner.schema === 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3'
+		? winner.auctionPayoutAuthorization?.authorization
+		: undefined
 	if (!Number.isSafeInteger(options.nowSeconds) || options.nowSeconds < 1
 		|| committed === null || typeof committed !== 'object'
 		|| (committed.leaderBidId !== '' && !HEX_32.test(committed.leaderBidId))
+		|| (committed.sellerActor !== undefined && !HEX_32.test(committed.sellerActor))
 		|| (committed.sellerPaymentPublicKey !== '' && !/^(?:02|03)[0-9a-f]{64}$/.test(committed.sellerPaymentPublicKey))
 		|| !Number.isSafeInteger(committed.height) || committed.height < 1 || !HEX_32.test(committed.evidenceDigest)
 		|| receipt.attested_at > options.nowSeconds
@@ -153,7 +164,12 @@ export async function preflightDemoIntegratedAdmission(options: {
 		refuse('DEMO_INTEGRATED_ADMISSION_CONSENSUS', 'receipt is stale or does not replace the participant-local committed leader')
 	}
 	if (receipt.replaces_bid_id !== committed.leaderBidId
-		|| (winner.schema === 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V2' && committed.sellerPaymentPublicKey !== winner.sellerPaymentPublicKey)) {
+		|| (winner.schema !== 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V1'
+			&& committed.sellerPaymentPublicKey !== winner.sellerPaymentPublicKey)
+		|| (winner.schema === 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3'
+			&& (v3SellerAuthorization === undefined
+				|| committed.sellerActor !== v3SellerAuthorization.sellerActor
+				|| committed.sellerPaymentPublicKey !== v3SellerAuthorization.sellerPaymentPublicKey))) {
 		options.context?.refuse('ADMISSION_STALE')
 		refuse('DEMO_INTEGRATED_ADMISSION_CONSENSUS', 'receipt does not replace the participant-local leader')
 	}

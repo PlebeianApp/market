@@ -47,6 +47,14 @@ import {
 } from './demo-maintainer-federation'
 import { parseP2PKSecret, proofPoint, type BlindedMessage, type BlindedSignature, type CashuProof } from './nut-client'
 import { deriveSellerChildPubkey } from './seller-child'
+import {
+	assertDemoFridayAuctionPayoutSignerBinding,
+} from './demo-friday-auction-payout-runtime'
+import type {
+	DemoFridayAuctionPayoutAuthorizationEnvelopeV1,
+	DemoFridayAuctionPayoutSelectionV1,
+} from './demo-friday-auction-payout-authorization'
+import type { DemoRecipientKeyset } from './demo-sigall-recipient'
 
 const HEX_32 = /^[0-9a-f]{64}$/
 const HEX_64 = /^[0-9a-f]{128}$/
@@ -76,6 +84,7 @@ export type DemoMaintainerPackageAuthorization =
 
 export interface DemoMaintainerExactBranchTemplate {
 	schema: 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V1' | 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V2'
+		| 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3'
 	role: DemoMaintainerBranchRole
 	network: string
 	chainId: string
@@ -97,6 +106,10 @@ export interface DemoMaintainerExactBranchTemplate {
 	bidderDerivationPath?: string
 	/** V2 auction-stable direct recipient key registered by the seller's Coco wallet. */
 	sellerPaymentPublicKey?: string
+	/** V3 single-prompt, auction-scoped seller payout proof. Winner branch only. */
+	auctionPayoutAuthorization?: DemoFridayAuctionPayoutAuthorizationEnvelopeV1
+	auctionPayoutSelection?: DemoFridayAuctionPayoutSelectionV1
+	auctionPayoutKeyset?: DemoRecipientKeyset
 	recipientPublicKey: string
 	bidderPublicKey: string
 	refundPublicKey: string
@@ -412,9 +425,15 @@ function canonicalTemplateUnsigned(value: DemoMaintainerExactBranchTemplate): Re
 		recipientCapabilityDigest: demoRecipientCapabilityDigest(value.recipientCapability),
 		cashuSigAllDigest: demoCashuSigAllDigest(value.inputs, value.outputs),
 	}
-	return value.schema === 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V1'
-		? { ...common, sellerP2pkXpub: value.sellerP2pkXpub, bidderDerivationPath: value.bidderDerivationPath }
-		: { ...common, sellerPaymentPublicKey: value.sellerPaymentPublicKey }
+	if (value.schema === 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V1') {
+		return { ...common, sellerP2pkXpub: value.sellerP2pkXpub, bidderDerivationPath: value.bidderDerivationPath }
+	}
+	if (value.schema === 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3') {
+		return { ...common, sellerPaymentPublicKey: value.sellerPaymentPublicKey,
+			auctionPayoutAuthorizationDigest: value.auctionPayoutAuthorization?.authorizationDigest,
+			auctionPayoutSelectionDigest: value.auctionPayoutSelection?.selectionDigest }
+	}
+	return { ...common, sellerPaymentPublicKey: value.sellerPaymentPublicKey }
 }
 
 export function demoMaintainerExactTemplateDigest(value: DemoMaintainerExactBranchTemplate): string {
@@ -429,13 +448,16 @@ function validateTemplate(value: DemoMaintainerExactBranchTemplate, expectedRole
 		'schema', 'role', 'network', 'chainId', 'auctionId', 'operationId', 'bidId', 'bidEventId',
 		'bidderActorId', 'amount', 'inputFee', 'mintUrl', 'unit', 'locktime', 'validUntil', 'closeTime',
 		'settlementWindowSeconds', ...(template.schema === 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V1'
-			? ['sellerP2pkXpub', 'bidderDerivationPath'] : ['sellerPaymentPublicKey']), 'recipientPublicKey',
+			? ['sellerP2pkXpub', 'bidderDerivationPath'] : template.schema === 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3'
+			? ['sellerPaymentPublicKey', 'auctionPayoutAuthorization', 'auctionPayoutSelection', 'auctionPayoutKeyset']
+			: ['sellerPaymentPublicKey']), 'recipientPublicKey',
 		'bidderPublicKey', 'refundPublicKey', 'committeePublicKey', 'committeeKeysetId',
 		'committeeKeysetVersion', 'threshold', 'participants', 'mintSeal', 'inputs', 'outputs',
 		'recipientCapability', 'templateDigest', 'cashuSigAllDigest', 'bidderMainSignature',
 		...(expectedRole === 'refund' ? ['refundSignature'] : []),
 	])
-	if (!['COCO_DEMO_MAINTAINER_EXACT_BRANCH_V1', 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V2'].includes(template.schema)
+	if (!['COCO_DEMO_MAINTAINER_EXACT_BRANCH_V1', 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V2',
+		'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3'].includes(template.schema)
 		|| template.role !== expectedRole || template.threshold !== 3 || template.unit !== 'sat') {
 		refuse('DEMO_MAINTAINER_TEMPLATE', 'template schema, role, threshold, or unit is invalid')
 	}
@@ -524,7 +546,28 @@ function validateTemplate(value: DemoMaintainerExactBranchTemplate, expectedRole
 		'schema', 'network', 'chainId', 'auctionId', 'operationId', 'role', 'mintUrl', 'unit',
 		'recipientPublicKey', 'outputsDigest', 'signature',
 	], 'DEMO_MAINTAINER_TEMPLATE_RECIPIENT')
-	if (capability.schema !== 'COCO_DEMO_RECIPIENT_CAPABILITY_V1'
+	if (template.schema === 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3') {
+		if (expectedRole !== 'winner_settlement' || template.auctionPayoutAuthorization === undefined
+			|| template.auctionPayoutSelection === undefined || template.auctionPayoutKeyset === undefined
+			|| JSON.stringify(template.recipientCapability)
+				!== JSON.stringify(template.auctionPayoutAuthorization.authorization.recipientCatalog.capability)) {
+			refuse('DEMO_MAINTAINER_TEMPLATE_RECIPIENT', 'auction payout proof is absent or changed')
+		}
+		assertDemoFridayAuctionPayoutSignerBinding({
+			authorization: template.auctionPayoutAuthorization,
+			selection: template.auctionPayoutSelection,
+			keyset: template.auctionPayoutKeyset,
+			observedAt: template.auctionPayoutSelection.selectedAt,
+			template: {
+				network: template.network, chainId: template.chainId, auctionId: template.auctionId,
+				operationId: template.operationId, bidderActorId: template.bidderActorId, amount: template.amount,
+				recipientPublicKey: template.recipientPublicKey,
+				activeSatKeysetId: template.mintSeal.activeSatKeysetId,
+				denominationKeyDigest: template.mintSeal.denominationKeyDigest,
+				outputs: template.outputs,
+			},
+		})
+	} else if (capability.schema !== 'COCO_DEMO_RECIPIENT_CAPABILITY_V1'
 		|| capability.network !== template.network || capability.chainId !== template.chainId
 		|| capability.auctionId !== template.auctionId || capability.operationId !== template.operationId
 		|| capability.role !== template.role || exactOrigin(capability.mintUrl, 'recipientCapability.mintUrl') !== template.mintUrl
@@ -606,13 +649,14 @@ function validateBundle(
 	if (demoOutputsDigest(winner.outputs) === demoOutputsDigest(refund.outputs) || winner.templateDigest === refund.templateDigest) {
 		refuse('DEMO_MAINTAINER_BUNDLE_CONFLICT', 'winner and refund branches must be distinct exact templates')
 	}
-	const paymentKeyAuthorization = winner.schema === 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V2'
+	const usesPaymentKeyAuthorization = (template: DemoMaintainerExactBranchTemplate): boolean =>
+		template.schema !== 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V1'
 	const exactPackageAuthorization = (
 		authorization: DemoMaintainerPackageAuthorization,
 		template: DemoMaintainerExactBranchTemplate,
 		label: string,
 	): void => {
-		if (paymentKeyAuthorization) {
+		if (usesPaymentKeyAuthorization(template)) {
 			exactKeys(authorization, ['schema', 'paymentPublicKey', 'packageDigest', 'signature'], label)
 			if (!('schema' in authorization)
 				|| authorization.schema !== 'COCO_DEMO_PAYMENT_KEY_PACKAGE_AUTHORIZATION_V1'
@@ -647,7 +691,7 @@ function validateBundle(
 		actorWinnerAuthorization: bundle.actorWinnerAuthorization,
 		actorReturnAuthorization: bundle.actorReturnAuthorization,
 	})
-	const bundleApprovalKey = paymentKeyAuthorization ? winner.bidderPublicKey.slice(2) : winner.bidderActorId
+	const bundleApprovalKey = usesPaymentKeyAuthorization(winner) ? winner.bidderPublicKey.slice(2) : winner.bidderActorId
 	if (bundle.bundleDigest !== bundleDigest
 		|| !verify(bundle.actorBundleSignature, bundleDigest, bundleApprovalKey)
 		|| !verify(bundle.bidderBundleSignature, bundleDigest, winner.bidderPublicKey)) {
@@ -847,6 +891,16 @@ function recipientResponse(branch: DemoMaintainerExactBranchTemplate, signatures
 	}
 }
 
+/** Fail closed in every effect/recovery entry point, including legacy direct services. */
+export async function assertDemoMaintainerAuctionPayoutFence(
+ branch: DemoMaintainerExactBranchTemplate,
+ claim?: (branch: DemoMaintainerExactBranchTemplate) => Promise<void>,
+): Promise<void> {
+ if (branch.schema !== 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3') return
+ if (claim === undefined) refuse('DEMO_MAINTAINER_PAYOUT_FENCE', 'V3 payout requires an authenticated durable winner fence')
+ await claim(structuredClone(branch))
+}
+
 export function createDemoMaintainerOfflineExecutor(options: {
 	store: DemoMaintainerOfflineStore
 	outcomes: DemoMaintainerFinalOutcomePort
@@ -856,6 +910,8 @@ export function createDemoMaintainerOfflineExecutor(options: {
 	recovery: DemoSigAllRecoveryMintStatePort
 	terminalResponse: DemoSigAllTerminalResponsePort
 	recipient: DemoMaintainerRecipientDeliveryPort
+	/** Must durably claim this exact winner using authenticated terminal evidence. */
+	claimAuctionPayoutWinnerExact?: (branch: DemoMaintainerExactBranchTemplate) => Promise<void>
 	now?: () => number
 	nowSeconds?: () => number
 }) {
@@ -866,6 +922,7 @@ export function createDemoMaintainerOfflineExecutor(options: {
 		reserveFederationAttempt: options.store.reserveFederationAttempt.bind(options.store),
 		saveAuthorization: options.store.saveAuthorization.bind(options.store),
 	})
+	const claimPayout = options.claimAuctionPayoutWinnerExact
 	const readOutcome = options.outcomes.readExact.bind(options.outcomes)
 	const authorize = options.federation.authorize.bind(options.federation)
 	const recoveryStore: DemoSigAllRecoveryStore = Object.freeze({
@@ -1044,6 +1101,7 @@ export function createDemoMaintainerOfflineExecutor(options: {
 			let record = await selected(identity)
 			assertIntegratedIdentity(identity, record)
 			const branch = branchFor(record)
+			await assertDemoMaintainerAuctionPayoutFence(branch, claimPayout)
 			const terminal = await readDemoSigAllTerminal({ store: recoveryStore, scope: scopeFor(branch), operationRoot: branch.templateDigest })
 			if (terminal !== null) {
 				const restored = await restoreDemoSigAllTerminalByIdentity({
@@ -1073,6 +1131,7 @@ export function createDemoMaintainerOfflineExecutor(options: {
 			const record = await selected(identity)
 			assertIntegratedIdentity(identity, record)
 			const branch = branchFor(record)
+			await assertDemoMaintainerAuctionPayoutFence(branch, claimPayout)
 			const refundPath = record.authorization === undefined && branch.role === 'refund' && nowSeconds() >= branch.locktime
 			if (!refundPath && record.authorization === undefined) refuse('DEMO_MAINTAINER_AUTHORIZATION', 'no pre-cutoff durable MAIN authorization exists to recover')
 			const value = durableRequest(refundPath ? { ...record, authorization: undefined } : record)

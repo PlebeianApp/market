@@ -4,7 +4,8 @@ const state = {
   view: null, wallet: null, validators: null, query: "", generation: 0,
   refreshPromise: null, maintenancePromise: null, actionKeys: new Set(), lastPresentation: "",
   readinessPromise: null, readinessNextAt: 0, readinessFailures: 0,
-  sellerAuctions: new Set(), approvalRevision: 0, approvalAbort: null,
+  maintenanceNextAt: 0, maintenanceFailures: 0,
+  bidDrafts: new Map(), expiredPrelockBids: [], auctionPayoutAvailability: new Map(),
 };
 const byId = (id) => document.getElementById(id);
 const short = (value) => value ? `${value.slice(0, 8)}…${value.slice(-6)}` : "—";
@@ -40,14 +41,11 @@ function r20RuntimeReady(config = state.config) {
   return config?.threshold_custody === true && config.browser_threshold_wallet_ready === true
     && config.browser_threshold_admission_ready === true && config.recovery_only === false;
 }
-function revokeReadinessConsent() {
-  // The accepted seller UI owns consent/cancellation and wallet serialization.
-  if (typeof stopSellerApprovals === "function") stopSellerApprovals("Runtime readiness changed. Review the auction and opt in again.");
-}
 function invalidateReadinessIdentity() {
-  revokeReadinessConsent(); state.generation += 1;
+  state.generation += 1;
   // Retire the controller without discarding a tab-local private identity.
-  state.actor = ""; state.friday = null; state.wallet = null;
+  state.actor = ""; state.friday = null; state.wallet = null; state.expiredPrelockBids = [];
+  state.maintenanceNextAt = 0; state.maintenanceFailures = 0;
   byId("actor").textContent = "Disconnected";
 }
 function readinessIdentityError() {
@@ -85,7 +83,7 @@ async function refreshReadiness() {
       const identityChanged = state.releasePins && JSON.stringify(r20Pins(state.releasePins)) !== JSON.stringify(r20Pins(pins));
       const ready = r20RuntimeReady(config);
       if (identityChanged) invalidateReadinessIdentity();
-      else if (wasReady !== ready) revokeReadinessConsent();
+      else if (wasReady && !ready) state.maintenanceNextAt = 0;
       state.config = config; state.releasePins = pins;
       // Valid false can be backend warmup, not a transport failure. Keep two
       // observations inside its continuity window, even after slow collection.
@@ -98,7 +96,7 @@ async function refreshReadiness() {
       return ready;
     } catch (error) {
       if (error.identityFault) invalidateReadinessIdentity();
-      else if (wasReady) revokeReadinessConsent();
+      else if (wasReady) state.maintenanceNextAt = 0;
       state.config = { ...state.config, browser_threshold_wallet_ready: false, browser_threshold_admission_ready: false };
       state.readinessFailures = Math.min(state.readinessFailures + 1, 4);
       state.readinessNextAt = readinessNow() + Math.min(30000, 4000 * 2 ** (state.readinessFailures - 1));
@@ -156,30 +154,12 @@ async function connectDemo() {
   message(retained ? "Reconnected this tab's existing demo identity. Reloading still loses its key."
     : "Created a fresh tab-local Nostr identity. Reloading loses this demo key; use NIP-07 for durable identity.", "warning");
 }
-function stopSellerApprovals(detail = "Seller approvals are off. Use an auction's opt-in or the manual button.") {
-  state.approvalRevision += 1;
-  state.approvalAbort?.abort(); state.approvalAbort = null;
-  state.sellerAuctions.clear();
-  byId("seller-approval-status").textContent = detail;
-}
 function disconnect() {
-  stopSellerApprovals(); state.generation += 1;
-  state.actor = ""; state.signer = null; state.friday = null; state.wallet = null; state.identityMode = "";
+  state.generation += 1;
+  state.bidDrafts.clear(); state.auctionPayoutAvailability.clear();
+  state.actor = ""; state.signer = null; state.friday = null; state.wallet = null; state.identityMode = ""; state.expiredPrelockBids = [];
+  state.maintenanceNextAt = 0; state.maintenanceFailures = 0;
   byId("actor").textContent = "Disconnected"; updateControls();
-}
-function toggleSellerApprovals(auctionId) {
-  requireR20Ready();
-  const auction = state.view?.state?.auctions?.[auctionId];
-  if (!state.friday || auction?.seller !== state.actor || auction.status !== "open") throw new Error("Connect the auction's seller first.");
-  // A changed selection never revives an in-flight attempt, even if toggled back.
-  state.approvalRevision += 1; state.approvalAbort?.abort(); state.approvalAbort = null;
-  if (state.sellerAuctions.has(auctionId)) state.sellerAuctions.delete(auctionId);
-  else state.sellerAuctions.add(auctionId);
-  byId("seller-approval-status").textContent = state.sellerAuctions.size
-    ? `Approvals enabled for ${state.sellerAuctions.size} selected auction(s), actor ${short(state.actor)}, deployment ${state.releasePins.deployment_id}. Each bid still needs the signer's consent. Keep this tab open.`
-    : "Seller approvals stopped. Pending returns and payouts still import automatically.";
-  renderAuctions();
-  void serviceSellerApprovals(false);
 }
 
 async function sign(kind, tags, content) {
@@ -194,7 +174,6 @@ function updateControls() {
   byId("faucet").disabled = !ready;
   byId("process-payments").disabled = !ready;
   byId("disconnect").disabled = !state.signer;
-  byId("stop-seller-approvals").disabled = !state.approvalAbort && state.sellerAuctions.size === 0;
   byId("create-submit").disabled = !ready;
   const policy = state.config?.fake_funding_policy;
   if (policy) {
@@ -203,36 +182,38 @@ function updateControls() {
   }
 }
 
-async function runMaintenance(capturedScope) {
+async function runMaintenance(capturedScope, { force = false } = {}) {
   if (!state.friday || !capturedScope) return { refunds: 0, winnerPayments: 0 };
-  if (state.maintenancePromise) return { refunds: 0, winnerPayments: 0 };
+  if (state.maintenancePromise) {
+    const prior = await state.maintenancePromise;
+    if (!force) return prior;
+  }
+  const now = readinessNow();
+  if (!force && now < state.maintenanceNextAt) return { refunds: 0, winnerPayments: 0 };
   const controller = state.friday;
   state.maintenancePromise = (async () => {
-    const imported = await controller.importAvailable();
-    if (capturedScope !== scope()) throw new Error("Signer or deployment changed during wallet maintenance.");
-    if (imported.refunds || imported.winnerPayments) {
-      message(`Imported ${imported.refunds} certified outbid return(s) and ${imported.winnerPayments} seller payout(s).`, "success");
+    try {
+      const imported = await controller.importAvailable();
+      if (capturedScope !== scope()) throw new Error("Signer or deployment changed during wallet maintenance.");
+      state.maintenanceFailures = 0;
+      state.maintenanceNextAt = readinessNow() + 15000;
+      if (imported.refunds || imported.winnerPayments) {
+        message(`Imported ${imported.refunds} certified outbid return(s) and ${imported.winnerPayments} seller payout(s).`, "success");
+      }
+      return imported;
+    } catch (error) {
+      state.maintenanceFailures = Math.min(state.maintenanceFailures + 1, 4);
+      state.maintenanceNextAt = readinessNow() + Math.min(120000, 15000 * 2 ** (state.maintenanceFailures - 1));
+      if (force) throw error;
+      return { refunds: 0, winnerPayments: 0 };
     }
-    return imported;
   })().finally(() => { state.maintenancePromise = null; });
   return state.maintenancePromise;
 }
-async function waitForApproval(signal, read) {
-  if (!signal) return read();
-  signal.throwIfAborted();
-  let onAbort;
-  const cancelled = new Promise((_, reject) => {
-    onAbort = () => reject(new Error("Seller approval cancelled."));
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-  try { return await Promise.race([read(), cancelled]); }
-  finally { signal.removeEventListener("abort", onAbort); }
-}
-async function runExclusiveMaintenance(capturedScope, operation, signal) {
+async function runExclusiveMaintenance(capturedScope, operation) {
   while (state.maintenancePromise) {
-    await waitForApproval(signal, () => state.maintenancePromise.catch(() => undefined));
+    await state.maintenancePromise.catch(() => undefined);
   }
-  signal?.throwIfAborted();
   if (capturedScope !== scope()) throw new Error("Signer or deployment changed before wallet maintenance.");
   const controller = state.friday;
   if (!controller) throw new Error("Connect a signer first.");
@@ -253,20 +234,44 @@ async function refresh() {
       const controller = state.friday;
       const currentActor = await controller.actor();
       if (generation !== state.generation || controller !== state.friday) return;
-      if (currentActor !== state.actor) { disconnect(); message("Signer account changed. Reconnect and opt in again.", "warning"); render(); return; }
+      if (currentActor !== state.actor) { disconnect(); message("Signer account changed. Reconnect before continuing.", "warning"); render(); return; }
       await runMaintenance(capturedScope);
-      // Do not open another wallet while an approval pass owns maintenance.
-      // Refresh still renders committed auctions and leaves Stop available.
       if (!state.maintenancePromise) {
         const balance = await runExclusiveMaintenance(capturedScope, (held) => held.balance());
         if (generation !== state.generation || capturedScope !== scope()) return;
         state.wallet = balance;
       }
+      const ownedOpenAuctions = Object.values(state.view?.state?.auctions || {})
+        .filter((auction) => auction.status === "open" && auction.seller === state.actor);
+      const retained = new Set(ownedOpenAuctions.map((auction) => auction.id));
+      for (const id of state.auctionPayoutAvailability.keys()) {
+        if (!retained.has(id)) state.auctionPayoutAvailability.delete(id);
+      }
+      await Promise.all(ownedOpenAuctions.map(async (auction) => {
+        if (state.auctionPayoutAvailability.get(auction.id) === "ready") return;
+        try {
+          const payout = await controller.readAuctionPayout(auction.id);
+          if (generation !== state.generation || controller !== state.friday) return;
+          state.auctionPayoutAvailability.set(auction.id, payout === null ? "missing" : "ready");
+        } catch {
+          if (generation === state.generation && controller === state.friday) state.auctionPayoutAvailability.set(auction.id, "unknown");
+        }
+      }));
     } else state.wallet = null;
     render();
-    void serviceSellerApprovals(false);
   })().catch((error) => { message(error.message, "error"); throw error; }).finally(() => { state.refreshPromise = null; });
   return state.refreshPromise;
+}
+
+async function refreshCommittedAuction(auctionId, minimumHeight, attempts = 3) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (state.refreshPromise) await state.refreshPromise.catch(() => undefined);
+    await refresh();
+    const height = Number(state.view?.state?.height);
+    const auction = state.view?.state?.auctions?.[auctionId];
+    if (Number.isSafeInteger(height) && height >= minimumHeight && auction) return auction;
+  }
+  return null;
 }
 
 function renderWallet() {
@@ -281,12 +286,47 @@ function renderWallet() {
     el("small", "", `${ui.formatSats(wallet.pending)} pending · ${ui.formatSats(wallet.unresolved)} unresolved`),
     el("small", "receipt", `Actor ${short(state.actor)} · ${state.identityMode}`));
   target.append(card);
+  const review = el("button", "button button-secondary", "Review expired bid intents");
+  review.type = "button"; review.disabled = !state.friday || state.actionKeys.has("review-expired-prelock");
+  review.onclick = () => performAction("review-expired-prelock", review, "Checking…", async () => {
+    requireR20Ready();
+    const controller = state.friday, captured = scope();
+    if (!controller) throw new Error("Connect a signer first.");
+    const pending = await runExclusiveMaintenance(captured, (held) => held.expiredPrelockPending());
+    if (controller !== state.friday || captured !== scope()) throw new Error("Signer or deployment changed during recovery review.");
+    state.expiredPrelockBids = pending; renderWallet();
+    message(pending.length ? `${pending.length} expired pre-lock bid intent(s) need review.` : "No expired pre-lock bid intents were found.", pending.length ? "warning" : "success");
+  }).catch(() => undefined);
+  target.append(review);
+  for (const pending of state.expiredPrelockBids) {
+    const recovery = el("div", "note");
+    recovery.append(el("strong", "", `Expired bid intent · ${ui.formatSats(pending.bidAmount)}`),
+      el("small", "", `Auction ${pending.auctionId} · expired ${ui.formatTime(pending.expiresAt)}`),
+      el("small", "receipt", `Operation ${pending.fundingOperationId}`));
+    const discard = el("button", "button button-secondary", "Discard pre-lock intent"); discard.type = "button";
+    discard.onclick = () => performAction(`discard-prelock:${pending.fundingOperationId}`, discard, "Verifying…", async () => {
+      if (!window.confirm(`Discard expired pre-lock intent ${pending.fundingOperationId} for auction ${pending.auctionId}? This is allowed only if no seller plan, payment lock or cancellation journal exists.`)) return;
+      requireR20Ready(); const controller = state.friday, captured = scope();
+      if (!controller) throw new Error("Connect a signer first.");
+      const result = await runExclusiveMaintenance(captured, (held) => held.discardExpiredPrelockPending(pending.fundingOperationId));
+      if (controller !== state.friday || captured !== scope()) throw new Error("Signer or deployment changed during expired intent recovery.");
+      state.expiredPrelockBids = state.expiredPrelockBids.filter((entry) => entry.fundingOperationId !== result.fundingOperationId);
+      message(`Discarded expired pre-lock intent ${short(result.fundingOperationId)}. The next bid will use a new operation.`, "success");
+      await refresh();
+    }).catch(() => undefined);
+    recovery.append(discard, el("small", "fine-print", "This never cancels a locked bid. If private payment or abort state exists, recovery stops and preserves the operation."));
+    target.append(recovery);
+  }
 }
 function participantStatus(auction) {
   if (!state.actor) return { tone: "", title: "Connect to participate", detail: "A Nostr identity and browser-owned Coco wallet are required." };
-  if (auction.seller === state.actor) return auction.status === "open"
-    ? { tone: "", title: "You are the seller", detail: "Opt in below for bid-plan approvals while this tab stays open, or use the manual payment button." }
-    : { tone: "leading", title: auction.winner ? "Seller payout eligible" : "Closed without sale", detail: auction.winner ? "Import the certified winner payment into your Coco key." : "No winner payment exists." };
+  if (auction.seller === state.actor) {
+    if (auction.status !== "open") return { tone: "leading", title: auction.winner ? "Seller payout eligible" : "Closed without sale", detail: auction.winner ? "Import the certified winner payment into your Coco key." : "No winner payment exists." };
+    const payout = state.auctionPayoutAvailability.get(auction.id);
+    if (payout === "missing") return { tone: "refund", title: "Offline bidding setup incomplete", detail: "Complete the one-time auction-scoped payout setup; no per-bid seller approval is used." };
+    if (payout === "ready") return { tone: "", title: "You are the seller", detail: "The auction-scoped payout authorization lets bidders bid while you are offline." };
+    return { tone: "", title: "You are the seller", detail: "Checking the auction-scoped offline bidding authorization." };
+  }
   const bids = Object.values(state.view?.state?.bids || {}).filter((bid) => bid.auction_id === auction.id && bid.bidder === state.actor).sort((a,b) => b.committed_at-a.committed_at);
   const latest = bids[0], leading = auction.leader_bid_id && state.view?.state?.bids?.[auction.leader_bid_id]?.bidder === state.actor;
   if (auction.status === "closed" && auction.winner === state.actor) return { tone: "leading", title: "You won", detail: "Consensus selected this identity. The seller receives the winning amount." };
@@ -296,13 +336,26 @@ function participantStatus(auction) {
 }
 function renderAuctions() {
   const target = byId("auctions"), all = Object.values(state.view?.state?.auctions || {}).sort((a,b) => b.created_at-a.created_at);
+  const active = document.activeElement, focusedBid = active?.dataset?.auctionBidId ? {
+    auctionId: active.dataset.auctionBidId,
+    start: Number.isInteger(active.selectionStart) ? active.selectionStart : null,
+    end: Number.isInteger(active.selectionEnd) ? active.selectionEnd : null,
+    direction: active.selectionDirection || "none",
+  } : null;
+  let restoreBidFocus = null;
+  const draftPrefix = `${scope()}\u0000`;
+  const openIds = new Set(all.filter((auction) => auction.status === "open").map((auction) => auction.id));
+  for (const key of state.bidDrafts.keys()) {
+    if (key.startsWith(draftPrefix) && !openIds.has(key.slice(draftPrefix.length))) state.bidDrafts.delete(key);
+  }
   const auctions = ui.filterAuctions(all, state.query); target.replaceChildren(); target.setAttribute("aria-busy", "false");
   byId("market-meta").textContent = `${auctions.length} of ${all.length} committed auction(s) · app height ${state.view?.state?.height ?? "—"}`;
   if (!auctions.length) { target.append(empty("No matching auctions", state.query ? "Clear the search to view all committed auctions." : "Create the first signed auction.")); return; }
   for (const auction of auctions) {
     const card = el("article", "auction"), status = participantStatus(auction), timer = ui.countdown(Number(auction.end_time));
     card.append(el("p", "eyebrow", auction.status.toUpperCase()), el("h3", "", auction.title), el("p", "section-subtitle", `Seller ${short(auction.seller)} · ${timer.label}`));
-    if (auction.image_url) { const image = document.createElement("img"); image.className="auction-image"; image.src=auction.image_url; image.alt="Auction item"; image.loading="lazy"; image.referrerPolicy="no-referrer"; card.append(image); }
+    const imageSource = ui.imageURL(auction.image_url);
+    if (imageSource.ok && imageSource.url) { const image = document.createElement("img"); image.className="auction-image"; image.src=imageSource.url; image.alt="Auction item"; image.loading="lazy"; image.decoding="async"; image.referrerPolicy="no-referrer"; card.append(image); }
     if (auction.description) card.append(el("p", "", auction.description));
     const list = el("dl");
     [["High bid", ui.formatSats(Number(auction.high_bid))],["Increment",ui.formatSats(Number(auction.min_increment))],["Reserve",auction.reserve ? ui.formatSats(Number(auction.reserve)) : "None"],["Ends",ui.formatTime(Number(auction.end_time))],["Extension",`${Math.max(0,Number(auction.end_time)-Number(auction.original_end_time))}s`],["Winner",short(auction.winner)]].forEach(([key,value]) => list.append(el("dt","",key),el("dd","",String(value))));
@@ -310,19 +363,35 @@ function renderAuctions() {
     const actions = el("div", "actions");
     if (auction.status === "open" && state.actor && auction.seller !== state.actor) {
       const minimum = ui.minimumBid(auction), label = document.createElement("label"), input = document.createElement("input");
-      label.append(el("span","field-help","Bid amount")); input.type="number"; input.min=String(minimum ?? 1); input.step="1"; input.inputMode="numeric"; label.append(input);
-      const button = el("button","button button-primary","Authorize funded bid"); button.type="button"; button.disabled = minimum === null || !state.friday || !r20RuntimeReady(); button.onclick=()=>performAction(`bid:${auction.id}`,button,"Authorizing…",()=>placeBid(auction.id,exactInteger(input.value,"Bid amount",minimum ?? 1)));
+      const draftKey = `${scope()}\u0000${auction.id}`;
+      label.append(el("span","field-help","Bid amount")); input.type="text"; input.pattern="[0-9]*"; input.autocomplete="off"; input.spellcheck=false; input.inputMode="numeric"; input.dataset.auctionBidId=auction.id; input.value=state.bidDrafts.get(draftKey) || ""; label.append(input);
+      const validate = () => { const parsed = ui.bidAmount(input.value, minimum); state.bidDrafts.set(draftKey, input.value); input.setCustomValidity?.(parsed.ok ? "" : parsed.reason); input.setAttribute("aria-invalid", String(input.value !== "" && !parsed.ok)); };
+      input.oninput=validate; validate();
+      const button = el("button","button button-primary","Authorize funded bid"); button.type="button"; button.disabled = minimum === null || !state.friday || !r20RuntimeReady(); button.onclick=()=>performAction(`bid:${auction.id}`,button,"Authorizing…",async()=>{const parsed=ui.bidAmount(input.value,minimum);if(!parsed.ok)throw new Error(parsed.reason);await placeBid(auction.id,parsed.amount);state.bidDrafts.delete(draftKey);});
+      if (focusedBid?.auctionId === auction.id) restoreBidFocus = input;
       actions.append(label,button);
     }
-    if (auction.status === "open" && auction.seller === state.actor) {
-      const enabled = state.sellerAuctions.has(auction.id);
-      const approval = el("button", "button button-secondary", enabled ? "Stop bid-plan approvals" : "Enable bid-plan approvals for this auction");
-      approval.type = "button"; approval.setAttribute("aria-pressed", String(enabled));
-      approval.onclick = () => { try { toggleSellerApprovals(auction.id); } catch (error) { message(error.message, "error"); } };
-      actions.append(approval, el("small", "fine-print", "Only this auction, identity and deployment while this tab is connected. Your signer may prompt for each exact bidder and amount. Denial pauses approvals. Reload turns opt-in off."));
+    if (auction.status === "open" && auction.seller === state.actor
+      && state.auctionPayoutAvailability.get(auction.id) === "missing") {
+      const setup = el("button", "button button-secondary", "Complete offline bidding setup");
+      setup.type = "button";
+      setup.onclick = () => performAction(`auction-payout:${auction.id}`, setup, "Authorizing…", async () => {
+        await authorizeCommittedAuctionPayout(auction);
+        message(`Offline bidding is ready for auction ${auction.id}; bidders no longer need this seller tab.`, "success");
+        renderAuctions();
+        await refresh();
+      }).catch(() => undefined);
+      actions.append(setup);
     }
     if (auction.status === "open") actions.append(el("small","fine-print",timer.ended ? "Awaiting the R20 deterministic close trigger and committed closed state." : "Consensus time controls anti-sniping extension and close eligibility."));
     card.append(actions); target.append(card);
+  }
+  if (restoreBidFocus) {
+    restoreBidFocus.focus?.({ preventScroll: true });
+    if (focusedBid.start !== null && focusedBid.end !== null && typeof restoreBidFocus.setSelectionRange === "function") {
+      const length = restoreBidFocus.value.length;
+      restoreBidFocus.setSelectionRange(Math.min(focusedBid.start, length), Math.min(focusedBid.end, length), focusedBid.direction);
+    }
   }
 }
 function renderValidators() {
@@ -345,72 +414,33 @@ async function placeBid(auctionId, amount) {
   const leader=auction.leader_bid_id?state.view?.state?.bids?.[auction.leader_bid_id]:null; if(leader?.bidder===state.actor) throw new Error("Own raises remain fail-closed until full-pool key continuity is proven.");
   const maximumEnd=Number(auction.original_end_time)+1800;
   const result=await state.friday.placeBid({auctionId,bidAmount:amount,fullPoolAmount:amount,reservedPoolAmount:amount,replacesBidId:auction.leader_bid_id||"",locktime:maximumEnd+900});
-  message(result.status==="seller_plan_pending"?`Seller authorization pending for ${short(result.fundingOperationId)}. Ask the seller tab to service its plans, then retry this exact bid.`:`Threshold bid ${result.status}${result.committedHeight?` at height ${result.committedHeight}`:""}.`,result.status==="unknown"?"warning":"success"); await refresh();
+  message(result.status==="seller_plan_pending"
+    ? `This auction has no registered offline payout authorization. Bid ${short(result.fundingOperationId)} remains pre-lock and cannot proceed.`
+    : `Threshold bid ${result.status}${result.committedHeight?` at height ${result.committedHeight}`:""}.`,result.status==="unknown"||result.status==="seller_plan_pending"?"warning":"success"); await refresh();
 }
-async function serviceSellerApprovals(manual) {
-  if (!state.friday || !state.actor) return;
-  if (!manual && (state.maintenancePromise || state.sellerAuctions.size === 0)) return;
-  const controller = state.friday, captured = scope(), generation = state.generation;
-  const pins = JSON.stringify(state.releasePins);
-  const auctionIds = manual ? Object.values(state.view?.state?.auctions || {})
-    .filter((auction) => auction.seller === state.actor && auction.status === "open").map((auction) => auction.id)
-    : [...state.sellerAuctions];
-  if (!auctionIds.length) return;
-  const revision = state.approvalRevision, abort = new AbortController();
-  state.approvalAbort = abort; updateControls();
-  const assertActive = async () => {
-    const check = () => {
-      if (abort.signal.aborted || revision !== state.approvalRevision || generation !== state.generation
-        || captured !== scope() || controller !== state.friday || pins !== JSON.stringify(state.releasePins)) throw new Error("Seller approval cancelled: identity, deployment or consent changed.");
-      requireR20Ready();
-      for (const id of auctionIds) {
-        const auction = state.view?.state?.auctions?.[id];
-        if (auction?.seller !== state.actor || auction.status !== "open"
-          || (!manual && !state.sellerAuctions.has(id))) throw new Error("Seller auction scope changed. Review and opt in again.");
-      }
-    };
-    check();
-    const owner = await waitForApproval(abort.signal, () => controller.actor());
-    check();
-    if (owner !== state.actor) throw new Error("Signer account changed. Reconnect and opt in again.");
-  };
-  // An unavailable extension must not hold maintenance indefinitely. Late
-  // signatures are discarded; stopping cannot close an extension-owned prompt.
-  const timeout = setTimeout(() => abort.abort(), 60000);
-  try {
-    await runExclusiveMaintenance(captured, async (held) => {
-      await assertActive();
-      const plans = await waitForApproval(abort.signal, () => held.serviceSellerPlans({ auctionIds, deploymentPins: r20Pins(state.releasePins), signal: abort.signal, assertActive,
-        onPlan: (plan) => {
-          byId("seller-approval-status").textContent = `Approval requested: auction ${plan.auctionId}, bidder ${plan.bidderActor}, ${ui.formatSats(plan.bidAmount)} fake sats, operation ${plan.fundingOperationId}, expires ${ui.formatTime(plan.expiresAt)}. The signer must approve this exact plan.`;
-        } }));
-      await assertActive();
-      byId("seller-approval-status").textContent = `Registered ${plans.registered} seller plan(s). ${manual ? "Manual pass complete." : "Approvals remain enabled for the selected auctions while this tab stays open."}`;
-    }, abort.signal);
-  } catch (error) {
-    if (revision === state.approvalRevision) {
-      stopSellerApprovals(`Approvals paused: ${error.message} No automatic retry. Review the exact bid and use the manual button or opt in again. Expired plans need a fresh bidder intent.`);
-      renderAuctions();
-    }
-  } finally {
-    clearTimeout(timeout);
-    if (state.approvalAbort === abort) state.approvalAbort = null;
-    updateControls();
+async function authorizeCommittedAuctionPayout(auction) {
+  requireR20Ready(); if (!state.friday) throw new Error("Connect a signer first.");
+  if (!auction || auction.status !== "open" || auction.seller !== state.actor) throw new Error("Connect the open auction's seller first.");
+  const startingBid = exactInteger(auction.starting_bid, "Starting bid");
+  const minIncrement = exactInteger(auction.min_increment, "Minimum increment");
+  const reserve = exactInteger(auction.reserve, "Reserve", 0);
+  const originalEndTime = exactInteger(auction.original_end_time, "Original end time");
+  const existing = await state.friday.readAuctionPayout(auction.id);
+  if (existing === null) {
+    const maximumEndTime = originalEndTime + 1800;
+    await state.friday.authorizeAuctionPayout({ auctionId: auction.id, startingBid, minIncrement, reserve,
+      originalEndTime, maximumEndTime, maximumPayout: 50000, validUntil: maximumEndTime + 900 });
   }
+  state.auctionPayoutAvailability.set(auction.id, "ready");
 }
 async function servicePayments() {
   requireR20Ready(); if (!state.friday) throw new Error("Connect a signer first.");
-  // This explicit gesture cancels an automatic attempt and starts one manual
-  // pass. It never grants future background signing authority.
-  stopSellerApprovals("Manual seller approval pass requested. Automatic approvals are off.");
-  await serviceSellerApprovals(true);
-  await runMaintenance(scope());
+  await runMaintenance(scope(), { force: true });
   await refresh();
 }
 
 byId("login").onclick=()=>connect().catch((error)=>message(error.message,"error"));
-byId("disconnect").onclick=()=>{disconnect();render();message("Disconnected. Seller approvals are off; reconnect to recover payments.");};
-byId("stop-seller-approvals").onclick=()=>{stopSellerApprovals("Seller approvals stopped. An extension prompt may remain open; any late signature is discarded locally. Already-submitted plans remain recoverable.");render();};
+byId("disconnect").onclick=()=>{disconnect();render();message("Disconnected. Reconnect to recover returns and payouts.");};
 byId("demo-login").onclick=()=>connectDemo().catch((error)=>message(error.message,"error"));
 byId("refresh").onclick=()=>refresh().catch(()=>undefined);
 byId("auction-search").oninput=(event)=>{state.query=event.target.value;renderAuctions();};
@@ -420,13 +450,22 @@ byId("faucet").onclick=(event)=>performAction("fund",event.currentTarget,"Fundin
   const pending=await state.friday.pendingFakeFunding(); if(pending&&(pending.amount!==parsed.amount||pending.policyDigest!==policy.digest)) throw new Error(`Unresolved funding ${short(pending.operationId)} must retry its original amount and policy.`);
   const result=await state.friday.fundFake(parsed.amount); message(`${ui.formatSats(parsed.amount)} fake sats finalized in Coco (${short(result.operationId)}).`,"success"); byId("faucet-amount").value=""; await refresh();
 }).catch(()=>undefined);
-byId("process-payments").onclick=(event)=>performAction("maintenance",event.currentTarget,"Servicing…",servicePayments).catch(()=>undefined);
+byId("process-payments").onclick=(event)=>performAction("maintenance",event.currentTarget,"Importing…",servicePayments).catch(()=>undefined);
 byId("create-form").onsubmit=(event)=>{event.preventDefault();return performAction("create",byId("create-submit"),"Signing…",async()=>{
   requireR20Ready(); if(!state.friday) throw new Error("Connect a signer first.");
   const duration=exactInteger(byId("duration").value,"Duration",3),starting=exactInteger(byId("starting").value,"Starting bid"),increment=exactInteger(byId("increment").value,"Minimum increment"),reserve=byId("reserve").value.trim()===""?0:exactInteger(byId("reserve").value,"Reserve",0);
+  const image=ui.imageURL(byId("image").value); if(!image.ok) throw new Error(image.reason);
   if(duration>3600) throw new Error("Duration may not exceed 3,600 seconds."); const sellerPaymentPublicKey=await state.friday.sellerPaymentPublicKey();
-  const id=`auction-${Date.now()}`; const signed=await sign(28640,[["t","plebeian-auctions-poc"],["auction",id]],{auction_id:id,title:byId("title").value,description:byId("description").value,image_url:byId("image").value,duration_seconds:duration,starting_bid:starting,min_increment:increment,reserve,funding_mode:"threshold_sigall_v1",seller_coco_payment_public_key:sellerPaymentPublicKey});
-  const result=await api("/api/event",{method:"POST",body:JSON.stringify(signed)}); message(`Auction committed at height ${result.height}.`,"success"); byId("create-form").reset(); await refresh();
+  const id=`auction-${Date.now()}`; const signed=await sign(28640,[["t","plebeian-auctions-poc"],["auction",id]],{auction_id:id,title:byId("title").value,description:byId("description").value,image_url:image.url,duration_seconds:duration,starting_bid:starting,min_increment:increment,reserve,funding_mode:"threshold_sigall_v1",seller_coco_payment_public_key:sellerPaymentPublicKey});
+  const result=await api("/api/event",{method:"POST",body:JSON.stringify(signed)});
+  const committed=await refreshCommittedAuction(id,result.height);
+  if(!committed||committed.status!=="open"||committed.seller!==state.actor
+    ||committed.starting_bid!==starting||committed.min_increment!==increment||committed.reserve!==reserve){
+    throw new Error("Committed auction differs from the signed listing; offline payout authorization was not created.");
+  }
+  await authorizeCommittedAuctionPayout(committed);
+  message(`Auction committed at height ${result.height}. One auction-scoped payout authorization now covers bids while the seller is offline.`,"success");
+  byId("create-form").reset(); await refresh();
 }).catch(()=>undefined);};
 
 (async function boot(){

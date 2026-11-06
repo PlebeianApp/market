@@ -33,6 +33,7 @@ const ID = /^[A-Za-z0-9_-]{1,160}$/
 // long enough to span that first degraded-consensus round.
 const NEXT_HEADER_ATTEMPTS = 100
 const NEXT_HEADER_RETRY_MS = 100
+const COMET_RPC_READ_TIMEOUT_MS = 5_000
 
 export interface ConsensusBid {
 	id: string
@@ -73,6 +74,8 @@ export interface ConsensusAuction {
 	status: string
 	leader_bid_id?: string
 	high_bid?: number
+	starting_bid?: number
+	min_increment?: number
 	reserve?: number
 	original_end_time?: number
 	end_time?: number
@@ -114,10 +117,10 @@ export interface DemoParticipantStateObservation {
 }
 
 export interface DemoParticipantConsensusReader {
-	readChainId(): Promise<string>
-	readCommit(height: number): Promise<DemoParticipantCommitObservation>
-	readBlock(height: number): Promise<DemoParticipantBlockObservation>
-	readCurrentState(): Promise<DemoParticipantStateObservation>
+	readChainId(signal?: AbortSignal): Promise<string>
+	readCommit(height: number, signal?: AbortSignal): Promise<DemoParticipantCommitObservation>
+	readBlock(height: number, signal?: AbortSignal): Promise<DemoParticipantBlockObservation>
+	readCurrentState(signal?: AbortSignal): Promise<DemoParticipantStateObservation>
 }
 
 export interface DemoCometDisplacementVerifierOptions {
@@ -205,7 +208,7 @@ export async function authenticatedDemoCometState(
  signal?: AbortSignal,
 ): Promise<{ observation: DemoParticipantStateObservation; bindingCommit: DemoCanonicalCommitV1 }> {
 	if (signal?.aborted) throw new Error('Comet health observation aborted')
- const observation = await reader.readCurrentState()
+ const observation = await reader.readCurrentState(signal)
  if (signal?.aborted) throw new Error('Comet health observation aborted')
 	if (!Number.isSafeInteger(observation.queryHeight) || observation.queryHeight < minimumHeight
 		|| observation.state.height !== observation.queryHeight || !HEX_32.test(observation.appHash)) {
@@ -229,7 +232,7 @@ export async function authenticatedDemoCometState(
 	for (let attempt = 0; attempt < NEXT_HEADER_ATTEMPTS; attempt++) {
   if (signal?.aborted) throw new Error('Comet health observation aborted')
 		try {
-			binding = await reader.readCommit(observation.queryHeight + 1)
+			binding = await reader.readCommit(observation.queryHeight + 1, signal)
 			break
 		} catch (error) {
 			lastError = error
@@ -369,18 +372,21 @@ export function createDemoCometAdmissionConsensus(
 				fail('participant-local state does not contain the requested open threshold auction')
 			}
 			const leaderBidId = auction.leader_bid_id ?? ''
+			const sellerActor = auction.seller
 			const sellerPaymentPublicKey = auction.seller_coco_payment_public_key ?? ''
 			if (!Number.isSafeInteger(state.height) || state.height < 1
 				|| (leaderBidId !== '' && !HEX_32.test(leaderBidId))
+				|| (sellerActor !== undefined && !HEX_32.test(sellerActor))
 				|| !/^(?:02|03)[0-9a-f]{64}$/.test(sellerPaymentPublicKey)) {
-				fail('participant-local leader, seller payment key, or height is malformed')
+				fail('participant-local leader, seller actor, seller payment key, or height is malformed')
 			}
 			return {
-				leaderBidId, sellerPaymentPublicKey, height: state.height,
+				leaderBidId, ...(sellerActor === undefined ? {} : { sellerActor }),
+				sellerPaymentPublicKey, height: state.height,
 				evidenceDigest: bytesToHex(sha256(utf8ToBytes(JSON.stringify([
 					'COCO_DEMO_ADMISSION_CONSENSUS_EVIDENCE_V1', chainId, state.height, stateResult.observation.appHash,
 					stateResult.bindingCommit.height, stateResult.bindingCommit.blockHash, request.auctionId, leaderBidId,
-					sellerPaymentPublicKey,
+					sellerActor ?? '', sellerPaymentPublicKey,
 				])))),
 			}
 		},
@@ -394,8 +400,10 @@ function cometHex(value: unknown, label: string, bytes: number): string {
 	return value.toLowerCase()
 }
 
-async function rpcJson(fetchImpl: typeof fetch, url: URL): Promise<Record<string, any>> {
-	const response = await fetchImpl(url, { headers: { accept: 'application/json' } })
+async function rpcJson(fetchImpl: typeof fetch, url: URL, signal?: AbortSignal): Promise<Record<string, any>> {
+	const requestTimeout = AbortSignal.timeout(COMET_RPC_READ_TIMEOUT_MS)
+	const boundedSignal = signal === undefined ? requestTimeout : AbortSignal.any([signal, requestTimeout])
+	const response = await fetchImpl(url, { headers: { accept: 'application/json' }, signal: boundedSignal })
 	if (!response.ok) fail(`local Comet RPC returned HTTP ${response.status}`)
 	const envelope = await response.json() as Record<string, unknown>
 	if (envelope.error !== undefined || envelope.result === null || typeof envelope.result !== 'object') fail('local Comet RPC returned an error envelope')
@@ -411,13 +419,13 @@ export function createLoopbackCometReader(endpoint = 'http://127.0.0.1:26657', f
 		fail('participant Comet RPC must be an exact credential-free 127.0.0.1 HTTP endpoint')
 	}
 	return Object.freeze({
-		async readChainId() {
-			const result = await rpcJson(fetchImpl, new URL('/status', base))
+		async readChainId(signal?: AbortSignal) {
+			const result = await rpcJson(fetchImpl, new URL('/status', base), signal)
 			return exactText(String(result.node_info?.network ?? ''), 'local chain id')
 		},
-		async readCommit(height: number) {
+		async readCommit(height: number, signal?: AbortSignal) {
 			const url = new URL('/commit', base); url.searchParams.set('height', String(height))
-			const result = await rpcJson(fetchImpl, url)
+			const result = await rpcJson(fetchImpl, url, signal)
 			if (result.canonical !== true) fail(`commit ${height} is not canonical`)
 			const header = result.signed_header?.header
 			const commit = result.signed_header?.commit
@@ -431,18 +439,18 @@ export function createLoopbackCometReader(endpoint = 'http://127.0.0.1:26657', f
 					.map((signature) => cometHex(signature.validator_address, 'validator address', 20).toUpperCase()),
 			}
 		},
-		async readBlock(height: number) {
+		async readBlock(height: number, signal?: AbortSignal) {
 			const url = new URL('/block', base); url.searchParams.set('height', String(height))
-			const result = await rpcJson(fetchImpl, url)
+			const result = await rpcJson(fetchImpl, url, signal)
 			if (String(result.block?.header?.height) !== String(height)) fail(`block ${height} is malformed`)
 			return {
 				height, blockHash: cometHex(result.block_id?.hash, 'block hash', 32),
 				transactions: (result.block?.data?.txs ?? []).map((value: string) => Uint8Array.from(Buffer.from(value, 'base64'))),
 			}
 		},
-		async readCurrentState() {
+		async readCurrentState(signal?: AbortSignal) {
 			const url = new URL('/abci_query', base); url.searchParams.set('path', '"/state"')
-			const result = await rpcJson(fetchImpl, url)
+			const result = await rpcJson(fetchImpl, url, signal)
 			if (Number(result.response?.code ?? 1) !== 0 || typeof result.response?.value !== 'string') fail('local state query failed')
 			const view = JSON.parse(Buffer.from(result.response.value, 'base64').toString('utf8')) as {
 				state?: unknown; app_hash?: unknown; canonical_state?: unknown
@@ -482,17 +490,17 @@ export function createPinnedObserverCometReader(options: {
 		return response
 	}) as typeof fetch
 	const reader = createLoopbackCometReader('http://127.0.0.1:27657', fetchImpl)
-	async function current(): Promise<void> {
-		const status = await rpcJson(fetchImpl, new URL('http://127.0.0.1:27657/status'))
+	async function current(signal?: AbortSignal): Promise<void> {
+		const status = await rpcJson(fetchImpl, new URL('http://127.0.0.1:27657/status'), signal)
 		if (status.node_info?.network !== options.chainId || status.node_info?.id !== options.nodeId
 			|| status.sync_info?.catching_up !== false || !/^[1-9][0-9]*$/.test(String(status.sync_info?.latest_block_height))
 			|| String(status.validator_info?.voting_power) !== '0') fail('observer unpinned, voting or catching up')
 	}
 	return Object.freeze({
-		async readChainId() { await current(); return options.chainId },
-		async readCommit(height: number) { await current(); return reader.readCommit(height) },
-		async readBlock(height: number) { await current(); return reader.readBlock(height) },
-		async readCurrentState() { await current(); return reader.readCurrentState() },
+		async readChainId(signal?: AbortSignal) { await current(signal); return options.chainId },
+		async readCommit(height: number, signal?: AbortSignal) { await current(signal); return reader.readCommit(height, signal) },
+		async readBlock(height: number, signal?: AbortSignal) { await current(signal); return reader.readBlock(height, signal) },
+		async readCurrentState(signal?: AbortSignal) { await current(signal); return reader.readCurrentState(signal) },
 	})
 }
 

@@ -73,6 +73,8 @@ export interface DemoFridayBrowserAcceptanceInput {
 	bidderB: PlebeianFridayBrowserController
 	seller: PlebeianFridayBrowserController
 	consensus: DemoFridayAcceptanceConsensusPort
+	reconnectAfterUnknown(request: { actor: string; fundingOperationId: string }):
+		Promise<PlebeianFridayBrowserController>
 }
 
 export interface DemoFridayBrowserAcceptanceReceiptV1 {
@@ -81,9 +83,21 @@ export interface DemoFridayBrowserAcceptanceReceiptV1 {
 	actors: { seller: string; bidderA: string; bidderB: string }
 	funding: { bidderA: number; bidderB: number }
 	outbidRefund: { actor: string; imported: number; finalBalance: number }
+	outbidRefunds: readonly [
+		{ actor: string; amount: number; imports: 1 },
+		{ actor: string; amount: number; imports: 1 },
+	]
 	antiSniping: { originalEndTime: number; endTime: number; extensionCount: number }
 	consensus: { offlineSlot: 4; onlineValidators: number; commitSignatures: number }
+	payoutAuthorization: { authorizationDigest: string; maximumPayout: 50_000 }
 	settlement: { winner: string; amount: number; sellerImports: number }
+	conservation: {
+		initialTotal: number
+		fundedTotal: number
+		finalTotal: number
+		finalSpendable: readonly [number, number, number]
+		unavailableTotal: 0
+	}
 }
 
 export interface DemoFridayFiveMemberAcceptanceInput {
@@ -123,6 +137,7 @@ export interface DemoFridayFiveMemberAcceptanceReceiptV1 {
 	]
 	antiSniping: { originalEndTime: number; endTime: number; extensionCount: number }
 	consensus: { offlineSlot: 4; onlineValidators: 3; commitSignatures: number; automaticClose: true }
+	payoutAuthorization: { authorizationDigest: string; maximumPayout: 50_000 }
 	settlement: { seller: string; winner: string; amount: number; sellerImports: 1 }
 	conservation: {
 		initialTotal: number
@@ -167,18 +182,57 @@ export function expectedDemoFridayAntiSnipingEnd(input: {
 	return Math.min(Math.max(input.priorEndTime, candidate), cap)
 }
 
+type ReconnectAfterUnknown = DemoFridayBrowserAcceptanceInput['reconnectAfterUnknown']
+
+async function authorizeAuctionPayout(
+	seller: PlebeianFridayBrowserController,
+	auction: DemoFridayAcceptanceAuctionV1,
+	policy: { startingBid: number; minIncrement: number; reserve: number; maximumEndTime: number; validUntil: number },
+): Promise<string> {
+	const request = { auctionId: auction.auctionId, startingBid: policy.startingBid,
+		minIncrement: policy.minIncrement, reserve: policy.reserve, originalEndTime: auction.originalEndTime,
+		maximumEndTime: policy.maximumEndTime, maximumPayout: 50_000, validUntil: policy.validUntil }
+	const registered = await seller.authorizeAuctionPayout(request)
+	const read = await seller.readAuctionPayout(auction.auctionId)
+	if (registered.schema !== 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_AUTHORIZATION_ENVELOPE_V1'
+		|| !HEX32.test(registered.authorizationDigest) || read === null
+		|| read.schema !== 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_AUTHORIZATION_ENVELOPE_V1'
+		|| read.authorizationDigest !== registered.authorizationDigest
+		|| read.authorization.sellerActor !== auction.seller
+		|| read.authorization.auctionId !== request.auctionId
+		|| read.authorization.startingBid !== request.startingBid
+		|| read.authorization.minIncrement !== request.minIncrement
+		|| read.authorization.reserve !== request.reserve
+		|| read.authorization.originalEndTime !== request.originalEndTime
+		|| read.authorization.maximumEndTime !== request.maximumEndTime
+		|| read.authorization.maximumPayout !== request.maximumPayout
+		|| read.authorization.validUntil !== request.validUntil) {
+		fail('offline auction payout authorization was not registered and re-read exactly')
+	}
+	return registered.authorizationDigest
+}
+
 async function admitBid(controller: PlebeianFridayBrowserController,
-	seller: PlebeianFridayBrowserController, request: Parameters<PlebeianFridayBrowserController['placeBid']>[0]): Promise<void> {
+	request: Parameters<PlebeianFridayBrowserController['placeBid']>[0],
+	reconnectAfterUnknown?: ReconnectAfterUnknown): Promise<PlebeianFridayBrowserController> {
 	let result = await controller.placeBid(request)
 	if (result.status === 'seller_plan_pending') {
-		const serviced = await seller.serviceSellerPlans()
-		if (!serviced.operations.includes(result.fundingOperationId)) fail('seller did not register the exact pending winner plan')
+		fail('bid fell back to the retired per-bid seller-plan path')
+	}
+	if (result.status === 'unknown') {
+		if (reconnectAfterUnknown === undefined) fail('uncertain bid requires a fresh controller recovery seam')
+		const actor = await controller.actor()
+		const recovered = await reconnectAfterUnknown({ actor, fundingOperationId: result.fundingOperationId })
+		if (recovered === controller || await recovered.actor() !== actor) {
+			fail('uncertain bid recovery did not reconstruct the same actor with a fresh controller')
+		}
+		controller = recovered
 		result = await controller.placeBid(request)
 	}
-	if (result.status === 'unknown') result = await controller.placeBid(request)
 	if (result.status !== 'admitted' || !Number.isSafeInteger(result.committedHeight) || result.committedHeight! < 1) {
 		fail(`bid did not reach authenticated admission (${result.status})`)
 	}
+	return controller
 }
 
 export async function runDemoFridayBrowserAcceptance(
@@ -197,33 +251,51 @@ export async function runDemoFridayBrowserAcceptance(
 	if (![sellerActor, bidderAActor, bidderBActor].every((value) => HEX32.test(value))
 		|| new Set([sellerActor, bidderAActor, bidderBActor]).size !== 3
 		|| !/^(?:02|03)[0-9a-f]{64}$/.test(sellerPaymentPublicKey)) fail('acceptance actors or seller payment key are invalid')
+	let bidderAController = input.bidderA, bidderBController = input.bidderB
+	let controllers = [input.seller, bidderAController, bidderBController] as const
+	const initial = await Promise.all(controllers.map(async (controller) => exactAvailableBalance(await controller.balance())))
+	if (initial.some((balance) => unavailable(balance) !== 0)) fail('acceptance wallets did not start fully available')
 	await input.consensus.createAuctionExact({ auctionId: input.auctionId, sellerActor, sellerPaymentPublicKey,
 		durationSeconds: input.durationSeconds, startingBid: input.initialBid, minIncrement: 100, reserve: 0 })
 	const created = exactAuction(await input.consensus.readAuctionExact(input.auctionId), input.auctionId)
 	if (created.seller !== sellerActor || created.status !== 'open' || created.leaderBidId !== '') fail('created auction differs from exact request')
-	const [fundedA, fundedB] = await Promise.all([input.bidderA.fundFake(10_000), input.bidderB.fundFake(10_000)])
-	if (fundedA.state !== 'finalized' || fundedB.state !== 'finalized' || fundedA.balance !== 10_000 || fundedB.balance !== 10_000) {
+	if (created.originalEndTime > Number.MAX_SAFE_INTEGER - input.maxTotalExtensionSeconds
+		- input.emergencyRecoverySeconds) fail('auction payout authorization deadline overflows')
+	const maximumEndTime = created.originalEndTime + input.maxTotalExtensionSeconds
+	const payoutAuthorizationDigest = await authorizeAuctionPayout(input.seller, created, {
+		startingBid: input.initialBid, minIncrement: 100, reserve: 0, maximumEndTime,
+		validUntil: maximumEndTime + input.emergencyRecoverySeconds,
+	})
+	const [fundedA, fundedB] = await Promise.all([bidderAController.fundFake(10_000), bidderBController.fundFake(10_000)])
+	const afterFunding = await Promise.all(controllers.map(async (controller) => exactAvailableBalance(await controller.balance())))
+	if (fundedA.state !== 'finalized' || fundedB.state !== 'finalized'
+		|| fundedA.balance !== initial[1].total + 10_000 || fundedB.balance !== initial[2].total + 10_000
+		|| afterFunding[0].total !== initial[0].total
+		|| afterFunding[1].available !== initial[1].available + 10_000
+		|| afterFunding[2].available !== initial[2].available + 10_000
+		|| afterFunding.some((balance) => unavailable(balance) !== 0)) {
 		fail('Coco fake funding did not finalize at exact balance')
 	}
 	const locktime = created.originalEndTime + input.maxTotalExtensionSeconds + input.emergencyRecoverySeconds
-	await admitBid(input.bidderA, input.seller, { auctionId: input.auctionId, bidAmount: input.initialBid,
-		fullPoolAmount: input.initialBid, reservedPoolAmount: input.initialBid, replacesBidId: '', locktime })
+	bidderAController = await admitBid(bidderAController, { auctionId: input.auctionId, bidAmount: input.initialBid,
+		fullPoolAmount: input.initialBid, reservedPoolAmount: input.initialBid, replacesBidId: '', locktime },
+	input.reconnectAfterUnknown)
 	const first = exactAuction(await input.consensus.waitForLeaderExact({ auctionId: input.auctionId,
 		actor: bidderAActor, amount: input.initialBid }), input.auctionId)
-	await admitBid(input.bidderB, input.seller, { auctionId: input.auctionId, bidAmount: input.displacingBid,
+	bidderBController = await admitBid(bidderBController, { auctionId: input.auctionId, bidAmount: input.displacingBid,
 		fullPoolAmount: input.displacingBid, reservedPoolAmount: input.displacingBid,
-		replacesBidId: first.leaderBidId, locktime })
+		replacesBidId: first.leaderBidId, locktime }, input.reconnectAfterUnknown)
 	await input.consensus.waitForLeaderExact({ auctionId: input.auctionId, actor: bidderBActor, amount: input.displacingBid })
-	const refund = await input.bidderA.importAvailable(), balanceA = await input.bidderA.balance()
+	const refund = await bidderAController.importAvailable(), balanceA = await bidderAController.balance()
 	if (refund.refunds !== 1 || balanceA.available !== 10_000 || balanceA.locked !== 0
 		|| balanceA.pending !== 0 || balanceA.unresolved !== 0 || balanceA.total !== 10_000) {
 		fail('certified displacement did not produce one exact spendable Coco refund')
 	}
 	const late = exactAuction(await input.consensus.waitUntilLateWindowExact({ auctionId: input.auctionId,
 		windowSeconds: input.lateBidWindowSeconds }), input.auctionId)
-	await admitBid(input.bidderA, input.seller, { auctionId: input.auctionId, bidAmount: input.lateBid,
+	bidderAController = await admitBid(bidderAController, { auctionId: input.auctionId, bidAmount: input.lateBid,
 		fullPoolAmount: input.lateBid, reservedPoolAmount: input.lateBid,
-		replacesBidId: late.leaderBidId, locktime })
+		replacesBidId: late.leaderBidId, locktime }, input.reconnectAfterUnknown)
 	const extended = exactAuction(await input.consensus.waitForLeaderExact({ auctionId: input.auctionId,
 		actor: bidderAActor, amount: input.lateBid }), input.auctionId)
 	const expectedExtendedEnd = expectedDemoFridayAntiSnipingEnd({ originalEndTime: late.originalEndTime,
@@ -233,6 +305,11 @@ export async function runDemoFridayBrowserAcceptance(
 	if (extended.originalEndTime !== late.originalEndTime || expectedExtendedEnd <= late.endTime
 		|| extended.endTime !== expectedExtendedEnd || extended.extensionCount !== late.extensionCount + 1) {
 		fail('committed late bid did not apply the reviewed anti-sniping extension')
+	}
+	const refundB = await bidderBController.importAvailable(), balanceB = exactAvailableBalance(await bidderBController.balance())
+	if (refundB.refunds !== 1 || refundB.winnerPayments !== 0
+		|| balanceB.available !== afterFunding[2].available || unavailable(balanceB) !== 0) {
+		fail('late displacement did not produce one exact spendable Coco refund')
 	}
 	await input.consensus.setValidatorOfflineExact(4)
 	const validators = await input.consensus.readValidatorsExact()
@@ -249,15 +326,33 @@ export async function runDemoFridayBrowserAcceptance(
 	}
 	const sellerImport = await input.seller.importAvailable()
 	if (sellerImport.winnerPayments !== 1) fail('seller did not import and acknowledge exactly one winner payment')
+	controllers = [input.seller, bidderAController, bidderBController] as const
+	const final = await Promise.all(controllers.map(async (controller) => exactAvailableBalance(await controller.balance())))
+	const initialTotal = initial.reduce((sum, balance) => sum + balance.total, 0)
+	const fundedTotal = initialTotal + 20_000
+	const finalTotal = final.reduce((sum, balance) => sum + balance.total, 0)
+	const unavailableTotal = final.reduce((sum, balance) => sum + unavailable(balance), 0)
+	const expectedAvailable = [initial[0].available + input.lateBid,
+		initial[1].available + 10_000 - input.lateBid, initial[2].available + 10_000]
+	if (finalTotal !== fundedTotal || unavailableTotal !== 0
+		|| final.some((balance, index) => balance.available !== expectedAvailable[index])) {
+		fail('final wallet vector or run-level conservation differs')
+	}
 	return Object.freeze({ schema: 'PLEBEIAN_FRIDAY_BROWSER_COCO_ACCEPTANCE_V1', auctionId: input.auctionId,
 		actors: { seller: sellerActor, bidderA: bidderAActor, bidderB: bidderBActor },
 		funding: { bidderA: fundedA.balance, bidderB: fundedB.balance },
 		outbidRefund: { actor: bidderAActor, imported: refund.refunds, finalBalance: balanceA.available },
+		outbidRefunds: [{ actor: bidderAActor, amount: input.initialBid, imports: 1 as const },
+			{ actor: bidderBActor, amount: input.displacingBid, imports: 1 as const }] as const,
 		antiSniping: { originalEndTime: extended.originalEndTime, endTime: extended.endTime,
 			extensionCount: extended.extensionCount },
 		consensus: { offlineSlot: 4 as const, onlineValidators: 3,
 			commitSignatures: Math.min(...validators.filter((value) => value.online).map((value) => value.commitSignatures)) },
-		settlement: { winner: closed.winner, amount: closed.highBid, sellerImports: sellerImport.winnerPayments } })
+		payoutAuthorization: { authorizationDigest: payoutAuthorizationDigest, maximumPayout: 50_000 as const },
+		settlement: { winner: closed.winner, amount: closed.highBid, sellerImports: sellerImport.winnerPayments },
+		conservation: { initialTotal, fundedTotal, finalTotal,
+			finalSpendable: final.map((balance) => balance.available) as [number, number, number],
+			unavailableTotal: 0 as const } })
 }
 
 type ExactBrowserBalance = Awaited<ReturnType<PlebeianFridayBrowserController['balance']>>
@@ -309,6 +404,13 @@ export async function runDemoFridayFiveMemberAcceptance(
 	if (created.seller !== sellerActor || created.status !== 'open' || created.leaderBidId !== '') {
 		fail('five-member auction differs from the exact signed create request')
 	}
+	if (created.originalEndTime > Number.MAX_SAFE_INTEGER - input.maxTotalExtensionSeconds
+		- input.emergencyRecoverySeconds) fail('five-member payout authorization deadline overflows')
+	const maximumEndTime = created.originalEndTime + input.maxTotalExtensionSeconds
+	const payoutAuthorizationDigest = await authorizeAuctionPayout(input.seller, created, {
+		startingBid: input.bidAmounts[0], minIncrement: 100, reserve: 0, maximumEndTime,
+		validUntil: maximumEndTime + input.emergencyRecoverySeconds,
+	})
 	const funded = await Promise.all(controllers.map((controller) => controller.fundFake(input.fundingAmount)))
 	const afterFunding = await Promise.all(controllers.map(async (controller) => exactAvailableBalance(await controller.balance())))
 	for (let index = 0; index < controllers.length; index += 1) {
@@ -327,7 +429,7 @@ export async function runDemoFridayFiveMemberAcceptance(
 	let priorBidId = ''
 	for (let index = 0; index < earlyBidders.length; index += 1) {
 		const amount = input.bidAmounts[index]!
-		await admitBid(earlyBidders[index]!, input.seller, { auctionId: input.auctionId, bidAmount: amount,
+		await admitBid(earlyBidders[index]!, { auctionId: input.auctionId, bidAmount: amount,
 			fullPoolAmount: amount, reservedPoolAmount: amount, replacesBidId: priorBidId, locktime })
 		const leader = exactAuction(await input.consensus.waitForLeaderExact({ auctionId: input.auctionId,
 			actor: earlyActors[index]!, amount }), input.auctionId)
@@ -345,7 +447,7 @@ export async function runDemoFridayFiveMemberAcceptance(
 	const late = exactAuction(await input.consensus.waitUntilLateWindowExact({ auctionId: input.auctionId,
 		windowSeconds: input.lateBidWindowSeconds }), input.auctionId)
 	const winningAmount = input.bidAmounts[3]
-	await admitBid(input.bidders[3], input.seller, { auctionId: input.auctionId, bidAmount: winningAmount,
+	await admitBid(input.bidders[3], { auctionId: input.auctionId, bidAmount: winningAmount,
 		fullPoolAmount: winningAmount, reservedPoolAmount: winningAmount,
 		replacesBidId: late.leaderBidId, locktime })
 	const extended = exactAuction(await input.consensus.waitForLeaderExact({ auctionId: input.auctionId,
@@ -409,6 +511,7 @@ export async function runDemoFridayFiveMemberAcceptance(
 		consensus: { offlineSlot: 4 as const, onlineValidators: 3 as const,
 			commitSignatures: Math.min(...validators.filter((value) => value.online).map((value) => value.commitSignatures)),
 			automaticClose: true as const },
+		payoutAuthorization: { authorizationDigest: payoutAuthorizationDigest, maximumPayout: 50_000 as const },
 		settlement: { seller: sellerActor, winner: bidderD, amount: winningAmount, sellerImports: 1 as const },
 		conservation: { initialTotal, fundedTotal, finalTotal,
 			finalSpendable: final.map((balance) => balance.available) as [number, number, number, number, number],

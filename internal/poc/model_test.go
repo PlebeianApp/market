@@ -316,6 +316,27 @@ func TestFridayCustodyReservationsUseCommittedTimeAndCreateEntitlements(t *testi
 	}
 }
 
+func TestAuctionImageURLPolicyAllowsOnlyBoundedCredentialFreeHTTPS(t *testing.T) {
+	t.Parallel()
+	for _, value := range []string{
+		"", "https://fastly.picsum.photos/id/1/400/300.jpg?x=1",
+		"https://www.webstaurantstore.com/images/products/large/1.jpg",
+	} {
+		if !validImageURL(value) {
+			t.Fatalf("expected image URL to be accepted: %q", value)
+		}
+	}
+	for _, value := range []string{
+		"http://example.com/item.jpg", "data:image/png;base64,AA==", "javascript:alert(1)",
+		"//example.com/item.jpg", "https://user:password@example.com/item.jpg",
+		"https://example.com/item.jpg#fragment", "https://example.com/" + strings.Repeat("a", 500),
+	} {
+		if validImageURL(value) {
+			t.Fatalf("expected image URL to be rejected: %q", value)
+		}
+	}
+}
+
 func TestFridayDeadlineIncrementReplacementAndExtensionCap(t *testing.T) {
 	t.Parallel()
 	seed := make([]byte, ed25519.SeedSize)
@@ -869,8 +890,7 @@ func TestFrostCashuAuthorityNeedsNoLegacySeedAndRejectsLegacyIssuance(t *testing
 		closed.Auctions[fixture.receipt.AuctionID].HighBid != state.Auctions[fixture.receipt.AuctionID].HighBid {
 		t.Fatalf("permissionless close changed auction outcome: %+v", closed.Auctions[fixture.receipt.AuctionID])
 	}
-	if _, err := DecodeTransaction([]byte(`{"version":1,"type":"close","actor":"` + actorForKey(fixture.actor) + `","auction_id":"abort-auction"}`));
-		err == nil || !strings.Contains(err.Error(), "invalid close transaction shape") {
+	if _, err := DecodeTransaction([]byte(`{"version":1,"type":"close","actor":"` + actorForKey(fixture.actor) + `","auction_id":"abort-auction"}`)); err == nil || !strings.Contains(err.Error(), "invalid close transaction shape") {
 		t.Fatalf("actor-bearing close transaction error = %v", err)
 	}
 	aborted, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "funding_abort", FundingAbort: &fixture.cert},

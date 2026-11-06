@@ -60,6 +60,7 @@ function signer() { return { async getPublicKey() { return actor }, async signEv
 
 function controller(calls: string[]): PlebeianFridayBrowserController { return {
 	async actor() { calls.push('actor'); return actor },
+	async authorizeAuctionPayout() { throw new Error('unused') }, async readAuctionPayout() { return null },
 	fundingPolicy() { return { schema: 'PLEBEIAN_FRIDAY_R20_FAKE_FUNDING_POLICY_V1', maxPerRequest: 10_000,
 		browserWalletAdvisoryMaxResultingBalance: 50_000,
 		digest: '3588ddbd214b3c1e57926b77a20c070249c1d468fbbe1592ff85e18daf4ae069' } },
@@ -69,6 +70,8 @@ function controller(calls: string[]): PlebeianFridayBrowserController { return {
 	async fundFake(amount) { calls.push(`fund:${amount}`); return { operationId: 'funding-1', state: 'finalized', balance: amount } },
 	async placeBid() { calls.push('bid'); return { status: 'admitted', fundingOperationId: 'funding-1', committedHeight: 1 } },
 	async serviceSellerPlans() { calls.push('plans'); return { registered: 0, operations: [] } },
+	async expiredPrelockPending() { return [] },
+	async discardExpiredPrelockPending() { throw new Error('unused') },
 	async importAvailable() { calls.push('import'); return { refunds: 0, winnerPayments: 0 } },
 	async cancelPending() { throw new Error('unused') }, async recoverCancellation() { throw new Error('unused') },
 } }

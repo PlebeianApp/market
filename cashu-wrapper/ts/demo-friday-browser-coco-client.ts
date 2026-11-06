@@ -35,6 +35,11 @@ import {
 	type DemoFridayUnsignedNostrBidV1,
 } from './demo-friday-browser-payment-state'
 import type { DemoFridayFundingAbortRecoveryCapsuleV1 } from './demo-friday-funding-abort-capsule'
+import {
+	verifyDemoFridayAuctionPayoutSelectionStatic,
+	type DemoFridayAuctionPayoutAuthorizationEnvelopeV1,
+	type DemoFridayAuctionPayoutSelectionV1,
+} from './demo-friday-auction-payout-authorization'
 import { createDemoFridayPaymentSignerFromSecret, type DemoFridayPaymentSigner } from './poc-demo-browser-signer'
 import {
 	demoFridayFundingAuthorizationUnsignedEvent,
@@ -128,6 +133,14 @@ export interface DemoFridayTrustedAuctionFundingV1 {
 	leaderBidAmount: number
 	/** Authenticated seller-prepared winner outputs, persisted independently of the package builder. */
 	winnerRequest: DemoRecipientCoordinatorRequest
+	/** Present only for a single-prompt auction catalog selection. */
+	winnerAuctionPayout?: DemoFridayAuctionPayoutBindingV1
+}
+
+export interface DemoFridayAuctionPayoutBindingV1 {
+	authorization: DemoFridayAuctionPayoutAuthorizationEnvelopeV1
+	selection: DemoFridayAuctionPayoutSelectionV1
+	keyset: DemoRecipientKeyset
 }
 
 export interface DemoFridayTrustedAuctionFundingPort {
@@ -176,6 +189,8 @@ export interface DemoFridayBrowserPublicOperationV1 {
 	winnerRecipientPublicKey: string
 	winnerRecipientCapabilityDigest: string
 	winnerOutputsDigest: string
+	winnerAuctionAuthorizationDigest?: string
+	winnerAuctionSelectionDigest?: string
 	committeePublicKey: string
 	committeeKeysetId: string
 	committeeKeysetVersion: string
@@ -230,6 +245,7 @@ export interface DemoFridayBrowserExactEnvelopeBuilderPort {
 		lockedToken: string
 		keyset: DemoRecipientKeyset
 		winnerRequest: DemoRecipientCoordinatorRequest
+		winnerAuctionPayout?: DemoFridayAuctionPayoutBindingV1
 		refundDelivery: DemoFridayBrowserRefundDeliveryV1
 		refundRequest: DemoRecipientCoordinatorRequest
 		signing: DemoFridayOperationBoundSigningV1
@@ -360,11 +376,13 @@ function exactTrustedAuctionFunding(options: {
 	request: DemoFridayBrowserFundingRequestV1
 	deployment: DemoFridayTrustedBrowserDeploymentV1
 	actor: string
+	nowSeconds: number
 }): DemoFridayTrustedAuctionFundingV1 {
 	const { value, request, deployment, actor } = options
 	if (value === null || typeof value !== 'object' || Array.isArray(value)
 		|| JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([
 			'auctionId', 'leaderActor', 'leaderBidAmount', 'leaderBidId', 'schema', 'sellerPaymentPublicKey', 'winnerRequest',
+			...(value.winnerAuctionPayout === undefined ? [] : ['winnerAuctionPayout']),
 		].sort())
 		|| value.schema !== 'PLEBEIAN_FRIDAY_TRUSTED_AUCTION_FUNDING_V1'
 		|| value.auctionId !== request.auctionId
@@ -401,15 +419,35 @@ function exactTrustedAuctionFunding(options: {
 		].sort())
 		|| capability.schema !== 'COCO_DEMO_RECIPIENT_CAPABILITY_V1'
 		|| capability.network !== deployment.authNetworkId || capability.chainId !== deployment.chainId
-		|| capability.auctionId !== request.auctionId || capability.operationId !== request.fundingOperationId
+		|| capability.auctionId !== request.auctionId
 		|| capability.role !== 'winner_settlement' || capability.mintUrl !== deployment.canonicalMintUrl
 		|| capability.unit !== 'sat' || !/^(?:02|03)[0-9a-f]{64}$/.test(capability.recipientPublicKey)
 		|| capability.recipientPublicKey !== value.sellerPaymentPublicKey
-		|| capability.outputsDigest !== demoOutputsDigest(winnerRequest.outputs)
 		|| !HEX_64.test(capability.signature)
 		|| !schnorr.verify(hexToBytes(capability.signature), hexToBytes(demoRecipientCapabilityDigest(capability)),
 			hexToBytes(capability.recipientPublicKey.slice(2)))) {
 		refuse('trusted seller recipient commitment is not exact or authentically signed')
+	}
+	if (value.winnerAuctionPayout === undefined) {
+		if (capability.operationId !== request.fundingOperationId
+			|| capability.outputsDigest !== demoOutputsDigest(winnerRequest.outputs)) {
+			refuse('operation seller recipient commitment does not bind the exact outputs')
+		}
+	} else {
+		const payout = value.winnerAuctionPayout
+		if (JSON.stringify(payout.keyset) !== JSON.stringify(deployment.keyset)) {
+			refuse('auction payout keyset differs from the pinned deployment')
+		}
+		const selection = verifyDemoFridayAuctionPayoutSelectionStatic(payout.selection, {
+			authorization: payout.authorization, keyset: payout.keyset, observedAt: options.nowSeconds,
+		})
+		if (selection.auctionId !== request.auctionId || selection.fundingOperationId !== request.fundingOperationId
+			|| selection.bidderActor !== actor || selection.bidAmount !== request.fullPoolAmount
+			|| selection.replacesBidId !== request.replacesBidId
+			|| canonicalJson(selection.outputs) !== canonicalJson(winnerRequest.outputs)
+			|| canonicalJson(payout.authorization.authorization.recipientCatalog.capability) !== canonicalJson(capability)) {
+			refuse('auction payout selection differs from the exact bid request')
+		}
 	}
 	return structuredClone(value)
 }
@@ -429,6 +467,10 @@ export function demoFridayBrowserPublicOperation(record: DemoFridayBrowserPaymen
 		winnerRecipientPublicKey: record.winnerRecipientPublicKey,
 		winnerRecipientCapabilityDigest: record.winnerRecipientCapabilityDigest,
 		winnerOutputsDigest: record.winnerOutputsDigest,
+		...(record.winnerAuctionAuthorizationDigest === undefined ? {} : {
+			winnerAuctionAuthorizationDigest: record.winnerAuctionAuthorizationDigest,
+			winnerAuctionSelectionDigest: record.winnerAuctionSelectionDigest,
+		}),
 		committeePublicKey: record.lock.committeePubkey,
 		committeeKeysetId: record.committeeKeysetId,
 		committeeKeysetVersion: record.committeeKeysetVersion, locktime: record.lock.locktime,
@@ -631,6 +673,8 @@ function assertSameRequest(
 		|| operation.winnerRecipientPublicKey !== auction.winnerRequest.capability.recipientPublicKey
 		|| operation.winnerRecipientCapabilityDigest !== winnerCapabilityDigest
 		|| operation.winnerOutputsDigest !== winnerOutputDigest
+		|| operation.winnerAuctionAuthorizationDigest !== auction.winnerAuctionPayout?.authorization.authorizationDigest
+		|| operation.winnerAuctionSelectionDigest !== auction.winnerAuctionPayout?.selection.selectionDigest
 		|| operation.keysetId !== deployment.keyset.id || operation.lock.committeePubkey !== deployment.committeePublicKey
 		|| operation.lock.locktime !== request.locktime) refuse('operation retry changed immutable funding terms')
 }
@@ -833,7 +877,7 @@ export function createDemoFridayBrowserCocoClient(options: {
 				const auction = exactTrustedAuctionFunding({
 					value: await options.auction.readExact({ auctionId: request.auctionId,
 						fundingOperationId: request.fundingOperationId, fullPoolAmount: request.fullPoolAmount }),
-					request, deployment, actor,
+					request, deployment, actor, nowSeconds: nowSeconds(),
 				})
 				const wallet = await options.walletFactory.openExact({ actor, environmentId: deployment.environmentId,
 					canonicalMintUrl: deployment.canonicalMintUrl })
@@ -859,6 +903,10 @@ export function createDemoFridayBrowserCocoClient(options: {
 						winnerRecipientPublicKey: auction.winnerRequest.capability.recipientPublicKey,
 						winnerRecipientCapabilityDigest: demoRecipientCapabilityDigest(auction.winnerRequest.capability),
 						winnerOutputsDigest: demoOutputsDigest(auction.winnerRequest.outputs),
+						...(auction.winnerAuctionPayout === undefined ? {} : {
+							winnerAuctionAuthorizationDigest: auction.winnerAuctionPayout.authorization.authorizationDigest,
+							winnerAuctionSelectionDigest: auction.winnerAuctionPayout.selection.selectionDigest,
+						}),
 						keysetId: deployment.keyset.id, denominationKeyDigest: deployment.mintSnapshot.denominationKeyDigest,
 						denominationAmounts: [...deployment.mintSnapshot.denominationAmounts],
 						mintNuts: [...deployment.mintSnapshot.nuts], inputFeePpk: 0,
@@ -928,6 +976,8 @@ export function createDemoFridayBrowserCocoClient(options: {
 							operation: demoFridayBrowserPublicOperation(operation), lockedToken,
 							keyset: deployment.keyset,
 							winnerRequest: structuredClone(auction.winnerRequest),
+							winnerAuctionPayout: auction.winnerAuctionPayout === undefined
+								? undefined : structuredClone(auction.winnerAuctionPayout),
 							refundDelivery: refund.delivery, refundRequest: refund.request,
 							signing: createDemoFridayOperationBoundSigning({ operation, paymentSigner, refundSigner,
 								nostrSigner: options.nostrSigner, lockedToken,

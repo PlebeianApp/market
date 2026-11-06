@@ -41,6 +41,12 @@ import type {
 	DemoFridayFundingAbortCapsuleStore,
 	DemoFridayFundingAbortCapsuleTerminalStore,
 } from './demo-friday-funding-abort-capsule'
+import type {
+	DemoFridayAuctionPayoutWinnerClaimV1,
+	DemoFridayAuctionPayoutWinnerOutcomeV1,
+} from './demo-friday-auction-payout-runtime'
+import type { DemoFridayAuctionPayoutSelectionV1 } from './demo-friday-auction-payout-authorization'
+import type { DemoRecipientKeyset } from './demo-sigall-recipient'
 
 function digest(value: unknown): string { return bytesToHex(sha256(utf8ToBytes(JSON.stringify(value)))) }
 
@@ -127,6 +133,12 @@ export function createDemoFridayTerminalExecutorPorts(options: {
 	terminalResponse: DemoSigAllTerminalResponsePort
 	recipientFor(template: DemoMaintainerExactBranchTemplate, recipientActorId: string): DemoMaintainerRecipientDeliveryPort
 	hasRecipientAck?(operationId: string): boolean | Promise<boolean>
+	/** Durable one-winner fence for V3 auction-scoped seller payouts. */
+	auctionPayout?: { claimWinnerExact(request: {
+		selection: DemoFridayAuctionPayoutSelectionV1
+		outcome: DemoFridayAuctionPayoutWinnerOutcomeV1
+		keyset: DemoRecipientKeyset
+	}): Promise<DemoFridayAuctionPayoutWinnerClaimV1> }
 	now?: () => number
 	nowSeconds?: () => number
 }): DemoFridayCoordinatorPorts {
@@ -180,7 +192,34 @@ export function createDemoFridayTerminalExecutorPorts(options: {
 		const noFederation: DemoMaintainerFederationPort = {
 			async authorize() { throw new Error('DEMO_FRIDAY_EXECUTOR_SIGNING: queued operation lacks durable prior authorization') },
 		}
+		const claimAuctionPayoutWinnerExact = async (selected: DemoMaintainerExactBranchTemplate): Promise<void> => {
+			if (selected.templateDigest !== template.templateDigest || selected.operationId !== template.operationId) {
+				throw new Error('DEMO_FRIDAY_EXECUTOR_PAYOUT: fence template differs from selected branch')
+			}
+			if (template.schema === 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3') {
+				if (claim.schema !== 'COCO_DEMO_INTEGRATED_TERMINAL_AUTHORITY_CLAIM_V2'
+					|| claim.cause !== 'winner' || claim.role !== 'winner_settlement'
+					|| options.auctionPayout === undefined || template.auctionPayoutSelection === undefined
+					|| template.auctionPayoutKeyset === undefined) {
+					throw new Error('DEMO_FRIDAY_EXECUTOR_PAYOUT: V3 winner lacks the authenticated payout fence')
+				}
+				await options.auctionPayout.claimWinnerExact({
+					selection: template.auctionPayoutSelection,
+					keyset: template.auctionPayoutKeyset!,
+					outcome: {
+						schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_OUTCOME_V1',
+						auctionId: claim.auctionId, winnerFundingOperationId: template.operationId,
+						winnerActor: template.bidderActorId, winningAmount: template.amount,
+						stateHeight: claim.outcomeHeight, appHash: claim.outcomeStateHash,
+						// The authenticated terminal claim certifies the closed outcome;
+						// closeTime is the exact template-bound close boundary.
+						closedAt: template.closeTime,
+					},
+				})
+			}
+		}
 		const executor = createDemoMaintainerOfflineExecutor({
+			claimAuctionPayoutWinnerExact,
 			store: options.offlineStore,
 			outcomes: { async readExact() { throw new Error('DEMO_FRIDAY_EXECUTOR_OUTCOME: queued operation lacks durable prior selection') } },
 			federation: noFederation, recoveryStore: options.recoveryStore, mint: options.mint,
@@ -190,6 +229,7 @@ export function createDemoFridayTerminalExecutorPorts(options: {
 			...(options.nowSeconds === undefined ? {} : { nowSeconds: options.nowSeconds }),
 		})
 		preparedMatches(record, await executor.readPreparedExact(identity))
+
 		return { record, lifecycle, claim, template, identity, executor, binding }
 	}
 

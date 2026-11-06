@@ -65,17 +65,20 @@ const worker = createInProcessDemoAdmissionParticipant({
 			}
 			const authenticated = await authenticatedDemoCometState(reader, validatorsHash, 1)
 			const auction = authenticated.observation.state.auctions?.[request.auctionId]
+			const sellerActor = auction?.seller
 			const sellerPaymentPublicKey = auction?.seller_coco_payment_public_key ?? ''
-			if (!/^(?:02|03)[0-9a-f]{64}$/.test(sellerPaymentPublicKey)) {
-				throw new Error('DEMO_ADMISSION_WORKER_CONSENSUS: committed auction lacks the direct Coco seller key')
+			if ((sellerActor !== undefined && !/^[0-9a-f]{64}$/.test(sellerActor))
+				|| !/^(?:02|03)[0-9a-f]{64}$/.test(sellerPaymentPublicKey)) {
+				throw new Error('DEMO_ADMISSION_WORKER_CONSENSUS: committed auction lacks the seller actor or direct Coco seller key')
 			}
 			return {
-				leaderBidId: auction?.leader_bid_id ?? '', sellerPaymentPublicKey,
+				leaderBidId: auction?.leader_bid_id ?? '',
+				...(sellerActor === undefined ? {} : { sellerActor }), sellerPaymentPublicKey,
 				height: authenticated.observation.queryHeight,
 				evidenceDigest: digest({
 					chainId, validatorsHash, participantId, auctionId: request.auctionId,
 					height: authenticated.observation.queryHeight, appHash: authenticated.observation.appHash,
-					leaderBidId: auction?.leader_bid_id ?? '', sellerPaymentPublicKey,
+					leaderBidId: auction?.leader_bid_id ?? '', sellerActor: sellerActor ?? '', sellerPaymentPublicKey,
 				}),
 			}
 		},

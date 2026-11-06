@@ -1,16 +1,21 @@
 import { describe, expect, test } from 'bun:test'
-import { secp256k1 } from '@noble/curves/secp256k1.js'
+import { secp256k1, schnorr } from '@noble/curves/secp256k1.js'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
 
 import {
+	createDemoFridayBrowserAuctionPayoutHttp,
 	createDemoFridayBrowserSellerPlanIntentHttp,
 	createDemoFridayBrowserSellerPlanHttp,
 	createDemoFridayBrowserTrustedAuctionFundingHttp,
 	createDemoFridayBrowserTrustedDeploymentHttp,
 } from './demo-friday-browser-trust-http'
 import type { DemoFridaySellerWinnerPlanEnvelopeV1, DemoFridaySellerWinnerPlanPublicV1 } from './demo-friday-browser-coco-seller-plan'
+import type { DemoFridaySellerOpeningRefV1 } from './demo-friday-browser-coco-seller-plan'
+import { prepareDemoFridayAuctionPayoutAuthorization, selectDemoFridayAuctionPayout } from './demo-friday-auction-payout-authorization'
+import type { DemoRecipientPrivateRecord } from './demo-sigall-recipient'
 import { demoDenominationKeyDigest, demoOutputsDigest } from './demo-sigall-settlement'
+import { createDemoFridayPaymentSignerFromSecret } from './poc-demo-browser-signer'
 
 const origin = 'https://172.105.64.142'
 const point = (value: number) => bytesToHex(secp256k1.getPublicKey(hexToBytes(value.toString(16).padStart(64, '0')), true))
@@ -121,5 +126,100 @@ describe('Friday trusted browser same-origin HTTP ports', () => {
 		await expect(plans.readExact({ sellerActor: '11'.repeat(32), auctionId: 'auction-1', fundingOperationId: 'funding-1' }))
 			.rejects.toThrow(/unexpected fields/)
 		expect(() => createDemoFridayBrowserTrustedDeploymentHttp({ origin: 'http://127.0.0.1' })).toThrow(/HTTPS origin/)
+	})
+
+	test('accepts canonical-equivalent key order for an exact auction payout selection', async () => {
+		const sellerSecret = hexToBytes('13'.padStart(64, '0'))
+		const sellerActor = bytesToHex(schnorr.getPublicKey(sellerSecret))
+		const recipient = createDemoFridayPaymentSignerFromSecret(hexToBytes('12'.padStart(64, '0')))
+		const rows = new Map<string, DemoRecipientPrivateRecord<DemoFridaySellerOpeningRefV1>>()
+		try {
+			const keyset = { id: '00aabbccddeeff11', unit: 'sat' as const, keys }
+			const sellerPaymentPublicKey = await recipient.getPublicKey()
+			const sign = (unsigned: { pubkey: string; created_at: number; kind: number; tags: string[][]; content: string }) => {
+				const id = bytesToHex(sha256(utf8ToBytes(JSON.stringify([
+					0, unsigned.pubkey, unsigned.created_at, unsigned.kind, unsigned.tags, unsigned.content,
+				]))))
+				return { ...structuredClone(unsigned), id, sig: bytesToHex(schnorr.sign(hexToBytes(id), sellerSecret)) }
+			}
+			const authorization = await prepareDemoFridayAuctionPayoutAuthorization({
+				scope: {
+					schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_SCOPE_V1', authNetworkId: 'friday-network',
+					chainId: 'friday-chain', auctionId: 'auction-order', sellerActor, sellerPaymentPublicKey,
+					canonicalMintUrl: origin, activeSatKeysetId: keyset.id,
+					denominationKeyDigest: demoDenominationKeyDigest(keyset.keys), startingBid: 1, minIncrement: 1,
+					reserve: 0, originalEndTime: 4_600, maximumEndTime: 5_200, maximumPayout: 3,
+					validFrom: 1_000, validUntil: 5_800,
+				},
+				keyset,
+				journal: {
+					async runExclusive<T>(_scope: string, run: () => Promise<T>): Promise<T> { return run() },
+					async load(scope) { return structuredClone(rows.get(scope) ?? null) },
+					async savePrepared(scope, record) { rows.set(scope, structuredClone(record)) },
+					async markImported() { throw new Error('unused') },
+				},
+				recipientKey: recipient,
+				nostr: { async getPublicKey() { return sellerActor }, async signEvent(value) { return sign(value) } },
+				nowSeconds: 1_000,
+			})
+			const selection = selectDemoFridayAuctionPayout({
+				authorization, keyset, nowSeconds: 1_100,
+				auction: {
+					auctionId: 'auction-order', sellerActor, sellerPaymentPublicKey, status: 'open',
+					startingBid: 1, minIncrement: 1, reserve: 0, originalEndTime: 4_600, endTime: 4_600,
+					leaderBidId: '', leaderActor: '', leaderBidAmount: 0, stateHeight: 20, appHash: 'a'.repeat(64),
+				},
+				request: { auctionId: 'auction-order', fundingOperationId: 'funding-order',
+					bidderActor: '4'.repeat(64), bidAmount: 3, replacesBidId: '' },
+			})
+			const sortedOutputKeys = selection.outputs.map((output) => ({ B_: output.B_, amount: output.amount, id: output.id }))
+			const result = await createDemoFridayBrowserTrustedAuctionFundingHttp({ origin, fetchImpl: async () => json({
+				schema: 'PLEBEIAN_FRIDAY_TRUSTED_AUCTION_FUNDING_V1', auctionId: 'auction-order',
+				leaderBidId: '', leaderActor: '', leaderBidAmount: 0, sellerPaymentPublicKey,
+				winnerRequest: { capability: structuredClone(authorization.authorization.recipientCatalog.capability),
+					outputs: sortedOutputKeys },
+				winnerAuctionPayout: { authorization, selection: { ...selection, outputs: sortedOutputKeys }, keyset },
+			}) }).readExact({ auctionId: 'auction-order', fundingOperationId: 'funding-order', fullPoolAmount: 3 })
+			expect(result.winnerRequest.outputs.map(({ amount }) => amount)).toEqual([2, 1])
+			expect(result.winnerAuctionPayout?.selection.selectionDigest).toBe(selection.selectionDigest)
+		} finally { recipient.dispose() }
+	})
+
+	test('maps exact auction authorization and winner discovery without accepting a partial claim', async () => {
+		const authorization = { schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_AUTHORIZATION_ENVELOPE_V1',
+			authorizationDigest: 'a'.repeat(64), authorization: { auctionId: 'auction-1' },
+			sellerAuthorization: { id: 'b'.repeat(64) } }
+		const selection = {
+			schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_SELECTION_V1', authorizationDigest: 'a'.repeat(64),
+			catalogOperationId: 'c'.repeat(64), auctionId: 'auction-1', fundingOperationId: 'funding-1',
+			bidderActor: 'd'.repeat(64), bidAmount: 3, replacesBidId: '', stateHeight: 41,
+			appHash: 'e'.repeat(64), selectedAt: 1_100, selectedIndexes: [0, 1], outputs,
+			recipientPublicKey: point(12), selectionDigest: 'f'.repeat(64),
+		}
+		const winner = { schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_CLAIM_V1', auctionId: 'auction-1',
+			authorizationDigest: 'a'.repeat(64), fundingOperationId: 'funding-1',
+			selectionDigest: 'f'.repeat(64), selection, outcomeHeight: 50, closedAt: 2_100 }
+		const calls: string[] = []
+		const payout = createDemoFridayBrowserAuctionPayoutHttp({ origin, fetchImpl: async (input) => {
+			const path = new URL(String(input)).pathname
+			calls.push(path)
+			if (path.endsWith('/register')) return json(authorization)
+			if (path.endsWith('/read')) return json({ schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_READ_RESULT_V1', authorization })
+			if (path.endsWith('/winner')) return json({ schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_READ_RESULT_V1', winner })
+			throw new Error(`unexpected path ${path}`)
+		} })
+		expect((await payout.registerExact(authorization as never)).authorizationDigest).toBe('a'.repeat(64))
+		expect((await payout.readExact('auction-1'))?.authorizationDigest).toBe('a'.repeat(64))
+		expect((await payout.readWinnerExact('auction-1'))?.selection.bidAmount).toBe(3)
+		expect(calls).toEqual(['/api/friday/auction-payout/register', '/api/friday/auction-payout/read',
+			'/api/friday/auction-payout/winner'])
+
+		const partial = createDemoFridayBrowserAuctionPayoutHttp({ origin, fetchImpl: async () => json({
+			schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_READ_RESULT_V1', winner: {
+				schema: winner.schema, auctionId: winner.auctionId, authorizationDigest: winner.authorizationDigest,
+				fundingOperationId: winner.fundingOperationId, selectionDigest: winner.selectionDigest,
+			},
+		}) })
+		await expect(partial.readWinnerExact('auction-1')).rejects.toThrow(/unexpected fields/)
 	})
 })
