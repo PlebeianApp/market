@@ -2,11 +2,15 @@ package poc
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+const catalogueReleaseFridayBrowserSHA256 = "6fbcb16bc2c660ed5710a19aea8d52f820966013ed8d8fdde19500a1aac5f214"
 
 func TestRemoteOfflineControlIsNotReachable(t *testing.T) {
 	t.Parallel()
@@ -53,8 +57,8 @@ func TestFridayPhoneUIHasPermanentDisclosuresAndNoVisibleRemoteFaultControl(t *t
 	handler.ServeHTTP(indexResponse, indexRequest)
 	body := indexResponse.Body.String()
 	for _, required := range []string{
-		`name="viewport"`, `Worthless fake sats only`, `3-of-4 FROST admission`,
-		`Participant-local policy over FIPS transport`, `not production or federal FIPS compliance`,
+		`name="viewport"`, `MVP · FAKE SATS`, `3-of-4 FROST monetary authorization`,
+		`jmcorgan/fips transport`, `One operator · fake sats only · not production`,
 		`id="description"`, `id="image"`, `id="increment"`, `id="faucet-amount"`,
 		`id="process-payments"`, `type="module" src="/app-bootstrap.js"`,
 	} {
@@ -81,12 +85,73 @@ func TestFridayPhoneUIHasPermanentDisclosuresAndNoVisibleRemoteFaultControl(t *t
 	if csp := indexResponse.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "img-src 'self' data: https:") {
 		t.Fatalf("Friday HTTPS item images are not bounded by the expected CSP: %q", csp)
 	}
+	if csp := indexResponse.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "connect-src 'self' wss://relay.powr.build") || strings.Contains(csp, " wss: ") || strings.Contains(csp, " wss:;") {
+		t.Fatalf("Friday Clave relay CSP is absent or broader than the reviewed relay: %q", csp)
+	}
 
 	cssRequest := httptest.NewRequest(http.MethodGet, "/styles.css", nil)
 	cssResponse := httptest.NewRecorder()
 	handler.ServeHTTP(cssResponse, cssRequest)
-	if cssResponse.Code != http.StatusOK || !strings.Contains(cssResponse.Body.String(), "@media(max-width:560px)") || !strings.Contains(cssResponse.Body.String(), "padding:.72rem 1rem") {
+	if cssResponse.Code != http.StatusOK || !strings.Contains(cssResponse.Body.String(), "@media (max-width: 700px)") || !strings.Contains(cssResponse.Body.String(), "padding: .7rem 1rem") {
 		t.Fatalf("Friday phone layout/touch target CSS is absent")
+	}
+}
+
+func TestDevelopmentNsecSignerRequiresEveryExplicitGate(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name, build, environment string
+		want                     bool
+	}{
+		{name: "all explicit development gates", build: "enabled", environment: "true", want: true},
+		{name: "ordinary release build", build: "disabled", environment: "true"},
+		{name: "missing runtime flag", build: "enabled", environment: ""},
+		{name: "false runtime flag", build: "enabled", environment: "false"},
+		{name: "near match rejected", build: "ENABLED", environment: "TRUE"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := devNsecSignerAllowed(test.build, test.environment); got != test.want {
+				t.Fatalf("devNsecSignerAllowed(%q, %q) = %v, want %v", test.build, test.environment, got, test.want)
+			}
+		})
+	}
+}
+
+func TestDevelopmentNsecConfigDefaultsOffAndCannotEscapeRemoteMode(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name string
+		api  *APIServer
+		want string
+	}{
+		{name: "ordinary local build", api: &APIServer{manifest: NetworkManifest{}}, want: `"dev_nsec_signer_enabled":false`},
+		{name: "explicit local test", api: &APIServer{manifest: NetworkManifest{}, devNsecSignerEnabled: true}, want: `"dev_nsec_signer_enabled":true`},
+		{name: "explicit remote test build", api: &APIServer{manifest: NetworkManifest{Mode: "remote"}, devNsecSignerEnabled: true}, want: `"dev_nsec_signer_enabled":true`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			handler, err := test.api.Handler()
+			if err != nil {
+				t.Fatal(err)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/config", nil))
+			if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), test.want) {
+				t.Fatalf("config status=%d body=%s, want %s", response.Code, response.Body.String(), test.want)
+			}
+		})
+	}
+}
+
+func TestEmbeddedFridayBrowserBundleMatchesCatalogueRelease(t *testing.T) {
+	t.Parallel()
+	bundle, err := staticFiles.ReadFile("static/friday-browser.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(bundle)
+	if got := hex.EncodeToString(digest[:]); got != catalogueReleaseFridayBrowserSHA256 {
+		t.Fatalf("embedded Friday browser SHA-256 = %s, want %s", got, catalogueReleaseFridayBrowserSHA256)
 	}
 }
 
@@ -193,6 +258,24 @@ func TestFridayFakeFundingPolicyGoldenIsRuntimeData(t *testing.T) {
 	}
 }
 
+func TestFridayAuctionPaymentPolicyPublishesExactBrowserAndPayoutCap(t *testing.T) {
+	t.Parallel()
+	policy := r20AuctionPaymentPolicy()
+	if policy["schema"] != r20AuctionPaymentPolicySchema || policy["max_bid_amount"] != int64(50_000) ||
+		policy["max_payout"] != int64(50_000) {
+		t.Fatalf("unexpected auction payment policy: %#v", policy)
+	}
+	if digest := r20AuctionPaymentPolicyDigest(); digest != "4d88017e3d191421aa46702ca9b6670fb324162c4c39d3ce4604bbfcfec3492b" {
+		t.Fatalf("unexpected auction payment policy digest: %s", digest)
+	}
+	if digest := r20AuctionPolicyDigest(DefaultPolicy()); digest != "257fb5bf2b414f206278ada15464030a075d6f4f51b9c2f6b965259136f9a777" {
+		t.Fatalf("unexpected one-hour auction policy digest: %s", digest)
+	}
+	if digest := r20AuctionPolicyDigest(SevenDayPolicy()); digest != "827ba464a45f6c2e3a70665e86d05a1f7465bcfe8fb8438cce6b9943da849d5e" {
+		t.Fatalf("unexpected inactive seven-day auction policy digest: %s", digest)
+	}
+}
+
 func TestPolicyRejectsBrowserUnsafeFundingIntegers(t *testing.T) {
 	t.Parallel()
 	for _, policy := range []Policy{
@@ -249,18 +332,21 @@ func TestFridayThresholdConfigPublishesExactPinsOnlyWhenActivationIsComplete(t *
 		CommitteeKeysetID: "friday-demo-frost-keyset-v2", CommitteeKeysetVersion: "2",
 		DKGRunID: "friday-demo-20261023-r20-dkg2", PublicKeyPackageSHA256: strings.Repeat("22", 32),
 		SignerRosterDigest: strings.Repeat("33", 32)}
-	releasePins := BrowserReleasePinsV1{Schema: "PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V1",
+	releasePins := BrowserReleasePinsV1{Schema: browserReleasePinsSchemaV2,
 		DeploymentID: fridayR20DeploymentID, AuthNetworkID: pins.AuthNetworkID, ChainID: pins.ChainID,
-		GenesisSHA256: pins.GenesisSHA256, CashuMintURL: pins.MintURL,
+		GenesisSHA256: pins.GenesisSHA256, ValidatorsHash: strings.Repeat("55", 32), CashuMintURL: pins.MintURL,
 		CommitteePublicKey: pins.CommitteePublicKey, CommitteeKeysetID: pins.CommitteeKeysetID,
 		CommitteeKeysetVersion: pins.CommitteeKeysetVersion, DKGRunID: pins.DKGRunID,
 		PublicKeyPackageSHA256: pins.PublicKeyPackageSHA256, SignerRosterDigest: pins.SignerRosterDigest,
-		FakeFundingPolicyDigest: "3588ddbd214b3c1e57926b77a20c070249c1d468fbbe1592ff85e18daf4ae069"}
+		FakeFundingPolicyDigest: "3588ddbd214b3c1e57926b77a20c070249c1d468fbbe1592ff85e18daf4ae069",
+		AuctionPolicyDigest:     "257fb5bf2b414f206278ada15464030a075d6f4f51b9c2f6b965259136f9a777",
+		AuctionPaymentDigest:    "4d88017e3d191421aa46702ca9b6670fb324162c4c39d3ce4604bbfcfec3492b"}
 	server := &APIServer{manifest: NetworkManifest{Schema: "PlebeianAuctionsPOCNetworkV4",
 		DeploymentID: "friday-demo-20261023-r20", ChainID: pins.ChainID, Mode: "remote",
 		CashuMintURL: pins.MintURL, CommitteePublicKey: pins.CommitteePublicKey, FundingAbortPins: &pins,
-		Policy: Policy{FaucetAmount: 10_000, FaucetCap: 50_000}},
-		browserThresholdReady: true, browserReleasePins: &releasePins, runtimeReadyProbe: func(context.Context) bool { return true }}
+		Policy: DefaultPolicy()},
+		browserThresholdReady: true, browserReleasePins: &releasePins,
+		closeTriggerReady: func() bool { return true }, runtimeReadyProbe: func(context.Context) bool { return true }}
 	handler, err := server.Handler()
 	if err != nil {
 		t.Fatal(err)
@@ -269,8 +355,13 @@ func TestFridayThresholdConfigPublishesExactPinsOnlyWhenActivationIsComplete(t *
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/config", nil))
 	body := response.Body.String()
 	for _, expected := range []string{`"browser_threshold_admission_ready":true`,
-		`"browser_threshold_wallet_ready":true`, `"deployment_id":"friday-demo-20261023-r20"`,
+		`"browser_threshold_wallet_ready":true`, `"automatic_close_healthy":true`, `"deployment_id":"friday-demo-20261023-r20"`,
 		`"auth_network_id":"friday-network-r20"`, `"dkg_run_id":"friday-demo-20261023-r20-dkg2"`,
+		`"validators_hash":"` + strings.Repeat("55", 32) + `"`,
+		`"auction_policy_digest":"257fb5bf2b414f206278ada15464030a075d6f4f51b9c2f6b965259136f9a777"`,
+		`"auction_payment_policy_digest":"4d88017e3d191421aa46702ca9b6670fb324162c4c39d3ce4604bbfcfec3492b"`,
+		`"auction_policy":{"default_duration_seconds":600,"emergency_recovery_seconds":900,"late_bid_extension_seconds":180,"late_bid_window_seconds":180,"max_duration_seconds":3600,"max_total_extension_seconds":1800,"min_duration_seconds":3,"schema":"PLEBEIAN_AUCTION_TIMING_POLICY_V1"}`,
+		`"auction_payment_policy":{"max_bid_amount":50000,"max_payout":50000,"schema":"PLEBEIAN_FRIDAY_AUCTION_PAYMENT_POLICY_V1"}`,
 		`"fake_funding_policy":{"digest":"3588ddbd214b3c1e57926b77a20c070249c1d468fbbe1592ff85e18daf4ae069","enforcement":"browser_wallet_advisory_only","max_per_request":10000,"max_resulting_balance":50000,"schema":"PLEBEIAN_FRIDAY_R20_FAKE_FUNDING_POLICY_V1"}`,
 		`"public_key_package_sha256":"` + strings.Repeat("22", 32) + `"`} {
 		if !strings.Contains(body, expected) {
@@ -280,7 +371,7 @@ func TestFridayThresholdConfigPublishesExactPinsOnlyWhenActivationIsComplete(t *
 	pinsResponse := httptest.NewRecorder()
 	handler.ServeHTTP(pinsResponse, httptest.NewRequest(http.MethodGet, "/api/browser-release-pins", nil))
 	if pinsResponse.Code != http.StatusOK || !strings.Contains(pinsResponse.Body.String(),
-		`"schema":"PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V1"`) {
+		`"schema":"PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V2"`) {
 		t.Fatalf("independent browser release pins are unavailable: %d %s", pinsResponse.Code, pinsResponse.Body.String())
 	}
 
@@ -296,6 +387,45 @@ func TestFridayThresholdConfigPublishesExactPinsOnlyWhenActivationIsComplete(t *
 	handler.ServeHTTP(policyMismatch, httptest.NewRequest(http.MethodGet, "/api/config", nil))
 	if !strings.Contains(policyMismatch.Body.String(), `"browser_threshold_admission_ready":false`) {
 		t.Fatalf("runtime config did not fail closed against changed funding policy pin: %s", policyMismatch.Body.String())
+	}
+	server.browserReleasePins.FakeFundingPolicyDigest = "3588ddbd214b3c1e57926b77a20c070249c1d468fbbe1592ff85e18daf4ae069"
+	for name, mutate := range map[string]func(){
+		"auction timing":  func() { server.browserReleasePins.AuctionPolicyDigest = strings.Repeat("44", 32) },
+		"auction payment": func() { server.browserReleasePins.AuctionPaymentDigest = strings.Repeat("44", 32) },
+	} {
+		server.browserReleasePins.AuctionPolicyDigest = r20AuctionPolicyDigest(DefaultPolicy())
+		server.browserReleasePins.AuctionPaymentDigest = r20AuctionPaymentPolicyDigest()
+		mutate()
+		mismatch := httptest.NewRecorder()
+		handler.ServeHTTP(mismatch, httptest.NewRequest(http.MethodGet, "/api/config", nil))
+		if !strings.Contains(mismatch.Body.String(), `"browser_threshold_admission_ready":false`) ||
+			!strings.Contains(mismatch.Body.String(), `"browser_threshold_wallet_ready":false`) {
+			t.Fatalf("runtime config did not fail closed against changed %s policy pin: %s", name, mismatch.Body.String())
+		}
+	}
+	server.browserReleasePins.AuctionPolicyDigest = r20AuctionPolicyDigest(SevenDayPolicy())
+	server.browserReleasePins.AuctionPaymentDigest = r20AuctionPaymentPolicyDigest()
+	server.manifest.Policy = SevenDayPolicy()
+	sevenDay := httptest.NewRecorder()
+	handler.ServeHTTP(sevenDay, httptest.NewRequest(http.MethodGet, "/api/config", nil))
+	if !strings.Contains(sevenDay.Body.String(), `"max_duration_seconds":604800`) ||
+		!strings.Contains(sevenDay.Body.String(), `"browser_threshold_admission_ready":false`) ||
+		!strings.Contains(sevenDay.Body.String(), `"browser_threshold_wallet_ready":false`) {
+		t.Fatalf("unapproved seven-day policy became operational: %s", sevenDay.Body.String())
+	}
+}
+
+func TestAuctionPolicyConfigDistinguishesRecoveryAndSevenDayCandidate(t *testing.T) {
+	legacy := r20AuctionPolicy(DefaultPolicy())
+	candidate := r20AuctionPolicy(SevenDayPolicy())
+	if legacy["max_duration_seconds"] != LegacyMaxAuctionDurationSeconds ||
+		candidate["max_duration_seconds"] != MaxAuctionDurationSeconds {
+		t.Fatalf("auction policy profiles changed: legacy=%v candidate=%v", legacy, candidate)
+	}
+	for _, key := range []string{"late_bid_window_seconds", "late_bid_extension_seconds", "max_total_extension_seconds", "emergency_recovery_seconds"} {
+		if legacy[key] != candidate[key] {
+			t.Fatalf("anti-sniping or recovery policy changed for %s: legacy=%v candidate=%v", key, legacy[key], candidate[key])
+		}
 	}
 }
 

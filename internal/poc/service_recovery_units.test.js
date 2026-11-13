@@ -52,7 +52,7 @@ test('recovery verifier rejects absent and changed exact application pins', () =
       FRIDAY_NETWORK_FACTS: '/var/lib/plebeian-auctions-friday/network-separated/network-facts.json',
       FRIDAY_DKG_RESULT: '/var/lib/plebeian-auctions-friday/separated-inputs/runtime-binding.json',
       FRIDAY_PARTICIPANT_BIN: '/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/coco-demo-frost-participant-3of4',
-      FRIDAY_TERMINAL_EXECUTOR_BIN: '/opt/plebeian-auctions-friday/releases/separated-deploy-v1/bin/plebeian-friday-terminal-executor',
+      FRIDAY_TERMINAL_EXECUTOR_BIN: '/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/bin/plebeian-friday-terminal-executor',
       FRIDAY_COORDINATOR_DB: '/var/lib/plebeian-auctions-friday/coordinator-v3/runtime/operations.sqlite3',
       FRIDAY_COORDINATOR_ANCHOR_DB: '/var/lib/plebeian-auctions-friday-anchor-separated/coordinator.sqlite3',
       FRIDAY_FUNDING_ABORT_ANCHOR_DB: '/var/lib/plebeian-auctions-friday-anchor-separated/funding-abort.sqlite3',
@@ -84,6 +84,12 @@ test('recovery verifier rejects absent and changed exact application pins', () =
       'plebeian-friday-site.service'], { encoding: 'utf8' });
     fs.writeFileSync(application, JSON.stringify(valid));
     assert.equal(run().status, 0);
+    const exactEnvironment = fs.readFileSync(environment, 'utf8');
+    fs.writeFileSync(environment, exactEnvironment.replace(
+      'sidequest-mvp-r4/bin/plebeian-friday-terminal-executor',
+      'sidequest-mvp-r4-recovery/bin/plebeian-friday-terminal-executor'));
+    assert.notEqual(run().status, 0);
+    fs.writeFileSync(environment, exactEnvironment);
     fs.writeFileSync(application, '{}');
     assert.notEqual(run().status, 0);
     fs.writeFileSync(application, JSON.stringify({ ...valid, deployment_id: 'wrong-deployment' }));

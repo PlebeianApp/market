@@ -1,49 +1,53 @@
 # Contributor snapshot provenance
 
-Public parent: `a89e0783c2761883f95f6ada26b9f3fbf486d50c` on
-`PlebeianApp/market`, `wip/auctions-mvp-checkpoint-2026-11-04`.
+## Public lineage
 
-Candidate source: local commit `7204810ae920512afe1dff14ecd505f463f60ade`,
-`recovery/r19-e2e-mvp`. Its recovery commits were `1f5a468` and `7204810`,
-following the preserved R19 baseline `5d827b2`. Those local hashes are provenance
-identifiers, not promises that the commits are reachable on GitHub.
+The prepared branch starts at the already published contributor checkpoint
+`41c7098e13fb8854abf5e304653d91ca18e23d0b` on
+`PlebeianApp/market`, branch `contrib/auctions-mvp-recovery-2026-11-06`.
+Its public parent and authorship remain intact.
 
-This contributor branch deliberately does not attach that independent local
-snapshot's history. It brings source changes onto the public parent for a
-reviewable diff and records their origin here. Existing upstream history and
-attribution are preserved. This is not a merge into the marketplace default
-branch and not a claim that private work was reviewed upstream.
+## Selected source
 
-## Included and excluded
+The source overlay is the exact tree of local commit
+`574f90b45bfe0b193f0e87e9a0e1cdaddd77bb34`, branch
+`codex/r86-terminal-fastpath`, tree
+`7c2ab1e793bea0f288cb8e087ad40135b4a5e95d`. This source line descends from
+the R77 Catalogue/Chief Design A integration and includes later payment,
+terminal, readiness and recovery corrections through R86.
 
-Included: candidate TypeScript/Go/UI sources and regression tests, the required
-embedded browser bundle, nginx route deltas and recovery unit/verifier fixtures.
-Legacy recipient-pending operation IDs are replaced with deterministic synthetic
-fixture IDs; behavior and case coverage are retained. Exact source-file hashes are recorded in `SOURCE-MANIFEST.json`.
+The local and public histories do not share a merge base because the earlier
+publication intentionally imported a sanitized source snapshot. This checkpoint
+therefore repeats that reviewable source-overlay model rather than manufacturing
+a merge or publishing local operational history.
 
-Excluded: new local baseline/live receipts, upgrade preflights and handoff plans,
-intermediate release units/verifiers, runtime state and private history. The
-tracked machine-specific `node_modules` symlink and obsolete generated
-`dist/poc-coordinator.js` are removed. Public-parent-only source is retained,
-including its Rust transcript verifier and vendored package source.
+## Deliberate exclusions
 
-The embedded browser bundle is the intentional generated-file exception; it is
-required by Go embedding and independently rebuild-checked. Vendored Coco tgz
-archives are dependency inputs inherited unchanged, not newly built binaries.
-The core pin is `60b7b070393eaad8746cb74a03c42017186da647`; the patched core and
-SQLite adapter provenance is retained in `SOURCE-PROVENANCE.md` and vendor files.
-No dependency or license claim is expanded by this branch.
+- `9ed795b1810a63d735d6c96cc23e2164f63c8dd3` (R78 profile/demo UI), which is
+  a separate candidate based on R77 and has not been reconciled with R86.
+- R87-R90 V3 signer/FIPS recovery continuations, which contain active
+  operational recovery tooling and require a separate publication review.
+- Runtime databases, journals, browser storage, wallet proofs, private keys,
+  signer shares, credentials, raw operational logs and untracked dependencies.
 
-## Publication review limits
+The selected R86 tree does contain historical public fixtures, deployment
+templates and evidence files. Their inclusion is visible in the outgoing diff;
+it does not make them current run instructions or live acceptance evidence.
+Three public-parent-only source files are retained deliberately: the Rust public
+admission transcript verifier and the vendored SQLite adapter's generated
+`dist/index.js` and `dist/index.d.ts`. Removing them is not required by R86 and
+would make the contributor snapshot less complete.
 
-Review covers the candidate delta, tracked-file inventory, common credential
-patterns, archive members and generated bundle. Synthetic test keys are not
-usable credentials and must never be reused. Existing public deployment
-fixtures contain historical host/path identifiers; they are not generic setup
-examples. Existing history is retained, not rewritten or certified secret-free.
-No secret scanner can prove that all historical data is harmless.
+## Generated and vendored material
 
-Root-level operational documents and `PUBLICATION-MANIFEST.json` remain
-historical records. They do not approve a new release or override the current
-[acceptance status](STATUS.md). No PR, deployment or external maintainer
-message is part of this publication.
+`internal/poc/static/friday-browser.js` is an intentionally tracked generated
+browser bundle. Publication review must compare it with a fresh build from the
+selected source. The tracked Coco tgz files are pinned dependency inputs; their
+archive members were inventoried during preparation, but licenses and full
+contents still require maintainer review.
+
+## Deployment relationship
+
+Conversation and recovery records identify R86 as the latest selected
+application-source release, but this preparation did not read every host or
+prove the exact installed release. Deployment evidence remains a separate gate.

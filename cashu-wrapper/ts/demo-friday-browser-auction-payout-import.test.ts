@@ -54,7 +54,9 @@ class MemoryState {
 	}
 	async saveSellerTerminalAck(record: { fundingOperationId: string }) {
 		const prior = this.acks.get(record.fundingOperationId)
-		if (prior !== undefined && JSON.stringify(prior) !== JSON.stringify(record)) throw new Error('ack conflict')
+		const confirms = prior !== undefined && prior.acknowledged === undefined && (record as any).acknowledged === true
+			&& JSON.stringify(prior.ack) === JSON.stringify((record as any).ack)
+		if (prior !== undefined && JSON.stringify(prior) !== JSON.stringify(record) && !confirms) throw new Error('ack conflict')
 		this.acks.set(record.fundingOperationId, structuredClone(record))
 	}
 }
@@ -119,21 +121,26 @@ describe('offline seller catalog terminal import', () => {
 			return { amount: output.amount, id: output.id, C_: signature.C_.toHex(true),
 				dleq: { e: bytesToHex(dleq.e), s: bytesToHex(dleq.s) } }
 		})
-		const terminal = { async readNoticeExact() { return { schema: 'PLEBEIAN_FRIDAY_COCO_TERMINAL_NOTICE_V1' as const,
+			let rejectFirstAcknowledgement = true
+			const terminal = { async readNoticeExact() { return { schema: 'PLEBEIAN_FRIDAY_COCO_TERMINAL_NOTICE_V1' as const,
 			actor: sellerActor, network: 'network', chainId: 'chain', auctionId: 'auction-1', operationId: 'funding-2',
 			role: 'winner_settlement' as const, mintUrl, amount: 300,
 			recipientCapabilityDigest: demoRecipientCapabilityDigest(authorization.authorization.recipientCatalog.capability), signatures } },
-			async acknowledgeExact() { acknowledgements += 1 } }
-		const receipt = await importDemoFridayAuctionPayoutWinner({ actor: sellerActor, environmentId: 'deployment',
+				async acknowledgeExact() { acknowledgements += 1
+					if (rejectFirstAcknowledgement) { rejectFirstAcknowledgement = false; throw new Error('ack response lost') } } }
+			await expect(importDemoFridayAuctionPayoutWinner({ actor: sellerActor, environmentId: 'deployment',
 			authorization, winner: claim, keyset, state: state as unknown as DemoFridayBrowserPaymentStatePort,
-			wallet, terminal })
-		expect(receipt).toMatchObject({ amount: 300, operationId: 'funding-2', imported: true, alreadyImported: false })
+				wallet, terminal })).rejects.toThrow(/ack response lost/)
 		expect({ walletImports, acknowledgements }).toEqual({ walletImports: 1, acknowledgements: 1 })
 		const replay = await importDemoFridayAuctionPayoutWinner({ actor: sellerActor, environmentId: 'deployment',
 			authorization, winner: claim, keyset, state: state as unknown as DemoFridayBrowserPaymentStatePort,
 			wallet, terminal })
 		expect(replay?.alreadyImported).toBe(true)
 		expect({ walletImports, acknowledgements }).toEqual({ walletImports: 1, acknowledgements: 2 })
+			expect((await importDemoFridayAuctionPayoutWinner({ actor: sellerActor, environmentId: 'deployment',
+				authorization, winner: claim, keyset, state: state as unknown as DemoFridayBrowserPaymentStatePort,
+				wallet, terminal }))?.alreadyImported).toBe(true)
+			expect({ walletImports, acknowledgements }).toEqual({ walletImports: 1, acknowledgements: 2 })
 		registryDb.close(false); anchorDb.close(false)
 	})
 })

@@ -1,0 +1,327 @@
+{
+  "public_parent": "a89e0783c2761883f95f6ada26b9f3fbf486d50c",
+  "candidate_commit": "7204810ae920512afe1dff14ecd505f463f60ade",
+  "scope": "New and changed implementation/test/template files, excluding documentation; unchanged public-parent files are inherited.",
+  "files": [
+    {
+      "path": "cashu-wrapper/ts/demo-comet-displacement-verifier.test.ts",
+      "sha256": "15d4882adbae01600ddf20b8667bf3de399aed6bde5f50a59ffb1abfca3349c0",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-comet-displacement-verifier.ts",
+      "sha256": "b0cf96aea8937e1c5b42a18953d86d567fe634b6814f7cea9966444158b62206",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-fips-admission-policy.ts",
+      "sha256": "d11689fc9039bfe774ec91e57cc627b6b52ea3b6bf63528ffc3c857bd4dc1b14",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-auction-payout-authorization.test.ts",
+      "sha256": "f23f1cd9f822812fd0643f0522f1798fbaeadd6c0851f4cfa2578e5f24c2254b",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-auction-payout-authorization.ts",
+      "sha256": "2894e3379392cd209899e8c6273153c0bfb8702e87b6f816c6f24ac789243471",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-auction-payout-freshness.test.ts",
+      "sha256": "9bd0a050dea04acf5d342171b15b3418686af3c99bfca79408f9096dabb9c13f",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-auction-payout-freshness.ts",
+      "sha256": "7b79355580b27cc2e62aca91b106746db1c7b4b25b745f9d9fdc6ed1c2accb6d",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-auction-payout-runtime.test.ts",
+      "sha256": "a7ca7f54b40473e8502f55d117c0f99a497f43c0b91e991277a176a8f814540c",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-auction-payout-runtime.ts",
+      "sha256": "6ea43a5ea82ce03089c5e9de13315f64087d41061852ac81b2e6092b443db720",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-authority-cli.test.ts",
+      "sha256": "196a15f5984c998dc14537b07a1e6229d847bd66ad3901679ba46ad8761972ed",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-authority-cli.ts",
+      "sha256": "5bef8b68b73aa6ef3709854a9060d54c0ec5d1fbe9eb0caf9b1fb04f827e7f89",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-authority-service.test.ts",
+      "sha256": "adceb049bcec8ea41effdae0df41372fea82add20c192f0927397b9ce562e33a",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-authority-service.ts",
+      "sha256": "ce720865229e7dd99e278808f67e55e5ffe4bcd8e2bda4fda64e601d50aafd40",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-acceptance-runner.test.ts",
+      "sha256": "d23e1fcd85610332d87e90f72474f3f0326eaf754bb9fb28acfec79726b6b781",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-acceptance-runner.ts",
+      "sha256": "9e27bfc0b66b606f028ac9ad3d20f7bb3e0f0b44e83ea5385f594fecccef2b0f",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-auction-payout-import.test.ts",
+      "sha256": "46cfc04b21fc87e41705604b74112aa9b207c348fcc67552d057202bf3f7e2b5",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-auction-payout-import.ts",
+      "sha256": "74f859f36e3c5f69a150c820147e90def70c498723798b9a6911402cf42c5c20",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-coco-client.test.ts",
+      "sha256": "a5721a88d62b95cc852718160ce4aade507d12df17cbc402bd3377dbfc224eda",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-coco-client.ts",
+      "sha256": "9ca39e4cd672e96fb7e8a0f4e0642a89c1974e379e3dc534acd19a5b02018fe0",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-coco-wallet.ts",
+      "sha256": "a51c84a22d9f5fb24749e06696adf3f9be668de30bda852f7051dd64aab6c2f6",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-exact-envelope-builder.test.ts",
+      "sha256": "599be452309421f7417b590d885bacd8987effd363fbc7f6687e3e509d636e4a",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-exact-envelope-builder.ts",
+      "sha256": "b3f48fa8953f003362b2c2ba7715253f319d5d71df89c8e227c2b43e451cf506",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-payment-state.ts",
+      "sha256": "f0b0f2f81571cfbd8dfa9dd34c91c70748febcd64ed1cf821e9618f12a507e44",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-trust-http.test.ts",
+      "sha256": "23c24f27de7039bc785f2b170abfba2d398ae08996c40bb4972a74c07dac674d",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-trust-http.ts",
+      "sha256": "c8087a67edd68888637d4781edfb0334445ebfa4589982e8ca656e707ffad5b9",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-trust-service.test.ts",
+      "sha256": "fab7ec7671c5606b4d9d5f0188b72f8d37b3332c985ac42ff2db0ca24b6ec5c2",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-browser-trust-service.ts",
+      "sha256": "e02cfe55d6aef56bbae28958416b740067538f680129be96b8f77011c6f2fdb6",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-coordinator-cli.test.ts",
+      "sha256": "3fbfbe291952ae2cee0a26901d3ae645e07011b182779b32a526cb6ce46b5fb3",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-coordinator-cli.ts",
+      "sha256": "27f0e583661c64f25f50569725cf9bb4b70b117d9f58299599d707fddb5300b8",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-legacy-recipient-pending.test.ts",
+      "sha256": "50d1a7cf3020af4bbe32f67e973f12c278ddf0eae1b42e58173d4f2e6fbeffd3",
+      "candidate_bytes_identical": false
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-mint-read-transport.test.ts",
+      "sha256": "2ccb8b54df8468cfa9a5a3afbfb42286a683baf99bcc6245c7015858925b9117",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-mint-read-transport.ts",
+      "sha256": "4d632ea0cd0d3f877dbdab849b818a812b7d3edfab1746485aaddf791aa34eee",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-prepared-funding.ts",
+      "sha256": "4d09946491b1a87269dfd9b52cacd2c37d8ef82516565f4c37d6b37075db26f9",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-r20-browser-acceptance-composition.test.ts",
+      "sha256": "1f6e1b76dba19bed947c48396feb4871a10fc4c8181652cd5b0793775bb4d923",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-separated-constants.ts",
+      "sha256": "76d89898de3d1dc4fe6605070b204dec2f9741c9b21266554fc33ed75da70a99",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-terminal-executor-cli.ts",
+      "sha256": "192ebc3c94f2e74ef5ecbc4f27fd649335b91a6e3a77b69ede42b691f317c1d0",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-terminal-executor-runtime.ts",
+      "sha256": "60ddbc2ba17914951e1c3faf8d4df156a3b9d4c9a06e6290bfe678d8a37e428f",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-trust-read-transport.test.ts",
+      "sha256": "2b38a23d26fa79b8c9b33ac68469771e170a95c8a43815a87d22f98a0ec384c7",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-friday-trust-read-transport.ts",
+      "sha256": "f5d932c33b3e54a01634df0ecdaf2bd14e0eb076833dfc3bab870c9abcfd4f76",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-integrated-admission-policy.ts",
+      "sha256": "9cd890d770112c0c78fcb4d584a77578575c1e876a6f9d153ef7b6c4b02e562b",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-integrated-admission-worker.ts",
+      "sha256": "c5098c92f552064f6f388570797e5c55b17d5ce17e695cca7aa1378db8a5cac6",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/demo-maintainer-offline.ts",
+      "sha256": "68f22d4a6f452d11da06e77e662d765d2d9524b544ea6f3a06ac4d4b3adce9da",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/package.json",
+      "sha256": "81af2351c4d5400fbacbbc5e1e307d35802d3154de5d027b497de89ce5827929",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/poc-friday-browser-entry-faucet-recovery.test.ts",
+      "sha256": "64107f4c6e19b78440b341bc1965ca99bc6d5545a8d13767808999933cb85819",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/poc-friday-browser-entry-recovery.test.ts",
+      "sha256": "3fe85acd1e3aacb675f44cd766b4f70481a8a9c27b2bf1c8b6edc29739735f06",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/poc-friday-browser-entry.ts",
+      "sha256": "3c2f56e8bb91ef49e4f5af64ce139d27513a999b82d39ec8e717f3003f1063ed",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "cashu-wrapper/ts/tsconfig.friday.json",
+      "sha256": "a85a5e2447c25c9af896d1302326602f791dcf085329ab87175c1eeeec4f00fe",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "deploy/sidequest-mvp/nginx-public-demo-active-r2.conf",
+      "sha256": "f0ce698971fc99fd96ac205a0452a147badfca677c5219876665c3f21874ccfa",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "deploy/sidequest-mvp/nginx-public-demo-limits-r2.conf",
+      "sha256": "05da12cfb6618e7e8330a2adde3ed83147794ba0ada8aa711b1ab8d16cf2e6a8",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "deploy/sidequest-mvp/plebeian-friday-authority-recovery.service",
+      "sha256": "2045b7976997add548e40659f0707055d984e2c6fe4794817f95e610df1c7949",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "deploy/sidequest-mvp/plebeian-friday-coordinator-recovery.service",
+      "sha256": "87d3e17986f9cca34cb202e14e75a77288f4ad71aa073bd65f0f9a6e5c5c24fd",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "deploy/sidequest-mvp/plebeian-friday-site-recovery.service",
+      "sha256": "04c36f6947ceba034d9fc28df3db0dac644c2e487f79ea01c96ccc89bace6c21",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "deploy/sidequest-mvp/verify-sidequest-recovery.py",
+      "sha256": "a6438bdd0365c41f8b1662e01bcdbfd95004a3a9206e200eedc0d51f2eed5931",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "internal/poc/a3_seller_ui_adversarial_r2.test.js",
+      "sha256": "d7569a69ee49c5ce92ecb8bfa5944e21adcce10bf30167ee6c17b09beac4fb6a",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "internal/poc/hlt_readiness_ui.test.js",
+      "sha256": "57c5cda7c287767787ab72d648444faccbae8efe0461d6117f9a3c578558a947",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "internal/poc/model_test.go",
+      "sha256": "eaeec7ca0c4b23f450e9e458f79aa1fc542065f910a3a7e780337ca41b4a763c",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "internal/poc/nginx_public_demo_limits.test.js",
+      "sha256": "5b2607234de8ab33f973178f5c6c3cbf38a861b719b16b9d957abf34b99e2336",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "internal/poc/seller_authorization_ui.test.js",
+      "sha256": "6275d392a71d3e7f026f9684e9c70150f87bfeada8f518411cf491a168f98e70",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "internal/poc/service_recovery_units.test.js",
+      "sha256": "e512c9a917d539f3b23d9fd9875d8565c885eeeb640dc48c2e6b0d0234033338",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "internal/poc/static/app.js",
+      "sha256": "8d740932f5c720e9901065e3be1687c275689086b9ae3fc04fdbadca7124737a",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "internal/poc/static/friday-browser.js",
+      "sha256": "5a1b1a15ea6a43ac9417c9ed0c48ae7a3a25ad0d3db711b352dfb548cb2bd726",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "internal/poc/static/index.html",
+      "sha256": "9bb42cb01130dda8588d75d74f064762702eb97a36a705e7857c26b4563a06c6",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "internal/poc/static/ui-helpers.js",
+      "sha256": "5dc0177471b4d5420e1d22d97b20f101c4c3bf0c10e2d93040b119abce19e922",
+      "candidate_bytes_identical": true
+    },
+    {
+      "path": "internal/poc/ui_helpers.test.js",
+      "sha256": "2328df1931f481d719aab2a80994c017ae365f02a7772d14a2867c164aaac4b1",
+      "candidate_bytes_identical": true
+    }
+  ]
+}

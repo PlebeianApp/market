@@ -9,6 +9,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
 
 import { prepareDemoFridayAuctionPayoutAuthorization } from './demo-friday-auction-payout-authorization'
+import { DEMO_EVENT_SKEW_SECONDS } from './demo-auction-timing-policy'
 import type { DemoFridaySellerOpeningRefV1 } from './demo-friday-browser-coco-seller-plan'
 import {
 	assertDemoFridayAuctionPayoutSignerBinding,
@@ -87,6 +88,25 @@ async function fixture() {
 }
 
 describe('auction payout authority, signer, winner fence and seller recovery', () => {
+	test('registration tolerates reviewed negative clock skew but selection stays inactive until validFrom', async () => {
+		const accepted = await fixture()
+		try {
+			accepted.setClock(now - DEMO_EVENT_SKEW_SECONDS)
+			await expect(accepted.authority.registerExact(accepted.envelope)).resolves.toBeDefined()
+			await expect(accepted.authority.selectExact({ auctionId: 'auction-1', fundingOperationId: 'funding-skew',
+				bidderActor: bidderA, bidAmount: 111, replacesBidId: '' })).rejects.toThrow(/not currently valid/)
+			accepted.setClock(now)
+			await expect(accepted.authority.selectExact({ auctionId: 'auction-1', fundingOperationId: 'funding-skew',
+				bidderActor: bidderA, bidAmount: 111, replacesBidId: '' })).resolves.toBeDefined()
+		} finally { accepted.recipient.dispose(); accepted.stateDb.close(false); accepted.anchorDb.close(false) }
+
+		const refused = await fixture()
+		try {
+			refused.setClock(now - DEMO_EVENT_SKEW_SECONDS - 1)
+			await expect(refused.authority.registerExact(refused.envelope)).rejects.toThrow(/not currently valid/)
+		} finally { refused.recipient.dispose(); refused.stateDb.close(false); refused.anchorDb.close(false) }
+	})
+
 	test('recovers a lost registration response without another recipient or Nostr signature', async () => {
 		const held = await fixture()
 		try {

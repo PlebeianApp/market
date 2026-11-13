@@ -3,7 +3,12 @@ import { isSeparatedApplication } from './demo-friday-runtime-config'
 import {
 	SEPARATED_EXECUTOR_BINARY, SEPARATED_R10_EXECUTOR_BINARY, SEPARATED_R33_EXECUTOR_BINARY,
 	SEPARATED_R34_EXECUTOR_BINARY, SEPARATED_R35_EXECUTOR_BINARY, SEPARATED_R36_EXECUTOR_BINARY,
-	SEPARATED_R38_EXECUTOR_BINARY,
+	SEPARATED_R38_EXECUTOR_BINARY, SEPARATED_RECOVERY_EXECUTOR_BINARY,
+	SEPARATED_FRESH_E2E_R2_EXECUTOR_BINARY,
+	SEPARATED_APP_RESTORATION_R48_EXECUTOR_BINARY,
+	SEPARATED_APP_RESTORATION_R49_EXECUTOR_BINARY,
+	SEPARATED_APP_RESTORATION_R50_EXECUTOR_BINARY,
+	SEPARATED_APP_RESTORATION_R51_EXECUTOR_BINARY,
 	SEPARATED_SUCCESSOR_EXECUTOR_BINARY,
 } from './demo-friday-separated-constants'
 import { loadSeparatedServiceBinding } from './demo-friday-separated-service'
@@ -22,7 +27,8 @@ import { resolve } from 'node:path'
 import { DEMO_FRIDAY_R20_TERMINAL_EXECUTOR_BINARY } from './demo-friday-r20-path-contract'
 
 import {
-	createDemoFridayCoordinatorWorker, DemoFridayCoordinatorSqlite,
+	createDemoFridayCoordinatorWorker, demoFridayActionableNonterminal,
+	DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R82_20261113, DemoFridayCoordinatorSqlite,
 	type DemoFridayCoordinatorPorts, type DemoFridayCoordinatorRecordV2,
 	type DemoFridayExecutionOutcome, type DemoFridayImportOutcome, type DemoFridayRecoveryOutcome,
 } from './demo-friday-coordinator-runtime'
@@ -97,12 +103,26 @@ export interface DemoFridayExecutorIdentityV2 {
 function executable(value: string): string {
 	const legacy = value.startsWith('/opt/plebeian-auctions-friday/bin/')
 	const r20 = value === DEMO_FRIDAY_R20_TERMINAL_EXECUTOR_BINARY
-	const separated = value === SEPARATED_EXECUTOR_BINARY || value === SEPARATED_SUCCESSOR_EXECUTOR_BINARY
-		|| value === SEPARATED_R10_EXECUTOR_BINARY || value === SEPARATED_R33_EXECUTOR_BINARY
-		|| value === SEPARATED_R34_EXECUTOR_BINARY || value === SEPARATED_R35_EXECUTOR_BINARY
-		|| value === SEPARATED_R36_EXECUTOR_BINARY || value === SEPARATED_R38_EXECUTOR_BINARY
+	const separated = SEPARATED_COORDINATOR_EXECUTORS.has(value)
 	if ((!legacy && !r20 && !separated) || resolve(value) !== value || value.endsWith('/') || value.includes('//')) {
 		throw new Error('DEMO_FRIDAY_COORDINATOR_CLI: executor must be a canonical Friday binary path')
+	}
+	return value
+}
+
+const SEPARATED_COORDINATOR_EXECUTORS = new Set<string>([
+	SEPARATED_EXECUTOR_BINARY, SEPARATED_SUCCESSOR_EXECUTOR_BINARY, SEPARATED_R10_EXECUTOR_BINARY,
+	SEPARATED_R33_EXECUTOR_BINARY, SEPARATED_R34_EXECUTOR_BINARY, SEPARATED_R35_EXECUTOR_BINARY,
+	SEPARATED_R36_EXECUTOR_BINARY, SEPARATED_R38_EXECUTOR_BINARY, SEPARATED_RECOVERY_EXECUTOR_BINARY,
+	SEPARATED_FRESH_E2E_R2_EXECUTOR_BINARY, SEPARATED_APP_RESTORATION_R48_EXECUTOR_BINARY,
+	SEPARATED_APP_RESTORATION_R49_EXECUTOR_BINARY,
+	SEPARATED_APP_RESTORATION_R50_EXECUTOR_BINARY,
+	SEPARATED_APP_RESTORATION_R51_EXECUTOR_BINARY,
+])
+
+export function exactSeparatedCoordinatorRuntimeExecutor(value: string): string {
+	if (!SEPARATED_COORDINATOR_EXECUTORS.has(value)) {
+		throw new Error('SEPARATED_COORDINATOR: exact approved executor required')
 	}
 	return value
 }
@@ -278,14 +298,7 @@ async function openRuntime(args: ServeArgs | InitAnchorArgs) {
 	if (isSeparatedApplication(application)) {
 	 if (application.role !== 'APPLICATION') throw new Error('SEPARATED_COORDINATOR: app role required')
 	 await loadSeparatedServiceBinding({application})
- if(args.mode==='serve' && args.executor!==SEPARATED_EXECUTOR_BINARY
-	&& args.executor!==SEPARATED_SUCCESSOR_EXECUTOR_BINARY
-	&& args.executor!==SEPARATED_R10_EXECUTOR_BINARY
-	&& args.executor!==SEPARATED_R33_EXECUTOR_BINARY
-	&& args.executor!==SEPARATED_R34_EXECUTOR_BINARY
-	&& args.executor!==SEPARATED_R35_EXECUTOR_BINARY
-	&& args.executor!==SEPARATED_R36_EXECUTOR_BINARY
-	&& args.executor!==SEPARATED_R38_EXECUTOR_BINARY) throw new Error('SEPARATED_COORDINATOR: exact approved executor required')
+	 if(args.mode==='serve') exactSeparatedCoordinatorRuntimeExecutor(args.executor)
 	}
 	if (application.schema === 'PLEBEIAN_FRIDAY_LIVE_APPLICATION_V3') {
 		await loadDemoFridayR20ServiceBinding({ application, pins: demoFridayR20ServicePins() })
@@ -327,7 +340,9 @@ async function main(): Promise<void> {
 			const stop = new AbortController()
 			for (const name of ['SIGINT', 'SIGTERM'] as const) process.once(name, () => stop.abort())
 			while (!stop.signal.aborted) {
-				for (const record of runtime.store.listNonterminal()) {
+				for (const record of demoFridayActionableNonterminal(
+					runtime.store.listNonterminal(), DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R82_20261113,
+				)) {
 					if (stop.signal.aborted) break
 					if (record.phase === 'queued') await worker.runExact(record.scope)
 					else if (record.phase === 'mint_unknown' || record.phase === 'recipient_pending') await worker.reconcileExact(record.scope)

@@ -1,0 +1,63 @@
+{
+  "schema": "PLEBEIAN_CATALOGUE_BID_REFUND_E2E_LOCAL_CANDIDATE_V1",
+  "status": "inactive_local_candidate",
+  "branch": "codex/catalogue-bid-refund-e2e",
+  "parent_commit": "8131f62d77d958a1b15455e282cda7457e2e8690",
+  "policy_activation": "none",
+  "deployment": "none",
+  "browser_assets": {
+    "app.js": {
+      "bytes": 70623,
+      "sha256": "0ed0330260a9d902d146c227f9190d6912f13853901e923a9cab784e775a4a1b"
+    },
+    "friday-browser.js": {
+      "bytes": 1760024,
+      "sha256": "e5139bfe2a400c29ee1f69149b2caeca9d8532f1acc0ebffde6ab1bd123f8092"
+    },
+    "index.html": {
+      "bytes": 10842,
+      "sha256": "6cc836c5e42b2d85228de5f28049a80cb4242ae320bbae903f0a4812d4f60355"
+    },
+    "styles.css": {
+      "bytes": 18226,
+      "sha256": "0538984950828e59d81332298e8c2aa347f03d57f19311601e8282cfd6d6c655"
+    },
+    "ui-helpers.js": {
+      "bytes": 12190,
+      "sha256": "6708478be760eed35ab58878d0a96243c19687ad6e9fdb910ba292c6eb65da6f"
+    },
+    "app-bootstrap.js": {
+      "bytes": 217,
+      "sha256": "b1632acf59e5467764bac369daff802ae29992c936c4c416472e879937f4c4ef"
+    }
+  },
+  "reproducible_local_site_binary": {
+    "toolchain": "go1.23.1",
+    "flags": ["-trimpath", "-buildvcs=false"],
+    "bytes": 46691808,
+    "sha256": "74dcba19d03db68ed1a0fe03624aa48048b64b19b71d75af4f835c0cfc839e73"
+  },
+  "verified_behavior": [
+    "stable bid input and button across one-second countdown updates",
+    "stable bid input and button across unchanged four-second committed-state refreshes",
+    "one bid action for one simulated pointer gesture across both update boundaries; the prior candidate also passed the real-browser gesture",
+    "new operations remain paused after readiness, committed-state, or wallet failure",
+    "a transient scheduled readiness transport failure preserves the actor, signer, controller, and generation while disabling admission until recovery",
+    "identity connection remains serialized with the immediate busy state already deployed in R66",
+    "a bid queued behind maintenance rechecks readiness, committed state, policy, and latest auction eligibility before funding",
+    "validator evidence cannot block committed state or exact payment maintenance",
+    "exact retained return and payout imports remain available without creating a new payment",
+    "a transient queued-operation rejection cannot block forced exact recovery, and an outage warns that retained recovery remains available",
+    "older losing operations remain eligible for exact certified return import",
+    "seller payout is not presented as imported until durable import status proves it",
+    "terminal HTTP timeout remains active through response body parsing"
+  ],
+  "not_verified_here": [
+    "real-browser pointer rerun against this exact final app.js hash",
+    "live fake-sats bid, close, winner, return, or seller payout execution",
+    "deployment rollout or rollback",
+    "activation of a seven-day auction policy on any network",
+    "production or federal FIPS compliance"
+  ],
+  "rollback_source_commit": "8131f62d77d958a1b15455e282cda7457e2e8690"
+}

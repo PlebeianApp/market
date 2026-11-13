@@ -133,6 +133,58 @@ describe('FIPS-routed authenticated signer RPC', () => {
 		held.database.close()
 	})
 
+	test('retains only a finite local refusal class and discards raw error text', async () => {
+		const held = await fixture()
+		const refusalFetch = (async () => Response.json({ error: 'DEMO_SIGNER_LOCAL_REFUSAL:MINT_BINDING' }, { status: 422 })) as unknown as typeof fetch
+		const transport = createDemoSignerRpcTransport({
+			endpoint: 'http://[fd00::1]:9191/v1/frost',
+			enrollment: { participantId: 1, processIdentity: 'signer-1', stateDirectory: held.root, verifyingShare: point(41) },
+			signerBinding: held.signerBinding, anchor: held.anchor, coordinatorIdentityPrivateKey: key(7),
+			signerIdentity: Buffer.from(schnorr.getPublicKey(key(8))).toString('hex'), fetchImpl: refusalFetch,
+		})
+		await expect(transport.roundOne(request(), { signal: new AbortController().signal }))
+			.rejects.toThrow('DEMO_SIGNER_RPC_REMOTE_REFUSAL:LOCAL_MINT_BINDING')
+
+		const rawFetch = (async () => Response.json({ error: 'secret bearer material' }, { status: 422 })) as unknown as typeof fetch
+		const rawTransport = createDemoSignerRpcTransport({
+			endpoint: 'http://[fd00::1]:9191/v1/frost',
+			enrollment: { participantId: 1, processIdentity: 'signer-1', stateDirectory: held.root, verifyingShare: point(41) },
+			signerBinding: held.signerBinding, anchor: held.anchor, coordinatorIdentityPrivateKey: key(7),
+			signerIdentity: Buffer.from(schnorr.getPublicKey(key(8))).toString('hex'), fetchImpl: rawFetch,
+		})
+		await expect(rawTransport.roundOne(request(), { signal: new AbortController().signal }))
+			.rejects.toThrow('DEMO_SIGNER_RPC_REMOTE_REFUSAL:HTTP_422')
+		held.database.close()
+	})
+
+	test('bounds a stalled refusal body and never awaits hostile cancellation', async () => {
+		const held = await fixture()
+		const transportFor = (fetchImpl: typeof fetch) => createDemoSignerRpcTransport({
+			endpoint: 'http://[fd00::1]:9191/v1/frost',
+			enrollment: { participantId: 1, processIdentity: 'signer-1', stateDirectory: held.root, verifyingShare: point(41) },
+			signerBinding: held.signerBinding, anchor: held.anchor, coordinatorIdentityPrivateKey: key(7),
+			signerIdentity: Buffer.from(schnorr.getPublicKey(key(8))).toString('hex'), fetchImpl,
+		})
+		const stalledFetch = (async () => new Response(new ReadableStream({
+			pull() { return new Promise<void>(() => {}) },
+			cancel() { return new Promise<void>(() => {}) },
+		}), { status: 422 })) as unknown as typeof fetch
+		const stalledAt = Date.now()
+		await expect(transportFor(stalledFetch).roundOne(request(), { signal: new AbortController().signal }))
+			.rejects.toThrow('DEMO_SIGNER_RPC_REMOTE_REFUSAL:HTTP_422')
+		expect(Date.now() - stalledAt).toBeLessThan(1_000)
+
+		const oversizedFetch = (async () => new Response(new ReadableStream({
+			start(controller) { controller.enqueue(new Uint8Array(1_025)) },
+			cancel() { return new Promise<void>(() => {}) },
+		}), { status: 422 })) as unknown as typeof fetch
+		const oversizedAt = Date.now()
+		await expect(transportFor(oversizedFetch).roundOne(request(), { signal: new AbortController().signal }))
+			.rejects.toThrow('DEMO_SIGNER_RPC_REMOTE_REFUSAL:HTTP_422')
+		expect(Date.now() - oversizedAt).toBeLessThan(1_000)
+		held.database.close()
+	})
+
 	test('rejects a signed response from the wrong restart epoch', async () => {
 		const held = await fixture()
 		const honestHandler = held.handler

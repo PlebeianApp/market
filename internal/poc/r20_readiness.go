@@ -18,6 +18,11 @@ func (server *APIServer) browserRuntimeReady(ctx context.Context) bool {
 	if server.recoveryOnly || !server.browserThresholdReady || !server.browserPinsReady() {
 		return false
 	}
+	// Threshold funding is not end-to-end ready unless the automatic close path
+	// is installed and healthy; otherwise accepted bids can never settle.
+	if server.closeTriggerReady == nil || !server.closeTriggerReady() {
+		return false
+	}
 	if server.runtimeReadyProbe != nil {
 		return server.runtimeReadyProbe(ctx)
 	}
@@ -44,6 +49,39 @@ func (server *APIServer) browserRuntimeReady(ctx context.Context) bool {
 		return false
 	}
 	return server.validRuntimeReadiness(raw)
+}
+
+// browserConfigRuntimeReady coalesces only concurrent public config reads.
+// The shared probe is detached from any one browser request but remains
+// bounded by browserRuntimeReady's own six-second deadline. There is no cache:
+// after a flight completes, the next config read performs a fresh probe.
+// Direct mutation handlers never use this helper, so admission remains
+// fail-closed against current authority health.
+func (server *APIServer) browserConfigRuntimeReady(ctx context.Context) bool {
+	server.configReadinessMu.Lock()
+	flight := server.configReadinessFlight
+	if flight == nil {
+		flight = &configReadinessFlight{done: make(chan struct{})}
+		server.configReadinessFlight = flight
+		go func(current *configReadinessFlight) {
+			ready := server.browserRuntimeReady(context.Background())
+			server.configReadinessMu.Lock()
+			current.ready = ready
+			close(current.done)
+			if server.configReadinessFlight == current {
+				server.configReadinessFlight = nil
+			}
+			server.configReadinessMu.Unlock()
+		}(flight)
+	}
+	server.configReadinessMu.Unlock()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-flight.done:
+		return flight.ready
+	}
 }
 
 func (server *APIServer) validRuntimeReadiness(raw []byte) bool {
@@ -78,7 +116,7 @@ func (server *APIServer) validRuntimeReadiness(raw []byte) bool {
 		value.ConsensusAvailable && value.Mode == "normal" && value.Funding == "enabled_two_step_nip07" && value.Height > 0 &&
 		value.DeploymentID == expected.DeploymentID && value.ConfigSHA256 == server.healthPinsSHA256 &&
 		pins.DeploymentID == expected.DeploymentID && pins.ChainID == expected.ChainID && pins.GenesisSHA256 == expected.GenesisSHA256 &&
-		validLowerHex(pins.ValidatorsHash, 32) && pins.MintURL == expected.CashuMintURL && pins.CommitteeKeysetID == expected.CommitteeKeysetID &&
+		pins.ValidatorsHash == expected.ValidatorsHash && pins.MintURL == expected.CashuMintURL && pins.CommitteeKeysetID == expected.CommitteeKeysetID &&
 		pins.CommitteeKeysetVersion == expected.CommitteeKeysetVersion && pins.DKGRunID == expected.DKGRunID &&
 		pins.PublicKeyPackageSHA256 == expected.PublicKeyPackageSHA256 && pins.SignerRosterDigest == expected.SignerRosterDigest
 }

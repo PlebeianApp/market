@@ -4,6 +4,10 @@ import { readFile, writeFile } from 'node:fs/promises'
 import {
 	createDemoThreshold3SeparatedProcessPorts,
 } from './demo-frost-threshold3-process-boundary'
+import {
+	createDemoMaintainerProcessFederationParticipantPort,
+	createDemoThreeOfFourMaintainerFederationPort,
+} from './demo-maintainer-federation'
 import { createDemoFrostStdioProcessTransport } from './demo-frost-stdio-transport'
 import {
 	demoFrostCommitteeLockedProofsDigest,
@@ -164,6 +168,39 @@ function request(sessionByte: number): DemoRoundOneRequest {
 }
 
 describe('concrete threshold-three process adapters', () => {
+	test('propagates only finite signer refusal classes through the real process composition', async () => {
+		const configured = participants({ roundTwo: 0 })
+		for (const [index, reason] of ['LOCAL_MINT_BINDING', 'secret text', 'HTTP_503'].entries()) {
+			configured[index + 1]!.transport.roundOne = async () => {
+				throw new Error(`DEMO_SIGNER_RPC_REMOTE_REFUSAL:${reason}`)
+			}
+		}
+		const processPorts = createDemoThreshold3SeparatedProcessPorts({
+			committeeKeysetId: 'threshold-three-keyset', committeeKeysetVersion: '1', requestTimeoutMs: 1_000,
+			policy, participants: configured,
+		})
+		const federation = createDemoThreeOfFourMaintainerFederationPort(
+			processPorts.map(createDemoMaintainerProcessFederationParticipantPort),
+			{ async aggregate() { throw new Error('must not aggregate below threshold') } },
+			{ roundTimeoutMs: 1_000 },
+		)
+		await expect(federation.authorize({
+			schema: 'COCO_DEMO_FROST_REQUEST_V1', threshold: 3, sessionId: request(39).sessionId,
+			packageDigest, cashuSigAllDigest: cashuDigest, committeePublicKey,
+			committeeKeysetId: 'threshold-three-keyset', committeeKeysetVersion: '1',
+			participants: configured.map((value, index) => ({
+				identifier: (index + 1) as DemoParticipantId, verifyingShare: value.enrollment.verifyingShare,
+			})),
+			policyPackageDigest: demoFrostParticipantPolicyDigest(policy),
+			closureEvidenceDigest: policy.certifiedClosure.evidenceDigest,
+			signedBidEvidenceDigest: policy.signedBid.evidenceDigest,
+			committeeLockedProofsDigest: demoFrostCommitteeLockedProofsDigest(policy.committeeLockedProofs),
+		})).rejects.toMatchObject({
+			code: 'DEMO_MAINTAINER_THRESHOLD_UNAVAILABLE', failedParticipantIds: [2, 3, 4],
+			message: expect.stringContaining('round-one 2:LOCAL_MINT_BINDING,3:UNAVAILABLE,4:HTTP_503'),
+		})
+	})
+
 	test('uses signed directory identities to isolate equal host-local absolute paths', () => {
 		const configured = participants({ roundTwo: 0 })
 		for (const [index, participant] of configured.entries()) {

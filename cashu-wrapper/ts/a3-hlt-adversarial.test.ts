@@ -61,6 +61,7 @@ function serviceFixture(phase: string | null, recordedSeller = true, explicitRec
   browserTrust: { registerSellerPlanExact: async () => { calls.push('seller-auth'); throw new Error('normal authorization refused') },
    issueSellerPlanChallengeExact: async () => { calls.push('intent'); return {} } } as never,
   terminalExchange: { readExact: () => { calls.push('terminal-read-auth'); throw new Error('normal authorization refused') },
+   readStatusExact: () => { calls.push('terminal-status-auth'); throw new Error('normal authorization refused') },
    acknowledgeExact: () => { calls.push('terminal-ack-auth'); throw new Error('normal authorization refused') } },
   fundingAbort: { prepareBrowserExact: async () => { calls.push('abort-auth'); throw new Error('normal authorization refused') } } as never,
  })

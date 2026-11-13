@@ -38,6 +38,9 @@ const (
 	ApplicationAuthorityLegacy      = "legacy_ed25519_v1"
 	ApplicationAuthorityFrostCashu  = "frost_cashu_v4"
 	frostLegacyNotePublicPinDomain  = "PLEBEIAN_FRIDAY_DISABLED_LEGACY_NOTE_AUTHORITY_V1"
+	LegacyMaxAuctionDurationSeconds = int64(3_600)
+	MaxAuctionDurationSeconds       = int64(7 * 24 * 60 * 60)
+	DefaultAuctionDurationSeconds   = int64(600)
 
 	// EmergencyRecoverySeconds is measured from the maximum possible auction
 	// end, not the current end.  The cooperative committee stops new MAIN
@@ -64,10 +67,19 @@ type Policy struct {
 func DefaultPolicy() Policy {
 	return Policy{
 		FaucetAmount: 10_000, FaucetCap: 50_000, MinBidIncrement: 100,
-		MinDurationSeconds: 3, MaxDurationSeconds: 3_600, EventSkewSeconds: 300,
+		MinDurationSeconds: 3, MaxDurationSeconds: LegacyMaxAuctionDurationSeconds, EventSkewSeconds: 300,
 		LateBidWindow: 180, LateBidExtension: 180, MaxTotalExtension: 1_800,
 		ReceiptTTLSeconds: 300,
 	}
+}
+
+// SevenDayPolicy is the reviewed source candidate for a fresh deployment.
+// DefaultPolicy intentionally remains the legacy one-hour recovery profile;
+// activation additionally requires an approved deployment identity.
+func SevenDayPolicy() Policy {
+	policy := DefaultPolicy()
+	policy.MaxDurationSeconds = MaxAuctionDurationSeconds
+	return policy
 }
 
 func (p Policy) Validate() error {
@@ -864,6 +876,9 @@ func applySignedEvent(state *State, event SignedEvent, now int64, policy Policy,
 		if increment == 0 {
 			increment = policy.MinBidIncrement
 		}
+		if now > (1<<63-1)-content.Duration {
+			return errors.New("auction timing overflows Unix seconds")
+		}
 		end := now + content.Duration
 		state.Auctions[content.AuctionID] = Auction{
 			ID: content.AuctionID, Seller: actor, Title: strings.TrimSpace(content.Title),
@@ -1065,6 +1080,10 @@ func applyRejectedIntegratedFunding(state *State, actor, eventID string, committ
 
 func applyAcceptedBid(state *State, actor, eventID string, committedAt int64, content bidContent, inputs []string, policy Policy) error {
 	auction := state.Auctions[content.AuctionID]
+	if auction.OriginalEndTime > (1<<63-1)-policy.MaxTotalExtension ||
+		committedAt > (1<<63-1)-policy.LateBidExtension {
+		return errors.New("auction extension timing overflows Unix seconds")
+	}
 	previousBidID := auction.LeaderBidID
 	if auction.LeaderBidID != "" {
 		previous := state.Locks[auction.LeaderBidID]

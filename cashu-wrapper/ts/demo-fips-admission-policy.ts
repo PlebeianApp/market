@@ -6,9 +6,10 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js'
 
 import { authenticatedDemoCometState, createLoopbackCometReader } from './demo-comet-displacement-verifier'
 import type { DemoAdmissionParticipantPolicyRequestV1 } from './demo-integrated-admission-service'
-import { preflightDemoIntegratedAdmission } from './demo-integrated-admission-policy'
-import { demoSignerObservationFetch, type DemoSignerPureContext } from './demo-signer-pure-policy'
+import { DemoIntegratedAdmissionRefusedError, preflightDemoIntegratedAdmission } from './demo-integrated-admission-policy'
+import { demoSignerObservationFetch, type DemoSignerPureContext, type DemoSignerPureReason } from './demo-signer-pure-policy'
 import type { DemoIntegratedAdmissionMintEvidenceV1 } from './demo-integrated-admission-policy'
+import { DemoMaintainerOfflineRefusedError } from './demo-maintainer-offline'
 import { exactDemoNut07Result } from './demo-nut07-exact'
 import { createOriginBoundMintFetch, createPinnedMintTransportFetch } from './coco-rail'
 import { CashuMintClient, proofPoint, type CashuProof } from './nut-client'
@@ -24,6 +25,25 @@ export interface DemoFipsAdmissionTrustPinsV1 {
 }
 
 function digest(value: unknown): string { return bytesToHex(sha256(utf8ToBytes(JSON.stringify(value)))) }
+
+/** Convert only locally-authenticated, typed deterministic validation failures
+ * into durable no-effect refusals. Transport, HTTP, parsing, timeout and all
+ * unrecognized exceptions remain unavailable/unknown and cannot manufacture a
+ * policy decision. */
+function deterministicAdmissionRefusal(error: unknown): DemoSignerPureReason | undefined {
+	if (error instanceof DemoMaintainerOfflineRefusedError) {
+		if (error.code === 'DEMO_MAINTAINER_BUNDLE_EXPIRED') return 'ADMISSION_STALE'
+		if (error.code.includes('_INPUT') || error.code.includes('_BALANCE')) return 'ADMISSION_POOL'
+		return 'ADMISSION_BINDING'
+	}
+	if (error instanceof DemoIntegratedAdmissionRefusedError) {
+		if (error.code.includes('_CONSENSUS')) return 'ADMISSION_STALE'
+		if (error.code.includes('_POOL') || error.code.includes('_PROOF')) return 'ADMISSION_POOL'
+		if (error.code.includes('_MINT')) return 'MINT_BINDING'
+		return 'ADMISSION_BINDING'
+	}
+	return undefined
+}
 
 async function exactStates(mintUrl: string, refs: string[], fetchImpl: typeof fetch): Promise<Array<{ Y: string; state: string }>> {
 	const response = await fetchImpl(`${mintUrl}/v1/checkstate`, {
@@ -73,9 +93,9 @@ export function createDemoFipsAdmissionParticipant(options: {
 					context?.refuse('ADMISSION_BINDING'); throw new Error('DEMO_FIPS_ADMISSION_CONSENSUS: request differs from enrolled chain')
 				}
 				const chainId = await reader.readChainId()
-				if (chainId !== pins.chainId) throw new Error('DEMO_FIPS_ADMISSION_CONSENSUS: node chain differs from enrollment')
+				if (chainId !== pins.chainId) { context?.refuse('ADMISSION_BINDING'); throw new Error('DEMO_FIPS_ADMISSION_CONSENSUS: node chain differs from enrollment') }
 				const authenticated = await authenticatedDemoCometState(reader, pins.validatorsHash, 1)
-				if (authenticated.observation.state.chain_id !== pins.chainId) throw new Error('DEMO_FIPS_ADMISSION_CONSENSUS: state chain differs from enrollment')
+				if (authenticated.observation.state.chain_id !== pins.chainId) { context?.refuse('ADMISSION_BINDING'); throw new Error('DEMO_FIPS_ADMISSION_CONSENSUS: state chain differs from enrollment') }
 				const auction = authenticated.observation.state.auctions?.[request.auctionId]
 				const sellerActor = auction?.seller
 				const sellerPaymentPublicKey = auction?.seller_coco_payment_public_key ?? ''
@@ -103,6 +123,7 @@ export function createDemoFipsAdmissionParticipant(options: {
 					.find((entry) => entry.id === request.activeKeysetId && entry.unit === 'sat')
 				if (keyset === undefined || request.inputs.some((proof) => proof.id !== request.activeKeysetId
 					|| !hasValidDleq(proof as never, keyset as never, { require: true }))) {
+					context?.refuse('MINT_BINDING')
 					throw new Error('DEMO_FIPS_ADMISSION_MINT: input DLEQ/keyset binding failed')
 				}
 				const refs = request.inputs.map((proof: CashuProof) => bytesToHex(proofPoint(proof).toBytes(true))).sort()
@@ -123,7 +144,13 @@ export function createDemoFipsAdmissionParticipant(options: {
 	}
 	const preflightExact = async (request: DemoAdmissionParticipantPolicyRequestV1, context?: DemoSignerPureContext) => {
 		const exact = structuredClone(request)
-		const ready = await preflightDemoIntegratedAdmission({ ...exact, ...buildReadPorts(context), context })
+		let ready: Awaited<ReturnType<typeof preflightDemoIntegratedAdmission>>
+		try { ready = await preflightDemoIntegratedAdmission({ ...exact, ...buildReadPorts(context), context }) }
+		catch (error) {
+			const reason = deterministicAdmissionRefusal(error)
+			if (context !== undefined && reason !== undefined) context.refuse(reason)
+			throw error
+		}
 		const claim = ready.proofClaim.proofStateRefs.map((proofRef) => ({ proofRef, network: ready.proofClaim.network,
 			chainId: ready.proofClaim.chainId, auctionId: ready.proofClaim.auctionId, operationId: ready.proofClaim.fundingOperationId }))
 		const evidence = { ...ready.evidence, proofUseEvidenceDigest: digest(['COCO_DEMO_FIPS_ADMISSION_PROOF_USE_V1', pins.participantId, ready.proofClaim]) }

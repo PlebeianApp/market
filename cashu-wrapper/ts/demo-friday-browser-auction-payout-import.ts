@@ -61,7 +61,10 @@ export async function importDemoFridayAuctionPayoutWinner(options: {
 			|| prior.ack.importReceipt.recipientPublicKey !== selection.recipientPublicKey) {
 			refuse('persisted auction-payout acknowledgement belongs to another winner')
 		}
-		await options.terminal.acknowledgeExact(structuredClone(prior.ack))
+		if (prior.acknowledged !== true) {
+			await options.terminal.acknowledgeExact(structuredClone(prior.ack))
+			await options.state.saveSellerTerminalAck({ ...structuredClone(prior), acknowledged: true })
+		}
 		return { ...structuredClone(prior.ack.importReceipt), alreadyImported: true }
 	}
 	const raw = await options.terminal.readNoticeExact({ actor: options.actor,
@@ -125,5 +128,10 @@ export async function importDemoFridayAuctionPayoutWinner(options: {
 		fundingOperationId: notice.operationId, ack,
 	})
 	await options.terminal.acknowledgeExact(ack)
+	await options.state.saveSellerTerminalAck({
+		schema: 'PLEBEIAN_FRIDAY_SELLER_TERMINAL_ACK_RECORD_V1', actor: options.actor,
+		environmentId: options.environmentId, auctionId: selection.auctionId,
+		fundingOperationId: notice.operationId, ack, acknowledged: true,
+	})
 	return { ...receipt, alreadyImported: false }
 }

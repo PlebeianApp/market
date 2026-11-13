@@ -301,6 +301,17 @@ for(const mode of ['outage','redirect'] as const)test(`P1 typed pure phase: ${mo
 	expect(s.calls.claims).toBe(0)
 })
 
+test('P1 typed pure phase: malformed exact bundle is a deterministic no-effect refusal',async()=>{
+	const {createDemoSignerPurePhase}=await import('./demo-signer-pure-policy')
+	const o=observedFetch(),s=build(r20,undefined,o.fetchImpl),r=requests(s.c.contract.mintUrl)
+	r.admission.bundle.actorBundleSignature='00'.repeat(64)
+	const participant=createDemoFipsAdmissionParticipant({contract:s.c.contract,pins:{...s.c.admissionPins,network:r.admission.receipt.auth_network_id},proofUse:{claimAdmissionProofs(){s.calls.claims++}},fetchImpl:o.fetchImpl})
+	const phase=createDemoSignerPurePhase(new AbortController().signal)
+	try{await phase.run(context=>participant.preflightExact(r.admission,context));throw new Error('must fail')}
+	catch(error){expect(phase.classification(error)).toEqual({kind:'refused',reason:'ADMISSION_BINDING'})}
+	expect(s.calls.claims).toBe(0);expect(o.urls).toEqual([])
+})
+
 import {
 	DEMO_FRIDAY_R20_BOUND_MANIFEST_SCHEMA, demoFridayR20ProfileDigest,
 	type DemoFridayR20RuntimeDkgBindingV1,

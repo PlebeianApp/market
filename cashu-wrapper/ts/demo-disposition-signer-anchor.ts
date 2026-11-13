@@ -93,6 +93,11 @@ function stable(value: DemoDispositionSignerBindingV1): string {
 	})
 }
 
+/** Exact stable identity verifier for a bounded offline recovery. */
+export function demoDispositionStableIdentityForRecovery(value: DemoDispositionSignerBindingV1): string {
+	return stable(value)
+}
+
 export function demoDispositionEnrollmentPermit(options: {
 	participantId: 1 | 2 | 3 | 4
 	dkgRunId: string
@@ -181,6 +186,11 @@ function rustStateDigest(stateDirectory: string): string {
 	operations('admission-operations')
 	durableBinding('admission-durable-binding.json')
 	return sha256(JSON.stringify(['COCO_DEMO_RUST_SIGNER_SAFETY_STATE_V1', entries]))
+}
+
+/** Read-only verifier used by a bounded offline incident recovery preflight. */
+export function demoDispositionRustStateDigestForRecovery(stateDirectory: string): string {
+	return rustStateDigest(stateDirectory)
 }
 
 function proofSnapshot(database: Database): ProofSnapshot {

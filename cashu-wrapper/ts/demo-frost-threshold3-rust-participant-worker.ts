@@ -227,6 +227,7 @@ export function createDemoFrostThreshold3RustParticipantWorker(
 				expectedPackageDigest: exact.binding.packageDigest,
 				expectedCashuSigAllDigest: exact.binding.digest,
 				ports: policyPorts,
+				signal,
 			})
 			const authorization = demoFrostThreshold3AuthorizationForRequest({ dkgRunId, publicKeyPackageSha256 }, exact)
 			await options.stateGuard?.assertCurrent()

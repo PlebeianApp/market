@@ -20,6 +20,11 @@ import { createDemoFridayFreshPayoutStateReader, DEMO_FRIDAY_AUCTION_PAYOUT_READ
 import { createLoopbackCometBidBroadcaster, createLoopbackCometTxRecovery } from './demo-comet-bid-consensus'
 import { runDemoFridayAuthorityProcess } from './demo-friday-authority-process'
 import {
+	assertDemoFridayTerminalTimeoutOrder,
+	DEMO_FRIDAY_TERMINAL_FEDERATION_TIMEOUT_MS,
+	DEMO_FRIDAY_TERMINAL_PROCESS_TIMEOUT_MS,
+} from './demo-friday-terminal-timeouts'
+import {
 	DemoFridayTrustedTerminalSqlite,
 	createDemoFridayAuthorityHealth,
 } from './demo-friday-authority-runtime'
@@ -28,7 +33,10 @@ import {
 	DemoFridayDiscoveringTerminalSource,
 } from './demo-friday-terminal-discovery'
 import { createDemoFridayTerminalAuthorityRuntime } from './demo-friday-terminal-authority-runtime'
-import { DemoFridayCoordinatorSqlite } from './demo-friday-coordinator-runtime'
+import {
+	DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R82_20261113,
+	DemoFridayCoordinatorSqlite,
+} from './demo-friday-coordinator-runtime'
 import { DemoFridayCoordinatorRollbackAnchorSqlite } from './demo-friday-coordinator-rollback-anchor'
 import {
 	DemoFridayFundingReplayRollbackAnchorSqlite,
@@ -573,6 +581,9 @@ export async function main(): Promise<void> {
 	const sellerPlanAnchorDb = new Database(anchors.sellerPlan, { create: false, strict: true })
 	const auctionPayoutDb = new Database(join(root, 'auction-payout.sqlite3'), { create: false, strict: true })
 	const auctionPayoutAnchorDb = new Database(anchors.auctionPayout, { create: false, strict: true })
+	const stop = new AbortController()
+	const stopProcess = (): void => stop.abort()
+	for (const name of ['SIGINT', 'SIGTERM'] as const) process.once(name, stopProcess)
 	try {
 		const reader = makeReader(
    ((input, init) => fetch(input, { ...init, redirect: 'error' })) as typeof fetch)
@@ -584,6 +595,7 @@ export async function main(): Promise<void> {
 		const participants = await createDemoFridayTerminalParticipants({
 			root: join(application.dkg_root, '..'), dkg, coordinatorSecret,
 		}, signerAnchor)
+		assertDemoFridayTerminalTimeoutOrder()
 		if (participants.length !== 4) throw new Error('DEMO_FRIDAY_AUTHORITY_CLI: four signer transports are required')
 		const mintUrl = demoFridayMintIdentityUrl(application)
 		const healthPins: FridayHealthPins = { deploymentId: application.deployment_id, chainId: facts.chain_id,
@@ -773,7 +785,9 @@ export async function main(): Promise<void> {
 			participants: participants as [typeof participants[0], typeof participants[0], typeof participants[0], typeof participants[0]],
 			threshold: {
 					binaryPath: participantBinary, publicKeyPackagePath: dkg.publicKeyPackagePath,
-				scratchParent: join(root, 'scratch'), processTimeoutMs: 20_000, federationTimeoutMs: 25_000,
+				scratchParent: join(root, 'scratch'),
+				processTimeoutMs: DEMO_FRIDAY_TERMINAL_PROCESS_TIMEOUT_MS,
+				federationTimeoutMs: DEMO_FRIDAY_TERMINAL_FEDERATION_TIMEOUT_MS,
 			}, executorFor, recoveryAudit: audit(recoveryStore), nowSeconds: () => Math.floor(Date.now() / 1_000),
 		})
 		const baseTerminalSource = new DemoFridayTrustedTerminalSqlite(terminalDb, resolver)
@@ -912,7 +926,8 @@ export async function main(): Promise<void> {
 		})
 		const health = createDemoFridayAuthorityHealth({
 			deploymentId: application.deployment_id, chainId: facts.chain_id,
-			coordinatorStore, rollbackAnchor, terminalSource,
+			coordinatorStore, rollbackAnchor, terminalSource, signal: stop.signal,
+			preservedRecipientPending: DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R82_20261113,
 			commitReader: { async readExact(signal) {
     const healthReader = makeReader(
      ((input, init) => fetch(input, { ...init, signal, redirect: 'error' })) as typeof fetch)
@@ -920,7 +935,7 @@ export async function main(): Promise<void> {
 				return { chainId: state.observation.state.chain_id, height: state.observation.queryHeight }
 			} },
 		})
-  const readiness = createFridayReadinessProbe({ pins: healthPins, async collect(signal) {
+  const readiness = createFridayReadinessProbe({ pins: healthPins, signal: stop.signal, async collect(signal) {
    if (healthConfig === undefined || recoveryOnly !== undefined || process.env.POC_FRIDAY_BROWSER_READY !== 'true') throw new Error('HEALTH_NOT_CONFIGURED_OR_RECOVERY_ONLY')
    // All required observations are collected within the one outer deadline.
    const boundedReader = makeReader(
@@ -940,8 +955,6 @@ export async function main(): Promise<void> {
     mintReady: matchingFridayMint(liveMint.mintSnapshot, healthConfig),
     readySigners: signers }
   } })
-		const stop = new AbortController()
-		for (const name of ['SIGINT', 'SIGTERM'] as const) process.once(name, () => stop.abort())
 		// This listener is loopback-only. Ordinary V4 funding, FundingAbortV1,
 		// terminal 3-of-4 authorization, and browser Coco exchange are composed
 		// here; public proxy activation remains a separate reviewed action.
@@ -951,6 +964,7 @@ export async function main(): Promise<void> {
 			health, readiness, readinessPins: healthPins, readinessConfigSha256: healthConfig === undefined ? undefined : process.env.POC_FRIDAY_HEALTH_PINS_SHA256, degradedRecovery, fundingAdmission, terminalExchange, browserTrust, auctionPayout, fundingAbort, recoveryOnly, signal: stop.signal,
 		})
 	} finally {
+		for (const name of ['SIGINT', 'SIGTERM'] as const) process.removeListener(name, stopProcess)
 		key.fill(0); coordinatorSecret.fill(0)
 		auctionPayoutAnchorDb.close(false); auctionPayoutDb.close(false)
 		sellerPlanAnchorDb.close(false); sellerPlanDb.close(false)

@@ -7,6 +7,7 @@ import {
 	prepareDemoFridayAuctionPayoutAuthorization,
 	selectDemoFridayAuctionPayout,
 	verifyDemoFridayAuctionPayoutAuthorization,
+	verifyDemoFridayAuctionPayoutAuthorizationRegistration,
 	verifyDemoFridayAuctionPayoutSelectionStatic,
 	type DemoFridayAuctionPayoutAuthorizationEnvelopeV1,
 	type DemoFridayAuctionPayoutLiveAuctionV1,
@@ -392,7 +393,7 @@ export function createDemoFridayAuctionPayoutAuthority(options: {
 	const nowSeconds = options.nowSeconds ?? (() => Math.floor(Date.now() / 1_000))
 	const service: DemoFridayAuctionPayoutAuthorityPort = {
 		async registerExact(value) {
-			const verified = verifyDemoFridayAuctionPayoutAuthorization(value, options.keyset, nowSeconds())
+			const verified = verifyDemoFridayAuctionPayoutAuthorizationRegistration(value, options.keyset, nowSeconds())
 			const auction = await options.auctions.readExact(verified.authorization.auctionId)
             assertAuctionScope(verified, auction)
             options.registry.observeAuctionExact(auction)

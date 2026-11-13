@@ -6,7 +6,11 @@ import { bytesToHex } from '@noble/hashes/utils.js'
 import { deriveDemoCometSignedBidEvidence } from './demo-comet-signed-bid-verifier'
 import { createDemoCometCloseVerifier } from './demo-comet-close-verifier'
 import { createDemoCometRejectedFundingVerifier } from './demo-comet-rejected-funding-verifier'
-import { createDemoCometDisplacementVerifier, createLoopbackCometReader } from './demo-comet-displacement-verifier'
+import {
+	createDemoCometDisplacementVerifier,
+	createLoopbackCometReader,
+	type DemoParticipantConsensusReader,
+} from './demo-comet-displacement-verifier'
 import { createDemoFridayFundingAbortFinalityVerifier } from './demo-friday-funding-abort-comet'
 import { type DemoDispositionSignerAnchor } from './demo-disposition-signer-anchor'
 import { demoIntegratedDisplacementFinalityDigest } from './demo-integrated-authority'
@@ -73,6 +77,58 @@ export function assertDemoFipsTerminalPins(contract: DemoFridaySignerContract, v
 	return Object.freeze({ ...value })
 }
 
+/** One terminal policy authenticates one state snapshot; concurrent closure and bid checks share its exact reads. */
+export function createDemoFipsTerminalPolicyReader(
+	baseReader: DemoParticipantConsensusReader,
+	signal?: AbortSignal,
+): DemoParticipantConsensusReader {
+	let chainId: Promise<string> | undefined
+	let state: ReturnType<DemoParticipantConsensusReader['readCurrentState']> | undefined
+	const commits = new Map<number, ReturnType<DemoParticipantConsensusReader['readCommit']>>()
+	const blocks = new Map<number, ReturnType<DemoParticipantConsensusReader['readBlock']>>()
+	const guard = async <Value>(value: Promise<Value>, inner?: AbortSignal): Promise<Value> => {
+		signal?.throwIfAborted(); inner?.throwIfAborted()
+		const result = await value
+		signal?.throwIfAborted(); inner?.throwIfAborted()
+		return structuredClone(result)
+	}
+	return Object.freeze({
+		readChainId(inner?: AbortSignal) {
+			signal?.throwIfAborted(); inner?.throwIfAborted()
+			chainId ??= baseReader.readChainId(signal)
+			return guard(chainId, inner)
+		},
+		readCommit(height: number, inner?: AbortSignal) {
+			signal?.throwIfAborted(); inner?.throwIfAborted()
+			let value = commits.get(height)
+			if (value === undefined) {
+				value = baseReader.readCommit(height, signal)
+				commits.set(height, value)
+				// A future height may legitimately be unavailable on the first
+				// attempt. Share one in-flight read, but never memoize its failure:
+				// authenticatedDemoCometState must be able to observe H+1 later.
+				void value.catch(() => { if (commits.get(height) === value) commits.delete(height) })
+			}
+			return guard(value, inner)
+		},
+		readBlock(height: number, inner?: AbortSignal) {
+			signal?.throwIfAborted(); inner?.throwIfAborted()
+			let value = blocks.get(height)
+			if (value === undefined) {
+				value = baseReader.readBlock(height, signal)
+				blocks.set(height, value)
+				void value.catch(() => { if (blocks.get(height) === value) blocks.delete(height) })
+			}
+			return guard(value, inner)
+		},
+		readCurrentState(inner?: AbortSignal) {
+			signal?.throwIfAborted(); inner?.throwIfAborted()
+			state ??= baseReader.readCurrentState(signal)
+			return guard(state, inner)
+		},
+	})
+}
+
 /**
  * Every call performs fresh participant-local Comet and mint reads. The
  * coordinator supplies only a signed V2 lookup identity carried inside the
@@ -87,19 +143,32 @@ export function createDemoFipsTerminalPolicyPorts(options: {
 }): DemoFrostParticipantPolicyPorts {
 	const pins = assertDemoFipsTerminalPins(options.contract, options.pins)
 	const policy = structuredClone(options.policy)
-	const reader = createLoopbackCometReader(pins.cometRpc, demoFridaySignerCometFetch(options.contract, options.fetchImpl ?? fetch))
-	const displacement = createDemoCometDisplacementVerifier({ reader, ...pins })
-	const close = createDemoCometCloseVerifier({ reader, ...pins })
-	const rejected = createDemoCometRejectedFundingVerifier({ reader, ...pins })
-	const fundingAbort = createDemoFridayFundingAbortFinalityVerifier({
-		reader, validatorsHash: pins.validatorsHash,
-		pins: {
-			authNetworkId: pins.network, chainId: pins.chainId, genesisSha256: pins.genesisHash,
-			mintUrl: policy.mintUrl, activeKeysetId: policy.activeKeysetId,
-			committeePublicKey: policy.committeePublicKey, committeeKeysetId: pins.committeeKeysetId,
-			committeeKeysetVersion: pins.committeeKeysetVersion, dkgRunId: pins.dkgRunId,
-			publicKeyPackageSha256: pins.publicKeyPackageSha256, signerRosterDigest: pins.signerRosterDigest,
-		},
+	const baseReader = createLoopbackCometReader(pins.cometRpc, demoFridaySignerCometFetch(options.contract, options.fetchImpl ?? fetch))
+	let policyReader: DemoParticipantConsensusReader | undefined
+	let policySignal: AbortSignal | undefined
+	const readerFor = (signal?: AbortSignal): DemoParticipantConsensusReader => {
+		if (policyReader !== undefined) {
+			if (signal !== policySignal) throw new Error('DEMO_FIPS_TERMINAL_SIGNAL: one policy used different lifecycle signals')
+			return policyReader
+		}
+		policySignal = signal
+		policyReader = createDemoFipsTerminalPolicyReader(baseReader, signal)
+		return policyReader
+	}
+	const terminalVerifiers = (reader: DemoParticipantConsensusReader) => ({
+		displacement: createDemoCometDisplacementVerifier({ reader, ...pins }),
+		close: createDemoCometCloseVerifier({ reader, ...pins }),
+		rejected: createDemoCometRejectedFundingVerifier({ reader, ...pins }),
+		fundingAbort: createDemoFridayFundingAbortFinalityVerifier({
+			reader, validatorsHash: pins.validatorsHash,
+			pins: {
+				authNetworkId: pins.network, chainId: pins.chainId, genesisSha256: pins.genesisHash,
+				mintUrl: policy.mintUrl, activeKeysetId: policy.activeKeysetId,
+				committeePublicKey: policy.committeePublicKey, committeeKeysetId: pins.committeeKeysetId,
+				committeeKeysetVersion: pins.committeeKeysetVersion, dkgRunId: pins.dkgRunId,
+				publicKeyPackageSha256: pins.publicKeyPackageSha256, signerRosterDigest: pins.signerRosterDigest,
+			},
+		}),
 	})
 	const mintFetch = pins.mintUrl === pins.mintTransportUrl
 		? createOriginBoundMintFetch(pins.mintUrl, options.fetchImpl ?? fetch, { allowFipsUlaHttp: true })
@@ -107,7 +176,8 @@ export function createDemoFipsTerminalPolicyPorts(options: {
 
 	return Object.freeze({
 		closureVerifier: Object.freeze({
-			async verifyAndDerive(evidence: DemoFrostParticipantLocalEvidence) {
+			async verifyAndDerive(evidence: DemoFrostParticipantLocalEvidence, signal?: AbortSignal) {
+				const { displacement, close, rejected, fundingAbort } = terminalVerifiers(readerFor(signal))
 				const lookup = exactClosureLookup(evidence)
 				if (lookup.kind === 'funding_abort') {
 					const finalized = await fundingAbort.verifyExact({ operationId: policy.operationId,
@@ -178,7 +248,9 @@ export function createDemoFipsTerminalPolicyPorts(options: {
 			},
 		}),
 		signedBidVerifier: Object.freeze({
-			async verifyAndDerive(evidence: DemoFrostParticipantLocalEvidence) {
+			async verifyAndDerive(evidence: DemoFrostParticipantLocalEvidence, signal?: AbortSignal) {
+				const reader = readerFor(signal)
+				const { fundingAbort } = terminalVerifiers(reader)
 				exactSignedBidMarker(evidence)
 				const closure = policy.certifiedClosure.evidence
 				if (closure.schema === 'COCO_DEMO_FROST_PARTICIPANT_LOCAL_CLOSURE_EVIDENCE_V2'
@@ -206,7 +278,8 @@ export function createDemoFipsTerminalPolicyPorts(options: {
 			},
 		}),
 		proofUse: Object.freeze({
-			async assertExclusive(request: Parameters<DemoFrostParticipantPolicyPorts['proofUse']['assertExclusive']>[0]) {
+			async assertExclusive(request: Parameters<DemoFrostParticipantPolicyPorts['proofUse']['assertExclusive']>[0], signal?: AbortSignal) {
+				signal?.throwIfAborted()
 				const policyDigest = demoFrostParticipantPolicyDigest(policy)
 				if (request.network !== pins.network || request.chainId !== pins.chainId
 					|| request.mintUrl !== pins.mintUrl || request.mintUrl !== policy.mintUrl
@@ -215,7 +288,12 @@ export function createDemoFipsTerminalPolicyPorts(options: {
 					|| JSON.stringify(request.proofStateRefs) !== JSON.stringify(policy.deposits.map(({ proofStateRef }) => proofStateRef))) {
 					throw new Error('DEMO_FIPS_TERMINAL_PROOF_USE: request differs from exact policy or trust pins')
 				}
-				const client = new CashuMintClient({ mintUrl: pins.mintUrl, fetchImpl: mintFetch })
+				const requestMintFetch = signal === undefined ? mintFetch : (async (input, init) => {
+					const held = init?.signal
+					const bounded = held === undefined || held === null ? signal : AbortSignal.any([signal, held])
+					return mintFetch(input, { ...init, signal: bounded })
+				}) as typeof fetch
+				const client = new CashuMintClient({ mintUrl: pins.mintUrl, fetchImpl: requestMintFetch })
 				const active = (await client.keysets()).keysets.filter((entry) => entry.active && entry.unit === 'sat')
 				if (active.length !== 1 || active[0]!.id !== policy.activeKeysetId || (active[0]!.input_fee_ppk ?? 0) !== 0) {
 					throw new Error('DEMO_FIPS_TERMINAL_MINT: active zero-fee keyset differs from policy')
@@ -227,12 +305,14 @@ export function createDemoFipsTerminalPolicyPorts(options: {
 					throw new Error('DEMO_FIPS_TERMINAL_MINT: input DLEQ/keyset binding failed')
 				}
 				const refs = policy.committeeLockedProofs.map((proof) => bytesToHex(proofPoint(proof).toBytes(true)))
-				const response = await mintFetch(`${pins.mintUrl}/v1/checkstate`, {
+				signal?.throwIfAborted()
+				const response = await requestMintFetch(`${pins.mintUrl}/v1/checkstate`, {
 					method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ Ys: refs }),
 				})
 				if (!response.ok) throw new Error(`DEMO_FIPS_TERMINAL_MINT: NUT-07 returned HTTP ${response.status}`)
 				const exact = exactDemoNut07Result(refs, await response.json())
 				if (exact.states.some((state) => state !== 'UNSPENT')) throw new Error('DEMO_FIPS_TERMINAL_MINT: proof pool is not UNSPENT')
+				signal?.throwIfAborted()
 				options.anchor.claimProofs(refs.map((proofRef) => ({
 					proofRef, network: pins.network, chainId: pins.chainId, auctionId: policy.auctionId,
 					operationId: policy.operationId, policyDigest,

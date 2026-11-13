@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import {
 	createDemoFridayBrowserPaymentOperation, createDemoFridayBrowserPaymentState,
+	validateDemoFridayBrowserPaymentOperation, validateDemoFridayBrowserPaymentRevision,
 	validateDemoFridayFakeFundingRecord,
 } from './demo-friday-browser-payment-state'
 
@@ -41,6 +42,8 @@ describe('Friday browser private payment state', () => {
 			reservedPoolAmount: 600, replacesBidId: 'a'.repeat(64), keysetId: '00deadbeef',
 			priorLeaderActor: 'e'.repeat(64), winnerRecipientPublicKey: `03${'4'.repeat(64)}`,
 			winnerRecipientCapabilityDigest: 'f'.repeat(64), winnerOutputsDigest: '1'.repeat(64),
+			trustedDeploymentDigest: '8'.repeat(64),
+			trustedAuctionFunding: { schema: 'PLEBEIAN_FRIDAY_TRUSTED_AUCTION_FUNDING_V1', leaderBidId: 'a'.repeat(64) },
 			denominationKeyDigest: 'b'.repeat(64), denominationAmounts: [1, 2, 4], mintNuts: [4, 7, 9, 10, 11, 12],
 			inputFeePpk: 0, committeePublicKey: committee, committeeKeysetId: 'committee-1',
 			committeeKeysetVersion: 'version-1', dkgRunId: 'dkg-1', publicKeyPackageSha256: 'c'.repeat(64),
@@ -52,6 +55,20 @@ describe('Friday browser private payment state', () => {
 		expect(operation.lock.bidderPubkey).toBe(operation.paymentPublicKey)
 		expect(operation.lock.refundPubkey).toBe(operation.refundPublicKey)
 		expect(operation.paymentSecret).not.toBe(operation.refundSecret)
+		expect(operation.trustedAuctionFunding).toEqual({
+			schema: 'PLEBEIAN_FRIDAY_TRUSTED_AUCTION_FUNDING_V1', leaderBidId: 'a'.repeat(64),
+		})
+		expect(operation.trustedDeploymentDigest).toBe('8'.repeat(64))
+		const advanced = { ...structuredClone(operation), revision: 1 }
+		expect(() => validateDemoFridayBrowserPaymentRevision(operation, advanced, 0)).not.toThrow()
+		expect(() => validateDemoFridayBrowserPaymentRevision(operation, {
+			...advanced, trustedAuctionFunding: {
+				schema: 'PLEBEIAN_FRIDAY_TRUSTED_AUCTION_FUNDING_V1', leaderBidId: '9'.repeat(64),
+			},
+		}, 0)).toThrow(/immutable terms changed/)
+		expect(() => validateDemoFridayBrowserPaymentRevision(operation, {
+			...advanced, trustedDeploymentDigest: '7'.repeat(64),
+		}, 0)).toThrow(/immutable terms changed/)
 		expect(JSON.stringify({
 			actor: operation.actor, operation: operation.fundingOperationId, bidAmount: operation.bidAmount,
 			reservedPoolAmount: operation.reservedPoolAmount, lock: operation.lock,
@@ -77,6 +94,37 @@ describe('Friday browser private payment state', () => {
 		expect(() => createDemoFridayBrowserPaymentOperation({
 			...base, canonicalMintUrl: 'https://172.105.64.142', reservedPoolAmount: 5_001,
 		}, deterministicRandom())).toThrow(/terms are invalid/)
+	})
+
+	test('requires an exact terminal ack before its durable confirmation and never permits confirmation rollback', () => {
+		const operation = createDemoFridayBrowserPaymentOperation({
+			actor, environmentId: 'friday-live', authNetworkId: 'friday-network', chainId: 'friday-chain',
+			auctionId: 'auction-1', fundingOperationId: 'funding-ack-1', canonicalMintUrl: 'https://172.105.64.142',
+			mintPublicKey: `02${'3'.repeat(64)}`, mintServerVersion: 'Nutshell/0.19.2', bidAmount: 12,
+			fullPoolAmount: 12, reservedPoolAmount: 12, replacesBidId: '', keysetId: '00deadbeef',
+			priorLeaderActor: '', winnerRecipientPublicKey: `03${'4'.repeat(64)}`,
+			winnerRecipientCapabilityDigest: 'f'.repeat(64), winnerOutputsDigest: '1'.repeat(64),
+			denominationKeyDigest: 'b'.repeat(64), denominationAmounts: [4, 8], mintNuts: [4, 7, 9, 10, 11, 12],
+			inputFeePpk: 0, committeePublicKey: committee, committeeKeysetId: 'committee-1',
+			committeeKeysetVersion: 'version-1', dkgRunId: 'dkg-1', publicKeyPackageSha256: 'c'.repeat(64),
+			signerRosterDigest: 'd'.repeat(64), locktime: 10_000,
+		}, deterministicRandom())
+		const acknowledgement = {
+			schema: 'PLEBEIAN_FRIDAY_COCO_TERMINAL_ACK_V1' as const, actor,
+			fundingOperationId: operation.fundingOperationId, noticeDigest: 'e'.repeat(64),
+			importReceipt: { schema: 'COCO_DEMO_RECIPIENT_IMPORT_RECEIPT_V1' as const,
+				operationId: operation.fundingOperationId, role: 'refund' as const,
+				recipientPublicKey: operation.refundPublicKey, amount: 12, proofCount: 2, imported: true as const },
+			recipientAckSignature: 'a'.repeat(128),
+		}
+		expect(() => validateDemoFridayBrowserPaymentOperation({ ...operation, terminalAckConfirmed: true }))
+			.toThrow(/confirmation lacks its exact persisted request/)
+		const pending = validateDemoFridayBrowserPaymentOperation({ ...operation, pendingTerminalAck: acknowledgement })
+		const confirmed = { ...pending, revision: pending.revision + 1, terminalAckConfirmed: true as const }
+		expect(validateDemoFridayBrowserPaymentRevision(pending, confirmed, pending.revision).terminalAckConfirmed).toBe(true)
+		expect(() => validateDemoFridayBrowserPaymentRevision(confirmed,
+			{ ...confirmed, revision: confirmed.revision + 1, terminalAckConfirmed: undefined }, confirmed.revision))
+			.toThrow(/immutable terms changed/)
 	})
 })
 

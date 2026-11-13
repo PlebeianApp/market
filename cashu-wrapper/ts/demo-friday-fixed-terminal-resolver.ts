@@ -52,6 +52,13 @@ import type { DemoFrostProcessParticipant } from './demo-frost-process-boundary'
 import { proofPoint } from './nut-client'
 
 const HEX_32 = /^[0-9a-f]{64}$/
+/**
+ * Consensus block reads are authenticated and have no payment side effects.
+ * Fetch a small bounded window concurrently, then validate and checkpoint the
+ * returned blocks strictly in height order.  Signing, mint execution and
+ * recipient import remain outside this resolver and stay serial.
+ */
+const TERMINAL_SCAN_BLOCK_READ_CONCURRENCY = 8
 const ID = /^[A-Za-z0-9_-]{1,160}$/
 
 export type DemoFridayTerminalDescriptorV1 = {
@@ -145,6 +152,7 @@ export class DemoFridayTerminalDescriptorSqlite implements DemoFridayTerminalDes
 		).get(reference)
 		if (row === null) return null
 		const value = exactDescriptor(JSON.parse(row.descriptor_json) as DemoFridayTerminalDescriptorV1)
+		if (value.reference !== reference) fail('stored terminal descriptor reference differs from lookup key')
 		if (demoFridayTerminalDescriptorDigest(value) !== row.identity_digest) fail('stored terminal descriptor digest changed')
 		return value
 	}
@@ -153,8 +161,9 @@ export class DemoFridayTerminalDescriptorSqlite implements DemoFridayTerminalDes
 	 * Advance one crash-safe bounded history page.  The first observation fixes
 	 * the terminal search horizon; later drain passes resume the exact same
 	 * cursor instead of rescanning from admission or silently abandoning a long
-	 * auction.  Each committed block is checkpointed independently, so a crash
-	 * can repeat at most one authenticated read.
+	 * auction.  Read-only block fetches use one bounded concurrent window, while
+	 * every committed block is validated and checkpointed in height order.  A
+	 * crash can repeat at most one read window and cannot repeat a payment effect.
 	 */
 	async scanHistoryPageExact(options: {
 		request: DemoFridayTerminalScanRequestV1
@@ -170,21 +179,31 @@ export class DemoFridayTerminalDescriptorSqlite implements DemoFridayTerminalDes
 		if (request.observedEndHeight < record.targetHeight) fail('terminal observation regressed below scan horizon')
 		let scannedBlocks = 0
 		while (record.nextHeight <= record.targetHeight && scannedBlocks < options.maxBlocks) {
-			const height = record.nextHeight
-			const block = await options.readBlock(height)
-			if (block.height !== height || !Array.isArray(block.transactions)) fail('terminal history block height differs')
-			const matches = block.transactions.filter((raw) => options.matches(raw)).length
-			if (matches > 1 || (matches === 1 && record.foundHeight !== 0)) {
-				fail('terminal event appears in more than one committed transaction')
+			const batchStart = record.nextHeight
+			const batchSize = Math.min(
+				TERMINAL_SCAN_BLOCK_READ_CONCURRENCY,
+				options.maxBlocks - scannedBlocks,
+				record.targetHeight - batchStart + 1,
+			)
+			const blocks = await Promise.all(Array.from({ length: batchSize }, (_, offset) =>
+				options.readBlock(batchStart + offset)))
+			for (let offset = 0; offset < blocks.length; offset++) {
+				const height = batchStart + offset
+				const block = blocks[offset]!
+				if (block.height !== height || !Array.isArray(block.transactions)) fail('terminal history block height differs')
+				const matches = block.transactions.filter((raw) => options.matches(raw)).length
+				if (matches > 1 || (matches === 1 && record.foundHeight !== 0)) {
+					fail('terminal event appears in more than one committed transaction')
+				}
+				const next: DemoFridayTerminalScanRecordV1 = {
+					...record, nextHeight: height + 1,
+					foundHeight: matches === 1 ? height : record.foundHeight,
+					revision: record.revision + 1,
+				}
+				this.#checkpointScan(record, next)
+				record = next
+				scannedBlocks++
 			}
-			const next: DemoFridayTerminalScanRecordV1 = {
-				...record, nextHeight: height + 1,
-				foundHeight: matches === 1 ? height : record.foundHeight,
-				revision: record.revision + 1,
-			}
-			this.#checkpointScan(record, next)
-			record = next
-			scannedBlocks++
 		}
 		const complete = record.nextHeight > record.targetHeight
 		if (complete && record.foundHeight === 0) fail('terminal event is absent from committed history')
@@ -390,6 +409,13 @@ async function commonPolicy(options: {
 		})), committeeLockedProofs: template.inputs.map((proof) => structuredClone(proof)),
 		outputs: template.outputs.map((output) => structuredClone(output)),
 		recipientCapability: structuredClone(template.recipientCapability), packageDigest: template.templateDigest,
+		...(template.schema !== 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3' ? {} : { recipientCatalog: {
+			schema: 'COCO_DEMO_FROST_WINNER_RECIPIENT_CATALOG_V1' as const,
+			operationId: template.auctionPayoutAuthorization!.authorization.catalogOperationId,
+			outputs: template.auctionPayoutAuthorization!.authorization.recipientCatalog.outputs
+				.map((output) => structuredClone(output)),
+			selectedIndexes: [...template.auctionPayoutSelection!.selectedIndexes],
+		} }),
 		cashuSigAllDigest: template.cashuSigAllDigest,
 		actorPackageAuthorization: structuredClone(options.actorPackageAuthorization),
 		certifiedClosure: { evidenceDigest: options.evidenceDigest, evidence: closureEvidence },

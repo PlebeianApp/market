@@ -158,6 +158,24 @@ function validateCertificate(value: DemoCertifiedCloseV1): DemoCertifiedCloseV1 
 	return certificate
 }
 
+export function assertDemoIntegratedCloseRecipientBinding(options: {
+	receiptSchema: DemoIntegratedFundingReceiptAny['schema']
+	certificateSellerPaymentPublicKey?: string
+	template: Pick<DemoMaintainerExactBranchTemplate,
+		'schema' | 'sellerPaymentPublicKey' | 'recipientPublicKey'>
+	role: 'winner_settlement' | 'refund'
+}): void {
+	if (options.receiptSchema !== 'PlebeianAuctionsPOCIntegratedFundingV4') return
+	const { template } = options
+	if (!['COCO_DEMO_MAINTAINER_EXACT_BRANCH_V2', 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3'].includes(template.schema)
+		|| (template.schema === 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3' && options.role !== 'winner_settlement')
+		|| template.sellerPaymentPublicKey !== options.certificateSellerPaymentPublicKey
+		|| (options.role === 'winner_settlement'
+			&& template.recipientPublicKey !== options.certificateSellerPaymentPublicKey)) {
+		refuse('DEMO_CLOSE_RECIPIENT', 'V4 terminal template changed the auction-committed Coco seller key')
+	}
+}
+
 export function demoIntegratedCloseDigest(value: DemoCertifiedCloseV1): string { return digest(validateCertificate(value)) }
 
 /**
@@ -201,12 +219,12 @@ export async function deriveAndAuthorizeDemoIntegratedClose(options: {
 		|| template.locktime !== certificate.timing.locktime) {
 		refuse('DEMO_CLOSE_TEMPLATE', 'terminal template differs from the certified active funding pool')
 	}
-	if (receipt.schema === 'PlebeianAuctionsPOCIntegratedFundingV4'
-		&& (template.schema !== 'COCO_DEMO_MAINTAINER_EXACT_BRANCH_V2'
-			|| template.sellerPaymentPublicKey !== certificate.sellerPaymentPublicKey
-			|| (role === 'winner_settlement' && template.recipientPublicKey !== certificate.sellerPaymentPublicKey))) {
-		refuse('DEMO_CLOSE_RECIPIENT', 'V4 terminal template changed the auction-committed Coco seller key')
-	}
+	assertDemoIntegratedCloseRecipientBinding({
+		receiptSchema: receipt.schema,
+		certificateSellerPaymentPublicKey: certificate.sellerPaymentPublicKey,
+		template,
+		role,
+	})
 	if (!Number.isSafeInteger(options.nowSeconds) || options.nowSeconds < certificate.commits[2].blockTime
 		|| options.nowSeconds >= certificate.timing.mainCutoff
 		|| options.nowSeconds >= demoSigAllSettlementCutoff(template.locktime)) {

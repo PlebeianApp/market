@@ -3,6 +3,7 @@ package poc
 import (
 	"context"
 	"errors"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -149,6 +150,9 @@ func TestR20CloseTriggerSubmitsOneSortedEligibleAuctionAndObservesCommit(t *test
 	after := closeState(100, closeAuction("z-auction", "open", 90), closeAuction("a-auction", "closed", 80))
 	port := &scriptedR20ClosePort{states: []r20CloseState{before, after}, closeCode: 200}
 	trigger := newR20CloseTrigger(port, func() time.Time { return time.Unix(100, 0) })
+	if !trigger.ready() {
+		t.Fatal("new close trigger is unexpectedly unhealthy")
+	}
 	if err := trigger.Step(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -164,11 +168,41 @@ func TestR20CloseTriggerQuarantinesPermanentRejectionWithoutImmediateRetry(t *te
 	if err := trigger.Step(context.Background()); err == nil || err.Error() != "R20_CLOSE_PERMANENT_REJECTION_QUARANTINED" {
 		t.Fatalf("first error=%v", err)
 	}
+	if trigger.ready() {
+		t.Fatal("permanent close rejection did not latch unhealthy readiness")
+	}
 	if err := trigger.Step(context.Background()); err != nil {
 		t.Fatalf("quarantined follow-up=%v", err)
 	}
 	if len(port.closed) != 1 {
 		t.Fatalf("permanent rejection was retried: %v", port.closed)
+	}
+}
+
+func TestR20CloseTriggerQuarantineFailsPublicBrowserReadinessClosed(t *testing.T) {
+	open := closeState(100, closeAuction("auction-1", "open", 90))
+	port := &scriptedR20ClosePort{states: []r20CloseState{open, open}, closeCode: 409}
+	trigger := newR20CloseTrigger(port, func() time.Time { return time.Unix(100, 0) })
+	manifest, server := exactR20CloseActivationFixture()
+	server.manifest = manifest
+	server.runtimeReadyProbe = func(context.Context) bool { return true }
+	server.closeTriggerReady = trigger.ready
+	if !server.browserRuntimeReady(context.Background()) {
+		t.Fatal("healthy close trigger did not permit otherwise-ready runtime")
+	}
+	if err := trigger.Step(context.Background()); err == nil || err.Error() != "R20_CLOSE_PERMANENT_REJECTION_QUARANTINED" {
+		t.Fatalf("quarantine error=%v", err)
+	}
+	if server.browserRuntimeReady(context.Background()) {
+		t.Fatal("close-trigger quarantine did not fail browser runtime readiness")
+	}
+	response := httptest.NewRecorder()
+	server.config(response, httptest.NewRequest("GET", "/api/config", nil))
+	body := response.Body.String()
+	for _, expected := range []string{`"automatic_close_healthy":false`, `"browser_threshold_admission_ready":false`, `"browser_threshold_wallet_ready":false`} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("missing %s in config: %s", expected, body)
+		}
 	}
 }
 
@@ -208,19 +242,21 @@ func exactR20CloseActivationFixture() (NetworkManifest, *APIServer) {
 		CommitteeKeysetID: fridayR20KeysetID, CommitteeKeysetVersion: fridayR20KeysetVersion,
 		DKGRunID: fridayR20DKGRunID, PublicKeyPackageSHA256: strings.Repeat("22", 32),
 		SignerRosterDigest: strings.Repeat("33", 32)}
-	release := &BrowserReleasePinsV1{Schema: "PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V1",
+	release := &BrowserReleasePinsV1{Schema: browserReleasePinsSchemaV2,
 		DeploymentID: fridayR20DeploymentID, AuthNetworkID: pins.AuthNetworkID, ChainID: pins.ChainID,
-		GenesisSHA256: pins.GenesisSHA256, CashuMintURL: pins.MintURL, CommitteePublicKey: pins.CommitteePublicKey,
+		GenesisSHA256: pins.GenesisSHA256, ValidatorsHash: strings.Repeat("55", 32), CashuMintURL: pins.MintURL, CommitteePublicKey: pins.CommitteePublicKey,
 		CommitteeKeysetID: pins.CommitteeKeysetID, CommitteeKeysetVersion: pins.CommitteeKeysetVersion,
 		DKGRunID: pins.DKGRunID, PublicKeyPackageSHA256: pins.PublicKeyPackageSHA256,
-		SignerRosterDigest:      pins.SignerRosterDigest,
-		FakeFundingPolicyDigest: "3588ddbd214b3c1e57926b77a20c070249c1d468fbbe1592ff85e18daf4ae069"}
+		SignerRosterDigest: pins.SignerRosterDigest, FakeFundingPolicyDigest: "3588ddbd214b3c1e57926b77a20c070249c1d468fbbe1592ff85e18daf4ae069",
+		AuctionPolicyDigest:  "257fb5bf2b414f206278ada15464030a075d6f4f51b9c2f6b965259136f9a777",
+		AuctionPaymentDigest: "4d88017e3d191421aa46702ca9b6670fb324162c4c39d3ce4604bbfcfec3492b"}
+	policy := DefaultPolicy()
 	manifest := NetworkManifest{Schema: "PlebeianAuctionsPOCNetworkV4", Mode: "remote",
 		ApplicationAuthority: ApplicationAuthorityFrostCashu, DeploymentID: fridayR20DeploymentID,
 		ChainID: pins.ChainID, CashuMintURL: pins.MintURL, CommitteePublicKey: pins.CommitteePublicKey,
-		FundingAbortPins: &pins, R20RuntimeBindingDigest: strings.Repeat("44", 32),
-		Policy: Policy{FaucetAmount: 10_000, FaucetCap: 50_000}}
-	return manifest, &APIServer{manifest: manifest, browserThresholdReady: true, browserReleasePins: release}
+		FundingAbortPins: &pins, R20RuntimeBindingDigest: strings.Repeat("44", 32), Policy: policy}
+	return manifest, &APIServer{manifest: manifest, browserThresholdReady: true, browserReleasePins: release,
+		closeTriggerReady: func() bool { return true }}
 }
 
 func setExactR20CloseActivationEnvironment(t *testing.T) {
@@ -274,6 +310,12 @@ func TestR20CloseTriggerActivationRejectsEachSecurityBoundaryNearMiss(t *testing
 		{"pins absent", func(_ *NetworkManifest, server *APIServer) { server.browserReleasePins = nil }},
 		{"pins differ", func(_ *NetworkManifest, server *APIServer) {
 			server.browserReleasePins.GenesisSHA256 = strings.Repeat("55", 32)
+		}},
+		{"timing policy pin differs", func(_ *NetworkManifest, server *APIServer) {
+			server.browserReleasePins.AuctionPolicyDigest = strings.Repeat("66", 32)
+		}},
+		{"payment policy pin differs", func(_ *NetworkManifest, server *APIServer) {
+			server.browserReleasePins.AuctionPaymentDigest = strings.Repeat("77", 32)
 		}},
 	}
 	for _, test := range tests {

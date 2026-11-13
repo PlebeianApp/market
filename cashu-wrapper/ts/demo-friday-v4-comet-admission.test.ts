@@ -25,7 +25,10 @@ import {
 import type { DemoFridayFundingAdmissionCommitV1, DemoFridayFundingReplayRecordV1 } from './demo-friday-prepared-funding'
 import type { DemoMaintainerOfflineRecord } from './demo-maintainer-offline'
 import { DemoFridayAuthenticatedTerminalDiscovery } from './demo-friday-terminal-discovery'
-import { DemoFridayTerminalDescriptorSqlite } from './demo-friday-fixed-terminal-resolver'
+import {
+	demoFridayTerminalDescriptorDigest,
+	DemoFridayTerminalDescriptorSqlite,
+} from './demo-friday-fixed-terminal-resolver'
 import { DemoFridayTrustedTerminalSqlite } from './demo-friday-authority-runtime'
 
 const H = 40
@@ -343,6 +346,7 @@ describe('Friday V4 authenticated Comet admission', () => {
 		const source = new DemoFridayTrustedTerminalSqlite(sourceDb, {
 			async resolveExact() { throw new Error('resolver is not used by discovery') },
 		})
+		let storedReads = 0
 		const discovery = new DemoFridayAuthenticatedTerminalDiscovery({
 			reader: value.reader,
 			pins: {
@@ -357,17 +361,52 @@ describe('Friday V4 authenticated Comet admission', () => {
 			},
 			prepared: {
 				listAdmittedExact() { return [structuredClone(replay)] },
-				readStoredExact(eventId) { return value.prepared.readStoredExact(eventId) },
+				readStoredExact(eventId) { storedReads++; return value.prepared.readStoredExact(eventId) },
 			},
 			descriptors, source,
 		})
 		try {
 			expect(await discovery.discoverExact()).toBe(1)
 			const descriptor = await descriptors.readExact(`terminal-${replay.eventId.slice(0, 32)}`)
+			if (descriptor === null) throw new Error('expected authenticated terminal descriptor')
 			expect(descriptor).toMatchObject({
 				branch: 'rejected_return', eventHeight: H, eventId: value.transaction.event.id,
 			})
 			expect(source.pendingCount()).toBe(1)
+			expect(storedReads).toBe(1)
+			const stableResult = JSON.stringify({ stable: true })
+			sourceDb.query(`UPDATE friday_terminal_references
+				SET phase = 'queued', revision = 2, result_json = ?`).run(stableResult)
+			expect(await discovery.discoverExact()).toBe(0)
+			expect(storedReads).toBe(1)
+			expect(source.pendingCount()).toBe(0)
+			expect(sourceDb.query<{ phase: string; revision: number; result_json: string }, []>(
+				'SELECT phase, revision, result_json FROM friday_terminal_references',
+			).get()).toEqual({ phase: 'queued', revision: 2, result_json: stableResult })
+			// Simulate a crash after the authenticated descriptor committed but
+			// before its queue insertion.  Rediscovery must reconstruct the queue
+			// reference without repeating the expensive stored-package/history path.
+			sourceDb.exec('DELETE FROM friday_terminal_references')
+			expect(await discovery.discoverExact()).toBe(0)
+			expect(storedReads).toBe(1)
+			expect(source.pendingCount()).toBe(1)
+			expect(await discovery.discoverExact()).toBe(0)
+			expect(storedReads).toBe(1)
+			expect(source.pendingCount()).toBe(1)
+			sourceDb.query('UPDATE friday_terminal_references SET identity_digest = ?').run('0'.repeat(64))
+			await expect(discovery.discoverExact()).rejects.toThrow(/reference identity changed/)
+			expect(storedReads).toBe(1)
+
+			// A descriptor whose authenticated bytes name another reference must
+			// fail before a queue row can be recreated.
+			sourceDb.exec('DELETE FROM friday_terminal_references')
+			const mismatched = { ...descriptor, reference: `terminal-${'f'.repeat(32)}` }
+			descriptorDb.query(`UPDATE friday_terminal_descriptors
+				SET identity_digest = ?, descriptor_json = ? WHERE reference = ?`).run(
+				demoFridayTerminalDescriptorDigest(mismatched), JSON.stringify(mismatched), descriptor.reference,
+			)
+			await expect(discovery.discoverExact()).rejects.toThrow(/reference differs from lookup key/)
+			expect(source.pendingCount()).toBe(0)
 		} finally {
 			descriptorDb.close()
 			sourceDb.close()

@@ -6,8 +6,61 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
+
+func TestBrowserConfigReadinessCoalescesOnlyConcurrentPresentationProbes(t *testing.T) {
+	t.Parallel()
+	_, server := exactR20CloseActivationFixture()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var calls atomic.Int32
+	server.runtimeReadyProbe = func(context.Context) bool {
+		if calls.Add(1) == 1 {
+			close(started)
+		}
+		<-release
+		return true
+	}
+
+	const readers = 32
+	results := make(chan bool, readers)
+	go func() { results <- server.browserConfigRuntimeReady(context.Background()) }()
+	<-started
+	for range readers - 1 {
+		go func() { results <- server.browserConfigRuntimeReady(context.Background()) }()
+	}
+	// Keep the leader blocked long enough for every follower to join its flight.
+	time.Sleep(25 * time.Millisecond)
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("concurrent public config reads started %d authority probes", got)
+	}
+	close(release)
+	for range readers {
+		if !<-results {
+			t.Fatal("coalesced healthy readiness returned false")
+		}
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("one completed flight used %d authority probes", got)
+	}
+
+	// Flights are not a cache. A later config read must re-check authority
+	// health, while mutation handlers continue to use browserRuntimeReady
+	// directly.
+	server.runtimeReadyProbe = func(context.Context) bool {
+		calls.Add(1)
+		return false
+	}
+	if server.browserConfigRuntimeReady(context.Background()) {
+		t.Fatal("a later config read reused stale healthy readiness")
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("later config read did not perform one fresh probe: %d", got)
+	}
+}
 
 func TestR20ReadinessBlocksDirectMutationBeforeRPC(t *testing.T) {
 	t.Parallel()
@@ -41,6 +94,11 @@ func TestR20ReadinessBlocksDirectMutationBeforeRPC(t *testing.T) {
 		}
 	}
 	ready = true
+	server.closeTriggerReady = nil
+	if server.browserRuntimeReady(context.Background()) {
+		t.Fatal("missing automatic close trigger did not block direct admission")
+	}
+	server.closeTriggerReady = func() bool { return true }
 	server.browserThresholdReady = false
 	if server.browserRuntimeReady(context.Background()) {
 		t.Fatal("static browser-disable flag did not block direct admission")
@@ -56,7 +114,7 @@ func TestR20ReadinessIdentityAndRecoveryStatus(t *testing.T) {
 		"quarantined": false, "consensusAvailable": true, "newOperationsReady": true, "mode": "normal",
 		"funding": "enabled_two_step_nip07", "readinessConfigSha256": server.healthPinsSHA256, "lastCommittedHeight": 10,
 		"readinessPins": map[string]any{"deploymentId": pins.DeploymentID, "chainId": pins.ChainID, "genesisSha256": pins.GenesisSHA256,
-			"validatorsHash": strings.Repeat("b", 64), "mintUrl": pins.CashuMintURL, "committeeKeysetId": pins.CommitteeKeysetID,
+			"validatorsHash": pins.ValidatorsHash, "mintUrl": pins.CashuMintURL, "committeeKeysetId": pins.CommitteeKeysetID,
 			"committeeKeysetVersion": pins.CommitteeKeysetVersion, "dkgRunId": pins.DKGRunID,
 			"publicKeyPackageSha256": pins.PublicKeyPackageSHA256, "signerRosterDigest": pins.SignerRosterDigest}}
 	raw, _ := json.Marshal(good)

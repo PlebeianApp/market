@@ -31,12 +31,21 @@ import {
 	type DemoRoundTwoRequest,
 	type DemoSignatureShare,
 } from './demo-sigall-settlement'
-import type { DemoPolicyVerifiedFrostParticipantPort } from './demo-frost-threshold3-process-boundary'
+import {
+	DemoFrostThreshold3ProcessError,
+	type DemoPolicyVerifiedFrostParticipantPort,
+} from './demo-frost-threshold3-process-boundary'
 
 const PARTICIPANT_IDS = [1, 2, 3, 4] as const
 const COMPRESSED_KEY = /^(?:02|03)[0-9a-f]{64}$/
 const HEX_32 = /^[0-9a-f]{64}$/
 const HEX_64 = /^[0-9a-f]{128}$/
+const SAFE_REMOTE_REFUSALS = new Set([
+	'LOCAL_ADMISSION_STALE', 'LOCAL_ADMISSION_BINDING', 'LOCAL_ADMISSION_POOL',
+	'LOCAL_ABORT_TIME', 'LOCAL_ABORT_BINDING', 'LOCAL_ABORT_LIFECYCLE',
+	'LOCAL_MINT_BINDING', 'LOCAL_MINT_SPENT', 'LOCAL_QUORUM_BINDING',
+	'READ_UNAVAILABLE', 'QUARANTINED', 'AUTH_BINDING', 'JOURNAL_CONFLICT',
+])
 
 export interface DemoMaintainerFederationRequest extends DemoCommitteeAuthorizationRequest {
 	threshold: 3
@@ -193,6 +202,23 @@ function boundedParticipantCall<T>(run: () => Promise<T>, timeoutMs: number): Pr
 				},
 			)
 	})
+}
+
+function safeRoundOneFailure(error: unknown): string {
+	if (error instanceof Error && error.message === 'maintainer round timed out') return 'TIMEOUT'
+	if (error instanceof DemoFrostThreshold3ProcessError
+		&& error.code === 'DEMO_FROST_T3_PROCESS_REMOTE_REFUSAL'
+		&& error.safeReason !== undefined
+		&& (SAFE_REMOTE_REFUSALS.has(error.safeReason) || /^HTTP_[1-5][0-9][0-9]$/.test(error.safeReason))) {
+		return error.safeReason
+	}
+	if (error instanceof Error) {
+		const match = /^DEMO_SIGNER_RPC_REMOTE_REFUSAL:(HTTP_[1-5][0-9][0-9]|[A-Z_]+)$/.exec(error.message)
+		if (match !== null && (SAFE_REMOTE_REFUSALS.has(match[1]!) || /^HTTP_[1-5][0-9][0-9]$/.test(match[1]!))) {
+			return match[1]!
+		}
+	}
+	return 'UNAVAILABLE'
 }
 
 /**
@@ -388,7 +414,18 @@ export function createDemoThreeOfFourMaintainerFederationPort(
 				return [{ participant, commitment: structuredClone(response.value.commitment) }]
 			})
 			if (admitted.length < 3) {
-				refuse('DEMO_MAINTAINER_THRESHOLD_UNAVAILABLE', 'fewer than three maintainers independently approved the exact finalized outcome')
+				const admittedIds = new Set(admitted.map(({ participant }) => participant.participantId))
+				const failures = responses.flatMap((response, index) => {
+					const participantId = eligible[index]!.participantId
+					if (admittedIds.has(participantId)) return []
+					return [{ participantId, reason: response.status === 'rejected'
+						? safeRoundOneFailure(response.reason) : 'INVALID_RESPONSE' }]
+				})
+				refuse(
+					'DEMO_MAINTAINER_THRESHOLD_UNAVAILABLE',
+					`fewer than three maintainers independently approved the exact finalized outcome; round-one ${failures.map(({ participantId, reason }) => `${participantId}:${reason}`).join(',')}`,
+					failures.map(({ participantId }) => participantId),
+				)
 			}
 			const selected = admitted.slice(0, 3)
 			const commitments = selected.map(({ commitment }) => commitment)

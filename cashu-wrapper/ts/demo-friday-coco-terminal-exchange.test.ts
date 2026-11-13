@@ -27,6 +27,10 @@ describe('Friday Coco terminal exchange', () => {
 		const exchange = new DemoFridayCocoTerminalExchangeSqlite(new Database(':memory:'), 'friday-blue')
 		expect(exchange.publishExact(notice, RECIPIENT)).toEqual(notice)
 		expect(exchange.readExact({ actor: notice.actor, fundingOperationId: notice.operationId })).toEqual(notice)
+		expect(exchange.readStatusExact({ actor: notice.actor, fundingOperationId: notice.operationId })).toEqual({
+			schema: 'PLEBEIAN_FRIDAY_COCO_TERMINAL_STATUS_V1', actor: notice.actor,
+			fundingOperationId: notice.operationId, noticePresent: true, acknowledged: false,
+		})
 		const noticeDigest = demoFridayCocoTerminalNoticeDigest(notice)
 		const receipt = { schema: 'COCO_DEMO_RECIPIENT_IMPORT_RECEIPT_V1' as const, operationId: notice.operationId,
 			role: 'refund' as const, recipientPublicKey: RECIPIENT, amount: 12, proofCount: 2, imported: true as const }
@@ -39,12 +43,21 @@ describe('Friday Coco terminal exchange', () => {
 		expect(exchange.acknowledgeExact(ack)).toEqual(ack)
 		expect(exchange.acknowledgeExact(ack)).toEqual(ack)
 		expect(exchange.hasAck(notice.operationId)).toBe(true)
+		expect(exchange.readStatusExact({ actor: notice.actor, fundingOperationId: notice.operationId }).acknowledged).toBe(true)
 	})
 
 	test('hides another actor notice and rejects receipt or acknowledgement-key substitution', () => {
 		const exchange = new DemoFridayCocoTerminalExchangeSqlite(new Database(':memory:'), 'friday-blue')
 		exchange.publishExact(notice, RECIPIENT)
 		expect(exchange.readExact({ actor: H('3'), fundingOperationId: notice.operationId })).toBeNull()
+		expect(exchange.readStatusExact({ actor: H('3'), fundingOperationId: notice.operationId })).toEqual({
+			schema: 'PLEBEIAN_FRIDAY_COCO_TERMINAL_STATUS_V1', actor: H('3'),
+			fundingOperationId: notice.operationId, noticePresent: false, acknowledged: false,
+		})
+		expect(exchange.readStatusExact({ actor: notice.actor, fundingOperationId: 'operation-missing' })).toEqual({
+			schema: 'PLEBEIAN_FRIDAY_COCO_TERMINAL_STATUS_V1', actor: notice.actor,
+			fundingOperationId: 'operation-missing', noticePresent: false, acknowledged: false,
+		})
 		const noticeDigest = demoFridayCocoTerminalNoticeDigest(notice)
 		const receipt = { schema: 'COCO_DEMO_RECIPIENT_IMPORT_RECEIPT_V1' as const, operationId: notice.operationId,
 			role: 'refund' as const, recipientPublicKey: RECIPIENT, amount: 12, proofCount: 2, imported: true as const }

@@ -16,6 +16,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -26,6 +27,17 @@ import (
 
 //go:embed static/*
 var staticFiles embed.FS
+
+// devNsecSignerBuild is deliberately disabled in ordinary and release builds.
+// A local developer must opt in at build time with -ldflags
+// '-X github.com/maximotodev/plebeian-auctions-poc/internal/poc.devNsecSignerBuild=enabled'
+// and at runtime with PLEBEIAN_DEV_NSEC_SIGNER=true. Ordinary release binaries
+// remain fail-closed even if the runtime flag is accidentally present.
+var devNsecSignerBuild = "disabled"
+
+func devNsecSignerAllowed(buildValue, environmentValue string) bool {
+	return buildValue == "enabled" && environmentValue == "true"
+}
 
 type NodeStatus struct {
 	Slot                  int    `json:"slot"`
@@ -46,11 +58,12 @@ type NodeStatus struct {
 }
 
 type APIServer struct {
-	manifest      NetworkManifest
-	clients       []*rpchttp.HTTP
-	offline       func(int) error
-	cashu         *httputil.ReverseProxy
-	legacyInterim bool
+	manifest             NetworkManifest
+	clients              []*rpchttp.HTTP
+	offline              func(int) error
+	cashu                *httputil.ReverseProxy
+	legacyInterim        bool
+	devNsecSignerEnabled bool
 	// Explicit activation is combined with current runtime readiness for UI
 	// flags and direct R20 broadcasts. Authority/mint retain their own checks.
 	browserThresholdReady bool
@@ -62,8 +75,22 @@ type APIServer struct {
 	// loopback Friday authority service.
 	recoveryOnly      bool
 	runtimeReadyProbe func(context.Context) bool
+	// Public catalogue tabs poll /api/config independently. Coalesce only
+	// overlapping presentation probes so a burst of tabs cannot serialize the
+	// loopback authority health endpoint behind identical six-second checks.
+	// Mutation handlers deliberately keep calling browserRuntimeReady directly.
+	configReadinessMu     sync.Mutex
+	configReadinessFlight *configReadinessFlight
+	// The automatic close trigger installs this local health latch before the
+	// HTTP listener starts. A permanent close rejection fails readiness closed.
+	closeTriggerReady func() bool
 	healthPinsSHA256  string
 	observerNodeID    string
+}
+
+type configReadinessFlight struct {
+	done  chan struct{}
+	ready bool
 }
 
 const browserReleasePinsPath = "/etc/plebeian-auctions-friday/browser-r20-pins.json"
@@ -74,6 +101,7 @@ type BrowserReleasePinsV1 struct {
 	AuthNetworkID           string `json:"auth_network_id"`
 	ChainID                 string `json:"chain_id"`
 	GenesisSHA256           string `json:"genesis_sha256"`
+	ValidatorsHash          string `json:"validators_hash"`
 	CashuMintURL            string `json:"cashu_mint_url"`
 	CommitteePublicKey      string `json:"committee_public_key"`
 	CommitteeKeysetID       string `json:"committee_keyset_id"`
@@ -82,7 +110,11 @@ type BrowserReleasePinsV1 struct {
 	PublicKeyPackageSHA256  string `json:"public_key_package_sha256"`
 	SignerRosterDigest      string `json:"signer_roster_digest"`
 	FakeFundingPolicyDigest string `json:"fake_funding_policy_digest"`
+	AuctionPolicyDigest     string `json:"auction_policy_digest"`
+	AuctionPaymentDigest    string `json:"auction_payment_policy_digest"`
 }
+
+const browserReleasePinsSchemaV2 = "PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V2"
 
 func browserDeploymentProfile(deployment, mint, keyset, version, dkg string) bool {
 	if deployment == fridaySeparatedDeploymentID {
@@ -92,12 +124,13 @@ func browserDeploymentProfile(deployment, mint, keyset, version, dkg string) boo
 }
 
 func validateBrowserReleasePins(value BrowserReleasePinsV1) error {
-	if value.Schema != "PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V1" ||
+	if value.Schema != browserReleasePinsSchemaV2 ||
 		!browserDeploymentProfile(value.DeploymentID, value.CashuMintURL, value.CommitteeKeysetID, value.CommitteeKeysetVersion, value.DKGRunID) || !validOperationID(value.AuthNetworkID) ||
-		!validOperationID(value.ChainID) || !validLowerHex(value.GenesisSHA256, 32) ||
+		!validOperationID(value.ChainID) || !validLowerHex(value.GenesisSHA256, 32) || !validLowerHex(value.ValidatorsHash, 32) ||
 		!validCompressedPublicKey(value.CommitteePublicKey) ||
 		!validLowerHex(value.PublicKeyPackageSHA256, 32) || !validLowerHex(value.SignerRosterDigest, 32) ||
-		!validLowerHex(value.FakeFundingPolicyDigest, 32) {
+		!validLowerHex(value.FakeFundingPolicyDigest, 32) || !validLowerHex(value.AuctionPolicyDigest, 32) ||
+		!validLowerHex(value.AuctionPaymentDigest, 32) {
 		return errors.New("browser release pins are malformed or differ from the fixed R20 deployment")
 	}
 	return nil
@@ -218,6 +251,7 @@ func NewAPIServer(manifest NetworkManifest, offline func(int) error) (*APIServer
 	}
 	return &APIServer{observerNodeID: observerNodeID, manifest: manifest, clients: clients, offline: offline, cashu: proxy,
 		legacyInterim:         os.Getenv("POC_ENABLE_LEGACY_INTERIM") == "true",
+		devNsecSignerEnabled:  devNsecSignerAllowed(devNsecSignerBuild, os.Getenv("PLEBEIAN_DEV_NSEC_SIGNER")),
 		browserThresholdReady: browserReady, browserReleasePins: browserPins,
 		recoveryOnly: recoveryOnlyValue == "true", healthPinsSHA256: os.Getenv("POC_FRIDAY_HEALTH_PINS_SHA256")}, nil
 }
@@ -263,7 +297,7 @@ func (server *APIServer) Handler() (http.Handler, error) {
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		response.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data: https:; frame-ancestors 'none'")
+		response.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' wss://relay.powr.build; img-src 'self' data: https:; frame-ancestors 'none'")
 		response.Header().Set("Referrer-Policy", "no-referrer")
 		response.Header().Set("X-Content-Type-Options", "nosniff")
 		response.Header().Set("X-Frame-Options", "DENY")
@@ -272,6 +306,9 @@ func securityHeaders(next http.Handler) http.Handler {
 }
 
 const r20FakeFundingPolicySchema = "PLEBEIAN_FRIDAY_R20_FAKE_FUNDING_POLICY_V1"
+const r20AuctionPolicySchema = "PLEBEIAN_AUCTION_TIMING_POLICY_V1"
+const r20AuctionPaymentPolicySchema = "PLEBEIAN_FRIDAY_AUCTION_PAYMENT_POLICY_V1"
+const r20AuctionPaymentMaximum int64 = 50_000
 
 func r20FakeFundingPolicy(policy Policy) map[string]any {
 	canonical := fmt.Sprintf("{\"max_per_request\":%d,\"max_resulting_balance\":%d,\"schema\":%q}",
@@ -286,18 +323,67 @@ func r20FakeFundingPolicy(policy Policy) map[string]any {
 	}
 }
 
+func r20AuctionPolicy(policy Policy) map[string]any {
+	defaultDuration := DefaultAuctionDurationSeconds
+	if defaultDuration < policy.MinDurationSeconds {
+		defaultDuration = policy.MinDurationSeconds
+	}
+	if policy.MaxDurationSeconds > 0 && defaultDuration > policy.MaxDurationSeconds {
+		defaultDuration = policy.MaxDurationSeconds
+	}
+	return map[string]any{
+		"schema":                      r20AuctionPolicySchema,
+		"min_duration_seconds":        policy.MinDurationSeconds,
+		"max_duration_seconds":        policy.MaxDurationSeconds,
+		"default_duration_seconds":    defaultDuration,
+		"late_bid_window_seconds":     policy.LateBidWindow,
+		"late_bid_extension_seconds":  policy.LateBidExtension,
+		"max_total_extension_seconds": policy.MaxTotalExtension,
+		"emergency_recovery_seconds":  EmergencyRecoverySeconds,
+	}
+}
+
+func r20AuctionPaymentPolicy() map[string]any {
+	return map[string]any{
+		"schema":         r20AuctionPaymentPolicySchema,
+		"max_bid_amount": r20AuctionPaymentMaximum,
+		"max_payout":     r20AuctionPaymentMaximum,
+	}
+}
+
+func r20PolicyDigest(value map[string]any) string {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:])
+}
+
+func r20AuctionPolicyDigest(policy Policy) string {
+	return r20PolicyDigest(r20AuctionPolicy(policy))
+}
+
+func r20AuctionPaymentPolicyDigest() string {
+	return r20PolicyDigest(r20AuctionPaymentPolicy())
+}
+
 func (server *APIServer) browserPinsReady() bool {
 	thresholdRoute := server.manifest.Schema == "PlebeianAuctionsPOCNetworkV4"
 	pins := server.manifest.FundingAbortPins
 	fundingPolicyDigest, _ := r20FakeFundingPolicy(server.manifest.Policy)["digest"].(string)
-	return thresholdRoute && pins != nil && browserDeploymentProfile(server.manifest.DeploymentID, pins.MintURL, pins.CommitteeKeysetID, pins.CommitteeKeysetVersion, pins.DKGRunID) &&
+	auctionPolicyDigest := r20AuctionPolicyDigest(server.manifest.Policy)
+	auctionPaymentDigest := r20AuctionPaymentPolicyDigest()
+	return thresholdRoute && pins != nil && server.browserReleasePins != nil && validateBrowserReleasePins(*server.browserReleasePins) == nil &&
+		browserDeploymentProfile(server.manifest.DeploymentID, pins.MintURL, pins.CommitteeKeysetID, pins.CommitteeKeysetVersion, pins.DKGRunID) &&
+		validateFridayGenesisPolicy(server.manifest.Policy) == nil && validateFridayDeploymentPolicy(server.manifest.DeploymentID, server.manifest.Policy) == nil &&
 		pins.AuthNetworkID != "" && pins.ChainID == server.manifest.ChainID &&
 		pins.MintURL == server.manifest.CashuMintURL &&
 		pins.CommitteePublicKey == server.manifest.CommitteePublicKey &&
 		validLowerHex(pins.GenesisSHA256, 32) && validOperationID(pins.ActiveKeysetID) &&
 		validCompressedPublicKey(pins.CommitteePublicKey) &&
 		validLowerHex(pins.PublicKeyPackageSHA256, 32) && validLowerHex(pins.SignerRosterDigest, 32) &&
-		server.browserReleasePins != nil && server.browserReleasePins.DeploymentID == server.manifest.DeploymentID &&
+		server.browserReleasePins.DeploymentID == server.manifest.DeploymentID &&
 		server.browserReleasePins.AuthNetworkID == pins.AuthNetworkID && server.browserReleasePins.ChainID == pins.ChainID &&
 		server.browserReleasePins.GenesisSHA256 == pins.GenesisSHA256 && server.browserReleasePins.CashuMintURL == pins.MintURL &&
 		server.browserReleasePins.CommitteePublicKey == pins.CommitteePublicKey &&
@@ -306,15 +392,19 @@ func (server *APIServer) browserPinsReady() bool {
 		server.browserReleasePins.DKGRunID == pins.DKGRunID &&
 		server.browserReleasePins.PublicKeyPackageSHA256 == pins.PublicKeyPackageSHA256 &&
 		server.browserReleasePins.SignerRosterDigest == pins.SignerRosterDigest &&
-		server.browserReleasePins.FakeFundingPolicyDigest == fundingPolicyDigest
+		server.browserReleasePins.FakeFundingPolicyDigest == fundingPolicyDigest &&
+		server.browserReleasePins.AuctionPolicyDigest == auctionPolicyDigest &&
+		server.browserReleasePins.AuctionPaymentDigest == auctionPaymentDigest
 }
 
 func (server *APIServer) config(response http.ResponseWriter, request *http.Request) {
 	thresholdRoute := server.manifest.Schema == "PlebeianAuctionsPOCNetworkV4"
 	pins := server.manifest.FundingAbortPins
 	fundingPolicy := r20FakeFundingPolicy(server.manifest.Policy)
+	auctionPolicy := r20AuctionPolicy(server.manifest.Policy)
+	auctionPolicyDigest := r20PolicyDigest(auctionPolicy)
 	pinsReady := server.browserPinsReady()
-	ready := pinsReady && server.browserRuntimeReady(request.Context())
+	ready := pinsReady && server.browserConfigRuntimeReady(request.Context())
 	paymentAttestation := "validators verify the coordinator reservation signature; they do not independently inspect Cashu bearer proofs"
 	walletAuthority := "custodial Coco v2 wallet against a Nutshell FakeWallet mint"
 	bidFunding := "application-level custodial reservation; not a mint-enforced lock"
@@ -330,7 +420,8 @@ func (server *APIServer) config(response http.ResponseWriter, request *http.Requ
 		"cashu_mint_url":          server.manifest.CashuMintURL,
 		"committee_public_key":    server.manifest.CommitteePublicKey,
 		"faucet_amount":           server.manifest.Policy.FaucetAmount,
-		"default_auction_seconds": 600,
+		"default_auction_seconds": auctionPolicy["default_duration_seconds"],
+		"auction_policy":          auctionPolicy,
 		"shared_application_key":  !thresholdRoute,
 		"threshold_custody":       thresholdRoute,
 		"fips_transport":          thresholdRoute,
@@ -343,15 +434,18 @@ func (server *APIServer) config(response http.ResponseWriter, request *http.Requ
 		// funding. The future two-phase API must set both readiness flags only
 		// after its exact build/config has been reviewed and installed.
 		"browser_threshold_wallet_ready": ready,
+		"automatic_close_healthy":        server.closeTriggerReady != nil && server.closeTriggerReady(),
 		"recovery_only":                  server.recoveryOnly,
 		"payment_attestation":            paymentAttestation,
 		"wallet_authority":               walletAuthority,
 		"bid_funding":                    bidFunding,
 		"fault_control_enabled":          server.offline != nil,
 		"legacy_interim_enabled":         server.legacyInterim,
+		"dev_nsec_signer_enabled":        server.devNsecSignerEnabled,
 	}
 	if thresholdRoute {
 		config["fake_funding_policy"] = fundingPolicy
+		config["auction_payment_policy"] = r20AuctionPaymentPolicy()
 	}
 	if pinsReady {
 		config["deployment_id"] = server.manifest.DeploymentID
@@ -362,6 +456,9 @@ func (server *APIServer) config(response http.ResponseWriter, request *http.Requ
 		config["dkg_run_id"] = pins.DKGRunID
 		config["public_key_package_sha256"] = pins.PublicKeyPackageSHA256
 		config["signer_roster_digest"] = pins.SignerRosterDigest
+		config["validators_hash"] = server.browserReleasePins.ValidatorsHash
+		config["auction_policy_digest"] = auctionPolicyDigest
+		config["auction_payment_policy_digest"] = r20AuctionPaymentPolicyDigest()
 	}
 	writeJSON(response, http.StatusOK, config)
 }

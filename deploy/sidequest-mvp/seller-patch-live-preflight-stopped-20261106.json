@@ -1,0 +1,117 @@
+{
+  "schema": "PLEBEIAN_SELLER_PATCH_LIVE_PREFLIGHT_STOPPED_V1",
+  "status": "STOPPED_BEFORE_AUTHENTICATION_SSH_HOST_KEY_MISMATCH_NO_LIVE_MUTATION",
+  "observedAtUtc": "2026-11-06T01:40:15Z",
+  "target": {
+    "role": "APP",
+    "ipv4": "139.162.161.233",
+    "publicOrigin": "https://139.162.161.233",
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "deploymentId": "friday-demo-20261030-separated-v1"
+  },
+  "authorizationInterpreted": {
+    "deploymentPreflight": true,
+    "fakeSatEndToEndAfterSafeActivation": true,
+    "serviceStopBackupInstallEnvironmentStoreAndUnitMutation": false,
+    "sshHostKeyReplacementOrAcceptance": false
+  },
+  "effects": {
+    "sshAuthenticationCompleted": false,
+    "remoteCommandExecuted": false,
+    "servicesStoppedStartedOrRestarted": false,
+    "filesEnvironmentUnitsOrNginxChanged": false,
+    "databasesStoresAnchorsOrJournalsChanged": false,
+    "credentialsReadCreatedOrChanged": false,
+    "signaturesRequested": false,
+    "liveBidsOrFakeSatsMoved": false
+  },
+  "blockingIdentityCheck": {
+    "pinnedEd25519Fingerprint": "SHA256:u0mwwvg/X0rEhgl6MPZaAKD/JzZ9Lyl9RZWkXubbCBM",
+    "presentedEd25519Fingerprint": "SHA256:vwneIrYnA381zb6bYV+WBrydo4zrv+hzNIwkrL7WN7g",
+    "presentedFingerprintConfirmedByIndependentKeyscan": true,
+    "strictHostKeyCheckingStoppedBeforeAuthentication": true,
+    "requiredResolution": "Independently verify the APP host-key rotation through the hosting provider or an already trusted console. Do not replace the pin based only on this network observation."
+  },
+  "publicReadOnlyChecks": {
+    "strictTlsRootStatus": 200,
+    "serverDateComparedWithLocalUtcSeconds": "within 1",
+    "profile": "FAKE_MONEY_ONLY",
+    "thresholdCustody": true,
+    "finalReadinessContinuity": [
+      {"browserThresholdWalletReady": true, "browserThresholdAdmissionReady": true, "recoveryOnly": false},
+      {"browserThresholdWalletReady": true, "browserThresholdAdmissionReady": true, "recoveryOnly": false}
+    ],
+    "initialTransientReadinessObservation": {
+      "browserThresholdWalletReady": false,
+      "browserThresholdAdmissionReady": false
+    },
+    "publicWebSocketStrictTlsUpgrade": "connected_without_credentials",
+    "authenticatedBrowserProfileWebSocket": "not_proven",
+    "servedRelease": {
+      "qualification": "R14 predecessor UI still exposes the legacy seller approval loop",
+      "appJsSha256": "7a05654909c3215573510c4546defcfa86e89a50187252215dec6bddfc76d8c6",
+      "fridayBrowserJsSha256": "100780900b556422f549b13bcc222c372630dfdd835b4378e846eca34f0cb1e2"
+    },
+    "publicState": {
+      "auctionCount": 37,
+      "bidCount": 21,
+      "sevenPreservedLegacyOperationIdsPresent": true,
+      "databaseTerminalNoticeAndAcknowledgementState": "not_proven_without_trusted_server_access"
+    }
+  },
+  "freshnessSamples": [
+    {"stateHeight": 157325, "validatorHeight": 157327, "ageSeconds": 5.225, "signatures": 4, "onlineValidators": 4},
+    {"stateHeight": 157333, "validatorHeight": 157335, "ageSeconds": 4.859, "signatures": 4, "onlineValidators": 4},
+    {"stateHeight": 157344, "validatorHeight": 157347, "ageSeconds": 6.027, "signatures": 4, "onlineValidators": 4},
+    {"stateHeight": 157352, "validatorHeight": 157355, "ageSeconds": 5.973, "signatures": 4, "onlineValidators": 4},
+    {"stateHeight": 157360, "validatorHeight": 157363, "ageSeconds": 6.460, "signatures": 4, "onlineValidators": 4}
+  ],
+  "freshnessQualification": {
+    "maximumAuthenticatedHeadAgeSeconds": 10,
+    "maximumFutureSkewSeconds": 2,
+    "allPublicSamplesInsidePolicy": true,
+    "allSamplesOneBlockAndAppHashAcrossFourValidators": true,
+    "appNtpSynchronization": "not_proven_without_trusted_server_access"
+  },
+  "candidateArtifacts": {
+    "backendRelease": "sidequest-mvp-r4-seller-patch-r38",
+    "siteRelease": "sidequest-mvp-r4-site-r17",
+    "authority": {"bytes": 99653664, "sha256": "07733396fef23b1c5284a354ef35bfe73174994a1bd0f91a1993d17ab5a6024f"},
+    "coordinator": {"bytes": 98657868, "sha256": "eebaaf66dfba7d86a429a91b9f7e555c815e13f47709859f59b9888688a4cf91"},
+    "terminalExecutor": {"bytes": 99116862, "sha256": "cf5f3d016ef68b26ac45b8a16539a4169d628629e405414dad9fa6fc673d92d0"},
+    "site": {"bytes": 46625128, "sha256": "ae6f901b9f3fdc20686c6cd954522561f9b0252916cfbd9587606ee432488dec"},
+    "backendGuardFixture": "PASS_WITH_10_AND_2",
+    "siteGuardFixture": "PASS"
+  },
+  "serverInternalPreflightNotRun": [
+    "active service paths, PIDs and restart counts",
+    "APP NTP synchronization and local clock discipline",
+    "absence of both auction-payout stores",
+    "seven legacy terminal notices, acknowledgements, request digests and mint-effect evidence",
+    "runtime and anchor database integrity, WAL and SHM inventory",
+    "backup destination availability and metadata preservation",
+    "installed predecessor guard, unit, environment and nginx hashes"
+  ],
+  "activationSequenceAfterIdentityAndApproval": [
+    "Verify the new SSH host key through an independent trusted channel and pin it without removing the predecessor evidence.",
+    "Repeat the complete read-only server-internal preflight and stop on any discrepancy.",
+    "Fence new work by stopping site, then authority, then coordinator; keep observer, mint, validators and signers running.",
+    "Take one timestamped non-overwriting metadata-preserving backup of runtime, WAL/SHM, independent anchors, environment, units, nginx and predecessor releases; verify its manifest and copied SQLite integrity read-only.",
+    "Install R38 and R17 into new release directories without overwriting R36 or R14 and run both successor guards.",
+    "Add exactly the 10-second head-age and 2-second future-skew environment values.",
+    "Create the two absent auction-payout stores once as the runtime owner; any pre-existing target is a stop condition.",
+    "Preserve predecessor units, install successor units, daemon-reload, rerun guards, then start coordinator, authority and site in that order.",
+    "Verify exact artifacts, readiness, public HTTPS/WebSocket behavior and the unchanged seven-operation inventory before any fake-sat operation.",
+    "Run the already authorized fresh-profile fake-sat acceptance and require settlement, acknowledgements, exact balances and conservation evidence before claiming success."
+  ],
+  "principalRisks": [
+    "Trusting an unverified SSH host key could connect to the wrong machine.",
+    "Stopping services creates a public admission outage until guarded restart or rollback.",
+    "A partial runtime/anchor backup or restore could violate monotonic recovery evidence or duplicate a fake-sat effect.",
+    "Creating stores or changing environment/units against unexpected live state could make the successor fail closed.",
+    "After any new R38 operation or uncertain mint effect, database rollback is unsafe; preserve state and enter recovery-only review.",
+    "Public freshness currently fits 10/2, but APP NTP synchronization is not yet proven.",
+    "A WebSocket transport connection was proven, not an authenticated browser-profile subscription."
+  ],
+  "exactActivationApprovalRequest": "After the APP SSH host-key rotation is independently verified and the complete server-internal read-only preflight passes, may I stop site, authority and coordinator; create and verify the full non-overwriting backup; install the exact R38/R17 artifacts into new directories; add only the approved 10/2 freshness values; initialize the two absent auction-payout stores once; install the successor units; start coordinator, authority and site in order; and then run the already approved fake-sat end-to-end workflow? I will stop on the first discrepancy, preserve all credentials, journals and legacy records, and will not claim success without settlement and exact-balance evidence."
+}

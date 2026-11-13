@@ -40,6 +40,19 @@ describe('fixed terminal descriptor journal', () => {
 		}
 	})
 
+	test('binds the internal descriptor reference to its lookup key', async () => {
+		const database = new Database(':memory:', { strict: true }); databases.push(database)
+		const journal = new DemoFridayTerminalDescriptorSqlite(database)
+		const value = descriptor()
+		journal.persistAuthenticatedExact(value)
+		const mismatched = { ...value, reference: 'terminal-2' }
+		database.query(`UPDATE friday_terminal_descriptors
+			SET identity_digest = ?, descriptor_json = ? WHERE reference = ?`).run(
+			demoFridayTerminalDescriptorDigest(mismatched), JSON.stringify(mismatched), value.reference,
+		)
+		await expect(journal.readExact(value.reference)).rejects.toThrow(/reference differs from lookup key/)
+	})
+
 	test('durably pages terminal history beyond the former 5000-block limit', async () => {
 		const database = new Database(':memory:', { strict: true }); databases.push(database)
 		const request = {
@@ -89,5 +102,68 @@ describe('fixed terminal descriptor journal', () => {
 		await expect(reopened.scanHistoryPageExact({
 			request, maxBlocks: 5, readBlock, matches: () => true,
 		})).rejects.toThrow(/more than one/)
+	})
+
+	test('fetches one bounded read-only window concurrently and checkpoints it in height order', async () => {
+		const database = new Database(':memory:', { strict: true }); databases.push(database)
+		const journal = new DemoFridayTerminalDescriptorSqlite(database)
+		const request = {
+			fundingOperationId: 'operation-window', admissionEventId: '2'.repeat(64),
+			kind: 'close' as const, targetId: 'auction-window', startHeight: 100, observedEndHeight: 111,
+		}
+		let active = 0, peak = 0
+		const release = new Map<number, () => void>()
+		const reads: number[] = [], completions: number[] = []
+		const pending = journal.scanHistoryPageExact({
+			request, maxBlocks: 12,
+			readBlock: async (height) => {
+				reads.push(height); active++; peak = Math.max(peak, active)
+				await new Promise<void>((resolve) => release.set(height, resolve))
+				active--; completions.push(height)
+				return { height, transactions: height === 110 ? [new TextEncoder().encode('close')] : [] }
+			},
+			matches: (raw) => new TextDecoder().decode(raw) === 'close',
+		})
+		await Promise.resolve()
+		expect(reads).toEqual([100, 101, 102, 103, 104, 105, 106, 107])
+		expect(peak).toBe(8)
+		for (const height of [...reads].reverse()) release.get(height)!()
+		while (reads.length < 12) await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(reads).toEqual([100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111])
+		const checkpoint = JSON.parse(database.query<{ record_json: string }, []>(
+			'SELECT record_json FROM friday_terminal_scan_cursors',
+		).get()!.record_json) as { nextHeight: number; revision: number }
+		expect(checkpoint).toMatchObject({ nextHeight: 108, revision: 8 })
+		for (const height of reads.slice(8).reverse()) release.get(height)!()
+		expect(await pending).toEqual({ complete: true, foundHeight: 110, scannedBlocks: 12 })
+		expect(completions).toHaveLength(12)
+	})
+
+	test('a failed read window checkpoints no partial progress and resumes safely after restart', async () => {
+		const database = new Database(':memory:', { strict: true }); databases.push(database)
+		const request = {
+			fundingOperationId: 'operation-window-restart', admissionEventId: '3'.repeat(64),
+			kind: 'event' as const, targetId: '4'.repeat(64), startHeight: 200, observedEndHeight: 207,
+		}
+		const first = new DemoFridayTerminalDescriptorSqlite(database)
+		await expect(first.scanHistoryPageExact({
+			request, maxBlocks: 8,
+			readBlock: async (height) => {
+				if (height === 204) throw new Error('authenticated reader unavailable')
+				return { height, transactions: [] }
+			},
+			matches: () => false,
+		})).rejects.toThrow(/reader unavailable/)
+		let resumedReads = 0
+		const reopened = new DemoFridayTerminalDescriptorSqlite(database)
+		expect(await reopened.scanHistoryPageExact({
+			request, maxBlocks: 8,
+			readBlock: async (height) => {
+				resumedReads++
+				return { height, transactions: height === 206 ? [new TextEncoder().encode('event')] : [] }
+			},
+			matches: (raw) => new TextDecoder().decode(raw) === 'event',
+		})).toEqual({ complete: true, foundHeight: 206, scannedBlocks: 8 })
+		expect(resumedReads).toBe(8)
 	})
 })

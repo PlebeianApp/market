@@ -6,7 +6,7 @@ the four voting validators and each retains its own FROST share. APP is not a
 fifth validator and must not receive a validator key or FROST share.
 
 The demo proves a fake-sat auction journey. It does not establish real-money,
-production, federal-FIPS, high-availability or independent-operator safety.
+production, high-availability or independent-operator safety.
 
 ## Build and local verification
 

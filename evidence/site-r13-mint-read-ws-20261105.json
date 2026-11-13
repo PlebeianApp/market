@@ -1,0 +1,38 @@
+{
+  "schema": "PLEBEIAN_SITE_R13_MINT_READ_WS_RECEIPT_V1",
+  "observed_at": "2026-11-05T20:21:31Z",
+  "scope": "Only safe mint-read pacing/429 retries and exact NUT-17 nginx WebSocket upgrade; no offline-seller patch",
+  "host": "139.162.161.233",
+  "isolated_source": "/tmp/plebeian-site-r13.kfL5lV",
+  "baseline_browser_sha256": "46f7547328ab95508228eca2097ad3df38db4901c34eb5e7c97d4c26f283c8db",
+  "baseline_reconstruction": "HEAD plus deployed expired-prelock recovery; browser byte-identical to live before patch",
+  "site_sha256": "e4c30959606b4085d0b02f7b376123c1fa30c3003444aa9b2840ef0e42178f0a",
+  "browser_sha256": "f521315cdda25e62d914e74c715f4952054d366ac79ba73e1e5b91336f78bc67",
+  "nginx_sha256": "f0ce698971fc99fd96ac205a0452a147badfca677c5219876665c3f21874ccfa",
+  "site_pid": 1295080,
+  "site_nrestarts": 0,
+  "checks": {
+    "focused_tests": "27 pass, 150 assertions",
+    "scoped_typecheck": "pass",
+    "go_internal_poc": "pass",
+    "full_friday_typecheck": "Existing reconstructed-baseline authority optional-method and recovery mock errors; not claimed passing",
+    "nginx_test": "pass",
+    "site_http": 200,
+    "public_ws_unauthenticated": 401,
+    "direct_mint_ws": 101,
+    "authenticated_public_ws": "untested: no accessible signed-in browser/credentials"
+  },
+  "preserved": [
+    "authority/coordinator/observer PIDs",
+    "all journals and wallets",
+    "current CSP",
+    "request/mutation/connection limits",
+    "user tabs"
+  ],
+  "prior_nonterminal_journals": "7 historical closed-auction broadcasts and 7 recipient_pending entries preserved, not claimed settled",
+  "rollback": {
+    "site_binary": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-site-r12/bin/plebeian-auctions-mvp",
+    "unit": "/etc/systemd/system/.plebeian-friday-site.pre-r13.service",
+    "nginx": "/etc/nginx/.plebeian-friday-public-demo-active.pre-r13.conf"
+  }
+}

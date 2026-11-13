@@ -18,16 +18,21 @@ test('A3 shipped seller UI has no legacy approval state, controls, or controller
 });
 
 test('A3 creation checks the committed listing before registering the bounded offline authorization', () => {
-  const committedRead = app.indexOf('const committed=await refreshCommittedAuction(id,result.height)');
-  const exactCheck = app.indexOf('committed.starting_bid!==starting');
+  const retained = app.indexOf('writeListingAttempt(submitted)');
+  const committedRead = app.indexOf('committed = await refreshCommittedAuction(attempt.auctionId, height)');
+  const exactCheck = app.indexOf('if (!listingMatches(attempt, committed))');
   const authorization = app.indexOf('await authorizeCommittedAuctionPayout(committed)');
   const success = app.lastIndexOf('covers bids while the seller is offline');
-  assert.ok(committedRead >= 0);
-  assert.ok(committedRead < exactCheck && exactCheck < authorization && authorization < success);
+  assert.ok(retained >= 0 && committedRead >= 0);
+  assert.ok(retained < committedRead && committedRead < exactCheck && exactCheck < authorization && authorization < success);
   assert.match(app, /async function refreshCommittedAuction\(auctionId, minimumHeight, attempts = 3\)/);
   assert.match(app, /height >= minimumHeight && auction/);
-  assert.match(app, /maximumPayout: 50000/);
-  assert.match(app, /validUntil: maximumEndTime \+ 900/);
+  assert.match(app, /Persistent listing recovery storage is unavailable/);
+  assert.match(app, /Its submission outcome is uncertain, so auction creation is blocked/);
+  assert.match(app, /maximumPayout: payment\.policy\.maxPayout/);
+  assert.match(app, /payment\.policy\.maxBidAmount/);
+  assert.match(app, /ui\.payoutWindow\(originalEndTime, state\.config\?\.auction_policy\)/);
+  assert.match(app, /validUntil: timing\.validUntil/);
 });
 
 test('A3 legacy controller recovery remains available but is not exposed as a bidding prerequisite', () => {

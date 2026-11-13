@@ -21,6 +21,7 @@ import {
 import { demoMaintainerExactTemplateDigest, type DemoMaintainerExactBranchTemplate } from './demo-maintainer-offline'
 import { buildDemoSigAllSecret, demoCashuSigAllDigest, demoOutputsDigest, demoRecipientCapabilityDigest } from './demo-sigall-settlement'
 import { proofPoint } from './nut-client'
+import { DEMO_EMERGENCY_RECOVERY_SECONDS, DEMO_MAX_EXTENSION_SECONDS } from './demo-auction-timing-policy'
 import { secp256k1, schnorr } from '@noble/curves/secp256k1.js'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import { HDKey } from '@scure/bip32'
@@ -136,6 +137,13 @@ class Store implements DemoIntegratedAuthorityStore {
 }
 
 describe('integrated fake-money outbid authority', () => {
+	test('keeps derived extension and recovery timestamps inside the safe integer range', () => {
+		const originalEndTime = Number.MAX_SAFE_INTEGER - DEMO_MAX_EXTENSION_SECONDS - DEMO_EMERGENCY_RECOVERY_SECONDS
+		const timing = demoIntegratedTiming(originalEndTime, originalEndTime)
+		expect(timing.locktime).toBe(Number.MAX_SAFE_INTEGER)
+		expect(() => demoIntegratedTiming(originalEndTime + 1, originalEndTime + 1)).toThrow(/safe integer range/)
+	})
+
 	test('keeps participant policy finality stable across later authenticated state observations', () => {
 		const { certificate } = fixture()
 		const later = structuredClone(certificate)

@@ -1,0 +1,83 @@
+{
+  "schema": "PLEBEIAN_SELLER_PATCH_UPGRADE_PREFLIGHT_V3",
+  "status": "ISOLATED_R38_R17_CANDIDATE_PREPARED_NOT_DEPLOYED",
+  "date": "2026-11-06",
+  "liveMutationsPerformed": false,
+  "servicesStoppedStartedOrRestarted": false,
+  "liveEnvironmentEdited": false,
+  "liveStoresCreated": false,
+  "credentialsCreatedOrAccessed": false,
+  "liveBidsOrPaymentsPerformed": false,
+  "committedOrPushed": false,
+  "predecessorReceiptsModified": false,
+  "supersedesSiteCandidate": "sidequest-mvp-r4-site-r16",
+  "candidate": {
+    "backend": "sidequest-mvp-r4-seller-patch-r38",
+    "site": "sidequest-mvp-r4-site-r17",
+    "isolatedStage": "/tmp/plebeian-seller-r38-stage.AsxOMf",
+    "maximumAuthenticatedHeadAgeSeconds": 10,
+    "maximumFutureSkewSeconds": 2
+  },
+  "source": {
+    "internal/poc/static/app.js": "7348a35077a1efab82d55cdf6c57fbab4cf9f31acf62e5a8a6d9e1859db06958",
+    "internal/poc/static/index.html": "9bb42cb01130dda8588d75d74f064762702eb97a36a705e7857c26b4563a06c6",
+    "internal/poc/static/friday-browser.js": "3084b94c6a710d4342aec7b3b8c3ac01615326e3bc7d34d55063127c8a0aaf18",
+    "trackedBrowserBundleMatchesIsolatedBuild": true,
+    "currentWorkingTreeSiteBuildMatchesCandidate": true
+  },
+  "behavior": {
+    "legacyApprovalControlsRemoved": true,
+    "publicUiCallsLegacySellerPlanService": false,
+    "newAuctionRegistersOneBoundedAuthorization": true,
+    "interruptedAuthorizationHasExactAuctionSetupRetry": true,
+    "registeredAuctionPayoutUnblocksBidWithoutPerBidSellerPlan": true,
+    "legacyAuctionWithoutAuthorizationFailsPrelock": true,
+    "legacyRecoveryControllerPreserved": true
+  },
+  "tests": {
+    "focusedUiBehavior": { "passed": 6, "failed": 0 },
+    "completeUiFiles": { "passed": 5, "failed": 0 },
+    "focusedControllerV3Recovery": { "passed": 12, "failed": 0, "expectations": 222 },
+    "browserController": { "passed": 124, "failed": 0, "expectations": 457 },
+    "typecheckFriday": true,
+    "goTestAll": true
+  },
+  "artifacts": {
+    "plebeian-auctions-mvp": {
+      "bytes": 46625128,
+      "sha256": "ae6f901b9f3fdc20686c6cd954522561f9b0252916cfbd9587606ee432488dec",
+      "byteForByteSecondBuildMatched": true
+    },
+    "embeddedFridayBrowserJs": {
+      "bytes": 1753282,
+      "sha256": "3084b94c6a710d4342aec7b3b8c3ac01615326e3bc7d34d55063127c8a0aaf18"
+    }
+  },
+  "guard": {
+    "file": "verify-sidequest-site-r17.py",
+    "exactFixturePassed": true,
+    "wrongModeFixtureFailedClosed": true,
+    "chainsDirectlyToDeployedR14": true
+  },
+  "deploymentFiles": {
+    "verify-sidequest-site-r17.py": {
+      "bytes": 3834,
+      "sha256": "b048871592f6b34455e7b46d5299b2b6cf241ea9d4abb4aa67aa5f06ede6100a"
+    },
+    "plebeian-friday-site-r17.service": {
+      "bytes": 1091,
+      "sha256": "19596a32440ba3f73fecd4166e3c0c37dc224982aea8df1b7ca05e5fc4906400"
+    },
+    "SELLER-PATCH-UPGRADE-PLAN-R3.md": {
+      "bytes": 5295,
+      "sha256": "c55c981f9221301c25f69d278eec0a418111e3008d2f2b6a10e7a3a3ac846851"
+    }
+  },
+  "activationBlockers": [
+    "separate approval for service stop, backup, install, environment/store/unit changes and service start",
+    "fresh live APP NTP and authenticated H+1 evidence inside 10 seconds age and 2 seconds future skew",
+    "authenticated public WebSocket verification through nginx",
+    "stable source checkpoint coordinated with GitHub publication",
+    "fresh five-profile fake-sat end-to-end acceptance"
+  ]
+}

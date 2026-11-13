@@ -1,0 +1,137 @@
+{
+  "schema": "PLEBEIAN_SELLER_PATCH_UPGRADE_PREFLIGHT_V1",
+  "status": "LOCAL_RELEASE_PREPARED_NOT_DEPLOYED",
+  "date": "2026-11-05",
+  "liveMutationsPerformed": false,
+  "servicesStoppedStartedOrRestarted": false,
+  "credentialsCreatedOrAccessed": false,
+  "liveBidsOrPaymentsPerformed": false,
+  "committedOrPushed": false,
+  "dependencyCache": {
+    "path": "/tmp/plebeian-trust-reads.IWg3d2/cashu-wrapper/ts/node_modules",
+    "bunLockSha256": "2610381f8ad8771443752675059807266f4c716644a1f13550d4c92a9eb0e29b",
+    "lockMatchedRepository": true,
+    "frozenDryRunPassed": true
+  },
+  "tests": {
+    "legacyCompatibility": {
+      "command": "bun test demo-friday-legacy-recipient-pending.test.ts demo-friday-coordinator-runtime.test.ts demo-friday-coco-terminal-exchange.test.ts",
+      "passed": 10,
+      "failed": 0,
+      "expectations": 146
+    },
+    "friday": {
+      "command": "bun run test:friday --timeout 10000",
+      "passed": 382,
+      "failed": 0,
+      "expectations": 1604,
+      "files": 61
+    },
+    "typecheck": {
+      "command": "bun run typecheck:friday",
+      "passed": true
+    },
+    "go": {
+      "command": "go test ./...",
+      "passed": true
+    },
+    "ui": {
+      "command": "node --test internal/poc/ui_helpers.test.js internal/poc/seller_authorization_ui.test.js",
+      "passed": 2,
+      "failed": 0
+    },
+    "releaseGuards": {
+      "authorityFixturePassed": true,
+      "coordinatorFixturePassed": true,
+      "siteFixturePassed": true,
+      "missingFreshnessKeyFailedClosed": true,
+      "pythonCompilePassed": true,
+      "systemdAnalyzeExitCode": 1,
+      "systemdUnitsParsedWithOnlyExpectedAbsentReleasePathDiagnostics": true,
+      "systemdAnalyzeDiagnostic": "The three fixed /opt successor binary paths do not exist because no release was installed. No unit syntax diagnostic was emitted."
+    }
+  },
+  "artifacts": {
+    "plebeian-auctions-mvp": {
+      "bytes": 46629352,
+      "sha256": "4365fb24f16c301265d09c841b95ea0589b0c7c0caea8e96956d5e16d70bd7d6"
+    },
+    "plebeian-friday-authority": {
+      "bytes": 100497755,
+      "sha256": "5b9173e21e4f24e38a78720c8b1afd3708738d470f17821bdd723dc67a43fb36"
+    },
+    "plebeian-friday-coordinator": {
+      "bytes": 99501853,
+      "sha256": "d213ec9314f1ab5106f6fd513fdee83ae6a500012063252530e46233c15f69a8"
+    },
+    "plebeian-friday-terminal-executor": {
+      "bytes": 99960953,
+      "sha256": "380dccc109830f5992d41bdda4aed58ee7eb0f380bbba5eb228a0c1332e02b19"
+    },
+    "plebeian-friday-signer-evidence-only": {
+      "bytes": 100075652,
+      "sha256": "8d5ff19621d52ea9f699d25e423699913178d195d5c5835eb5fd16372e9ebec9",
+      "activationScope": false
+    }
+  },
+  "deploymentFiles": {
+    "verify-sidequest-seller-patch-r37.py": {
+      "bytes": 4700,
+      "sha256": "14409e2da2c48b986eab5fe5aaa811eeca198e6503051f39f36c45a2b262debb"
+    },
+    "verify-sidequest-site-r15.py": {
+      "bytes": 3838,
+      "sha256": "c2bc573adf4143d338c6c55aff7f2d71b35083fb0e87eb13552453d404f00e8b"
+    },
+    "plebeian-friday-authority-r37.service": {
+      "bytes": 2030,
+      "sha256": "dbe47ae716202ea4ecd01774bd5ae8c6176ce27736f72721a799d7d279519042"
+    },
+    "plebeian-friday-coordinator-r37.service": {
+      "bytes": 1712,
+      "sha256": "07710ef13ad391fbde065e69f83d1ce7f67922154802eb68fe7f7a4fbd26ad4d"
+    },
+    "plebeian-friday-site-r15.service": {
+      "bytes": 1072,
+      "sha256": "d9fee9ff5da2867f881eefe43bb9ff5d747495ae5945a301dc4489b33a13123a"
+    }
+  },
+  "liveReadOnlyPreflight": {
+    "ntpSynchronized": true,
+    "chainId": "plebeian-auctions-mvp-20261102",
+    "observerCatchingUp": false,
+    "validatorsHash": "D1936C5E5E9D09D0A96107031AE144068DCC2AD3F1D071E7F8FE871A8AAFF773",
+    "authenticatedHeadAgeSeconds": [0.480, 0.251, 0.152, 0.306, 0.187],
+    "commitSignaturesEach": 3,
+    "currentSiteRelease": "sidequest-mvp-r4-site-r14",
+    "currentBackendRelease": "sidequest-mvp-r4-terminal-ack-r36",
+    "auctionPayoutRuntimeStorePresent": false,
+    "auctionPayoutAnchorStorePresent": false,
+    "freshnessEnvironmentKeysPresent": false,
+    "recipientPending": {
+      "count": 7,
+      "winnerPayouts": 4,
+      "returns": 3,
+      "terminalNotices": 7,
+      "acknowledgements": 0,
+      "missingCoordinatorRequestDigest": [
+        "7572f156484ff2805e8935e5abef61d51f990a6cdb1e6bf53af100e68bba19ba",
+        "521b34e25d017adfd7453e6fc402f433001cfd0a28c16fe925c4bb59c3862e68"
+      ]
+    }
+  },
+  "proposedFreshnessPolicy": {
+    "maximumHeadAgeSeconds": 30,
+    "maximumFutureSkewSeconds": 5,
+    "perRpcReadTimeoutMilliseconds": 5000,
+    "endToEndReadTimeoutMilliseconds": 15000,
+    "ownerApprovalRequired": true
+  },
+  "activationBlockers": [
+    "owner approval of the exact freshness policy",
+    "owner approval of service stop, backup, store initialization, install and start",
+    "authenticated public WebSocket verification through nginx",
+    "stable source checkpoint coordinated with the GitHub reviewer",
+    "fresh five-profile fake-sat end-to-end acceptance"
+  ]
+}

@@ -258,7 +258,10 @@ export function createDemoFridayBrowserAuctionPayoutHttp(options: {
 			}), 'auction payout read result')
 			exactKeys(raw, ['schema', 'authorization'], 'auction payout read result')
 			if (raw.schema !== 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_READ_RESULT_V1') refuse('auction payout read schema differs')
-			return raw.authorization === null ? null : envelope(raw.authorization)
+			if (raw.authorization === null) return null
+			const found = envelope(raw.authorization)
+			if (found.authorization.auctionId !== auctionId) refuse('auction payout read identity differs')
+			return found
 		},
 		async readWinnerExact(auctionId) {
 			if (!ID.test(auctionId)) refuse('auction payout winner identity is malformed')

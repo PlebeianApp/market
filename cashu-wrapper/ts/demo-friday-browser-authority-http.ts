@@ -18,6 +18,8 @@ import type {
 
 const HEX_32 = /^[0-9a-f]{64}$/
 const ID = /^[A-Za-z0-9_-]{1,160}$/
+const CONFIRM_READINESS_RETRIES = 15
+const CONFIRM_READINESS_RETRY_MS = 1_000
 
 function refuse(message: string): never {
 	throw new Error(`DEMO_FRIDAY_BROWSER_AUTHORITY_HTTP: ${message}`)
@@ -57,6 +59,17 @@ async function exactJson(response: Response): Promise<unknown> {
 	return response.json() as Promise<unknown>
 }
 
+async function exactRefusalCode(response: Response): Promise<string | null> {
+	if (response.headers.get('content-type')?.split(';')[0] !== 'application/json') return null
+	let value: unknown
+	try { value = await response.json() }
+	catch { return null }
+	if (value === null || typeof value !== 'object' || Array.isArray(value)) return null
+	const raw = value as Record<string, unknown>
+	if (JSON.stringify(Object.keys(raw).sort()) !== JSON.stringify(['error']) || typeof raw.error !== 'string') return null
+	return raw.error
+}
+
 function exactStatus(value: unknown): DemoFridayFundingAdmissionStatusV1 {
 	if (value === null || typeof value !== 'object' || Array.isArray(value)) refuse('status is not an object')
 	const raw = value as Record<string, unknown>
@@ -84,9 +97,11 @@ function exactStatus(value: unknown): DemoFridayFundingAdmissionStatusV1 {
 export function createDemoFridayBrowserAuthorityFundingHttp(options: {
 	origin: string
 	fetchImpl?: typeof fetch
+	waitImpl?: (delayMs: number) => Promise<void>
 }): DemoFridayFundingAdmissionPort {
 	const origin = exactOrigin(options.origin)
 	const fetchImpl = options.fetchImpl ?? fetch
+	const waitImpl = options.waitImpl ?? ((delayMs: number) => new Promise((resolve) => setTimeout(resolve, delayMs)))
 	const post = async (path: string, body: unknown): Promise<unknown> => exactJson(await fetchImpl(`${origin}${path}`, {
 		method: 'POST', redirect: 'error', credentials: 'same-origin',
 		headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body),
@@ -118,11 +133,44 @@ export function createDemoFridayBrowserAuthorityFundingHttp(options: {
 		},
 		async finalizeExact(request: Parameters<DemoFridayFundingAdmissionPort['finalizeExact']>[0]) {
 			if (request.preparationId !== request.fundingAuthorizationEventId) refuse('finalize preparation identity differs')
-			const result = await post('/api/friday/funding/confirm', {
+			const confirmation = {
 				schema: 'PLEBEIAN_FRIDAY_V4_FUNDING_CONFIRMATION_V1',
 				fundingAuthorizationEventId: request.fundingAuthorizationEventId,
 				signedEvent: request.signedBid,
-			})
+			}
+			let result: unknown
+			for (let attempt = 0; ; attempt += 1) {
+				const response = await fetchImpl(`${origin}/api/friday/funding/confirm`, {
+					method: 'POST', redirect: 'error', credentials: 'same-origin',
+					headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(confirmation),
+				})
+				if (response.ok) {
+					result = await exactJson(response)
+					break
+				}
+				const refusalCode = await exactRefusalCode(response)
+				if (response.status !== 503 || refusalCode !== 'new_operations_unready'
+					|| attempt >= CONFIRM_READINESS_RETRIES) {
+					refuse(`authority returned HTTP ${response.status}`)
+				}
+				// The authority emitted this exact refusal before invoking the funding
+				// admission mutation. Re-read the already prepared identity before a
+				// bounded retry of the same signed bytes. A committed result wins; an
+				// unknown or changed identity remains fail-closed.
+				const held = exactStatus(await post('/api/friday/funding/status', {
+					preparationId: request.preparationId,
+					fundingOperationId: request.fundingOperationId,
+					fundingAuthorizationEventId: request.fundingAuthorizationEventId,
+				}))
+				if (held.preparationId !== request.preparationId
+					|| held.fundingAuthorizationEventId !== request.fundingAuthorizationEventId
+					|| held.fundingOperationId !== request.fundingOperationId) {
+					refuse('transient confirm recovery status differs from request')
+				}
+				if (held.status === 'admitted' || held.status === 'rejected_return') return held
+				if (held.status !== 'prepared') refuse('transient confirm recovery status is not prepared')
+				await waitImpl(CONFIRM_READINESS_RETRY_MS)
+			}
 			if (result === null || typeof result !== 'object' || Array.isArray(result)) refuse('finalize response is not an object')
 			const raw = result as Record<string, unknown>
 			exactKeys(raw, ['schema', 'status', 'fundingAuthorizationEventId', 'fundingOperationId',
@@ -153,19 +201,60 @@ export function createDemoFridayBrowserAuthorityFundingHttp(options: {
 export function createDemoFridayBrowserAuthorityTerminalHttp(options: {
 	origin: string
 	fetchImpl?: typeof fetch
+	timeoutMs?: number
 }): DemoFridayCocoTerminalPort {
 	const origin = exactOrigin(options.origin)
 	const fetchImpl = options.fetchImpl ?? fetch
-	const post = async (path: string, body: unknown): Promise<unknown> => exactJson(await fetchImpl(`${origin}${path}`, {
-		method: 'POST', redirect: 'error', credentials: 'same-origin',
-		headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body),
-	}))
+	const timeoutMs = options.timeoutMs ?? 8_000
+	if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) {
+		refuse('terminal request timeout is invalid')
+	}
+	const post = async (path: string, body: unknown): Promise<unknown> => {
+		const controller = new AbortController()
+		const timer = setTimeout(() => controller.abort(), timeoutMs)
+		try {
+			// Keep the abort timer active through response body parsing. Returning the
+			// exactJson promise directly would run finally as soon as headers arrive.
+			const result = await exactJson(await fetchImpl(`${origin}${path}`, {
+				method: 'POST', redirect: 'error', credentials: 'same-origin', signal: controller.signal,
+				headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body),
+			}))
+			return result
+		} catch (error) {
+			if (controller.signal.aborted) {
+				const action = path.endsWith('/ack') ? 'acknowledgement' : 'read'
+				refuse(`terminal ${action} timed out; the exact operation remains retained for replay`)
+			}
+			throw error
+		} finally { clearTimeout(timer) }
+	}
 	return Object.freeze({
 		async readNoticeExact(request) {
 			if (!HEX_32.test(request.actor) || !ID.test(request.fundingOperationId)) {
 				refuse('terminal read identity is malformed')
 			}
 			return structuredClone(await post('/api/friday/terminal/read', request))
+		},
+		async readAcknowledgementStatusExact(request) {
+			if (!HEX_32.test(request.actor) || !ID.test(request.fundingOperationId)) {
+				refuse('terminal status identity is malformed')
+			}
+			const value = await post('/api/friday/terminal/status', request)
+			if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+				refuse('terminal status is not an object')
+			}
+			const raw = value as Record<string, unknown>
+			exactKeys(raw, ['schema', 'actor', 'fundingOperationId', 'noticePresent', 'acknowledged'], 'terminal status')
+			if (raw.schema !== 'PLEBEIAN_FRIDAY_COCO_TERMINAL_STATUS_V1'
+				|| raw.actor !== request.actor || raw.fundingOperationId !== request.fundingOperationId
+				|| typeof raw.noticePresent !== 'boolean' || typeof raw.acknowledged !== 'boolean'
+				|| (raw.acknowledged === true && raw.noticePresent !== true)) {
+				refuse('terminal status identity is malformed')
+			}
+			return structuredClone(value) as {
+				schema: 'PLEBEIAN_FRIDAY_COCO_TERMINAL_STATUS_V1'; actor: string; fundingOperationId: string;
+				noticePresent: boolean; acknowledged: boolean
+			}
 		},
 		async acknowledgeExact(request) {
 			const result = await post('/api/friday/terminal/ack', request)

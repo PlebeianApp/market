@@ -14,6 +14,75 @@ const HEX_32 = /^[0-9a-f]{64}$/
 export type DemoFridayTerminalBranch = 'outbid_return' | 'rejected_return' | 'funding_abort_return' | 'winner_payout' | 'reserve_unmet_return'
 export type DemoFridayCoordinatorPhase = 'queued' | 'executing' | 'mint_unknown' | 'recipient_pending' | 'completed' | 'quarantined'
 
+/**
+ * Historical fake-sats deliveries explicitly preserved outside the fresh MVP
+ * acceptance run.  Each digest binds every persisted record field in a fixed
+ * order.  A missing or changed record fails closed; only exact matches are
+ * removed from the actionable coordinator view.
+ */
+export const DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_20261108: ReadonlyMap<string, string> = new Map([
+	['41b42d475bd2ac9bfb48b18995e58c6a4e8eb9ddcbed1b0795301b9fe59fc887', 'eb41b1fae208ea544751814a4da8c2744a788881a542c5b16b356dc6c70faa2b'],
+	['428d439715270d5a15b070b8c9084a4d7cdc8c44b90e28668dc26d7aa80a46cc', 'dabf645756c89e8a480872c00f32d19d1aedd2e5ed2aacdbfbc22b1160d4be7f'],
+	['914b84ce2f72f6cbb8c973bb0e8e9a77b68b549228f708b67323b2d087bfdae0', '1efe94faff1c0c98f82de7269812b84b423aa5f078f532c954a752007f104a6b'],
+	['ac58122c85c5120c0227f20737183b1602103dde9f901f5411e19502976e0f6b', 'f8390e09c3fcc3a96bcb78edc4fbcc6ea2481e19da89ba1415b2d763b3f88d79'],
+	['cea0bac2bbd5f69ce9b42952d9dca1a9c4b6bdb9991af3f56776c85277cd443e', 'd486a5b772e980c23d3ab5dc694860c9328d9b6cf94c475f18159261edda1be9'],
+	['e3b0e7b37d3ab34c9f744ae1f5a51d787228c15f5f94e1444977767a293c73bd', '376478e6976d8ca4e99b2d7e78876d4113303484d9585b45ec73095cf8e79b85'],
+	['fa7f60db5bd8b13b29190429318ab1400344a96bfb78cfc52cec3b1f429656f4', '25ac3b47f589551ae354a91937079a5ba8f5b82eb5de169d7c511530acc1be2a'],
+])
+
+/**
+ * Forward-only R48 runtime isolation contract. R47 proved that the eighth
+ * record must be excluded by the compiled coordinator and authority, not only
+ * by their prestart verifier.
+ */
+export const DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R48_20261109: ReadonlyMap<string, string> = new Map([
+	...DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_20261108,
+	['f37f14a3c1e4a529d2915678de3ceab3d3ac1aa246f53ac96023400883c44c6d', 'd055dc91b36891184691bb7cbd1087d8d67080caadf3a7e4b0cdccda09643136'],
+])
+
+/** Forward-only R49 contract: identical eight inert records, explicitly versioned. */
+export const DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R49_20261109: ReadonlyMap<string, string> = new Map(
+	DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R48_20261109,
+)
+
+/** Forward-only R50 contract: identical eight inert records, explicitly versioned. */
+export const DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R50_20261109: ReadonlyMap<string, string> = new Map(
+	DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R49_20261109,
+)
+
+/** Forward-only R51 contract: identical eight inert records, explicitly versioned. */
+export const DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R51_20261109: ReadonlyMap<string, string> = new Map(
+	DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R50_20261109,
+)
+
+/**
+ * Forward-only R79 isolation contract.  Three later fake-sats deliveries have
+ * durable terminal responses but no recipient acknowledgement.  An import
+ * attempt for the first record exited before producing a result and stopped
+ * the coordinator on 2026-11-13.  Keep all three exact records inert until
+ * their original recipient sessions can reconcile them; a missing or changed
+ * record still fails closed before any new operation is served.
+ */
+export const DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R79_20261113: ReadonlyMap<string, string> = new Map([
+	...DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R51_20261109,
+	['2446fbe5e179a35b2052c009d11d21afe6dd306a6965f49a0ffcc94076ec016b', '1ded66021330161e8d2540c4021557b11932ca14999d1f045933b7070d6adbed'],
+	['2c6bd6e0b60622b664a8eea689f3deb770552ea2fe2096b444df615448d263d4', '93745719d6b2c8482abfd653ecac7bb5423e1e4ef6a7156c0c2a89f7f0f15773'],
+	['e676e0d6661710807c2a2a8e3f0294092edb7426d900c22fa2c49594970b7dc1', '870f399d035c59110f96902ec90581c014034a0e428ba46e40a999d1d79e25e9'],
+])
+
+/**
+ * Forward-only R82 contract. R81 acceptance exposed one later exact
+ * recipient-pending return whose unavailable original browser made the
+ * import child exit before returning a typed outcome. Preserve that exact
+ * immutable record alongside the R79 backlog so it cannot terminate the
+ * coordinator or block unrelated fresh fake-sats operations. Any field,
+ * phase or revision change still fails closed before new work is served.
+ */
+export const DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R82_20261113: ReadonlyMap<string, string> = new Map([
+	...DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R79_20261113,
+	['23d3a1c1f0a62861da4489b98723d110548010739630a0eba826b4c389054ce8', '0ca44c8af4c6a4f051bb02020913ffadb60147cee3df4ced140360c630d2577e'],
+])
+
 export interface DemoFridayCoordinatorRecordV2 {
 	schema: 'PLEBEIAN_FRIDAY_COORDINATOR_RECORD_V2'
 	deploymentId: string
@@ -37,6 +106,34 @@ export interface DemoFridayCoordinatorRecordV2 {
 	terminalResponseDigest?: string
 	recipientImportDigest?: string
 	reasonCode?: string
+}
+
+export function demoFridayCoordinatorRecordIdentityDigest(record: Readonly<DemoFridayCoordinatorRecordV2>): string {
+	return createHash('sha256').update(JSON.stringify([
+		record.schema, record.deploymentId, record.scope, record.authorityOperationId,
+		record.paymentOperationId, record.recipientActorId, record.operationRoot,
+		record.frostOperationRoot, record.bundleDigest, record.chainId,
+		record.executionBindingDigest, record.preparedAuthorizationDigest,
+		record.selectionRoot, record.outcomeHeight, record.branch, record.phase,
+		record.revision, record.attempts, record.requestDigest ?? null,
+		record.terminalResponseDigest ?? null, record.recipientImportDigest ?? null,
+		record.reasonCode ?? null,
+	])).digest('hex')
+}
+
+export function demoFridayActionableNonterminal(
+	records: readonly DemoFridayCoordinatorRecordV2[],
+	preserved: ReadonlyMap<string, string> = DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_20261108,
+): DemoFridayCoordinatorRecordV2[] {
+	const byScope = new Map(records.map((record) => [record.scope, record] as const))
+	for (const [scope, expectedDigest] of preserved) {
+		const record = byScope.get(scope)
+		if (record === undefined || record.phase !== 'recipient_pending'
+			|| demoFridayCoordinatorRecordIdentityDigest(record) !== expectedDigest) {
+			throw new Error('DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING: exact historical record differs')
+		}
+	}
+	return records.filter((record) => !preserved.has(record.scope)).map((record) => structuredClone(record))
 }
 
 export type DemoFridayExecutionOutcome =

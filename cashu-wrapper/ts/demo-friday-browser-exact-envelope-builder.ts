@@ -35,11 +35,14 @@ import {
 	validateDemoFridayFundingAbortRecoveryCapsule,
 	type DemoFridayFundingAbortRecoveryCapsuleV1,
 } from './demo-friday-funding-abort-capsule'
+import {
+	DEMO_EMERGENCY_RECOVERY_SECONDS,
+	DEMO_MAIN_CUTOFF_SECONDS,
+	DEMO_SETTLEMENT_WINDOW_SECONDS,
+} from './demo-auction-timing-policy'
 
 const HEX_32 = /^[0-9a-f]{64}$/
 const COMPRESSED = /^(?:02|03)[0-9a-f]{64}$/
-const EMERGENCY_RECOVERY_SECONDS = 900
-const SETTLEMENT_WINDOW_SECONDS = 600
 
 function refuse(message: string): never {
 	throw new Error(`DEMO_FRIDAY_EXACT_ENVELOPE_BUILDER: ${message}`)
@@ -103,9 +106,9 @@ async function makeTemplate(options: {
 	signing: DemoFridayOperationBoundSigningV1
 }): Promise<DemoMaintainerExactBranchTemplate> {
 	const operation = options.operation
-	const maximumEndTime = operation.locktime - EMERGENCY_RECOVERY_SECONDS
+	const maximumEndTime = operation.locktime - DEMO_EMERGENCY_RECOVERY_SECONDS
 	if (!HEX_32.test(operation.fundingOperationId) || !Number.isSafeInteger(maximumEndTime) || maximumEndTime < 1
-		|| maximumEndTime + SETTLEMENT_WINDOW_SECONDS !== operation.locktime - 300) {
+		|| maximumEndTime + DEMO_SETTLEMENT_WINDOW_SECONDS !== operation.locktime - DEMO_MAIN_CUTOFF_SECONDS) {
 		refuse('operation does not use the approved maximum-end emergency timing policy')
 	}
 	const recipientPublicKey = options.request.capability.recipientPublicKey
@@ -118,7 +121,7 @@ async function makeTemplate(options: {
 		bidEventId: operation.fundingOperationId, bidderActorId: operation.actor,
 		amount: operation.fullPoolAmount, inputFee: 0, mintUrl: operation.canonicalMintUrl, unit: 'sat',
 		locktime: operation.locktime, validUntil: maximumEndTime, closeTime: maximumEndTime,
-		settlementWindowSeconds: SETTLEMENT_WINDOW_SECONDS,
+		settlementWindowSeconds: DEMO_SETTLEMENT_WINDOW_SECONDS,
 		sellerPaymentPublicKey: operation.winnerRecipientPublicKey, recipientPublicKey,
 		...(auctionPayout === undefined ? {} : {
 			auctionPayoutAuthorization: structuredClone(auctionPayout.authorization),

@@ -634,16 +634,26 @@ func fridayBundleDigest(value FridayCometGenesisBundleV1) (string, error) {
 	return hashBytes(message), nil
 }
 
-// validateFridayGenesisPolicy allows only the reviewed funding pair to be
-// selected at genesis. Comparing the whole struct also pins future fields.
+// validateFridayGenesisPolicy recognizes the legacy recovery profile and the
+// reviewed seven-day source candidate. Deployment activation is a separate
+// check because no production identity has yet been approved for seven days.
 func validateFridayGenesisPolicy(policy Policy) error {
 	if err := policy.Validate(); err != nil || policy.FaucetCap > 50_000 {
 		return errors.New("Friday Comet funding policy is invalid or exceeds the reviewed browser payment bound")
 	}
-	reviewed := DefaultPolicy()
-	reviewed.FaucetAmount, reviewed.FaucetCap = policy.FaucetAmount, policy.FaucetCap
-	if policy != reviewed {
+	legacy := DefaultPolicy()
+	legacy.FaucetAmount, legacy.FaucetCap = policy.FaucetAmount, policy.FaucetCap
+	sevenDay := SevenDayPolicy()
+	sevenDay.FaucetAmount, sevenDay.FaucetCap = policy.FaucetAmount, policy.FaucetCap
+	if policy != legacy && policy != sevenDay {
 		return errors.New("Friday Comet non-funding policy differs from DefaultPolicy")
+	}
+	return nil
+}
+
+func validateFridayDeploymentPolicy(deploymentID string, policy Policy) error {
+	if policy.MaxDurationSeconds == MaxAuctionDurationSeconds {
+		return fmt.Errorf("Friday seven-day auction policy is not bound to an approved deployment identity: %s", deploymentID)
 	}
 	return nil
 }
@@ -659,6 +669,9 @@ func AssembleFridayCometGenesis(root string, descriptorPaths []string, input Fri
 	}
 	anchor, anchorSHA256, err := loadFridayDeploymentAnchor(input.DeploymentAnchorPath, input.OwnerApprovalPublicKey)
 	if err != nil {
+		return FridayCometGenesisBundleV1{}, err
+	}
+	if err := validateFridayDeploymentPolicy(anchor.DeploymentID, input.Policy); err != nil {
 		return FridayCometGenesisBundleV1{}, err
 	}
 	frost, err := loadFridayFROSTFinalPackage(input.FROSTFinalPackagePath, anchor)
@@ -1034,6 +1047,9 @@ func validateFridayCometBundle(root string) (FridayCometGenesisBundleV1, Network
 		return receipt, NetworkManifest{}, NetworkFacts{}, err
 	}
 	if err := validateFridayGenesisPolicy(manifest.Policy); err != nil {
+		return receipt, NetworkManifest{}, NetworkFacts{}, err
+	}
+	if err := validateFridayDeploymentPolicy(receipt.DeploymentID, manifest.Policy); err != nil {
 		return receipt, NetworkManifest{}, NetworkFacts{}, err
 	}
 	if manifest.Schema != "PlebeianAuctionsPOCNetworkV4" || manifest.Mode != "remote" ||

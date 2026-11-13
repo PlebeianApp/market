@@ -7,6 +7,7 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import {
 	createDemoFridayBrowserCocoClient,
 	demoFridayAdmissionStatusDigest,
+	demoFridayTrustedDeploymentDigest,
 	type DemoFridayFundingAdmissionStatusV1,
 } from './demo-friday-browser-coco-client'
 import { prepareDemoFridayAuctionPayoutAuthorization, selectDemoFridayAuctionPayout } from './demo-friday-auction-payout-authorization'
@@ -62,7 +63,7 @@ function preWalletClient(auctionValue: unknown, opened: { value: boolean }, trus
 		state: { async runWalletExclusive<T>(_identity: unknown, run: () => Promise<T>) {
 			walletLockHeld = true
 			try { return await run() } finally { walletLockHeld = false }
-		} } as never,
+		}, async loadOperation() { return null } } as never,
 		nostrSigner: { async getPublicKey() { return actor }, async signEvent() { throw new Error('unused') } },
 		builder: {} as never, admission: {} as never, terminal: {} as never,
 	})
@@ -70,6 +71,12 @@ function preWalletClient(auctionValue: unknown, opened: { value: boolean }, trus
 
 const fundingRequest = { auctionId: 'auction-1', fundingOperationId: 'operation-1', bidAmount: 12,
 	fullPoolAmount: 12, reservedPoolAmount: 12, replacesBidId: 'c'.repeat(64), locktime: 10_000 }
+
+function deferred<T>() {
+	let resolve!: (value: T) => void
+	const promise = new Promise<T>((yes) => { resolve = yes })
+	return { promise, resolve }
+}
 
 function operationFixture() {
 	let next = 40
@@ -80,7 +87,8 @@ function operationFixture() {
 		mintServerVersion: deployment.mintSnapshot.serverVersion, bidAmount: 12, fullPoolAmount: 12,
 		reservedPoolAmount: 12, replacesBidId: fundingRequest.replacesBidId, priorLeaderActor: leaderActor,
 		winnerRecipientPublicKey: compressed(3), winnerRecipientCapabilityDigest: demoRecipientCapabilityDigest(winnerRequest().capability),
-		winnerOutputsDigest: demoOutputsDigest(winnerRequest().outputs), keysetId: keyset.id,
+		winnerOutputsDigest: demoOutputsDigest(winnerRequest().outputs),
+		trustedDeploymentDigest: demoFridayTrustedDeploymentDigest(deployment), keysetId: keyset.id,
 		denominationKeyDigest: deployment.mintSnapshot.denominationKeyDigest, denominationAmounts: [4, 8],
 		mintNuts: [4, 7, 9, 10, 11, 12], inputFeePpk: 0, committeePublicKey: deployment.committeePublicKey,
 		committeeKeysetId: deployment.committeeKeysetId, committeeKeysetVersion: deployment.committeeKeysetVersion,
@@ -192,6 +200,30 @@ describe('Friday browser Coco client composition gates', () => {
 		expect(touched).toBe(false)
 	})
 
+	test('starts independent deployment and cached-actor reads together before any wallet effect', async () => {
+		const deploymentRead = deferred<typeof deployment>(), actorRead = deferred<string>()
+		let deploymentStarted = false, actorStarted = false, opened = false
+		const phases: Array<Record<string, unknown>> = []
+		const client = createDemoFridayBrowserCocoClient({
+			deployment: { readExact() { deploymentStarted = true; return deploymentRead.promise } },
+			auction: { async readExact() { throw new Error('joined reads reached auction validation') } },
+			walletFactory: { async openExact() { opened = true; throw new Error('wallet must remain closed') } },
+			state: { async loadOperation() { return null } } as never,
+			nostrSigner: { getPublicKey() { actorStarted = true; return actorRead.promise } } as never,
+			builder: {} as never, admission: {} as never, terminal: {} as never,
+		})
+		const pending = client.prepareAndFinalize(fundingRequest, (progress) => {
+			phases.push({ ...progress })
+			if (progress.phase === 'checking_identity') throw new Error('presentation observer failed')
+		})
+		expect({ deploymentStarted, actorStarted, opened }).toEqual({ deploymentStarted: true, actorStarted: true, opened: false })
+		deploymentRead.resolve(structuredClone(deployment)); actorRead.resolve(actor)
+		await expect(pending).rejects.toThrow('joined reads reached auction validation')
+		expect(opened).toBe(false)
+		expect(phases).toEqual([{ phase: 'checking_identity' }, { phase: 'checking_auction' }])
+		expect(phases.every((phase) => Object.keys(phase).length === 1)).toBe(true)
+	})
+
 	test('requires advertised NUT-12 before opening Coco or reserving browser proofs', async () => {
 		let opened = false
 		const withoutDleq = structuredClone(deployment)
@@ -207,14 +239,18 @@ describe('Friday browser Coco client composition gates', () => {
 		expect(opened).toBe(false)
 	})
 
-	test('persists the app marker only after Coco durably prepares, then resumes without creating a replacement', async () => {
+	test('persists the app marker and authenticated auction snapshot, then resumes without substituting a newer leader', async () => {
 		let operation: ReturnType<typeof operationFixture> | null = null
-		let binds = 0, resumes = 0, disposals = 0, builderCalls = 0
+		let auctionReads = 0, binds = 0, resumes = 0, disposals = 0, builderCalls = 0
 		const client = createDemoFridayBrowserCocoClient({
 			deployment: { async readExact() { return deployment } },
-			auction: { async readExact() { return { schema: 'PLEBEIAN_FRIDAY_TRUSTED_AUCTION_FUNDING_V1',
-				auctionId: 'auction-1', leaderBidId: fundingRequest.replacesBidId, leaderActor,
-				leaderBidAmount: 10, sellerPaymentPublicKey: compressed(3), winnerRequest: winnerRequest() } } },
+			auction: { async readExact() {
+				auctionReads += 1
+				return { schema: 'PLEBEIAN_FRIDAY_TRUSTED_AUCTION_FUNDING_V1', auctionId: 'auction-1',
+					leaderBidId: auctionReads === 1 ? fundingRequest.replacesBidId : 'd'.repeat(64),
+					leaderActor: auctionReads === 1 ? leaderActor : 'e'.repeat(64), leaderBidAmount: 10,
+					sellerPaymentPublicKey: compressed(3), winnerRequest: winnerRequest() }
+			} },
 			walletFactory: { async openExact() { return {
 				actor, mintUrl, seedLocation: 'indexeddb' as const,
 				async inspect() { return structuredClone(deployment.mintSnapshot) },
@@ -244,11 +280,63 @@ describe('Friday browser Coco client composition gates', () => {
 		})
 		await expect(client.prepareAndFinalize(fundingRequest)).rejects.toThrow(/NUT-12\/DLEQ/)
 		expect(operation).toMatchObject({ phase: 'coco_send_pending', fundingOperationId: fundingRequest.fundingOperationId,
-			revision: 1 })
+			revision: 1, trustedDeploymentDigest: demoFridayTrustedDeploymentDigest(deployment),
+			trustedAuctionFunding: { leaderBidId: fundingRequest.replacesBidId, leaderActor } })
 		await expect(client.prepareAndFinalize(fundingRequest)).rejects.toThrow(/NUT-12\/DLEQ/)
 		expect(operation).toMatchObject({ phase: 'coco_send_pending', fundingOperationId: fundingRequest.fundingOperationId,
 			revision: 1 })
-		expect({ binds, resumes, disposals, builderCalls }).toEqual({ binds: 1, resumes: 2, disposals: 2, builderCalls: 0 })
+		expect({ auctionReads, binds, resumes, disposals, builderCalls })
+			.toEqual({ auctionReads: 1, binds: 1, resumes: 2, disposals: 2, builderCalls: 0 })
+	})
+
+	test('refuses deployment cryptography or participant rotation before resuming a persisted Coco operation', async () => {
+		for (const rotated of [
+			(() => {
+				const value = structuredClone(deployment)
+				value.keyset.keys['4'] = compressed(55)
+				value.mintSnapshot.denominationKeyDigest = demoDenominationKeyDigest(value.keyset.keys)
+				return value
+			})(),
+			(() => {
+				const value = structuredClone(deployment)
+				value.participants[0].verifyingShare = compressed(56)
+				return value
+			})(),
+		]) {
+			const operation = operationFixture()
+			operation.phase = 'coco_send_pending'
+			operation.revision = 1
+			let auctionReads = 0, walletOpens = 0, builderCalls = 0
+			const client = createDemoFridayBrowserCocoClient({
+				deployment: { async readExact() { return rotated } },
+				auction: { async readExact() { auctionReads += 1; throw new Error('must not read auction') } },
+				walletFactory: { async openExact() { walletOpens += 1; throw new Error('must not open wallet') } },
+				state: { async loadOperation() { return structuredClone(operation) } } as never,
+				nostrSigner: { async getPublicKey() { return actor } } as never,
+				builder: { async buildAbortCapsuleExact() { builderCalls += 1; throw new Error('must not build') } } as never,
+				admission: {} as never, terminal: {} as never,
+			})
+			await expect(client.prepareAndFinalize(fundingRequest)).rejects.toThrow(/complete trusted deployment identity/)
+			expect({ auctionReads, walletOpens, builderCalls }).toEqual({ auctionReads: 0, walletOpens: 0, builderCalls: 0 })
+		}
+	})
+
+	test('keeps a legacy operation readable but refuses to restart its browser mutation', async () => {
+		const operation = operationFixture()
+		delete operation.trustedDeploymentDigest
+		operation.phase = 'coco_send_pending'
+		operation.revision = 1
+		let auctionReads = 0, walletOpens = 0
+		const client = createDemoFridayBrowserCocoClient({
+			deployment: { async readExact() { return deployment } },
+			auction: { async readExact() { auctionReads += 1; throw new Error('must not read auction') } },
+			walletFactory: { async openExact() { walletOpens += 1; throw new Error('must not open wallet') } },
+			state: { async loadOperation() { return structuredClone(operation) } } as never,
+			nostrSigner: { async getPublicKey() { return actor } } as never,
+			builder: {} as never, admission: {} as never, terminal: {} as never,
+		})
+		await expect(client.prepareAndFinalize(fundingRequest)).rejects.toThrow(/legacy operation lacks.*deployment identity/)
+		expect({ auctionReads, walletOpens }).toEqual({ auctionReads: 0, walletOpens: 0 })
 	})
 
 	test('fails closed instead of creating a Coco send when the app marker exists but Coco lost the operation', async () => {
@@ -363,7 +451,7 @@ describe('Friday browser Coco client composition gates', () => {
 		}
 	})
 
-	test('replays one persisted canonical ack without reopening Coco or exposing local replay state', async () => {
+	test('replays one persisted canonical ack once and records its confirmed delivery without reopening Coco', async () => {
 		const operation = operationFixture()
 		operation.refundDelivery = { intent: { schema: 'COCO_DEMO_RECIPIENT_INTENT_V1', network: operation.authNetworkId,
 			chainId: operation.chainId, auctionId: operation.auctionId, operationId: operation.fundingOperationId,
@@ -373,12 +461,16 @@ describe('Friday browser Coco client composition gates', () => {
 				schema: 'COCO_DEMO_RECIPIENT_IMPORT_RECEIPT_V1', operationId: operation.fundingOperationId,
 				role: 'refund', recipientPublicKey: operation.refundPublicKey, amount: 12, proofCount: 2, imported: true,
 			}, recipientAckSignature: 'e'.repeat(128) }
+		let retained = structuredClone(operation)
 		const sent: string[] = []
 		const client = createDemoFridayBrowserCocoClient({ deployment: {} as never, auction: {} as never,
 			walletFactory: { async openExact() { throw new Error('Coco must not reopen for ack replay') } },
 			state: { async runWalletExclusive<T>(_identity: unknown, run: () => Promise<T>) { return run() },
 				async runOperationExclusive<T>(_identity: unknown, run: () => Promise<T>) { return run() },
-				async loadOperation() { return structuredClone(operation) } } as never,
+				async loadOperation() { return structuredClone(retained) },
+				async saveOperation(record: typeof operation, revision: number) {
+					expect(revision).toBe(retained.revision); retained = structuredClone(record)
+				} } as never,
 			nostrSigner: {} as never, builder: {} as never, admission: {} as never,
 			terminal: { async readNoticeExact() { throw new Error('must replay before reread') },
 				async acknowledgeExact(value) { sent.push(JSON.stringify(value)) } },
@@ -386,15 +478,16 @@ describe('Friday browser Coco client composition gates', () => {
 		const identity = { actor, environmentId: operation.environmentId, fundingOperationId: operation.fundingOperationId }
 		expect(await client.importRefundExact(identity)).toMatchObject({ imported: true, alreadyImported: true })
 		expect(await client.importRefundExact(identity)).toMatchObject({ imported: true, alreadyImported: true })
-		expect(sent).toHaveLength(2)
-		expect(sent[0]).toBe(sent[1])
+		expect(sent).toHaveLength(1)
+		expect(retained.terminalAckConfirmed).toBe(true)
 		expect(sent[0]).not.toContain('alreadyImported')
 		expect(sent[0]).not.toContain(operation.paymentSecret)
 		expect(sent[0]).not.toContain(operation.refundSecret)
 	})
 
-	test('accepts only the exact canonical finalized status on recovery', async () => {
+	test('accepts only the exact canonical finalized status on legacy server recovery', async () => {
 		const operation = operationFixture()
+		delete operation.trustedDeploymentDigest
 		const unsigned = { pubkey: actor, created_at: 1_000, kind: 28_641, tags: [] as string[][], content: '{}' }
 		const eventId = bytesToHex(sha256(new TextEncoder().encode(JSON.stringify([
 			0, unsigned.pubkey, unsigned.created_at, unsigned.kind, unsigned.tags, unsigned.content,
@@ -462,6 +555,30 @@ describe('Friday browser Coco client composition gates', () => {
 		expect(String(operation.phase)).toBe('finalized')
 		expect(operation.finalizedStatusDigest).toBe(demoFridayAdmissionStatusDigest(admitted))
 	})
+
+	test('rejects a tampered persisted server preparation before signing or rereading a newer leader', async () => {
+		let operation = operationFixture()
+		const unsigned = { pubkey: actor, created_at: 1_000, kind: 28_641, tags: [] as string[][], content: '{}' }
+		operation.phase = 'server_prepared'
+		operation.fundingAuthorizationEventId = 'e'.repeat(64)
+		operation.preparedBid = { preparationId: 'prepare-1', fundingAuthorizationEventId: operation.fundingAuthorizationEventId,
+			receiptDigest: 'f'.repeat(64), unsignedBid: unsigned }
+		let signs = 0, auctionReads = 0
+		const client = createDemoFridayBrowserCocoClient({ deployment: {} as never,
+			auction: { async readExact() { auctionReads++; throw new Error('new leader must not be read') } } as never,
+			walletFactory: {} as never,
+			nostrSigner: { async signEvent() { signs++; throw new Error('tampered bytes must not be signed') } } as never,
+			builder: {} as never, terminal: {} as never,
+			state: { async runWalletExclusive<T>(_identity: unknown, run: () => Promise<T>) { return run() },
+				async runOperationExclusive<T>(_identity: unknown, run: () => Promise<T>) { return run() },
+				async loadOperation() { return structuredClone(operation) },
+				async saveOperation() { throw new Error('tampered bytes must not be saved') } } as never,
+			admission: {} as never,
+		})
+		const identity = { actor, environmentId: operation.environmentId, fundingOperationId: operation.fundingOperationId }
+		await expect(client.recoverExact(identity)).rejects.toThrow(/unsigned bid content/)
+		expect({ signs, auctionReads, phase: String(operation.phase) }).toEqual({ signs: 0, auctionReads: 0, phase: 'server_prepared' })
+	})
 })
 
 for(const phase of ['bid','refund'] as const)test(`P2 bidder ${phase} disposal failure reaches production common-lease fence`,async()=>{
@@ -470,7 +587,8 @@ for(const phase of ['bid','refund'] as const)test(`P2 bidder ${phase} disposal f
  const locks={request<T>(_name:string,_options:unknown,run:()=>Promise<T>):Promise<T>{const previous=tail;let release!:()=>void;tail=new Promise<void>(r=>{release=r});return previous.then(run).finally(release)}}
  const tab=()=>createDemoFridayBrowserPaymentState({indexedDB:{} as IDBFactory,locks})
  const trusted={...deployment,environmentId:`p2-bidder-${phase}`},operation=operationFixture()
- operation.environmentId=trusted.environmentId;operation.refundDelivery={intent:{} as never,keyset:{} as never}
+ operation.environmentId=trusted.environmentId;operation.trustedDeploymentDigest=demoFridayTrustedDeploymentDigest(trusted)
+ operation.refundDelivery={intent:{} as never,keyset:{} as never}
  const identity={actor,environmentId:trusted.environmentId,fundingOperationId:fundingRequest.fundingOperationId}
  const client=createDemoFridayBrowserCocoClient({deployment:{async readExact(){return trusted}},auction:{async readExact(){return {schema:'PLEBEIAN_FRIDAY_TRUSTED_AUCTION_FUNDING_V1',auctionId:'auction-1',leaderBidId:fundingRequest.replacesBidId,leaderActor,leaderBidAmount:10,sellerPaymentPublicKey:compressed(3),winnerRequest:winnerRequest()}}},
   walletFactory:{async openExact(){opens++;return {actor,mintUrl,async inspect(){throw new Error('initial wallet observation refused')},async dispose(){disposals++;throw new Error('cleanup unconfirmed')}} as never}},

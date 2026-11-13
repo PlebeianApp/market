@@ -292,6 +292,13 @@ export interface DemoFridayFundingAdmissionPort {
 
 export interface DemoFridayCocoTerminalPort {
 	readNoticeExact(request: { actor: string; fundingOperationId: string }): Promise<unknown | null>
+	readAcknowledgementStatusExact?(request: { actor: string; fundingOperationId: string }): Promise<{
+		schema: 'PLEBEIAN_FRIDAY_COCO_TERMINAL_STATUS_V1'
+		actor: string
+		fundingOperationId: string
+		noticePresent: boolean
+		acknowledged: boolean
+	}>
 	acknowledgeExact(request: {
 		schema: 'PLEBEIAN_FRIDAY_COCO_TERMINAL_ACK_V1'
 		actor: string
@@ -303,10 +310,41 @@ export interface DemoFridayCocoTerminalPort {
 }
 
 export interface DemoFridayBrowserCocoClient {
-	prepareAndFinalize(request: DemoFridayBrowserFundingRequestV1): Promise<DemoFridayFundingAdmissionStatusV1>
-	/** Resume only the persisted exact signed bid; cannot lock, rebuild, re-sign, or substitute bytes. */
-	recoverExact(identity: DemoFridayBrowserOperationIdentity): Promise<DemoFridayFundingAdmissionStatusV1>
+	prepareAndFinalize(request: DemoFridayBrowserFundingRequestV1,
+		observe?: DemoFridayBidProgressObserver): Promise<DemoFridayFundingAdmissionStatusV1>
+	/** Resume only the persisted server preparation; it may sign its immutable prepared event once, but cannot lock, rebuild, or substitute bytes. */
+	recoverExact(identity: DemoFridayBrowserOperationIdentity,
+		observe?: DemoFridayBidProgressObserver): Promise<DemoFridayFundingAdmissionStatusV1>
 	importRefundExact(identity: DemoFridayBrowserOperationIdentity): Promise<DemoRecipientImportReceipt | null>
+}
+
+export type DemoFridayBidProgressPhase =
+	| 'checking_identity'
+	| 'checking_auction'
+	| 'waiting_for_wallet'
+	| 'opening_wallet'
+	| 'preparing_funds'
+	| 'reserving_funds'
+	| 'building_authorization'
+	| 'contacting_authority'
+	| 'awaiting_intent_signature'
+	| 'awaiting_funding_signature'
+	| 'awaiting_bid_signature'
+	| 'awaiting_signature'
+	| 'confirming_consensus'
+	| 'resuming_exact'
+
+/** Redacted observer: phases contain no actor, auction, amount or operation identity. */
+export type DemoFridayBidProgressObserver = (progress: Readonly<{
+	phase: DemoFridayBidProgressPhase
+}>) => void
+
+function observeBidProgress(observer: DemoFridayBidProgressObserver | undefined,
+	phase: DemoFridayBidProgressPhase): void {
+	try { observer?.(Object.freeze({ phase })) }
+	catch {
+		// Presentation and instrumentation must never alter a payment outcome.
+	}
 }
 
 function refuse(message: string): never {
@@ -358,6 +396,11 @@ function exactDeployment(value: DemoFridayTrustedBrowserDeploymentV1): DemoFrida
 		refuse('trusted deployment does not pin the exact zero-fee Coco mint cryptographic snapshot')
 	}
 	return { ...structuredClone(value), canonicalMintUrl, mintSnapshot: snapshot, keyset }
+}
+
+/** Canonical identity of the complete trusted deployment, including the four participant shares. */
+export function demoFridayTrustedDeploymentDigest(value: DemoFridayTrustedBrowserDeploymentV1): string {
+	return bytesToHex(sha256(utf8ToBytes(canonicalJson(exactDeployment(value)))))
 }
 
 function exactRequest(value: DemoFridayBrowserFundingRequestV1): DemoFridayBrowserFundingRequestV1 {
@@ -664,8 +707,28 @@ function assertSameRequest(
 ): void {
 	const winnerCapabilityDigest = demoRecipientCapabilityDigest(auction.winnerRequest.capability)
 	const winnerOutputDigest = demoOutputsDigest(auction.winnerRequest.outputs)
-	if (operation.environmentId !== deployment.environmentId || operation.authNetworkId !== deployment.authNetworkId
+	const deploymentDigest = demoFridayTrustedDeploymentDigest(deployment)
+	// Legacy records remain available to the terminal-import and exact
+	// server-recovery paths, but may not restart browser wallet or envelope
+	// mutations under deployment fields they never pinned.
+	if (operation.trustedDeploymentDigest === undefined) {
+		refuse('legacy operation lacks the complete trusted deployment identity')
+	}
+	if (operation.trustedDeploymentDigest !== deploymentDigest
+		|| operation.environmentId !== deployment.environmentId || operation.authNetworkId !== deployment.authNetworkId
 		|| operation.chainId !== deployment.chainId || operation.canonicalMintUrl !== deployment.canonicalMintUrl
+		|| operation.mintPublicKey !== deployment.mintSnapshot.mintPublicKey
+		|| operation.mintServerVersion !== deployment.mintSnapshot.serverVersion
+		|| operation.keysetId !== deployment.keyset.id
+		|| operation.denominationKeyDigest !== deployment.mintSnapshot.denominationKeyDigest
+		|| JSON.stringify(operation.denominationAmounts) !== JSON.stringify(
+			[...deployment.mintSnapshot.denominationAmounts].sort((a, b) => a - b))
+		|| JSON.stringify(operation.mintNuts) !== JSON.stringify([...deployment.mintSnapshot.nuts].sort((a, b) => a - b))
+		|| operation.committeeKeysetId !== deployment.committeeKeysetId
+		|| operation.committeeKeysetVersion !== deployment.committeeKeysetVersion
+		|| operation.dkgRunId !== deployment.dkgRunId
+		|| operation.publicKeyPackageSha256 !== deployment.publicKeyPackageSha256
+		|| operation.signerRosterDigest !== deployment.signerRosterDigest
 		|| operation.auctionId !== request.auctionId || operation.fundingOperationId !== request.fundingOperationId
 		|| operation.bidAmount !== request.bidAmount || operation.fullPoolAmount !== request.fullPoolAmount
 		|| operation.reservedPoolAmount !== request.reservedPoolAmount || operation.replacesBidId !== request.replacesBidId
@@ -675,7 +738,7 @@ function assertSameRequest(
 		|| operation.winnerOutputsDigest !== winnerOutputDigest
 		|| operation.winnerAuctionAuthorizationDigest !== auction.winnerAuctionPayout?.authorization.authorizationDigest
 		|| operation.winnerAuctionSelectionDigest !== auction.winnerAuctionPayout?.selection.selectionDigest
-		|| operation.keysetId !== deployment.keyset.id || operation.lock.committeePubkey !== deployment.committeePublicKey
+		|| operation.lock.committeePubkey !== deployment.committeePublicKey
 		|| operation.lock.locktime !== request.locktime) refuse('operation retry changed immutable funding terms')
 }
 
@@ -765,6 +828,7 @@ export function createDemoFridayOperationBoundSigning(options: {
 	lockedToken: string
 	winnerRequest: DemoRecipientCoordinatorRequest
 	refundRequest: DemoRecipientCoordinatorRequest
+	observe?: DemoFridayBidProgressObserver
 }): DemoFridayOperationBoundSigningV1 {
 	const { operation } = options
 	let decoded: { proofs?: Array<{ secret?: unknown }> }
@@ -849,6 +913,7 @@ export function createDemoFridayOperationBoundSigning(options: {
 				refuse('builder funding authorization is not the canonical exact event')
 			}
 			nostrAuthorizationUsed = true
+			observeBidProgress(options.observe, 'awaiting_funding_signature')
 			return exactSignedBid(await options.nostrSigner.signEvent(structuredClone(event)), event)
 		},
 	} satisfies DemoFridayOperationBoundSigningV1)
@@ -867,18 +932,41 @@ export function createDemoFridayBrowserCocoClient(options: {
 }): DemoFridayBrowserCocoClient {
 	const nowSeconds = options.nowSeconds ?? (() => Math.floor(Date.now() / 1_000))
 	return Object.freeze({
-		async prepareAndFinalize(requestValue) {
+		async prepareAndFinalize(requestValue, observe) {
 			const request = exactRequest(requestValue)
-			const deployment = exactDeployment(await options.deployment.readExact())
-			const actor = await options.nostrSigner.getPublicKey()
+			observeBidProgress(observe, 'checking_identity')
+			// Both reads are side-effect-free in the browser composition and both are
+			// independently revalidated before the first wallet effect.
+			const [deploymentValue, actor] = await Promise.all([
+				options.deployment.readExact(), options.nostrSigner.getPublicKey(),
+			])
+			const deployment = exactDeployment(deploymentValue)
 			if (!HEX_32.test(actor)) refuse('Nostr actor identity is malformed')
 			const identity = { actor, environmentId: deployment.environmentId, fundingOperationId: request.fundingOperationId }
+			const observedOperation = await options.state.loadOperation(identity)
+			if (observedOperation !== null) {
+				if (observedOperation.trustedDeploymentDigest === undefined) {
+					refuse('legacy operation lacks the complete trusted deployment identity')
+				}
+				if (observedOperation.trustedDeploymentDigest !== demoFridayTrustedDeploymentDigest(deployment)) {
+					refuse('operation retry changed the complete trusted deployment identity')
+				}
+			}
+			// A fresh operation must still validate the current auction before Coco is
+			// opened. An interrupted operation instead revalidates and resumes the
+			// exact authenticated snapshot it persisted before its first wallet effect.
+			// It must not substitute a newer leader, selection, or seller output set.
+			observeBidProgress(observe, 'checking_auction')
+			const observedAuction = exactTrustedAuctionFunding({
+				value: observedOperation?.trustedAuctionFunding === undefined
+					? await options.auction.readExact({ auctionId: request.auctionId,
+						fundingOperationId: request.fundingOperationId, fullPoolAmount: request.fullPoolAmount })
+					: observedOperation.trustedAuctionFunding as DemoFridayTrustedAuctionFundingV1,
+				request, deployment, actor, nowSeconds: nowSeconds(),
+			})
+			observeBidProgress(observe, 'waiting_for_wallet')
 			return options.state.runWalletExclusive(identity, async () => {
-				const auction = exactTrustedAuctionFunding({
-					value: await options.auction.readExact({ auctionId: request.auctionId,
-						fundingOperationId: request.fundingOperationId, fullPoolAmount: request.fullPoolAmount }),
-					request, deployment, actor, nowSeconds: nowSeconds(),
-				})
+				observeBidProgress(observe, 'opening_wallet')
 				const wallet = await options.walletFactory.openExact({ actor, environmentId: deployment.environmentId,
 					canonicalMintUrl: deployment.canonicalMintUrl })
 				return useFridayWallet(wallet, async () => {
@@ -891,6 +979,10 @@ export function createDemoFridayBrowserCocoClient(options: {
 					}
 					return await options.state.runOperationExclusive(identity, async () => {
 				let operation = await options.state.loadOperation(identity)
+				const auction = operation?.trustedAuctionFunding === undefined ? observedAuction : exactTrustedAuctionFunding({
+					value: operation.trustedAuctionFunding as DemoFridayTrustedAuctionFundingV1,
+					request, deployment, actor, nowSeconds: nowSeconds(),
+				})
 				if (operation === null) {
 					const input: DemoFridayBrowserPaymentOperationInput = {
 						...identity, authNetworkId: deployment.authNetworkId, chainId: deployment.chainId,
@@ -907,6 +999,8 @@ export function createDemoFridayBrowserCocoClient(options: {
 							winnerAuctionAuthorizationDigest: auction.winnerAuctionPayout.authorization.authorizationDigest,
 							winnerAuctionSelectionDigest: auction.winnerAuctionPayout.selection.selectionDigest,
 						}),
+						trustedDeploymentDigest: demoFridayTrustedDeploymentDigest(deployment),
+						trustedAuctionFunding: structuredClone(auction),
 						keysetId: deployment.keyset.id, denominationKeyDigest: deployment.mintSnapshot.denominationKeyDigest,
 						denominationAmounts: [...deployment.mintSnapshot.denominationAmounts],
 						mintNuts: [...deployment.mintSnapshot.nuts], inputFeePpk: 0,
@@ -925,6 +1019,7 @@ export function createDemoFridayBrowserCocoClient(options: {
 				const refundSigner = createDemoFridayPaymentSignerFromSecret(hexToBytes(operation.refundSecret))
 				let lockedToken: string
 				if (operation.phase === 'keys_ready') {
+					observeBidProgress(observe, 'preparing_funds')
 					// First make the exact Coco operation durable without mint I/O.
 					// Only then record the application marker that authorizes resume.
 					// A marker with a missing Coco operation therefore fails closed.
@@ -939,6 +1034,7 @@ export function createDemoFridayBrowserCocoClient(options: {
 					await options.state.saveOperation(advanced, operation.revision); operation = advanced
 				}
 				if (operation.phase === 'coco_send_pending') {
+					observeBidProgress(observe, 'reserving_funds')
 					const locked = await wallet.prepareThresholdFunding({
 						amount: operation.reservedPoolAmount, operationId: operation.fundingOperationId, lock: operation.lock,
 					})
@@ -955,7 +1051,7 @@ export function createDemoFridayBrowserCocoClient(options: {
 						refundDelivery: refund.delivery, refundRequest: refund.request,
 						signing: createDemoFridayOperationBoundSigning({ operation, paymentSigner, refundSigner,
 							nostrSigner: options.nostrSigner, lockedToken,
-							winnerRequest: auction.winnerRequest, refundRequest: refund.request }),
+							winnerRequest: auction.winnerRequest, refundRequest: refund.request, observe }),
 						nowSeconds: nowSeconds(),
 					})
 					const advanced = nextRecord(operation, { phase: 'coco_locked', abortCapsule: capsule,
@@ -971,6 +1067,7 @@ export function createDemoFridayBrowserCocoClient(options: {
 
 				try {
 					if (operation.phase === 'coco_locked') {
+						observeBidProgress(observe, 'building_authorization')
 						const refund = await prepareRefundDelivery({ operation, keyset: deployment.keyset, state: options.state, refundSigner })
 						const built = await options.builder.buildExact({
 							operation: demoFridayBrowserPublicOperation(operation), lockedToken,
@@ -981,7 +1078,7 @@ export function createDemoFridayBrowserCocoClient(options: {
 							refundDelivery: refund.delivery, refundRequest: refund.request,
 							signing: createDemoFridayOperationBoundSigning({ operation, paymentSigner, refundSigner,
 								nostrSigner: options.nostrSigner, lockedToken,
-								winnerRequest: auction.winnerRequest, refundRequest: refund.request }),
+								winnerRequest: auction.winnerRequest, refundRequest: refund.request, observe }),
 							nowSeconds: nowSeconds(),
 						})
 						const verified = exactEnvelope(built.envelope, operation, nowSeconds())
@@ -994,6 +1091,7 @@ export function createDemoFridayBrowserCocoClient(options: {
 						await options.state.saveOperation(advanced, operation.revision); operation = advanced
 					}
 					if (operation.phase === 'envelope_prepared') {
+						observeBidProgress(observe, 'contacting_authority')
 						const prepared = exactPrepared(
 							await options.admission.prepareExact(structuredClone(operation.envelope)), operation, nowSeconds(),
 						)
@@ -1002,6 +1100,7 @@ export function createDemoFridayBrowserCocoClient(options: {
 					}
 					if (operation.preparedBid === undefined) refuse('prepared bid is absent')
 					if (operation.phase === 'server_prepared' && operation.signedBid === undefined) {
+						observeBidProgress(observe, 'awaiting_bid_signature')
 						const signed = exactSignedBid(
 							await options.nostrSigner.signEvent(structuredClone(operation.preparedBid.unsignedBid)),
 							operation.preparedBid.unsignedBid,
@@ -1014,6 +1113,7 @@ export function createDemoFridayBrowserCocoClient(options: {
 					const signedBid = operation.signedBid
 					const authorizationEventId = operation.fundingAuthorizationEventId
 					if (preparedBid === undefined || authorizationEventId === undefined) refuse('prepared funding identity is absent')
+					observeBidProgress(observe, 'confirming_consensus')
 					let status = exactStatus(await options.admission.readExact({
 						preparationId: preparedBid.preparationId,
 						fundingOperationId: operation.fundingOperationId,
@@ -1046,27 +1146,50 @@ export function createDemoFridayBrowserCocoClient(options: {
 			})
 		},
 
-		async recoverExact(identityValue) {
+		async recoverExact(identityValue, observe) {
 			const identity = { ...identityValue }
+			observeBidProgress(observe, 'resuming_exact')
+			observeBidProgress(observe, 'waiting_for_wallet')
 			return options.state.runWalletExclusive(identity, () => options.state.runOperationExclusive(identity, async () => {
-				const operation = await options.state.loadOperation(identity)
+				let operation = await options.state.loadOperation(identity)
 				if (operation === null || phaseRank(operation.phase) < phaseRank('server_prepared')
 					|| operation.preparedBid === undefined || operation.fundingAuthorizationEventId === undefined) {
 					refuse('operation has no server-prepared identity to recover')
 				}
+				const preparedBid = operation.preparedBid
+				const fundingAuthorizationEventId = operation.fundingAuthorizationEventId
+				if (operation.signedBid === undefined) {
+					// IndexedDB is durable recovery input, not signing authority. Re-run
+					// the committee receipt, exact envelope, and operation binding before
+					// asking NIP-07 to sign bytes recovered from storage. The immutable
+					// attestation timestamp preserves safe recovery after wall-clock expiry.
+					const receiptDigest = exactUnsignedBid(preparedBid.unsignedBid, operation,
+						preparedBid.unsignedBid.created_at)
+					if (preparedBid.receiptDigest !== receiptDigest) {
+						refuse('persisted server receipt digest differs from the exact unsigned bid bytes')
+					}
+					observeBidProgress(observe, 'awaiting_bid_signature')
+					const signed = exactSignedBid(
+						await options.nostrSigner.signEvent(structuredClone(preparedBid.unsignedBid)),
+						preparedBid.unsignedBid,
+					)
+					const advanced = nextRecord(operation, { signedBid: signed })
+					await options.state.saveOperation(advanced, operation.revision); operation = advanced
+				}
+				const signedBid = operation.signedBid ?? refuse('operation has no exact signed bid to recover')
+				observeBidProgress(observe, 'confirming_consensus')
 				let status = exactStatus(await options.admission.readExact({
-					preparationId: operation.preparedBid.preparationId,
+					preparationId: preparedBid.preparationId,
 					fundingOperationId: operation.fundingOperationId,
-					fundingAuthorizationEventId: operation.fundingAuthorizationEventId,
-				}), operation, operation.preparedBid)
+					fundingAuthorizationEventId,
+				}), operation, preparedBid)
 				if (status.status !== 'admitted' && status.status !== 'rejected_return') {
-					if (operation.signedBid === undefined) refuse('operation has no exact signed bid to recover')
 					status = exactStatus(await options.admission.finalizeExact({
-						preparationId: operation.preparedBid.preparationId,
+						preparationId: preparedBid.preparationId,
 						fundingOperationId: operation.fundingOperationId,
-						fundingAuthorizationEventId: operation.fundingAuthorizationEventId,
-						signedBid: structuredClone(operation.signedBid),
-					}), operation, operation.preparedBid)
+						fundingAuthorizationEventId,
+						signedBid: structuredClone(signedBid),
+					}), operation, preparedBid)
 				}
 				if ((status.status === 'admitted' || status.status === 'rejected_return') && operation.phase !== 'finalized') {
 					const advanced = nextRecord(operation, { phase: 'finalized', finalizedStatusDigest: demoFridayAdmissionStatusDigest(status) })
@@ -1085,7 +1208,11 @@ export function createDemoFridayBrowserCocoClient(options: {
 				// payment operation and must not abort recovery of later entries.
 				if (operation === null || operation.refundDelivery === undefined) return null
 				if (operation.pendingTerminalAck !== undefined) {
-					await options.terminal.acknowledgeExact(structuredClone(operation.pendingTerminalAck))
+					if (operation.terminalAckConfirmed !== true) {
+						await options.terminal.acknowledgeExact(structuredClone(operation.pendingTerminalAck))
+						const confirmed = nextRecord(operation, { terminalAckConfirmed: true })
+						await options.state.saveOperation(confirmed, operation.revision)
+					}
 					return { ...structuredClone(operation.pendingTerminalAck.importReceipt), alreadyImported: true }
 				}
 				const rawNotice = await options.terminal.readNoticeExact({
@@ -1147,6 +1274,8 @@ export function createDemoFridayBrowserCocoClient(options: {
 				const advanced = nextRecord(operation, { pendingTerminalAck: ack })
 				await options.state.saveOperation(advanced, operation.revision)
 				await options.terminal.acknowledgeExact(structuredClone(ack))
+				const confirmed = nextRecord(advanced, { terminalAckConfirmed: true })
+				await options.state.saveOperation(confirmed, advanced.revision)
 				return receipt
 			}))
 		},

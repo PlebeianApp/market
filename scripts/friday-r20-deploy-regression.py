@@ -303,15 +303,19 @@ class FridayR20DeployRegression(unittest.TestCase):
 
     def test_browser_release_pins_are_an_independent_rendered_artifact(self) -> None:
         template = json.loads((R20 / "browser-r20-pins.json.example").read_text(encoding="utf-8"))
-        self.assertEqual(template["schema"], "PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V1")
+        self.assertEqual(template["schema"], "PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V2")
         self.assertEqual(template["deployment_id"], "friday-demo-20261023-r20")
         self.assertEqual(template["committee_keyset_id"], "friday-demo-frost-keyset-v2")
         self.assertEqual(template["committee_keyset_version"], "2")
         self.assertEqual(template["dkg_run_id"], "friday-demo-20261023-r20-dkg2")
         self.assertEqual(template["cashu_mint_url"], "https://172.105.95.57")
-        for name in ("auth_network_id", "chain_id", "genesis_sha256", "committee_public_key",
+        for name in ("auth_network_id", "chain_id", "genesis_sha256", "validators_hash", "committee_public_key",
                      "public_key_package_sha256", "signer_roster_digest", "fake_funding_policy_digest"):
             self.assertRegex(template[name], r"^%FRIDAY_[A-Z0-9_]+%$")
+        self.assertEqual(template["auction_policy_digest"],
+                         "257fb5bf2b414f206278ada15464030a075d6f4f51b9c2f6b965259136f9a777")
+        self.assertEqual(template["auction_payment_policy_digest"],
+                         "4d88017e3d191421aa46702ca9b6670fb324162c4c39d3ce4604bbfcfec3492b")
 
 
 if __name__ == "__main__":

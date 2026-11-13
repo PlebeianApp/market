@@ -316,6 +316,99 @@ func TestFridayCustodyReservationsUseCommittedTimeAndCreateEntitlements(t *testi
 	}
 }
 
+func TestSevenDayAuctionBoundaryKeepsLateBidExtensionSemantics(t *testing.T) {
+	t.Parallel()
+	seed := make([]byte, ed25519.SeedSize)
+	seed[0] = 71
+	committee := testPrivateKey(t)
+	state, err := NewState("seven-day-duration", ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey), hex.EncodeToString(committee.PubKey().SerializeCompressed()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := SevenDayPolicy()
+	if policy.MaxDurationSeconds != MaxAuctionDurationSeconds || policy.MaxTotalExtension != 1_800 {
+		t.Fatalf("seven-day policy mismatch: %+v", policy)
+	}
+	seller, bidder := testPrivateKey(t), testPrivateKey(t)
+	created := testEvent(t, seller, 1_000, KindCreate, createContent{
+		AuctionID: "seven-day", Title: "Seven day lot", Duration: MaxAuctionDurationSeconds, StartingBid: 1_000,
+	})
+	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &created}, 1_000, policy, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalEnd := int64(1_000) + MaxAuctionDurationSeconds
+	if state.Auctions["seven-day"].OriginalEndTime != originalEnd {
+		t.Fatalf("original end=%d want %d", state.Auctions["seven-day"].OriginalEndTime, originalEnd)
+	}
+	tooLong := testEvent(t, seller, 1_001, KindCreate, createContent{
+		AuctionID: "too-long", Title: "Too long", Duration: MaxAuctionDurationSeconds + 1, StartingBid: 1_000,
+	})
+	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &tooLong}, 1_001, policy, seed); err == nil || !strings.Contains(err.Error(), "duration") {
+		t.Fatalf("seven-day-plus-one duration error=%v", err)
+	}
+	lateAt := originalEnd - 1
+	receipt := testReservationReceipt(t, committee, "seven-day", actorForKey(bidder), 1_000, "seven-day-late-bid", "", lateAt+policy.ReceiptTTLSeconds)
+	lateBid := testEvent(t, bidder, lateAt, KindBid, bidContent{AuctionID: "seven-day", Amount: 1_000, Reservation: &receipt})
+	state, err = ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &lateBid}, lateAt, policy, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantEnd := lateAt + policy.LateBidExtension
+	if state.Auctions["seven-day"].EndTime != wantEnd || wantEnd > originalEnd+policy.MaxTotalExtension {
+		t.Fatalf("late extension end=%d want=%d cap=%d", state.Auctions["seven-day"].EndTime, wantEnd, originalEnd+policy.MaxTotalExtension)
+	}
+}
+
+func TestSevenDayPolicyPreservesExistingFundedAuctionLocktime(t *testing.T) {
+	t.Parallel()
+	committee, actor, bidderPayment := testEvenPrivateKey(t), testPrivateKey(t), testPrivateKey(t)
+	legacyPolicy := DefaultPolicy()
+	legacyPolicy.MaxDurationSeconds = LegacyMaxAuctionDurationSeconds
+	originalEnd := int64(10_000)
+	locktime := originalEnd + legacyPolicy.MaxTotalExtension + EmergencyRecoverySeconds
+	receipt := testIntegratedFundingReceipt(t, committee, actor, bidderPayment, "legacy-funded-auction", "", 2_500, 2_500,
+		"legacy-funded-operation", []string{hex.EncodeToString(testPrivateKey(t).PubKey().SerializeCompressed())}, locktime, 9_900)
+	seed := make([]byte, ed25519.SeedSize)
+	state, err := NewState("legacy-funded", ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey), receipt.CommitteePublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.AuthNetworkID, state.ChainID = receipt.AuthNetworkID, receipt.ChainID
+	state.Auctions[receipt.AuctionID] = Auction{ID: receipt.AuctionID, Seller: strings.Repeat("f", 64),
+		FundingMode: FundingModeThresholdSigAll, OriginalEndTime: originalEnd, EndTime: originalEnd, Status: "open"}
+	content := bidContent{AuctionID: receipt.AuctionID, Amount: receipt.BidAmount, IntegratedFunding: &receipt}
+	if err := verifyIntegratedFundingReceipt(state, actorForKey(actor), receipt.AttestedAt, content, receipt, legacyPolicy); err != nil {
+		t.Fatalf("legacy policy rejected its funded auction: %v", err)
+	}
+	if err := verifyIntegratedFundingReceipt(state, actorForKey(actor), receipt.AttestedAt, content, receipt, SevenDayPolicy()); err != nil {
+		t.Fatalf("seven-day policy changed an existing funded auction locktime: %v", err)
+	}
+}
+
+func TestAuctionTimestampOverflowFailsClosed(t *testing.T) {
+	t.Parallel()
+	seed := make([]byte, ed25519.SeedSize)
+	state, err := NewState("timing-overflow", ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey),
+		hex.EncodeToString(testPrivateKey(t).PubKey().SerializeCompressed()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	seller := testPrivateKey(t)
+	created := testEvent(t, seller, 1<<63-2, KindCreate, createContent{
+		AuctionID: "overflow", Title: "Overflow", Duration: 3, StartingBid: 1,
+	})
+	if _, err := ApplyTransaction(state, Transaction{Version: TxVersion, Type: "event", Event: &created}, 1<<63-2, DefaultPolicy(), seed); err == nil || !strings.Contains(err.Error(), "overflows") {
+		t.Fatalf("create timing overflow error=%v", err)
+	}
+	state.Auctions["late-overflow"] = Auction{ID: "late-overflow", Seller: actorForKey(seller), FundingMode: FundingModeLegacy,
+		StartingBid: 1, MinIncrement: 1, OriginalEndTime: 1<<63 - 100, EndTime: 1<<63 - 100, Status: "open"}
+	if err := applyAcceptedBid(&state, strings.Repeat("a", 64), strings.Repeat("b", 64), 1<<63-101,
+		bidContent{AuctionID: "late-overflow", Amount: 1}, nil, DefaultPolicy()); err == nil || !strings.Contains(err.Error(), "overflows") {
+		t.Fatalf("extension timing overflow error=%v", err)
+	}
+}
+
 func TestAuctionImageURLPolicyAllowsOnlyBoundedCredentialFreeHTTPS(t *testing.T) {
 	t.Parallel()
 	for _, value := range []string{

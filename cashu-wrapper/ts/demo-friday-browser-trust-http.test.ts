@@ -213,6 +213,11 @@ describe('Friday trusted browser same-origin HTTP ports', () => {
 		expect((await payout.readWinnerExact('auction-1'))?.selection.bidAmount).toBe(3)
 		expect(calls).toEqual(['/api/friday/auction-payout/register', '/api/friday/auction-payout/read',
 			'/api/friday/auction-payout/winner'])
+		const mismatched = createDemoFridayBrowserAuctionPayoutHttp({ origin, fetchImpl: async () => json({
+			schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_READ_RESULT_V1',
+			authorization: { ...authorization, authorization: { auctionId: 'another-auction' } },
+		}) })
+		await expect(mismatched.readExact('auction-1')).rejects.toThrow(/read identity differs/)
 
 		const partial = createDemoFridayBrowserAuctionPayoutHttp({ origin, fetchImpl: async () => json({
 			schema: 'PLEBEIAN_FRIDAY_AUCTION_PAYOUT_WINNER_READ_RESULT_V1', winner: {

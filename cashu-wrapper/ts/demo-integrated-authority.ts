@@ -22,9 +22,17 @@ import {
 } from './demo-integrated-admission-receipt-any'
 import { proofPoint } from './nut-client'
 
-export const DEMO_MAX_EXTENSION_SECONDS = 1_800
-export const DEMO_EMERGENCY_RECOVERY_SECONDS = 900
-export const DEMO_MAIN_CUTOFF_SECONDS = 300
+export {
+	DEMO_EMERGENCY_RECOVERY_SECONDS,
+	DEMO_MAIN_CUTOFF_SECONDS,
+	DEMO_MAX_EXTENSION_SECONDS,
+} from './demo-auction-timing-policy'
+import {
+	DEMO_EMERGENCY_RECOVERY_SECONDS,
+	DEMO_MAIN_CUTOFF_SECONDS,
+	DEMO_MAX_EXTENSION_SECONDS,
+} from './demo-auction-timing-policy'
+
 export const DEMO_DISPLACEMENT_SUCCESSORS = 2
 
 const HEX_32 = /^[0-9a-f]{64}$/
@@ -341,6 +349,9 @@ export function demoIntegratedExecutionRootBindingV2Digest(
 export function demoIntegratedTiming(originalEndTime: number, certifiedEndTime: number): DemoIntegratedTimingV1 {
 	if (!Number.isSafeInteger(originalEndTime) || originalEndTime < 1 || !Number.isSafeInteger(certifiedEndTime)) {
 		refuse('DEMO_AUTHORITY_TIMING', 'auction end times must be positive safe Unix seconds')
+	}
+	if (originalEndTime > Number.MAX_SAFE_INTEGER - DEMO_MAX_EXTENSION_SECONDS - DEMO_EMERGENCY_RECOVERY_SECONDS) {
+		refuse('DEMO_AUTHORITY_TIMING', 'auction timing exceeds the safe integer range')
 	}
 	const maximumEndTime = originalEndTime + DEMO_MAX_EXTENSION_SECONDS
 	if (certifiedEndTime < originalEndTime || certifiedEndTime > maximumEndTime) {

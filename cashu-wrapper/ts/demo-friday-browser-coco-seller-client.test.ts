@@ -53,7 +53,9 @@ class MemoryState {
 	}
 	async saveSellerTerminalAck(record: { fundingOperationId: string }) {
 		const prior = this.sellerAcks.get(record.fundingOperationId)
-		if (prior !== undefined && JSON.stringify(prior) !== JSON.stringify(record)) throw new Error('ack conflict')
+		const confirms = prior !== undefined && prior.acknowledged === undefined && (record as any).acknowledged === true
+			&& JSON.stringify(prior.ack) === JSON.stringify((record as any).ack)
+		if (prior !== undefined && JSON.stringify(prior) !== JSON.stringify(record) && !confirms) throw new Error('ack conflict')
 		this.sellerAcks.set(record.fundingOperationId, structuredClone(record))
 	}
 }

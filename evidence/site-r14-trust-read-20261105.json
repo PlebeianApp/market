@@ -1,0 +1,39 @@
+{
+  "schema": "PLEBEIAN_SITE_R14_TRUST_READ_RECEIPT_V1",
+  "observed_at": "2026-11-05T22:38:47.102073+00:00",
+  "scope": "Only reviewed trust read POST pacing, coalescing, bounded 429 retries, endpoint diagnostics. No offline-seller deployment.",
+  "host": "139.162.161.233",
+  "source": "/tmp/plebeian-site-r14.JfUKxR",
+  "baseline_browser_sha256": "f521315cdda25e62d914e74c715f4952054d366ac79ba73e1e5b91336f78bc67",
+  "baseline_match": "Reconstructed R13 matched live browser byte-for-byte before changes",
+  "site_sha256": "2090c192887b31b115386d0657b1b84ab8b7e2f287ece8756c728131770f5cc8",
+  "browser_sha256": "100780900b556422f549b13bcc222c372630dfdd835b4378e846eca34f0cb1e2",
+  "site_pid": 1475557,
+  "site_nrestarts": 0,
+  "verification": {
+    "isolated_tests": "56 passed, 214 assertions",
+    "scoped_typecheck": "passed",
+    "go_internal_poc": "passed",
+    "real_timer_mock_read_spacing_ms": 347.961328,
+    "live_bid_retry": "not performed",
+    "live_signatures": "not performed",
+    "browser_tabs": "not refreshed",
+    "nginx": "unchanged config and main PID; no reload",
+    "authority_coordinator_observer": "main PIDs unchanged",
+    "journals_and_wallets": "preserved; no modifications"
+  },
+  "confirmed_429_paths_at_2226_utc": [
+    "GET /v1/keys/001a10236c313f83",
+    "POST /api/friday/deployment",
+    "POST /api/friday/seller-plan/read"
+  ],
+  "limitations": [
+    "Same-profile Web Locks cannot coordinate separate profiles/devices sharing an IP",
+    "User tabs continue old code until deliberate reload; pending test operation not retried",
+    "No live end-to-end transaction claimed"
+  ],
+  "rollback": {
+    "prior_binary": "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-site-r13/bin/plebeian-auctions-mvp",
+    "prior_unit": "/etc/systemd/system/.plebeian-friday-site.pre-r14.service"
+  }
+}

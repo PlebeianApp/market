@@ -56,6 +56,21 @@ export class DemoFridayAuthenticatedTerminalDiscovery {
 		let created = 0
 		let scanBudget = TERMINAL_SCAN_BLOCK_BUDGET
 		for (const replay of this.options.prepared.listAdmittedExact()) {
+			const referenceName = `terminal-${replay.eventId.slice(0, 32)}`
+			const existing = await this.options.descriptors.readExact(referenceName)
+			if (existing !== null) {
+				if (existing.reference !== referenceName || existing.fundingOperationId !== replay.fundingOperationId
+					|| existing.scope !== replay.scope || existing.bundleDigest !== replay.bundleDigest) {
+					fail('persisted terminal descriptor differs from admitted funding')
+				}
+				// Reconcile the crash window between durable descriptor persistence and
+				// queue insertion without re-reading history or re-verifying an outcome.
+				this.options.source.enqueueAuthenticatedExact({
+					schema: 'PLEBEIAN_FRIDAY_TERMINAL_REFERENCE_V1', reference: referenceName,
+					identityDigest: demoFridayTerminalDescriptorDigest(existing),
+				})
+				continue
+			}
 			const funding = observation.state.integrated_fundings?.[replay.fundingOperationId]
 			if (funding === undefined || funding.receipt === undefined) continue
 			const held = await this.options.prepared.readStoredExact(replay.eventId)
@@ -130,7 +145,7 @@ export class DemoFridayAuthenticatedTerminalDiscovery {
 			} else continue
 			const descriptor = {
 				schema: 'PLEBEIAN_FRIDAY_TERMINAL_DESCRIPTOR_V1' as const,
-				reference: `terminal-${replay.eventId.slice(0, 32)}`, branch, auctionId,
+				reference: referenceName, branch, auctionId,
 				fundingOperationId: replay.fundingOperationId, scope: replay.scope,
 				bundleDigest: replay.bundleDigest, eventHeight, eventId,
 			}

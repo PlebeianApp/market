@@ -1,9 +1,10 @@
 {
-  "schema": "PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V1",
+  "schema": "PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V2",
   "deployment_id": "friday-demo-20261030-separated-v1",
   "auth_network_id": "%FRIDAY_AUTH_NETWORK_ID%",
   "chain_id": "%FRIDAY_CHAIN_ID%",
   "genesis_sha256": "%FRIDAY_GENESIS_SHA256%",
+  "validators_hash": "%FRIDAY_VALIDATORS_HASH%",
   "cashu_mint_url": "https://139.162.161.233",
   "committee_public_key": "%FRIDAY_COMMITTEE_PUBLIC_KEY%",
   "committee_keyset_id": "friday-demo-frost-keyset-separated-v1",
@@ -11,5 +12,7 @@
   "dkg_run_id": "friday-demo-20261030-separated-v1-dkg1",
   "public_key_package_sha256": "%FRIDAY_PUBLIC_KEY_PACKAGE_SHA256%",
   "signer_roster_digest": "%FRIDAY_SIGNER_ROSTER_DIGEST%",
-  "fake_funding_policy_digest": "%FRIDAY_FAKE_FUNDING_POLICY_DIGEST%"
+  "fake_funding_policy_digest": "%FRIDAY_FAKE_FUNDING_POLICY_DIGEST%",
+  "auction_policy_digest": "257fb5bf2b414f206278ada15464030a075d6f4f51b9c2f6b965259136f9a777",
+  "auction_payment_policy_digest": "4d88017e3d191421aa46702ca9b6670fb324162c4c39d3ce4604bbfcfec3492b"
 }

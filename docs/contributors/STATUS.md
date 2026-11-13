@@ -1,58 +1,56 @@
 # Current verification and acceptance
 
-Recorded 2026-11-06. Implementation snapshot: `fc86843`; see the source manifest
-for per-file hashes and the provenance document for the local source commit.
+Recorded 2026-11-13. Public parent: `41c7098e13fb8854abf5e304653d91ca18e23d0b`.
+Selected source snapshot: `574f90b45bfe0b193f0e87e9a0e1cdaddd77bb34`
+(R86), tree `7c2ab1e793bea0f288cb8e087ad40135b4a5e95d`.
 
-## Fresh checks in the isolated contributor checkout
+## Preparation checks
 
-- Frozen-lock Bun install with lifecycle scripts disabled: passed.
-- Friday browser suite: 131 passed, 0 failed, 486 assertions.
-- Friday scoped TypeScript check: passed.
-- Node UI/deployment fixture suite: 42 passed, 0 failed.
-- Additional mint-read/trust-read/browser-recovery tests: 20 passed, 0 failed.
-- Synthetic legacy recipient-pending fixture after sanitization: passed.
-- Browser bundle: rebuilt from source, byte-for-byte identical. SHA-256:
-  `5a1b1a15ea6a43ac9417c9ed0c48ae7a3a25ad0d3db711b352dfb548cb2bd726`.
-- Full Friday rerun with `bun run test:friday --timeout 15000`: 386 passed,
-  0 failed, 1,626 assertions. The default-timeout result below still applies.
-- Go `./...` with the installed Go 1.23.1 binary: passed offline.
-- R20 suite: **57 passed, 1 skipped, 1 failed**. The disposable predecessor
-  permission-seal test failed with `process executable inventory could not be
-  completed`; its process inspection prerequisite is unavailable here. The
-  root-only traversal test was skipped. The fail-closed guard was not weakened
-  or bypassed. R20 is not a passing gate for this publication.
-- Diff whitespace check: passed.
+- Existing contributor checkout was clean before preparation: **passed**.
+- Exact GitHub branch-tip observation: **passed** (read-only).
+- Exact ngit branch-tip observation: **passed** (read-only).
+- Source/public-parent/checkpoint history reconciliation: **passed**.
+- High-confidence credential-pattern scan of the selected tracked tree: **no
+  matches** for private-key blocks, nsec values, common GitHub/AWS/Slack token
+  forms or Basic/Bearer credential literals.
+- Sensitive filename and archive-member inventory: **reviewed**. Four tracked
+  dependency tgz archives contained no secret-like member names. Source paths
+  mentioning wallets, seeds and private keys are code/tests/verifiers, not a
+  claim that their contents are harmless.
+- Diff whitespace check: see the final preparation receipt before publication.
 
-The first full Friday suite run returned 385 passed and one failure: the
-idempotent terminal-operation regression exceeded Bun's default 5-second
-budget (5.078 seconds). The identical test passed when rerun alone in 4.592
-seconds. This timeout is disclosed rather than treated as a clean initial run.
-The explicit 15-second-budget rerun is listed above.
+The scan is bounded and pattern-based. It is not a formal secret or license
+audit, and it cannot certify earlier public history.
 
-The first Go attempt selected system Go 1.22.2 and was blocked by the module's
-Go 1.23.1 requirement. Automatic selection with checksums disabled also failed.
-The final attempt uses the already installed Go 1.23.1 binary directly and
-forbids network module/checksum retrieval. Install/select the right Go binary
-before using the contributor commands.
+## Tests
 
-## Not established by this publication
+Fresh source tests are intentionally separated from this documentation and
+publication-preparation pass. Record exact commands and results here before
+publication. Until then:
 
-- Fresh live one-seller/two-bidder acceptance on this exact candidate.
-- Visual/NIP-07 browser QA, real mint settlement or deployed-service restarts.
-- A fresh Rust gate or isolated full Nutshell/FROST/Comet integration run.
-- Production security, cryptographic audit, marketplace compatibility or merge
-  readiness. No required remote CI result is implied by local tests.
+- `node --test internal/poc/catalogue_ui.test.js`: **passed** (1 test, 0 failed,
+  Node reported 116.65 ms total duration).
+- `go test ./internal/poc`: **blocked before tests**. The installed Go is
+  1.22.2 while `go.mod` requires Go 1.23.1; no toolchain download was allowed.
+- `go test ./...`: **not run** after the focused Go gate was blocked.
+- `bun run typecheck:friday`: **not run**; this isolated checkout has no
+  `cashu-wrapper/ts/node_modules`, and dependency installation was outside this
+  bounded preparation pass.
+- `bun run test:friday:browser`: **not run** for the same dependency reason.
+- `bun run test:friday`: **not run** for the same dependency reason.
+- Rust participant tests: **not run**; Cargo/Rust were not available on PATH.
+- Live browser/payment acceptance: **not run**.
 
-The public parent recorded a historical five-user acceptance. That is not
-acceptance of this newer recovery code. Existing historical status files and
-binary hashes remain tied to their original revisions and execution contexts.
-No deployment, signing ceremony, public mint transaction, PR or maintainer
-message was performed to publish this branch.
+Historical results in `TEST-REALITY-AND-PROVENANCE.md`, dated evidence and the
+November 6 status document are tied to earlier commits. They must not be
+reported as fresh results for this checkpoint.
 
-## Remaining maintainer work
+## Not established
 
-Review the implementation delta and provenance. Reproduce the focused and
-integration gates in an isolated FakeWallet environment, investigate any flaky
-or environment-dependent checks, then separately approve and execute staged
-visual QA and the fresh fake-sat acceptance journey. Never infer deployment
-permission from a contributor branch or passing tests.
+- That R86 is the exact release currently installed on every host.
+- Fresh live one-seller/multi-bidder bid, refund, anti-sniping, close, payout,
+  acknowledgement and conservation acceptance on this candidate.
+- Inclusion or deployment of the separate R78 profile/demo candidate.
+- Acceptance of the R87-R90 V3 recovery continuations.
+- Production security, cryptographic audit, marketplace merge readiness or
+  permission to publish.

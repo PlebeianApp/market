@@ -612,6 +612,14 @@ func LoadNetworkManifest(root string) (NetworkManifest, error) {
 	if err := manifest.Policy.Validate(); err != nil {
 		return NetworkManifest{}, err
 	}
+	if manifest.Schema == "PlebeianAuctionsPOCNetworkV4" {
+		if err := validateFridayGenesisPolicy(manifest.Policy); err != nil {
+			return NetworkManifest{}, err
+		}
+		if err := validateFridayDeploymentPolicy(manifest.DeploymentID, manifest.Policy); err != nil {
+			return NetworkManifest{}, err
+		}
+	}
 	if manifest.FundingAbortPins != nil {
 		pins := *manifest.FundingAbortPins
 		if pins.AuthNetworkID != manifest.ChainID || pins.ChainID != manifest.ChainID ||

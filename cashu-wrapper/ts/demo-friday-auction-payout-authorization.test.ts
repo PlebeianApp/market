@@ -16,6 +16,13 @@ import type { DemoFridaySellerOpeningRefV1 } from './demo-friday-browser-coco-se
 import type { DemoRecipientPrivateRecord } from './demo-sigall-recipient'
 import { demoDenominationKeyDigest } from './demo-sigall-settlement'
 import { createDemoFridayPaymentSignerFromSecret } from './poc-demo-browser-signer'
+import {
+	DEMO_EMERGENCY_RECOVERY_SECONDS,
+	DEMO_EVENT_SKEW_SECONDS,
+	DEMO_MAX_AUTHORIZATION_SECONDS,
+	DEMO_MAX_BASE_AUCTION_SECONDS,
+	DEMO_MAX_EXTENSION_SECONDS,
+} from './demo-auction-timing-policy'
 
 const actorSecret = hexToBytes('31'.padStart(64, '0'))
 const sellerActor = bytesToHex(schnorr.getPublicKey(actorSecret))
@@ -93,6 +100,30 @@ async function prepared() {
 }
 
 describe('auction-scoped offline seller payout authorization', () => {
+	test('accepts the seven-day deadline at maximum consensus skew, then rejects one second more', async () => {
+		const held = fixture()
+		try {
+			held.scope.sellerPaymentPublicKey = await held.recipient.getPublicKey()
+			held.scope.originalEndTime = now + DEMO_EVENT_SKEW_SECONDS + DEMO_MAX_BASE_AUCTION_SECONDS
+			held.scope.maximumEndTime = held.scope.originalEndTime + DEMO_MAX_EXTENSION_SECONDS
+			held.scope.validUntil = held.scope.maximumEndTime + DEMO_EMERGENCY_RECOVERY_SECONDS
+			expect(held.scope.validUntil - now).toBe(DEMO_MAX_AUTHORIZATION_SECONDS)
+			const options = {
+				scope: held.scope, keyset: held.keyset, journal: held.journal,
+				recipientKey: {
+					getPublicKey: () => held.recipient.getPublicKey(),
+					signRecipientCapability: (value: Parameters<typeof held.recipient.signRecipientCapability>[0]) => held.recipient.signRecipientCapability(value),
+				},
+				nostr: { async getPublicKey() { return sellerActor }, async signEvent(value: Parameters<typeof signed>[0]) { return signed(value) } },
+				nowSeconds: now,
+			}
+			const envelope = await prepareDemoFridayAuctionPayoutAuthorization(options)
+			expect(envelope.authorization.originalEndTime).toBe(now + DEMO_EVENT_SKEW_SECONDS + DEMO_MAX_BASE_AUCTION_SECONDS)
+			await expect(prepareDemoFridayAuctionPayoutAuthorization({ ...options,
+				scope: { ...held.scope, validUntil: held.scope.validUntil + 1 } })).rejects.toThrow(/outside the supported cap/)
+		} finally { held.recipient.dispose() }
+	})
+
 	test('signs once, keeps openings private, and selects many exact bid payouts without the seller', async () => {
 		const held = await prepared()
 		try {

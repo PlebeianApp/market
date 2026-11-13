@@ -1,6 +1,15 @@
 import { Database } from 'bun:sqlite'
 import { describe, expect, test } from 'bun:test'
-import { createDemoFridayCoordinatorWorker, DemoFridayCoordinatorSqlite, type DemoFridayCoordinatorPorts } from './demo-friday-coordinator-runtime'
+import {
+	createDemoFridayCoordinatorWorker,
+	demoFridayActionableNonterminal,
+	demoFridayCoordinatorRecordIdentityDigest,
+	DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R48_20261109,
+	DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R79_20261113,
+	DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R82_20261113,
+	DemoFridayCoordinatorSqlite,
+	type DemoFridayCoordinatorPorts,
+} from './demo-friday-coordinator-runtime'
 
 const h = (character: string): string => character.repeat(64)
 
@@ -20,6 +29,60 @@ function authorized(overrides: Partial<Parameters<DemoFridayCoordinatorSqlite['e
 }
 
 describe('persistent Friday coordinator process boundary', () => {
+	test('pins all eight isolated historical recipient-pending records', () => {
+		expect(DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R48_20261109.size).toBe(8)
+		expect(DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R48_20261109.get(
+			'f37f14a3c1e4a529d2915678de3ceab3d3ac1aa246f53ac96023400883c44c6d',
+		)).toBe('d055dc91b36891184691bb7cbd1087d8d67080caadf3a7e4b0cdccda09643136')
+	})
+
+	test('pins the three later recipient-pending records without weakening the historical pins', () => {
+		expect(DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R79_20261113.size).toBe(11)
+		expect(DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R79_20261113.get(
+			'2446fbe5e179a35b2052c009d11d21afe6dd306a6965f49a0ffcc94076ec016b',
+		)).toBe('1ded66021330161e8d2540c4021557b11932ca14999d1f045933b7070d6adbed')
+		expect(DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R79_20261113.get(
+			'2c6bd6e0b60622b664a8eea689f3deb770552ea2fe2096b444df615448d263d4',
+		)).toBe('93745719d6b2c8482abfd653ecac7bb5423e1e4ef6a7156c0c2a89f7f0f15773')
+		expect(DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R79_20261113.get(
+			'e676e0d6661710807c2a2a8e3f0294092edb7426d900c22fa2c49594970b7dc1',
+		)).toBe('870f399d035c59110f96902ec90581c014034a0e428ba46e40a999d1d79e25e9')
+	})
+
+	test('pins the exact R81 acceptance return without weakening the R79 backlog', () => {
+		expect(DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R82_20261113.size).toBe(12)
+		expect(DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R82_20261113.get(
+			'23d3a1c1f0a62861da4489b98723d110548010739630a0eba826b4c389054ce8',
+		)).toBe('0ca44c8af4c6a4f051bb02020913ffadb60147cee3df4ced140360c630d2577e')
+		for (const [scope, digest] of DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R79_20261113) {
+			expect(DEMO_FRIDAY_PRESERVED_RECIPIENT_PENDING_R82_20261113.get(scope)).toBe(digest)
+		}
+	})
+
+	test('preserves only the exact pinned historical recipient backlog while scheduling fresh work', () => {
+		const { db, store } = opened()
+		try {
+			store.enqueueAuthorized(authorized())
+			const historical = store.transition('auction-a:bid-a', ['queued'], (record) => {
+				record.phase = 'recipient_pending'; record.attempts = 1
+				record.requestDigest = h('c'); record.terminalResponseDigest = h('d')
+			})
+			const fresh = {
+				...historical, scope: 'auction-fresh:bid-fresh', authorityOperationId: 'funding-fresh',
+				paymentOperationId: 'payment-fresh', operationRoot: h('3'), frostOperationRoot: h('4'),
+				bundleDigest: h('5'), executionBindingDigest: h('6'), preparedAuthorizationDigest: h('7'),
+				selectionRoot: h('8'), phase: 'queued' as const, revision: 0, attempts: 0,
+				requestDigest: undefined, terminalResponseDigest: undefined,
+			}
+			const preserved = new Map([[historical.scope, demoFridayCoordinatorRecordIdentityDigest(historical)]])
+			expect(demoFridayActionableNonterminal([historical], preserved)).toEqual([])
+			expect(demoFridayActionableNonterminal([historical, fresh], preserved)).toEqual([fresh])
+			expect(() => demoFridayActionableNonterminal([fresh], preserved)).toThrow(/exact historical record differs/)
+			expect(() => demoFridayActionableNonterminal([{ ...historical, revision: historical.revision + 1 }, fresh], preserved))
+				.toThrow(/exact historical record differs/)
+		} finally { db.close(false) }
+	})
+
 	test('globally excludes operation and bundle reuse across auction scopes', () => {
 		const { db, store } = opened()
 		try {

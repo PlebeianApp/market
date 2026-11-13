@@ -20,6 +20,26 @@ import type {
 	DemoFrostProcessTransport,
 } from './demo-frost-process-boundary'
 import type { DemoFrostThreshold3ParticipantWorker } from './demo-frost-threshold3-rust-participant-worker'
+import {
+	DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261109,
+	DemoSignerTerminalIncidentCachedRejection20261109,
+} from './demo-signer-terminal-incident-20261109'
+import {
+	DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261110,
+	DemoSignerTerminalIncidentCachedRejection20261110,
+} from './demo-signer-terminal-incident-20261110'
+import {
+	DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261111,
+	DemoSignerTerminalIncidentCachedRejection20261111,
+} from './demo-signer-terminal-incident-20261111'
+import {
+	DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261111_R59D,
+	DemoSignerTerminalIncidentCachedRejection20261111R59d,
+} from './demo-signer-terminal-incident-20261111-r59d'
+import {
+	DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261111_R62,
+	DemoSignerTerminalIncidentCachedRejection20261111R62,
+} from './demo-signer-terminal-incident-20261111-r62'
 
 export const DEMO_SIGNER_RPC_VERSION = 'COCO_DEMO_SIGNER_RPC_V1' as const
 const REQUEST_CONTEXT = utf8ToBytes('COCO_DEMO_SIGNER_RPC_REQUEST_V1')
@@ -27,6 +47,17 @@ const RESPONSE_CONTEXT = utf8ToBytes('COCO_DEMO_SIGNER_RPC_RESPONSE_V1')
 const HEX_32 = /^[0-9a-f]{64}$/
 const HEX_64 = /^[0-9a-f]{128}$/
 const X_ONLY = /^[0-9a-f]{64}$/
+const MAX_REFUSAL_BYTES = 1_024
+const REFUSAL_READ_TIMEOUT_MS = 250
+const LOCAL_REFUSAL_REASONS = new Set([
+	'ADMISSION_STALE', 'ADMISSION_BINDING', 'ADMISSION_POOL',
+	'ABORT_TIME', 'ABORT_BINDING', 'ABORT_LIFECYCLE',
+	'MINT_BINDING', 'MINT_SPENT', 'QUORUM_BINDING',
+	'TERMINAL_PRE_EFFECT_EXACT_REQUEST_20261110',
+	'TERMINAL_PRE_EFFECT_EXACT_REQUEST_20261111',
+	'TERMINAL_PRE_EFFECT_EXACT_REQUEST_20261111_R59D',
+	'TERMINAL_PRE_EFFECT_WINNER_POLICY_20261111_R62',
+])
 
 type Method = 'roundOne' | 'roundTwo'
 type RequestPayload = DemoFrostProcessRoundOneRequest | DemoFrostProcessRoundTwoRequest
@@ -108,6 +139,10 @@ export interface DemoSignerRpcJournal {
 		| { status: 'created' }
 		| { status: 'replay'; response: DemoSignerRpcResponseV1 }
 		| { status: 'pending' }
+		| { status: 'incident_rejected'; body: typeof DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261109
+			| typeof DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261110
+			| typeof DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261111
+			| typeof DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261111_R59D }
 	>
 	complete(requestId: string, requestDigest: string, response: DemoSignerRpcResponseV1): Promise<void>
 }
@@ -119,6 +154,77 @@ export interface DemoSignerRpcServerOptions {
 	worker: DemoFrostThreshold3ParticipantWorker
 	journal: DemoSignerRpcJournal
 	serialize?<T>(signal: AbortSignal, operation: () => Promise<T>): Promise<T>
+}
+
+/**
+ * Retain only a closed, non-secret refusal class from an unsigned HTTP error.
+ * The class is diagnostic-only and never changes retry, quorum, or settlement
+ * behavior. Raw bodies and participant-controlled strings are discarded.
+ */
+function boundedRefusalRead(
+	reader: ReadableStreamDefaultReader<Uint8Array>,
+	signal: AbortSignal,
+): Promise<{ done: boolean; value?: Uint8Array }> {
+	return new Promise((resolve, reject) => {
+		let settled = false
+		const finish = (complete: () => void) => {
+			if (settled) return
+			settled = true
+			clearTimeout(timer)
+			signal.removeEventListener('abort', aborted)
+			complete()
+		}
+		const aborted = () => finish(() => reject(new Error('refusal body read aborted')))
+		const timer = setTimeout(() => finish(() => reject(new Error('refusal body read timed out'))), REFUSAL_READ_TIMEOUT_MS)
+		signal.addEventListener('abort', aborted, { once: true })
+		if (signal.aborted) { aborted(); return }
+		void reader.read().then(
+			(value) => finish(() => resolve(value)),
+			(error) => finish(() => reject(error)),
+		)
+	})
+}
+
+async function signerRefusalClass(response: Response, signal: AbortSignal): Promise<string> {
+	const fallback = `HTTP_${response.status}`
+	if (response.body === null) return fallback
+	const reader = response.body.getReader()
+	const buffer = new Uint8Array(MAX_REFUSAL_BYTES)
+	let used = 0
+	try {
+		for (;;) {
+			const part = await boundedRefusalRead(reader, signal)
+			if (part.done) break
+			if (!(part.value instanceof Uint8Array) || part.value.byteLength > MAX_REFUSAL_BYTES - used) {
+				try { void reader.cancel().catch(() => undefined) } catch { /* diagnostic body only */ }
+				return fallback
+			}
+			buffer.set(part.value, used); used += part.value.byteLength
+		}
+	} catch {
+		try { void reader.cancel().catch(() => undefined) } catch { /* diagnostic body only */ }
+		return fallback
+	} finally {
+		try { reader.releaseLock() } catch { /* already released */ }
+	}
+	try {
+		const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, used))) as unknown
+		if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)
+			|| JSON.stringify(Object.keys(parsed).sort()) !== JSON.stringify(['error'])) return fallback
+		const error = (parsed as { error?: unknown }).error
+		if (typeof error !== 'string') return fallback
+		const local = /^DEMO_SIGNER_LOCAL_REFUSAL:([A-Z_]+)$/.exec(error)
+		if (local !== null && LOCAL_REFUSAL_REASONS.has(local[1]!)) return `LOCAL_${local[1]}`
+		if (error === 'signer observation temporarily unavailable'
+			|| error === 'DEMO_SIGNER_READ_TEMPORARILY_UNAVAILABLE') return 'READ_UNAVAILABLE'
+		if (/^DEMO_SIGNER_RPC_QUARANTINED(?::|$)/.test(error)
+			|| /^DEMO_SIGNER_QUARANTINED(?::|$)/.test(error)) return 'QUARANTINED'
+		if (/^DEMO_SIGNER_RPC_(?:AUTHENTICATION|AUTHORITY|BINDING)(?::|$)/.test(error)) return 'AUTH_BINDING'
+		if (/^DEMO_SIGNER_JOURNAL_CONFLICT(?::|$)/.test(error)) return 'JOURNAL_CONFLICT'
+		return fallback
+	} catch {
+		return fallback
+	}
 }
 
 export interface DemoSignerCoordinatorAnchorPort {
@@ -237,6 +343,24 @@ export function createDemoSignerRpcHandler(options: DemoSignerRpcServerOptions):
 		const requestDigest = demoSignerRpcRequestDigest(request)
 		const claimed = await options.journal.claim(request.requestId, requestDigest)
 		if (claimed.status === 'replay') return structuredClone(claimed.response)
+		if (claimed.status === 'incident_rejected') {
+			if (claimed.body === DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261109) {
+				throw new DemoSignerTerminalIncidentCachedRejection20261109()
+			}
+			if (claimed.body === DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261110) {
+				throw new DemoSignerTerminalIncidentCachedRejection20261110()
+			}
+			if (claimed.body === DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261111) {
+				throw new DemoSignerTerminalIncidentCachedRejection20261111()
+			}
+			if (claimed.body === DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261111_R59D) {
+				throw new DemoSignerTerminalIncidentCachedRejection20261111R59d()
+			}
+			if (claimed.body === DEMO_TERMINAL_INCIDENT_REJECTION_BODY_20261111_R62) {
+				throw new DemoSignerTerminalIncidentCachedRejection20261111R62()
+			}
+			throw new Error('DEMO_SIGNER_RPC_INCIDENT_TOMBSTONE: cached body differs')
+		}
 		if (claimed.status === 'pending') {
 			throw new Error('DEMO_SIGNER_RPC_QUARANTINED: request was interrupted after durable claim')
 		}
@@ -317,7 +441,7 @@ export function createDemoSignerRpcTransport(options: DemoSignerRpcTransportOpti
 				'x-plebeian-fips-plaintext-probe': 'PLEBEIAN-FRIDAY-SIGNER-TRANSPORT-V1',
 			}, body: JSON.stringify(request), signal,
 		})
-		if (!http.ok) throw new Error(`DEMO_SIGNER_RPC_HTTP: signer refused with ${http.status}`)
+		if (!http.ok) throw new Error(`DEMO_SIGNER_RPC_REMOTE_REFUSAL:${await signerRefusalClass(http, signal)}`)
 		const response = await http.json() as DemoSignerRpcResponseV1
 		exactKeys(response, [
 			'version', 'requestId', 'method', 'participantId', 'keysetId', 'keysetVersion', 'dkgRunId',

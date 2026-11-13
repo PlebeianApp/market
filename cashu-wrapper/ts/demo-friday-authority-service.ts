@@ -38,7 +38,11 @@ import { DemoIntegratedCloseAuthorityRefusedError } from './demo-integrated-clos
 import { DemoIntegratedRejectedAuthorityRefusedError } from './demo-integrated-rejected-authority'
 
 export const DEMO_FRIDAY_AUTHORITY_LOOPBACK_PORT = 8_181 as const
-const MAX_BODY = 32 * 1024
+// A fully bounded funding envelope can legitimately exceed 32 KiB when it
+// carries several exact Cashu proofs and both terminal packages. Keep the
+// public authority bounded, but align it with the 64 KiB protocol envelope
+// accepted at the edge and by the coordinator.
+export const DEMO_FRIDAY_AUTHORITY_MAX_BODY_BYTES = 64 * 1024
 const ID = /^[A-Za-z0-9_-]{1,160}$/
 
 export interface DemoFridayTrustedTerminalCandidateV1 {
@@ -110,7 +114,7 @@ function json(status: number, body: unknown): Response {
 
 async function boundedJson(request: Request): Promise<unknown> {
 	const declared = request.headers.get('content-length')
-	if (declared !== null && (!/^[0-9]+$/.test(declared) || Number(declared) > MAX_BODY)) {
+	if (declared !== null && (!/^[0-9]+$/.test(declared) || Number(declared) > DEMO_FRIDAY_AUTHORITY_MAX_BODY_BYTES)) {
 		throw new Error('request body is too large')
 	}
 	if (request.body === null) throw new Error('request body is absent')
@@ -119,7 +123,7 @@ async function boundedJson(request: Request): Promise<unknown> {
 		for (;;) {
 			const next = await reader.read(); if (next.done) break
 			size += next.value.byteLength
-			if (size > MAX_BODY) { await reader.cancel(); throw new Error('request body is too large') }
+			if (size > DEMO_FRIDAY_AUTHORITY_MAX_BODY_BYTES) { await reader.cancel(); throw new Error('request body is too large') }
 			chunks.push(next.value)
 		}
 	} finally { reader.releaseLock() }
@@ -147,7 +151,7 @@ export function createDemoFridayFixedAuthorityService(options: {
 	/** Omit to keep the public route fail-closed (the default deployment). */
 	fundingAdmission?: DemoFridayV4FundingAdmissionPort
 	/** Omit to keep browser Coco terminal delivery fail-closed. */
-	terminalExchange?: Pick<DemoFridayCocoTerminalExchangeSqlite, 'readExact' | 'acknowledgeExact'>
+	terminalExchange?: Pick<DemoFridayCocoTerminalExchangeSqlite, 'readExact' | 'readStatusExact' | 'acknowledgeExact'>
 	/** Omit to keep every trusted browser-read and seller-plan route fail-closed. */
 	browserTrust?: DemoFridayBrowserTrustService
 	/** Omit to keep auction-scoped offline seller authorization disabled. */
@@ -219,6 +223,7 @@ export function createDemoFridayFixedAuthorityService(options: {
 			const confirmFunding = url.pathname === '/api/friday/funding/confirm'
 			const recoverFunding = url.pathname === '/api/friday/funding/status'
 			const readTerminal = url.pathname === '/api/friday/terminal/read'
+			const readTerminalStatus = url.pathname === '/api/friday/terminal/status'
 			const ackTerminal = url.pathname === '/api/friday/terminal/ack'
 			const readDeployment = url.pathname === '/api/friday/deployment'
 			const issueSellerIntent = url.pathname === '/api/friday/seller-plan/intent'
@@ -237,7 +242,7 @@ export function createDemoFridayFixedAuthorityService(options: {
 			const abortRoute = registerAbortCapsule || prepareAbort || requestAbort || readAbort
 			const browserTrustRoute = readDeployment || issueSellerIntent || readSellerChallenge || listSellerChallenges
 				|| readSellerPlan || registerSellerPlan || readAuctionFunding
-			if ((!prepareFunding && !confirmFunding && !recoverFunding && !readTerminal && !ackTerminal
+			if ((!prepareFunding && !confirmFunding && !recoverFunding && !readTerminal && !readTerminalStatus && !ackTerminal
 				&& !registerAuctionPayout && !readAuctionPayout && !readAuctionPayoutWinner
 				&& !browserTrustRoute && !abortRoute)
 				|| request.method !== 'POST') return json(404, { error: 'not_found' })
@@ -268,7 +273,7 @@ export function createDemoFridayFixedAuthorityService(options: {
 				let action: DemoFridayRecoveryOnlyAction | undefined
 				if (confirmFunding) action = 'funding_confirm'
 				else if (recoverFunding) action = 'funding_status'
-				else if (readTerminal) action = 'terminal_read'
+				else if (readTerminal || readTerminalStatus) action = 'terminal_read'
 				else if (ackTerminal) action = 'terminal_ack'
 				else if (readSellerChallenge) action = 'seller_challenge'
 				else if (readSellerPlan) action = 'seller_read'
@@ -364,10 +369,11 @@ export function createDemoFridayFixedAuthorityService(options: {
 						fundingOperationId: String(raw.fundingOperationId), fullPoolAmount: Number(raw.fullPoolAmount) }))
 				} catch { return json(422, { error: 'browser_trust_rejected' }) }
 			}
-			if (readTerminal || ackTerminal) {
+			if (readTerminal || readTerminalStatus || ackTerminal) {
 				if (options.terminalExchange === undefined) return json(503, { error: 'terminal_coco_disabled' })
 				try {
 					if (readTerminal) return json(200, options.terminalExchange.readExact(body as { actor: string; fundingOperationId: string }))
+					if (readTerminalStatus) return json(200, options.terminalExchange.readStatusExact(body as { actor: string; fundingOperationId: string }))
 					return json(200, options.terminalExchange.acknowledgeExact(body as DemoFridayCocoTerminalAckV1))
 				} catch { return json(422, { error: 'terminal_coco_rejected' }) }
 			}
@@ -404,7 +410,7 @@ export function serveDemoFridayFixedAuthority(options: Parameters<typeof createD
 	const service = createDemoFridayFixedAuthorityService(options)
 	return Bun.serve({
 		hostname: '127.0.0.1', port: DEMO_FRIDAY_AUTHORITY_LOOPBACK_PORT,
-		maxRequestBodySize: MAX_BODY,
+		maxRequestBodySize: DEMO_FRIDAY_AUTHORITY_MAX_BODY_BYTES,
 		fetch: (request) => service.handle(request),
 	})
 }

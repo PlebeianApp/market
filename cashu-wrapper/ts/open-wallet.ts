@@ -21,7 +21,7 @@
  * `MemoryRepositories` through `openMemoryWalletDomain` - so the same wiring is exercised without a browser.
  */
 
-import { initializeCoco, MemoryRepositories, type Keypair, type Manager } from '@cashu/coco-core'
+import { initializeCoco, MemoryRepositories, type Keypair, type Manager, type WebSocketFactory } from '@cashu/coco-core'
 import type { Plugin } from '@cashu/coco-core/plugin'
 import { IndexedDbRepositories } from '@cashu/coco-indexeddb'
 import { createCocoRail, type CocoRailPort } from './coco-rail'
@@ -64,6 +64,8 @@ export interface OpenWalletDomainOptions {
 	readonly repositories?: CocoRepositories
 	/** Exact transport supplied by the application; used by Coco and the rail. */
 	readonly requestFetch?: typeof fetch
+	/** Explicit transport choice. Browser fake-mint flows disable optional NUT-17 and use bounded polling. */
+	readonly webSocketFactory?: WebSocketFactory | null
 	/** Test-only loopback HTTP exception. Remote browser wallets remain HTTPS-only. */
 	readonly allowLoopbackHttp?: boolean
 	/** Explicit isolated FIPS ULA HTTP exception for the server-side demo lab. */
@@ -143,6 +145,7 @@ export async function openWalletDomain(options: OpenWalletDomainOptions): Promis
 			seedGetter: seedGetterFor(options.seedStore),
 			...(options.authority !== undefined ? { authority: options.authority } : {}),
 			...(options.requestFetch !== undefined ? { requestFetch: options.requestFetch } : {}),
+			...(options.webSocketFactory !== undefined ? { webSocketFactory: options.webSocketFactory } : {}),
 		})
 		options.signal?.throwIfAborted()
 		const openedManager = manager

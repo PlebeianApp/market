@@ -364,7 +364,7 @@ export async function openDemoFridayBrowserCocoWallet(options: {
 		account: { accountId: options.actor, environmentId: options.environmentId }, seedStore,
 		repositoryName: options.repositoryName ?? `plebeian-friday-coco-${options.environmentId}-${options.actor}`,
 		authority: { namespace: `plebeian-friday-browser-${options.environmentId}-${options.actor}`, ownerId: crypto.randomUUID() },
-		requestFetch: boundedFetch, allowLoopbackHttp, signal: options.signal,
+		requestFetch: boundedFetch, webSocketFactory: null, allowLoopbackHttp, signal: options.signal,
 	}).catch((error: unknown) => { throw walletOpeningFailure(error) })
 	try {
 		options.signal?.throwIfAborted()

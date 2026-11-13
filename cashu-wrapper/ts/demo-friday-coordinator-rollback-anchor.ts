@@ -33,7 +33,10 @@ export class DemoFridayCoordinatorRollbackAnchorSqlite implements DemoFridayCoor
 		private readonly database: Database,
 		private readonly allowFirstEnrollment = false,
 	) {
-		database.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
+		// The authority and coordinator intentionally share this independent
+		// anchor.  A short authority transaction must make the coordinator wait,
+		// not crash the worker with SQLITE_BUSY and strand terminal operations.
+		database.exec(`PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
 			CREATE TABLE IF NOT EXISTS friday_coordinator_rollback_anchor (
 				id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
 				schema TEXT NOT NULL, deployment_id TEXT NOT NULL, store_generation TEXT NOT NULL,

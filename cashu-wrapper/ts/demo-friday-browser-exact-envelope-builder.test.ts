@@ -8,7 +8,14 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
 
 import { createDemoFridayBrowserExactEnvelopeBuilder } from './demo-friday-browser-exact-envelope-builder'
-import { createDemoFridayOperationBoundSigning, demoFridayBrowserPublicOperation } from './demo-friday-browser-coco-client'
+import {
+	createDemoFridayBrowserCocoClient,
+	createDemoFridayOperationBoundSigning,
+	demoFridayAdmissionStatusDigest,
+	demoFridayBrowserPublicOperation,
+	exactDemoFridayCommitteeBidContent,
+	type DemoFridayFundingAdmissionStatusV1,
+} from './demo-friday-browser-coco-client'
 import { createDemoFridayBrowserPaymentOperation } from './demo-friday-browser-payment-state'
 import {
 	prepareDemoFridayAuctionPayoutAuthorization,
@@ -18,10 +25,18 @@ import type { DemoFridaySellerOpeningRefV1 } from './demo-friday-browser-coco-se
 import { verifyDemoFridayPreparedFundingEnvelope } from './demo-friday-prepared-funding'
 import { validateDemoIntegratedAdmission } from './demo-integrated-admission-policy'
 import {
+	demoIntegratedFundingV4AdmissionSignatureDigest,
+	finalizeDemoIntegratedFundingReceiptV4,
 	prepareDemoIntegratedFundingReceiptV4,
 	type DemoIntegratedFundingReceiptV4Terms,
 } from './demo-integrated-funding-receipt-v4'
+import {
+	deriveAndAuthorizeDemoIntegratedClose,
+	type DemoCertifiedCloseV1,
+} from './demo-integrated-close-authority'
+import { demoIntegratedTiming } from './demo-integrated-authority'
 import type { DemoRecipientPrivateRecord } from './demo-sigall-recipient'
+import { DemoMaintainerOfflineRefusedError, validateDemoMaintainerExactTemplateBundle } from './demo-maintainer-offline'
 import { buildDemoSigAllSecret, demoDenominationKeyDigest, demoOutputsDigest, demoRecipientCapabilityDigest } from './demo-sigall-settlement'
 import { proofPoint } from './nut-client'
 import { createDemoFridayPaymentSignerFromSecret } from './poc-demo-browser-signer'
@@ -97,9 +112,13 @@ describe('Friday exact browser threshold envelope builder', () => {
 		const paymentSigner = createDemoFridayPaymentSignerFromSecret(hexToBytes(operation.paymentSecret))
 		const refundSigner = createDemoFridayPaymentSignerFromSecret(refundSecret)
 		try {
+			const signerProgress: string[] = []
 			const signing = createDemoFridayOperationBoundSigning({ operation, paymentSigner, refundSigner,
 				nostrSigner: { async getPublicKey() { return actor }, async signEvent(unsigned) { return signedEvent(unsigned) } },
-				lockedToken, winnerRequest, refundRequest })
+				lockedToken, winnerRequest, refundRequest, observe(progress) {
+					signerProgress.push(progress.phase)
+					throw new Error('presentation observer must not interrupt exact signing')
+				} })
 			const builder = createDemoFridayBrowserExactEnvelopeBuilder({ participants: [1, 2, 3, 4].map((identifier) => ({
 				identifier: identifier as 1 | 2 | 3 | 4, verifyingShare: compressed(50 + identifier),
 			})) as never })
@@ -121,6 +140,7 @@ describe('Friday exact browser threshold envelope builder', () => {
 				lockedToken: getEncodedToken({ mint: mintUrl, unit: 'sat', proofs: invalidDleq } as never),
 			})).rejects.toThrow(/DLEQ\/keyset binding failed/)
 			const built = await builder.buildExact({ ...buildInput, lockedToken })
+			expect(signerProgress).toEqual(['awaiting_funding_signature'])
 			const verified = verifyDemoFridayPreparedFundingEnvelope(built.envelope, {
 				authNetworkId: operation.authNetworkId, chainId: operation.chainId, mintUrl, nowSeconds: 1_000,
 			})
@@ -212,6 +232,10 @@ describe('Friday exact browser threshold envelope builder', () => {
 						mintUrl, nowSeconds: 1_000,
 					})
 					expect(verifiedV3.bundle.winner.schema).toBe('COCO_DEMO_MAINTAINER_EXACT_BRANCH_V3')
+					const changedPayoutBinding = structuredClone(verifiedV3.bundle)
+					changedPayoutBinding.winner.auctionPayoutSelection!.selectionDigest = '0'.repeat(64)
+					expect(() => validateDemoMaintainerExactTemplateBundle(changedPayoutBinding, 1_000, true))
+						.toThrow(DemoMaintainerOfflineRefusedError)
 					expect(verifiedV3.bundle.actorWinnerAuthorization).toMatchObject({
 						schema: 'COCO_DEMO_PAYMENT_KEY_PACKAGE_AUTHORIZATION_V1',
 						paymentPublicKey: operation.paymentPublicKey,
@@ -252,6 +276,142 @@ describe('Friday exact browser threshold envelope builder', () => {
 						actor_funding_authorization: verifiedV3.authorization.event,
 					}
 					const receipt = prepareDemoIntegratedFundingReceiptV4(terms)
+					const participantPolicyDigest = 'e'.repeat(64)
+					const admittedReceipt = finalizeDemoIntegratedFundingReceiptV4(
+						receipt,
+						participantPolicyDigest,
+						bytesToHex(schnorr.sign(
+							hexToBytes(demoIntegratedFundingV4AdmissionSignatureDigest(receipt, participantPolicyDigest)),
+							privateKey(21),
+						)),
+					)
+					const unsignedBid = { pubkey: actor, created_at: 1_000, kind: 28_641, tags: [] as string[][],
+						content: JSON.stringify({ auction_id: operation.auctionId, amount: operation.bidAmount,
+							replaces_bid_id: operation.replacesBidId, integrated_funding: admittedReceipt }) }
+					const preparedReceiptDigest = exactDemoFridayCommitteeBidContent(unsignedBid.content).receiptDigest
+					const fundingAuthorizationEventId = verifiedV3.authorization.event.id
+					const preparedBid = { preparationId: 'prepare-progress', fundingAuthorizationEventId,
+						receiptDigest: preparedReceiptDigest, unsignedBid }
+					operation.phase = 'server_prepared'
+					operation.envelope = { schema: 'PLEBEIAN_FRIDAY_PREPARED_FUNDING_ENVELOPE_V1',
+						authorization: structuredClone(verifiedV3.authorization.event),
+						bundle: structuredClone(verifiedV3.bundle) }
+					operation.fundingAuthorizationEventId = fundingAuthorizationEventId
+					operation.preparedBid = preparedBid
+					delete operation.signedBid
+					delete operation.finalizedStatusDigest
+					let retained = structuredClone(operation), bidSigns = 0
+					const bidProgress: string[] = []
+					const statusBase = { preparationId: preparedBid.preparationId,
+						fundingOperationId: operation.fundingOperationId,
+						fundingAuthorizationEventId,
+						bidAmount: operation.bidAmount, reservedPoolAmount: operation.reservedPoolAmount,
+						canonicalMintUrl: operation.canonicalMintUrl }
+					const signedBid = signedEvent(unsignedBid)
+					const admittedStatus: DemoFridayFundingAdmissionStatusV1 = { ...statusBase, status: 'admitted',
+						signedBidEventId: signedBid.id, receiptDigest: preparedReceiptDigest,
+						transactionHash: '9'.repeat(64), committedHeight: 44 }
+					const recoveryClient = createDemoFridayBrowserCocoClient({
+						deployment: {} as never, auction: {} as never, walletFactory: {} as never,
+						nostrSigner: { async signEvent(value: typeof unsignedBid) {
+							bidSigns += 1
+							expect(value).toEqual(unsignedBid)
+							return structuredClone(signedBid)
+						} } as never,
+						builder: {} as never, terminal: {} as never,
+						state: {
+							async runWalletExclusive<T>(_identity: unknown, run: () => Promise<T>) { return run() },
+							async runOperationExclusive<T>(_identity: unknown, run: () => Promise<T>) { return run() },
+							async loadOperation() { return structuredClone(retained) },
+							async saveOperation(next: typeof retained, expected: number | null) {
+								expect(expected).toBe(retained.revision); retained = structuredClone(next)
+							},
+						} as never,
+						admission: {
+							async readExact() { return { ...statusBase, status: 'prepared' as const } },
+							async finalizeExact() { return structuredClone(admittedStatus) },
+						} as never,
+					})
+					await expect(recoveryClient.recoverExact({ actor, environmentId: operation.environmentId,
+						fundingOperationId: operation.fundingOperationId }, (progress) => {
+						bidProgress.push(progress.phase)
+						if (progress.phase === 'awaiting_bid_signature') {
+							throw new Error('presentation observer must not interrupt final bid signing')
+						}
+					})).resolves.toEqual(admittedStatus)
+					expect({ bidProgress, bidSigns }).toEqual({ bidProgress: [
+						'resuming_exact', 'waiting_for_wallet', 'awaiting_bid_signature', 'confirming_consensus',
+					], bidSigns: 1 })
+					expect(retained).toMatchObject({ phase: 'finalized', signedBid,
+						finalizedStatusDigest: demoFridayAdmissionStatusDigest(admittedStatus) })
+					const timing = demoIntegratedTiming(7_300, 9_100)
+					const closeCertificate: DemoCertifiedCloseV1 = {
+						schema: 'COCO_DEMO_CERTIFIED_CLOSE_V1', network: operation.authNetworkId,
+						chainId: operation.chainId, genesisHash: '9'.repeat(64), validatorRosterVersion: 'roster-1',
+						auctionId: operation.auctionId, sellerActorId: sellerActor,
+						sellerPaymentPublicKey: compressed(4), bidId: '5'.repeat(64), bidEventId: '6'.repeat(64),
+						bidderActorId: actor, fundingOperationId: operation.fundingOperationId,
+						cause: 'winner', poolAmount: operation.fullPoolAmount, reserveAmount: 0,
+						proofStateRefs, activeKeysetId: operation.keysetId, inputFeePpk: 0,
+						admittedFundingReceipt: admittedReceipt, timing,
+						commits: [100, 101, 102].map((height) => ({
+							height, blockTime: 9_100 + height - 99, blockHash: height.toString(16).padStart(64, '0'),
+							appHash: (height + 100).toString(16).padStart(64, '0'),
+						})) as DemoCertifiedCloseV1['commits'],
+						closeState: { stateHeight: 102, stateAppHash: 'f'.repeat(64), bindingCommit: {
+							height: 103, blockTime: 9_104, blockHash: 'a'.repeat(64), appHash: 'f'.repeat(64),
+						} },
+					}
+					const storeFixture = () => {
+						let claims = 0
+						return {
+							store: { async claimTerminalDisposition(claim: unknown) {
+								claims += 1
+								return { claim: structuredClone(claim), created: true }
+							} } as never,
+							claims: () => claims,
+						}
+					}
+					const validStore = storeFixture()
+					await expect(deriveAndAuthorizeDemoIntegratedClose({
+						request: { network: operation.authNetworkId, chainId: operation.chainId,
+							genesisHash: closeCertificate.genesisHash,
+							validatorRosterVersion: closeCertificate.validatorRosterVersion,
+							auctionId: operation.auctionId, closeHeight: 100 },
+						template: verifiedV3.bundle.winner,
+						closeVerifier: { async verifyAndDerive() { return structuredClone(closeCertificate) } },
+						store: validStore.store, nowSeconds: 9_103,
+					})).resolves.toMatchObject({ claim: { role: 'winner_settlement', poolAmount: 12 } })
+					expect(validStore.claims()).toBe(1)
+					const cutoffStore = storeFixture()
+					await expect(deriveAndAuthorizeDemoIntegratedClose({
+						request: { network: operation.authNetworkId, chainId: operation.chainId,
+							genesisHash: closeCertificate.genesisHash,
+							validatorRosterVersion: closeCertificate.validatorRosterVersion,
+							auctionId: operation.auctionId, closeHeight: 100 },
+						template: verifiedV3.bundle.winner,
+						closeVerifier: { async verifyAndDerive() { return structuredClone(closeCertificate) } },
+						store: cutoffStore.store, nowSeconds: closeCertificate.timing.mainCutoff,
+					})).rejects.toMatchObject({ code: 'DEMO_CLOSE_CUTOFF' })
+					expect(cutoffStore.claims()).toBe(0)
+
+					for (const field of ['authorization', 'selection', 'keyset'] as const) {
+						const changed = structuredClone(verifiedV3.bundle.winner)
+						if (field === 'authorization') changed.auctionPayoutAuthorization!.authorizationDigest = '0'.repeat(64)
+						if (field === 'selection') changed.auctionPayoutSelection!.selectionDigest = '0'.repeat(64)
+						if (field === 'keyset') changed.auctionPayoutKeyset!.keys['4'] = compressed(92)
+						const rejectedStore = storeFixture()
+						await expect(deriveAndAuthorizeDemoIntegratedClose({
+							request: { network: operation.authNetworkId, chainId: operation.chainId,
+								genesisHash: closeCertificate.genesisHash,
+								validatorRosterVersion: closeCertificate.validatorRosterVersion,
+								auctionId: operation.auctionId, closeHeight: 100 },
+							template: changed,
+							closeVerifier: { async verifyAndDerive() { return structuredClone(closeCertificate) } },
+							store: rejectedStore.store, nowSeconds: 9_103,
+						})).rejects.toThrow()
+						expect(rejectedStore.claims()).toBe(0)
+					}
 					const consensusState = (stateSellerActor: string, stateSellerPaymentPublicKey: string) => ({
 						async readCommittedLeader() {
 							return { leaderBidId: operation.replacesBidId, sellerActor: stateSellerActor,

@@ -9,7 +9,11 @@ export interface FridayReadinessSample {
  mintReady: boolean; readySigners: number[]
 }
 export interface FridayReadinessStatus { ready: boolean; reason: string; height: number }
-export const HEALTH_SAMPLE_MS = 5_000, HEALTH_PROGRESS_MS = 20_000, HEALTH_SPACING_MS = 1_000
+// A canonical state sample is authenticated by the next Comet header. The
+// deployed chain can legitimately take a little over six seconds to produce
+// that header, so the previous five-second bound made readiness flap even
+// while consensus advanced. Ten seconds remains bounded and fail-closed.
+export const HEALTH_SAMPLE_MS = 10_000, HEALTH_PROGRESS_MS = 20_000, HEALTH_SPACING_MS = 1_000
 export function sameHealthPins(a: FridayHealthPins, b: FridayHealthPins): boolean {
  return Object.keys(b).length === 10 && Object.keys(a).length === 10
   && Object.entries(b).every(([k, v]) => typeof v === 'string' && v.length > 0 && a[k as keyof FridayHealthPins] === v)
@@ -49,7 +53,7 @@ export class FridayReadiness {
 /** Bounded, coalesced request-time collection. Late results cannot mutate the machine. */
 export function createFridayReadinessProbe(options: {
  pins: FridayHealthPins; collect(signal: AbortSignal): Promise<Omit<FridayReadinessSample, 'observedAt'>>
- now?: () => number; timeoutMs?: number
+ now?: () => number; timeoutMs?: number; signal?: AbortSignal
 }) {
  const now = options.now ?? (() => performance.now()), machine = new FridayReadiness(options.pins, now)
  const timeout = options.timeoutMs ?? HEALTH_SAMPLE_MS
@@ -59,14 +63,24 @@ export function createFridayReadinessProbe(options: {
   if (pending !== undefined) return pending
   pending = (async () => {
    const started = now(), abort = new AbortController(); let timer: ReturnType<typeof setTimeout> | undefined
+   let lifecycleAbort: (() => void) | undefined
+   const lifecycle = new Promise<never>((_, reject) => {
+    if (options.signal === undefined) return
+    lifecycleAbort = () => { abort.abort(); reject(new Error('stopped')) }
+    if (options.signal.aborted) lifecycleAbort(); else options.signal.addEventListener('abort', lifecycleAbort, { once: true })
+   })
    try {
     const sample = await Promise.race([options.collect(abort.signal), new Promise<never>((_, reject) => {
      timer = setTimeout(() => { abort.abort(); reject(new Error('timeout')) }, timeout)
-    })])
+    }), lifecycle])
     if (abort.signal.aborted) return machine.fail('dependency_timeout')
     return machine.observe({ ...sample, observedAt: started })
    } catch { return machine.fail('dependency_error') }
-   finally { clearTimeout(timer); abort.abort(); pending = undefined }
+   finally {
+    clearTimeout(timer)
+    if (lifecycleAbort !== undefined) options.signal?.removeEventListener('abort', lifecycleAbort)
+    abort.abort(); pending = undefined
+   }
   })()
   return pending
  } }

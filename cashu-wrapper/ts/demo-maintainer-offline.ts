@@ -553,20 +553,24 @@ function validateTemplate(value: DemoMaintainerExactBranchTemplate, expectedRole
 				!== JSON.stringify(template.auctionPayoutAuthorization.authorization.recipientCatalog.capability)) {
 			refuse('DEMO_MAINTAINER_TEMPLATE_RECIPIENT', 'auction payout proof is absent or changed')
 		}
-		assertDemoFridayAuctionPayoutSignerBinding({
-			authorization: template.auctionPayoutAuthorization,
-			selection: template.auctionPayoutSelection,
-			keyset: template.auctionPayoutKeyset,
-			observedAt: template.auctionPayoutSelection.selectedAt,
-			template: {
-				network: template.network, chainId: template.chainId, auctionId: template.auctionId,
-				operationId: template.operationId, bidderActorId: template.bidderActorId, amount: template.amount,
-				recipientPublicKey: template.recipientPublicKey,
-				activeSatKeysetId: template.mintSeal.activeSatKeysetId,
-				denominationKeyDigest: template.mintSeal.denominationKeyDigest,
-				outputs: template.outputs,
-			},
-		})
+		try {
+			assertDemoFridayAuctionPayoutSignerBinding({
+				authorization: template.auctionPayoutAuthorization,
+				selection: template.auctionPayoutSelection,
+				keyset: template.auctionPayoutKeyset,
+				observedAt: template.auctionPayoutSelection.selectedAt,
+				template: {
+					network: template.network, chainId: template.chainId, auctionId: template.auctionId,
+					operationId: template.operationId, bidderActorId: template.bidderActorId, amount: template.amount,
+					recipientPublicKey: template.recipientPublicKey,
+					activeSatKeysetId: template.mintSeal.activeSatKeysetId,
+					denominationKeyDigest: template.mintSeal.denominationKeyDigest,
+					outputs: template.outputs,
+				},
+			})
+		} catch {
+			refuse('DEMO_MAINTAINER_TEMPLATE_RECIPIENT', 'auction payout signer binding is invalid')
+		}
 	} else if (capability.schema !== 'COCO_DEMO_RECIPIENT_CAPABILITY_V1'
 		|| capability.network !== template.network || capability.chainId !== template.chainId
 		|| capability.auctionId !== template.auctionId || capability.operationId !== template.operationId

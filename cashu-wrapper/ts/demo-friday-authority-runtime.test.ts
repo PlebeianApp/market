@@ -6,11 +6,36 @@ import {
 	createDemoFridayAuthorityHealth,
 	runDemoFridayAuthorityDrainLoop,
 } from './demo-friday-authority-runtime'
+import { demoFridayCoordinatorRecordIdentityDigest } from './demo-friday-coordinator-runtime'
 import { DemoIntegratedCloseAuthorityRefusedError } from './demo-integrated-close-authority'
 
 const DIGEST = 'a'.repeat(64)
 
 describe('fixed Friday authority runtime adapters', () => {
+	test('excludes an exact preserved recipient outcome while counting a fresh ninth row', async () => {
+		const historical = {
+			schema: 'PLEBEIAN_FRIDAY_COORDINATOR_RECORD_V2' as const,
+			deploymentId: 'deployment', scope: 'historical', authorityOperationId: 'authority',
+			paymentOperationId: 'payment', recipientActorId: '1'.repeat(64),
+			operationRoot: '2'.repeat(64), frostOperationRoot: '3'.repeat(64),
+			bundleDigest: '4'.repeat(64), chainId: 'chain', executionBindingDigest: '5'.repeat(64),
+			preparedAuthorizationDigest: '6'.repeat(64), selectionRoot: '7'.repeat(64),
+			outcomeHeight: 42, branch: 'outbid_return' as const, phase: 'recipient_pending' as const,
+			revision: 2, attempts: 1, requestDigest: '8'.repeat(64), terminalResponseDigest: '9'.repeat(64),
+		}
+		const records = [historical]
+		const health = createDemoFridayAuthorityHealth({
+			deploymentId: 'deployment', chainId: 'chain', terminalSource: { pendingCount: () => 0 } as never,
+			preservedRecipientPending: new Map([[historical.scope, demoFridayCoordinatorRecordIdentityDigest(historical)]]),
+			coordinatorStore: { anchorSnapshot: () => ({}), listNonterminal: () => records } as never,
+			rollbackAnchor: { observeExact() {} },
+			commitReader: { readExact: async () => ({ chainId: 'chain', height: 10 }) },
+		})
+		expect(await health.readExact()).toMatchObject({ queuePending: 0, consensusAvailable: true })
+		records.push({ ...historical, scope: 'fresh' })
+		expect(await health.readExact()).toMatchObject({ queuePending: 1, consensusAvailable: true })
+	})
+
 	test('durably resolves and acknowledges one authenticated reference', async () => {
 		const db = new Database(':memory:')
 		let resolutions = 0
@@ -107,6 +132,7 @@ describe('fixed Friday authority runtime adapters', () => {
 			const source = new DemoFridayTrustedTerminalSqlite(terminalDb, { async resolveExact() { throw new Error('unused') } })
 			const health = createDemoFridayAuthorityHealth({
 				deploymentId: 'friday-blue', chainId: 'friday-chain', terminalSource: source,
+				preservedRecipientPending: new Map(),
 				coordinatorStore: {
 					anchorSnapshot() { return { schema: 'PLEBEIAN_FRIDAY_COORDINATOR_ANCHOR_SNAPSHOT_V1' } as never },
 					listNonterminal() { return [{ scope: 'one' }] as never },
@@ -124,6 +150,7 @@ describe('fixed Friday authority runtime adapters', () => {
  test('stalled authority is unavailable without safety quarantine and resumes after advancement', async () => {
   let now = 0, height = 10
   const health = createDemoFridayAuthorityHealth({ deploymentId: 'deployment', chainId: 'chain', now: () => now,
+   preservedRecipientPending: new Map(),
    terminalSource: { pendingCount: () => 0 } as never,
    coordinatorStore: { anchorSnapshot: () => ({}), listNonterminal: () => [] } as never,
    rollbackAnchor: { observeExact() {} }, commitReader: { readExact: async () => ({ chainId: 'chain', height }) },
@@ -134,6 +161,36 @@ describe('fixed Friday authority runtime adapters', () => {
   height++; now++
   expect(await health.readExact()).toMatchObject({ quarantined: false, consensusAvailable: true })
  })
+
+ test('canonical commit collection accepts six seconds but remains unavailable after ten', async () => {
+  let now = 0, delay = 6_200, height = 10
+  const health = createDemoFridayAuthorityHealth({ deploymentId: 'deployment', chainId: 'chain', now: () => now,
+   preservedRecipientPending: new Map(),
+   terminalSource: { pendingCount: () => 0 } as never,
+   coordinatorStore: { anchorSnapshot: () => ({}), listNonterminal: () => [] } as never,
+   rollbackAnchor: { observeExact() {} }, commitReader: { readExact: async () => {
+    now += delay; return { chainId: 'chain', height: height++ }
+   } },
+  })
+  expect(await health.readExact()).toMatchObject({ quarantined: false, consensusAvailable: true })
+  delay = 10_001
+  expect(await health.readExact()).toMatchObject({ quarantined: false, consensusAvailable: false })
+ })
+
+	test('process lifecycle abort cancels a held commit read immediately', async () => {
+		const lifecycle = new AbortController(); let observed: AbortSignal | undefined
+		const health = createDemoFridayAuthorityHealth({ deploymentId: 'deployment', chainId: 'chain', signal: lifecycle.signal,
+			preservedRecipientPending: new Map(),
+			terminalSource: { pendingCount: () => 0 } as never,
+			coordinatorStore: { anchorSnapshot: () => ({}), listNonterminal: () => [] } as never,
+			rollbackAnchor: { observeExact() {} }, commitReader: { async readExact(signal) {
+				observed = signal; return new Promise(() => {})
+			} },
+		})
+		const pending = health.readExact(); await Promise.resolve(); lifecycle.abort()
+		expect(await pending).toMatchObject({ consensusAvailable: false })
+		expect(observed?.aborted).toBe(true)
+	})
 
 	test('drain loop is serial and exits only through its explicit signal', async () => {
 		const controller = new AbortController(); let calls = 0, sleeps = 0

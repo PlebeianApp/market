@@ -39,9 +39,15 @@ describe('HLT-001 elapsed progress and composite readiness', () => {
  })
  test('stale/future observations and clock rollback refuse', () => {
   const f = fixture(); f.set(10_000)
-  expect(f.sample(1, { observedAt: 4_999 }).reason).toBe('sample_expired')
+  expect(f.sample(1, { observedAt: -1 }).reason).toBe('sample_expired')
   expect(f.sample(1, { observedAt: 10_001 }).reason).toBe('sample_expired')
   f.set(9_999); expect(f.sample(1).reason).toBe('clock_invalid')
+ })
+ test('next-header authentication remains bounded but accepts the observed six-second block interval', () => {
+  const f = fixture(); f.set(6_200)
+  expect(f.sample(1, { observedAt: 0 }).reason).toBe('warming')
+  f.set(10_001)
+  expect(f.sample(2, { observedAt: 0 }).reason).toBe('sample_expired')
  })
  test('one unavailable signer permits 3/4; two unavailable or duplicates refuse', () => {
   const f = fixture(); f.sample(1, { readySigners: [1, 2, 4] }); f.set(1_000)
@@ -64,6 +70,14 @@ describe('HLT-001 elapsed progress and composite readiness', () => {
   late({ pins: healthPins, height: 10, mintReady: true, authorityReady: true, readySigners: [1, 2, 3] })
   const errors = createFridayReadinessProbe({ pins: healthPins, collect: async () => { throw new Error('down') } })
   expect((await errors.readExact()).reason).toBe('dependency_error')
+ })
+ test('process lifecycle abort cancels a held collection without waiting for its timeout', async () => {
+  const lifecycle = new AbortController(); let observed: AbortSignal | undefined
+  const probe = createFridayReadinessProbe({ pins: healthPins, timeoutMs: 5_000, signal: lifecycle.signal,
+   collect: async (signal) => { observed = signal; return new Promise(() => {}) } })
+  const pending = probe.readExact(); await Promise.resolve(); lifecycle.abort()
+  expect((await pending).ready).toBe(false)
+  expect(observed?.aborted).toBe(true)
  })
  test('mint identity/keyset/denominations are independently pinned; advertised NUTs are insufficient', () => {
   const mint = { mintPublicKey: '02' + '1'.repeat(64), activeSatKeysetId: 'sat-keyset', denominationKeyDigest: 'e'.repeat(64), serverVersion: 'version' }

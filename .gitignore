@@ -10,7 +10,3 @@ cashu-wrapper/frost-participant-3of4/target/
 cashu-wrapper/frost-public-inspect/target/
 *.log
 __pycache__/
-
-# Contributor-generated outputs
-/dist/
-*.tsbuildinfo

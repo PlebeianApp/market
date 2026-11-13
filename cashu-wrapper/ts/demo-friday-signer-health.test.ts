@@ -3,7 +3,8 @@ import { DemoSignerCoordinatorAnchorSqlite } from './demo-signer-coordinator-anc
 import { expect, test } from 'bun:test'
 import { schnorr } from '@noble/curves/secp256k1.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
-import { createFridaySignerHealthHandler, probeFridaySignerHealth, collectFridayReadySigners } from './demo-friday-signer-health'
+import { createFridaySignerHealthHandler, probeFridaySignerHealth, collectFridayReadySigners,
+ probeFridaySignerHealthTranscript, verifyFridaySignerHealthTranscript } from './demo-friday-signer-health'
 import type { DemoSignerDurableBindingV1 } from './demo-signer-rpc'
 import { healthPins } from './demo-friday-readiness.test'
 const secret = (n: number) => { const bytes = new Uint8Array(32); bytes[31] = n; return bytes }
@@ -30,6 +31,29 @@ test('authenticated health is bound to challenge, participant and enrollment; pe
  const f = fixture(); expect(await probeFridaySignerHealth(f.options)).toBe(1)
  expect(f.counts()).toEqual({ checks: 1, anchors: 1 })
  expect(await probeFridaySignerHealth(fixture({ down: true }).options)).toBeNull()
+})
+test('portable transcript retains and independently verifies both signed messages without observing an anchor', async () => {
+ const f = fixture()
+ const transcript = await probeFridaySignerHealthTranscript(f.options)
+ expect(f.counts()).toEqual({ checks: 1, anchors: 0 })
+ expect(transcript).toMatchObject({ schema: 'FRIDAY_SIGNER_HEALTH_TRANSCRIPT_V1',
+  coordinatorIdentity: bytesToHex(schnorr.getPublicKey(coordinator)),
+  request: { participantId: 1, issuedAt: 1_000 },
+  reply: { ready: true, processInstanceId: 'a'.repeat(64) } })
+ expect(verifyFridaySignerHealthTranscript({ transcript, coordinatorIdentity: transcript.coordinatorIdentity,
+  participantId: 1, signerIdentity, pins: healthPins, enrollment: binding })).toMatchObject({
+   participantId: 1, ready: true, processInstanceId: 'a'.repeat(64), binding,
+  })
+ const tampered = structuredClone(transcript)
+ tampered.reply.processInstanceId = 'b'.repeat(64)
+ expect(() => verifyFridaySignerHealthTranscript({ transcript: tampered,
+  coordinatorIdentity: transcript.coordinatorIdentity, participantId: 1,
+  signerIdentity, pins: healthPins, enrollment: binding })).toThrow('REPLY')
+ const extra = structuredClone(transcript) as typeof transcript & { unexpected?: boolean }
+ extra.unexpected = true
+ expect(() => verifyFridaySignerHealthTranscript({ transcript: extra,
+  coordinatorIdentity: transcript.coordinatorIdentity, participantId: 1,
+  signerIdentity, pins: healthPins, enrollment: binding })).toThrow('SHAPE')
 })
 test('tampered reply, wrong identity, enrollment, keyset and stale authentication refuse', async () => {
  const f = fixture()

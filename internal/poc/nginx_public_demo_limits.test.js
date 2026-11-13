@@ -22,6 +22,8 @@ test('ordinary methods and exact body-bound POST reads do not consume the mutati
     assert.match(body, /terminal\/read/);
     assert.match(body, /funding\/status/);
     assert.match(body, /funding-abort\/status/);
+    assert.match(body, /POST:\/v1\/checkstate "";/);
+    assert.doesNotMatch(body, /seller-plan\/\(\?:[^)]*intent/);
   }
 });
 

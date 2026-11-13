@@ -131,7 +131,26 @@ describe('local-only 3-of-4 maintainer-federation candidate', () => {
 		const port = createDemoThreeOfFourMaintainerFederationPort([
 			participant(1), participant(2), participant(3, { withhold: true }), participant(4, { withhold: true }),
 		], aggregator(calls))
-		await expect(port.authorize(request())).rejects.toMatchObject({ code: 'DEMO_MAINTAINER_THRESHOLD_UNAVAILABLE' })
+		await expect(port.authorize(request())).rejects.toMatchObject({
+			code: 'DEMO_MAINTAINER_THRESHOLD_UNAVAILABLE', failedParticipantIds: [3, 4],
+			message: expect.stringContaining('round-one 3:UNAVAILABLE,4:UNAVAILABLE'),
+		})
+		expect(calls.calls).toBe(0)
+	})
+
+	test('threshold refusal retains only finite per-slot remote reason classes', async () => {
+		const calls = { calls: 0 }
+		const second = participant(2), third = participant(3), fourth = participant(4)
+		second.roundOneVerified = async () => { throw new Error('DEMO_SIGNER_RPC_REMOTE_REFUSAL:LOCAL_MINT_BINDING') }
+		third.roundOneVerified = async () => { throw new Error('DEMO_SIGNER_RPC_REMOTE_REFUSAL:made-up secret text') }
+		fourth.roundOneVerified = async () => { throw new Error('DEMO_SIGNER_RPC_REMOTE_REFUSAL:HTTP_503') }
+		const port = createDemoThreeOfFourMaintainerFederationPort([
+			participant(1), second, third, fourth,
+		], aggregator(calls))
+		await expect(port.authorize(request())).rejects.toMatchObject({
+			code: 'DEMO_MAINTAINER_THRESHOLD_UNAVAILABLE', failedParticipantIds: [2, 3, 4],
+			message: expect.stringContaining('round-one 2:LOCAL_MINT_BINDING,3:UNAVAILABLE,4:HTTP_503'),
+		})
 		expect(calls.calls).toBe(0)
 	})
 

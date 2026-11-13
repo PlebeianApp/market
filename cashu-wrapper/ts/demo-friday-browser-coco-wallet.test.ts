@@ -229,6 +229,7 @@ test('wallet opening propagates cancellation to mint inspection and disposes bef
 		}) as typeof fetch,
 		async openDomain(options) {
 			expect(options.signal).toBe(abort.signal)
+			expect(options.webSocketFactory).toBeNull()
 			return { runtime: {} as never, paymentKey: {} as never,
 				rail: { async trustMint() { return { mintUrl, trusted: true } }, async inspectMint() {
 					await options.requestFetch!(mintUrl+'/v1/info'); return snapshot

@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -44,12 +45,17 @@ type r20ClosePort interface {
 }
 
 type r20CloseTrigger struct {
-	port        r20ClosePort
-	now         func() time.Time
-	mu          sync.Mutex
-	quarantined map[string]bool
-	nextAttempt map[string]time.Time
-	retryCount  map[string]uint8
+	port           r20ClosePort
+	now            func() time.Time
+	mu             sync.Mutex
+	quarantined    map[string]bool
+	nextAttempt    map[string]time.Time
+	retryCount     map[string]uint8
+	quarantinedAny atomic.Bool
+}
+
+func (trigger *r20CloseTrigger) ready() bool {
+	return !trigger.quarantinedAny.Load()
 }
 
 func newR20CloseTrigger(port r20ClosePort, now func() time.Time) *r20CloseTrigger {
@@ -95,9 +101,12 @@ func requireR20CloseTriggerActivation(root, listen string, manifest NetworkManif
 	}
 	pins := server.browserReleasePins
 	policyDigest, _ := r20FakeFundingPolicy(manifest.Policy)["digest"].(string)
+	auctionPolicyDigest := r20AuctionPolicyDigest(manifest.Policy)
+	auctionPaymentDigest := r20AuctionPaymentPolicyDigest()
 	if validateBrowserReleasePins(*pins) != nil || pins.DeploymentID != manifest.DeploymentID ||
 		pins.ChainID != manifest.ChainID || pins.CashuMintURL != manifest.CashuMintURL ||
 		pins.CommitteePublicKey != manifest.CommitteePublicKey || pins.FakeFundingPolicyDigest != policyDigest ||
+		pins.AuctionPolicyDigest != auctionPolicyDigest || pins.AuctionPaymentDigest != auctionPaymentDigest ||
 		manifest.FundingAbortPins == nil {
 		return false, errors.New("R20_CLOSE_ACTIVATION_BROWSER_BINDING_INVALID")
 	}
@@ -203,6 +212,7 @@ func (trigger *r20CloseTrigger) Step(ctx context.Context) error {
 		}
 		if response.Status >= 400 && response.Status < 500 {
 			trigger.quarantined[id] = true
+			trigger.quarantinedAny.Store(true)
 			return errors.New("R20_CLOSE_PERMANENT_REJECTION_QUARANTINED")
 		}
 		if response.Status < 200 || response.Status >= 300 {

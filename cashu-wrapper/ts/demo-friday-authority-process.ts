@@ -7,6 +7,7 @@
  * of those capabilities through HTTP.
  */
 import {
+	DEMO_FRIDAY_AUTHORITY_MAX_BODY_BYTES,
 	DEMO_FRIDAY_AUTHORITY_LOOPBACK_PORT,
 	createDemoFridayFixedAuthorityService,
 } from './demo-friday-authority-service'
@@ -17,6 +18,14 @@ import {
 
 type ServiceOptions = Parameters<typeof createDemoFridayFixedAuthorityService>[0]
 
+async function waitForStop(signal: AbortSignal): Promise<void> {
+	if (signal.aborted) return
+	await new Promise<void>((resolve) => {
+		const stopped = (): void => resolve()
+		signal.addEventListener('abort', stopped, { once: true })
+	})
+}
+
 export interface DemoFridayAuthorityListener {
 	stop(closeActiveConnections?: boolean): void | Promise<void>
 }
@@ -25,6 +34,7 @@ export interface DemoFridayAuthorityListenerFactory {
 	(options: {
 		hostname: '127.0.0.1'
 		port: typeof DEMO_FRIDAY_AUTHORITY_LOOPBACK_PORT
+		maxRequestBodySize: typeof DEMO_FRIDAY_AUTHORITY_MAX_BODY_BYTES
 		fetch: (request: Request) => Promise<Response>
 	}): DemoFridayAuthorityListener
 }
@@ -35,22 +45,62 @@ export async function runDemoFridayAuthorityProcess(options: ServiceOptions & {
 	listenerFactory?: DemoFridayAuthorityListenerFactory
 }): Promise<void> {
 	if (options.signal.aborted) throw new Error('DEMO_FRIDAY_AUTHORITY_PROCESS: stopped before startup')
-	const service = createDemoFridayFixedAuthorityService(options)
-	const factory = options.listenerFactory ?? ((value) => Bun.serve({
-		...value, maxRequestBodySize: 32 * 1024,
-	}))
+	const { terminalSource, signal, listenerFactory, ...serviceOptions } = options
+	let drainQuarantined = false
+	const baseHealth = serviceOptions.health
+	const baseReadiness = serviceOptions.readiness
+	const service = createDemoFridayFixedAuthorityService({
+		...serviceOptions,
+		terminalSource,
+		health: {
+			async readExact() {
+				const status = await baseHealth.readExact()
+				return drainQuarantined ? { ...status, quarantined: true } : status
+			},
+		},
+		...(baseReadiness === undefined ? {} : {
+			readiness: {
+				async readExact() {
+					const status = await baseReadiness.readExact()
+					return drainQuarantined
+						? { ...status, ready: false, reason: 'terminal_drain_quarantined' }
+						: status
+				},
+			},
+		}),
+	})
+	const factory = listenerFactory ?? ((value) => Bun.serve(value))
 	const listener = factory({
 		hostname: '127.0.0.1', port: DEMO_FRIDAY_AUTHORITY_LOOPBACK_PORT,
+		maxRequestBodySize: DEMO_FRIDAY_AUTHORITY_MAX_BODY_BYTES,
 		fetch: (request) => service.handle(request),
 	})
+	let stopping: Promise<void> | undefined
+	const stopListener = (): void => {
+		stopping ??= Promise.resolve(listener.stop(true))
+	}
+	signal.addEventListener('abort', stopListener, { once: true })
+	if (signal.aborted) stopListener()
 	try {
 		// The fixed loopback listener is the cross-process singleton lease. It must
 		// be owned before any restart-only recovery releases durable work.
-		options.terminalSource.recoverInterruptedExact()
-		await runDemoFridayAuthorityDrainLoop({ service, signal: options.signal })
+		terminalSource.recoverInterruptedExact()
+		try {
+			await runDemoFridayAuthorityDrainLoop({ service, signal })
+		} catch (error) {
+			if (signal.aborted) return
+			// An exact terminal effect may have happened before local acknowledgement.
+			// Keep recovery HTTP available, fail new operations closed, and wait for
+			// the reviewed restart boundary instead of releasing the reference.
+			drainQuarantined = true
+			void error
+			await waitForStop(signal)
+		}
 	} catch (error) {
-		if (!options.signal.aborted) throw error
+		if (!signal.aborted) throw error
 	} finally {
-		await listener.stop(true)
+		signal.removeEventListener('abort', stopListener)
+		stopListener()
+		await stopping
 	}
 }

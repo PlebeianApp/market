@@ -402,6 +402,7 @@ func RunSite(ctx context.Context, root, listen string) error {
 			return err
 		}
 		trigger := newR20CloseTrigger(port, time.Now)
+		api.closeTriggerReady = trigger.ready
 		go runR20CloseTrigger(ctx, trigger, func(category string) {
 			// Every category originates from the fixed allowlist in the trigger;
 			// no response bodies, auction identifiers, or arbitrary error text are

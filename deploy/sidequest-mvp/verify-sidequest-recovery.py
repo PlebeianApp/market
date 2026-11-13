@@ -15,12 +15,12 @@ import stat
 RELEASE = Path("/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4-recovery")
 ARTIFACTS = {
     "plebeian-friday-authority": (
-        99_654_044,
-        "be3246e9de909e13bb7de0795cd39ca4c162b247a12d2a5476107a3b0a8fccbc",
+        99_654_070,
+        "61a14645aac2eef4d6305c027b1d314e60c143a1c0a328ac5586120f4e0b720c",
     ),
     "plebeian-friday-coordinator": (
-        98_658_332,
-        "d9e5311b8baa025504e0db53d55aa327476e4e909a1224e1df285449e3611386",
+        98_658_609,
+        "3a6955b83d6a76487c9faa1f47a298fb157ee74a8362eacfe555d7e4aadf2843",
     ),
     "plebeian-friday-terminal-executor": (
         99_117_242,
@@ -34,6 +34,10 @@ ARTIFACTS = {
 BASE_GUARD = (
     14_659,
     "36bc33672b1cd2bef0961c7a7df160686cb2674e62242784303a64d652515f1d",
+)
+LIVE_TERMINAL_EXECUTOR = (
+    "/opt/plebeian-auctions-friday/releases/sidequest-mvp-r4/"
+    "bin/plebeian-friday-terminal-executor"
 )
 FRESHNESS = {
     "PLEBEIAN_AUCTION_PAYOUT_MAX_HEAD_AGE_SECONDS": "10",
@@ -104,10 +108,18 @@ def exact_configuration(environment: Path, application: Path, release: Path, ser
     require(isinstance(manifest, dict), "APPLICATION_OBJECT")
     namespace = runpy.run_path(str(release / "bin" / "verify-friday-separated-base.py"))
     common = namespace.get("COMMON")
+    paths = namespace.get("PATHS")
     verify_values = namespace.get("verify_values")
-    require(isinstance(common, set) and callable(verify_values), "BASE_GUARD_CONTRACT")
+    require(isinstance(common, set) and isinstance(paths, dict) and callable(verify_values),
+            "BASE_GUARD_CONTRACT")
+    require(paths.get("FRIDAY_TERMINAL_EXECUTOR_BIN")
+            == "/opt/plebeian-auctions-friday/releases/separated-deploy-v1/"
+               "bin/plebeian-friday-terminal-executor", "BASE_GUARD_TERMINAL_CONTRACT")
     extended = common | set(FRESHNESS)
+    successor_paths = dict(paths)
+    successor_paths["FRIDAY_TERMINAL_EXECUTOR_BIN"] = LIVE_TERMINAL_EXECUTOR
     verify_values.__globals__["COMMON"] = extended
+    verify_values.__globals__["PATHS"] = successor_paths
     verify_values(settings, manifest, service)
 
 

@@ -32,6 +32,12 @@ import {
 const PARTICIPANT_IDS = [1, 2, 3, 4] as const
 const HEX_32 = /^[0-9a-f]{64}$/
 const COMPRESSED_KEY = /^(?:02|03)[0-9a-f]{64}$/
+const SAFE_REMOTE_REFUSALS = new Set([
+	'LOCAL_ADMISSION_STALE', 'LOCAL_ADMISSION_BINDING', 'LOCAL_ADMISSION_POOL',
+	'LOCAL_ABORT_TIME', 'LOCAL_ABORT_BINDING', 'LOCAL_ABORT_LIFECYCLE',
+	'LOCAL_MINT_BINDING', 'LOCAL_MINT_SPENT', 'LOCAL_QUORUM_BINDING',
+	'READ_UNAVAILABLE', 'QUARANTINED', 'AUTH_BINDING', 'JOURNAL_CONFLICT',
+])
 
 /**
  * A process port that retains the signer-authenticated participant-local
@@ -44,7 +50,7 @@ export interface DemoPolicyVerifiedFrostParticipantPort extends DemoFrostPartici
 }
 
 export class DemoFrostThreshold3ProcessError extends Error {
-	constructor(readonly code: string, message: string) {
+	constructor(readonly code: string, message: string, readonly safeReason?: string) {
 		super(`${code}: ${message}`)
 		this.name = 'DemoFrostThreshold3ProcessError'
 	}
@@ -130,6 +136,16 @@ async function bounded<T>(participantId: DemoParticipantId, round: string, timeo
 	try { return await Promise.race([run(controller.signal), timeout]) }
 	catch (error) {
 		if (error instanceof DemoFrostThreshold3ProcessError) throw error
+		if (error instanceof Error) {
+			const match = /^DEMO_SIGNER_RPC_REMOTE_REFUSAL:(HTTP_[1-5][0-9][0-9]|[A-Z_]+)$/.exec(error.message)
+			if (match !== null && (SAFE_REMOTE_REFUSALS.has(match[1]!) || /^HTTP_[1-5][0-9][0-9]$/.test(match[1]!))) {
+				throw new DemoFrostThreshold3ProcessError(
+					'DEMO_FROST_T3_PROCESS_REMOTE_REFUSAL',
+					`participant ${participantId} ${round} returned ${match[1]}`,
+					match[1],
+				)
+			}
+		}
 		return refuse('DEMO_FROST_T3_PROCESS_UNAVAILABLE', `participant ${participantId} ${round} failed: ${error instanceof Error ? error.message : 'transport failure'}`)
 	} finally { if (timer !== undefined) clearTimeout(timer) }
 }

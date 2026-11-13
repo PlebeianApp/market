@@ -795,6 +795,50 @@ func TestFridayGenesisRejectsEveryNonFundingPolicyMutation(t *testing.T) {
 	}
 }
 
+func TestFridayGenesisPolicyKeepsLegacyOneHourBundleReadable(t *testing.T) {
+	legacy := DefaultPolicy()
+	if err := validateFridayGenesisPolicy(legacy); err != nil {
+		t.Fatalf("legacy one-hour Friday policy no longer validates for recovery: %v", err)
+	}
+	if err := validateFridayGenesisPolicy(SevenDayPolicy()); err != nil {
+		t.Fatalf("new seven-day Friday policy rejected: %v", err)
+	}
+	unsupported := SevenDayPolicy()
+	unsupported.MaxDurationSeconds--
+	if err := validateFridayGenesisPolicy(unsupported); err == nil {
+		t.Fatal("unreviewed duration policy was accepted")
+	}
+}
+
+func TestFridaySevenDayPolicyRequiresAnApprovedDeploymentIdentity(t *testing.T) {
+	parent := t.TempDir()
+	authority := literalFridayAuthority(t, parent)
+	_, paths := literalFridayRoster(t, parent, authority)
+	input := literalFridayAssembly(authority)
+	input.Policy = SevenDayPolicy()
+	if _, err := AssembleFridayCometGenesis(filepath.Join(parent, "seven-day"), paths, input); err == nil ||
+		!strings.Contains(err.Error(), "not bound to an approved deployment identity") {
+		t.Fatalf("unapproved seven-day assembly error=%v", err)
+	}
+}
+
+func TestFridayLegacyOneHourSignedBundleStillValidates(t *testing.T) {
+	parent := t.TempDir()
+	authority := literalFridayAuthority(t, parent)
+	_, paths := literalFridayRoster(t, parent, authority)
+	bundlePath := filepath.Join(parent, "legacy-bundle")
+	if _, err := AssembleFridayCometGenesis(bundlePath, paths, literalFridayAssembly(authority)); err != nil {
+		t.Fatal(err)
+	}
+	_, manifest, _, err := validateFridayCometBundle(bundlePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.Policy != DefaultPolicy() || manifest.Policy.MaxDurationSeconds != LegacyMaxAuctionDurationSeconds {
+		t.Fatalf("legacy signed bundle policy changed: %+v", manifest.Policy)
+	}
+}
+
 func TestFridayGenesisFundingPolicyBoundaries(t *testing.T) {
 	parent := t.TempDir()
 	authority := literalFridayAuthority(t, parent)

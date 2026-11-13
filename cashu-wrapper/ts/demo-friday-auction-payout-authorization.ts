@@ -39,13 +39,13 @@ import {
 } from './demo-sigall-recipient'
 import { demoDenominationKeyDigest, demoOutputsDigest, demoRecipientCapabilityDigest } from './demo-sigall-settlement'
 import { blindMessage, randomSecretHex } from './nut-client'
+import { DEMO_EVENT_SKEW_SECONDS, DEMO_MAX_AUTHORIZATION_SECONDS } from './demo-auction-timing-policy'
 
 const HEX_32 = /^[0-9a-f]{64}$/
 const HEX_64 = /^[0-9a-f]{128}$/
 const POINT = /^(?:02|03)[0-9a-f]{64}$/
 const ID = /^[A-Za-z0-9_-]{1,160}$/
 const MAX_PAYOUT = 50_000
-const MAX_AUTHORIZATION_SECONDS = 8 * 60 * 60
 export const DEMO_FRIDAY_AUCTION_PAYOUT_AUTHORIZATION_KIND = 28_652 as const
 
 export interface DemoFridayAuctionPayoutScopeV1 {
@@ -159,7 +159,7 @@ function exactScope(value: DemoFridayAuctionPayoutScopeV1, keyset: DemoRecipient
 		|| !Number.isSafeInteger(value.maximumPayout) || value.maximumPayout < value.startingBid || value.maximumPayout > MAX_PAYOUT
 		|| !Number.isSafeInteger(value.validFrom) || value.validFrom !== nowSeconds
 		|| !Number.isSafeInteger(value.validUntil) || value.validUntil < value.maximumEndTime
-		|| value.validUntil - value.validFrom > MAX_AUTHORIZATION_SECONDS) {
+		|| value.validUntil - value.validFrom > DEMO_MAX_AUTHORIZATION_SECONDS) {
 		refuse('auction payout scope is malformed, expired, or outside the supported cap')
 	}
 	return { ...structuredClone(value), canonicalMintUrl: exactOrigin(value.canonicalMintUrl) }
@@ -303,10 +303,11 @@ export async function prepareDemoFridayAuctionPayoutAuthorization(options: {
 	}
 }
 
-export function verifyDemoFridayAuctionPayoutAuthorization(
+function verifyDemoFridayAuctionPayoutAuthorizationAt(
 	value: DemoFridayAuctionPayoutAuthorizationEnvelopeV1,
 	keyset: DemoRecipientKeyset,
 	nowSeconds: number,
+	futureValidityAllowanceSeconds: number,
 ): DemoFridayAuctionPayoutAuthorizationEnvelopeV1 {
 	if (value === null || typeof value !== 'object' || Array.isArray(value)) refuse('authorization envelope is absent')
 	const envelope = value as DemoFridayAuctionPayoutAuthorizationEnvelopeV1
@@ -326,7 +327,8 @@ export function verifyDemoFridayAuctionPayoutAuthorization(
 	// Scope creation requires validFrom === now. Verification instead permits the
 	// authorization's bounded lifetime while retaining the same structural checks.
 	const checked = exactScope(scope, keyset, scope.validFrom)
-	if (nowSeconds < checked.validFrom || nowSeconds > checked.validUntil) refuse('auction payout authorization is not currently valid')
+	if (!Number.isSafeInteger(nowSeconds) || nowSeconds < checked.validFrom - futureValidityAllowanceSeconds
+		|| nowSeconds > checked.validUntil) refuse('auction payout authorization is not currently valid')
 	if (authorization.catalogOperationId !== catalogOperationId(checked)
 		|| envelope.authorizationDigest !== digest(authorization)) refuse('authorization identity or digest changed')
 	const expectedAmounts = demoFridayAuctionPayoutCatalogAmounts(checked.maximumPayout, keyset)
@@ -354,6 +356,23 @@ export function verifyDemoFridayAuctionPayoutAuthorization(
 	if (unsigned.created_at !== checked.validFrom) refuse('seller authorization was not created with the exact auction scope')
 	const sellerAuthorization = signedExact(envelope.sellerAuthorization, unsigned)
 	return structuredClone({ ...envelope, authorization: { ...authorization, recipientCatalog: catalog }, sellerAuthorization })
+}
+
+export function verifyDemoFridayAuctionPayoutAuthorization(
+	value: DemoFridayAuctionPayoutAuthorizationEnvelopeV1,
+	keyset: DemoRecipientKeyset,
+	nowSeconds: number,
+): DemoFridayAuctionPayoutAuthorizationEnvelopeV1 {
+	return verifyDemoFridayAuctionPayoutAuthorizationAt(value, keyset, nowSeconds, 0)
+}
+
+/** Registration alone tolerates the reviewed host-clock skew; spending and selection do not. */
+export function verifyDemoFridayAuctionPayoutAuthorizationRegistration(
+	value: DemoFridayAuctionPayoutAuthorizationEnvelopeV1,
+	keyset: DemoRecipientKeyset,
+	nowSeconds: number,
+): DemoFridayAuctionPayoutAuthorizationEnvelopeV1 {
+	return verifyDemoFridayAuctionPayoutAuthorizationAt(value, keyset, nowSeconds, DEMO_EVENT_SKEW_SECONDS)
 }
 
 export function selectDemoFridayAuctionPayout(options: {

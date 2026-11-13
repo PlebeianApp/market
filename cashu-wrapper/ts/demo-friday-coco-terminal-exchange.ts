@@ -39,6 +39,14 @@ export interface DemoFridayCocoTerminalAckV1 {
 	recipientAckSignature: string
 }
 
+export interface DemoFridayCocoTerminalStatusV1 {
+	schema: 'PLEBEIAN_FRIDAY_COCO_TERMINAL_STATUS_V1'
+	actor: string
+	fundingOperationId: string
+	noticePresent: boolean
+	acknowledged: boolean
+}
+
 function fail(message: string): never { throw new Error(`DEMO_FRIDAY_COCO_TERMINAL_EXCHANGE: ${message}`) }
 function canonical(value: unknown): string {
 	if (value === null || typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value)
@@ -129,6 +137,19 @@ export class DemoFridayCocoTerminalExchangeSqlite {
 		// on a bidder refund.
 		if (row.actor !== request.actor) return null
 		return exactDemoFridayCocoTerminalNotice(JSON.parse(row.notice_json) as unknown)
+	}
+
+	readStatusExact(request: { actor: string; fundingOperationId: string }): DemoFridayCocoTerminalStatusV1 {
+		if (!HEX_32.test(request.actor) || !ID.test(request.fundingOperationId)) fail('status identity is malformed')
+		const row = this.database.query<{ deployment_id: string; actor: string; ack_json: string | null }, [string]>(
+			'SELECT deployment_id,actor,ack_json FROM friday_coco_terminal_exchange WHERE operation_id = ?',
+		).get(request.fundingOperationId)
+		const visible = row !== null && row.deployment_id === this.deploymentId && row.actor === request.actor
+		return {
+			schema: 'PLEBEIAN_FRIDAY_COCO_TERMINAL_STATUS_V1', actor: request.actor,
+			fundingOperationId: request.fundingOperationId, noticePresent: visible,
+			acknowledged: visible && row.ack_json !== null,
+		}
 	}
 
 	acknowledgeExact(value: unknown): DemoFridayCocoTerminalAckV1 {

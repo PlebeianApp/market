@@ -1,0 +1,83 @@
+{
+  "schema": "PLEBEIAN_CATALOGUE_R67_POLICY_UI_LOCAL_CANDIDATE_V1",
+  "status": "inactive_local_candidate_not_deployed",
+  "generated_at_utc": "2026-11-11T23:27:20Z",
+  "source": {
+    "branch": "codex/catalogue-r66-policy-candidate",
+    "base_commit": "72e9f33eff93c9b99216d5508644d99109db8403",
+    "implementation_commit": "37757d433bd98c880dcea4f4ea8daa61382ce9ec",
+    "implementation_tree": "92855d0eb1ebf55ca8b04264b1dc6683551d6474",
+    "r67_recovery_delta_source_commit": "321a0429e9fb8902aa7b1ee423162369a746a4ca",
+    "changed_file_count": 25
+  },
+  "policy_binding": {
+    "release_pin_schema": "PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V2",
+    "auction_timing": "one-hour maximum; 3-minute late window and extension; 30-minute total extension cap; 15-minute emergency recovery",
+    "auction_policy_sha256": "257fb5bf2b414f206278ada15464030a075d6f4f51b9c2f6b965259136f9a777",
+    "auction_payment": "maximum bid and payout 50000 fake sats",
+    "auction_payment_policy_sha256": "4d88017e3d191421aa46702ca9b6670fb324162c4c39d3ce4604bbfcfec3492b",
+    "canonical_validators_sha256": "d1936c5e5e9d09d0a96107031ae144068dcc2ad3f1d071e7f8fe871a8aaff773",
+    "seven_day_profile": "inactive and rejected by the current deployment guard",
+    "mismatch_behavior": "new operations remain fail-closed; exact retained payment recovery remains available"
+  },
+  "r67_transport_delta": {
+    "authority_and_api_friday_body_limit": "64 KiB",
+    "site_root_body_limit": "32 KiB unchanged",
+    "browser_fake_mint_nut17": "disabled; bounded HTTP polling retained",
+    "scope": "exact seven-file delta from the reviewed R67 recovery commit",
+    "live_activation": "not performed"
+  },
+  "browser_assets": {
+    "app.js": { "bytes": 75899, "sha256": "f1cdbe6ccead04b4d748aef872d0e1ccbbb2df61b2a35aa807c4f8658520f8af" },
+    "friday-browser.js": { "bytes": 1760092, "sha256": "06a178bc85041d1a2df9503939612e16d80ce8dc3c05bd69c16be6e1866263fc" },
+    "index.html": { "bytes": 11037, "sha256": "80ac11c49b72db7c6a0339cda1a306fb700bed61aefc8d023812347c391c7b88" },
+    "styles.css": { "bytes": 18846, "sha256": "76cc4dbb34bf16cc942f67ee6918e39f046f8adff087b3714a712eebee791db9" },
+    "ui-helpers.js": { "bytes": 12190, "sha256": "6708478be760eed35ab58878d0a96243c19687ad6e9fdb910ba292c6eb65da6f" },
+    "app-bootstrap.js": { "bytes": 217, "sha256": "b1632acf59e5467764bac369daff802ae29992c936c4c416472e879937f4c4ef" }
+  },
+  "reproducible_build": {
+    "browser_command": "bun build poc-friday-browser-entry.ts --outfile ../../internal/poc/static/friday-browser.js --target browser --minify",
+    "browser_independent_builds": 2,
+    "browser_outputs_byte_identical": true,
+    "site_command": "CGO_ENABLED=0 go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= -o plebeian-auctions-poc .",
+    "site_independent_builds": 2,
+    "site_outputs_byte_identical": true,
+    "site_binary": { "bytes": 45332609, "sha256": "49fb410d9f6a6a675f5d7fd79edd0337bab4713e3a7476aa33bad14a52ed6866" },
+    "served_bundle_matches_committed_bundle": true,
+    "toolchain": { "bun": "1.3.11", "node": "v24.11.0", "go": "go1.23.1 linux/amd64", "git": "2.43.0" }
+  },
+  "verification": {
+    "node_ui": "8 files passed, 0 failed",
+    "go_all_offline": "passed",
+    "friday_typecheck": "passed",
+    "browser_wallet": "135 passed, 0 failed, 496 assertions",
+    "r67_focused": "33 passed, 0 failed, 142 assertions",
+    "readiness_continuity": "9 passed, 0 failed",
+    "deployment_policy": "14 passed, 0 failed",
+    "friday_aggregate": "387 passed; the 2 child-process EPERM cases passed 7/7 in the permitted focused rerun",
+    "git_diff_check": "passed"
+  },
+  "ui_verification": {
+    "local_browser": "exact final app.js against a synthetic V2 one-hour/50000 policy fixture",
+    "verified": [
+      "resolved closed auctions hidden by default and available through an accessible history disclosure",
+      "current-actor pending return and seller payout cards remain visible",
+      "one real Playwright double-click gesture produces exactly one bid call",
+      "one-hour and 50000 fake-sat limits are visible in the form"
+    ],
+    "automated": [
+      "immediate aria-busy loading state and duplicate guard",
+      "signing/funding, committed-state verification, ambiguous-outcome and error restoration copy",
+      "stable bid input and button across countdown ticks and unchanged refreshes",
+      "closed-history empty, actionable, imported and recovery states"
+    ],
+    "not_verified": "A final mobile browser pass and an in-flight loading-state screenshot were not captured in the available browser session."
+  },
+  "inactive_package": {
+    "path": "/tmp/plebeian-catalogue-r67-policy-release.Ixpcnw/inactive-release",
+    "deployment": "none",
+    "push_or_publication": "none",
+    "services_or_live_payment_state": "untouched"
+  },
+  "required_next_gate": "fresh coordinated fake-sats acceptance against a newly approved exact V2 release pin file and deployment identity"
+}

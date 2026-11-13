@@ -20,21 +20,21 @@ import {
 	type DemoFridayTerminalBranch,
 } from './demo-friday-coordinator-runtime'
 
-const DEPLOYMENT = 'contributor-legacy-fixture'
+const DEPLOYMENT = 'plebeian-friday-separated-20261103'
 
 /**
- * Synthetic stable identities covering seven historical recipient-pending
- * cases. No live operation identifiers or bearer material are published here.
- * Restart checks must preserve each identity rather than relabel an effect.
+ * Public identities from the 2026-11-05 read-only APP inventory.  These are
+ * fixture labels, never bearer material.  Keeping the exact values catches an
+ * accidental migration that would relabel an already-minted terminal effect.
  */
 const LEGACY = Object.freeze([
-	{ operationId: 'cb32dbbdd1666059e028a0e80774cf3471b27a8148754c04a3d720dab8ae8261', branch: 'winner_payout', role: 'winner_settlement', missingRequestDigest: false },
-	{ operationId: '1e219fc0d4363c4c7f04393b393ee42ee99efcdcae00d9d0c5820b87da16abd9', branch: 'winner_payout', role: 'winner_settlement', missingRequestDigest: true },
-	{ operationId: '800231905a7524fe084f3de3751e7c373be25d86bff5786d1b386b105a435ef7', branch: 'outbid_return', role: 'refund', missingRequestDigest: false },
-	{ operationId: '9c45474d1c67d84ae034c509cd27d917851d7f301db4bb5d396450564a92ea3b', branch: 'rejected_return', role: 'refund', missingRequestDigest: false },
-	{ operationId: '0784a4ffade955f0f06da01bacd046f6fa085abbb5ff7e86edf5bf755b078214', branch: 'winner_payout', role: 'winner_settlement', missingRequestDigest: false },
-	{ operationId: 'f32eb19b8351da454f3da88642942aea9a13562c91b557283fd0d45d34825f87', branch: 'winner_payout', role: 'winner_settlement', missingRequestDigest: false },
-	{ operationId: '245bc39cf486c6426837699cc99ee26c822f6e4a7f717a2491700d990ae1e804', branch: 'outbid_return', role: 'refund', missingRequestDigest: true },
+	{ operationId: 'e82c3d5943e89c26087c5f12466273f7d0c5ba4907ef63771b46fbab36a58734', branch: 'winner_payout', role: 'winner_settlement', missingRequestDigest: false },
+	{ operationId: '7572f156484ff2805e8935e5abef61d51f990a6cdb1e6bf53af100e68bba19ba', branch: 'winner_payout', role: 'winner_settlement', missingRequestDigest: true },
+	{ operationId: '7a2ada64ee9134a10df6975800f598eee164b07ae9c67aa641cc1d382dccbf9f', branch: 'outbid_return', role: 'refund', missingRequestDigest: false },
+	{ operationId: '63da655f8958810434ece0e0159436424d2b5aacfb3764a0d681f76f4429ffc1', branch: 'rejected_return', role: 'refund', missingRequestDigest: false },
+	{ operationId: 'ec958664c1fb2ffef5a4ee1aa07e48d9f49af1cfc719a488e7aa410201d1f1bf', branch: 'winner_payout', role: 'winner_settlement', missingRequestDigest: false },
+	{ operationId: '84069b68d726d7853a2566ef0d2d54e24d4ce7d2f1a295e17d36c5336e26c3d6', branch: 'winner_payout', role: 'winner_settlement', missingRequestDigest: false },
+	{ operationId: '521b34e25d017adfd7453e6fc402f433001cfd0a28c16fe925c4bb59c3862e68', branch: 'outbid_return', role: 'refund', missingRequestDigest: true },
 ] as const)
 
 function digest(label: string): string { return createHash('sha256').update(label).digest('hex') }

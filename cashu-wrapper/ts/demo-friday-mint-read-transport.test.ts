@@ -49,6 +49,20 @@ test('NUT-17 exact route upgrades without overriding inherited limits', () => {
  expect(block).not.toMatch(/\n\s*limit_(?:req|conn)\s/)
  expect(block).toContain('proxy_pass http://[fdb2:77a9:c591:3ac6:3513:5bf8:cc3b:5a04]:3438;')
 })
+test('the public authority and root retain distinct bounded request sizes', () => {
+ const config = readFileSync(new URL('../../deploy/sidequest-mvp/nginx-public-demo-active-r2.conf', import.meta.url), 'utf8')
+ const authority = config.match(/location \^~ \/api\/friday\/ \{([\s\S]*?)\n\}/)![1]!
+ const root = config.match(/location \/ \{([\s\S]*?)\n\}/)![1]!
+ expect(authority).toContain('client_max_body_size 64k;')
+ expect(root).toContain('client_max_body_size 32k;')
+})
+test('the public edge preserves the one reviewed Clave relay in the final browser CSP', () => {
+ const config = readFileSync(new URL('../../deploy/sidequest-mvp/nginx-public-demo-active-r2.conf', import.meta.url), 'utf8')
+ const root = config.match(/location \/ \{([\s\S]*?)\n\}/)![1]!
+ expect(root).toContain("connect-src 'self' wss://relay.powr.build;")
+ expect(root).not.toMatch(/connect-src[^;]*\swss:\s*(?:;|$)/)
+ expect(root).toContain('proxy_hide_header Content-Security-Policy;')
+})
 test('abort during Retry-After stops without a second request', async () => {
  const controller = new AbortController(); let calls = 0
  const transport = createFridayMintReadTransport((async () => { calls++; return response(429, '1') }) as unknown as typeof fetch)

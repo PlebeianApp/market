@@ -1,44 +1,46 @@
-# Plebeian Auctions MVP: contributor candidate
+# Plebeian Auctions MVP
 
-**Fake sats only. Source for review, not an accepted release or deployment.**
+Experimental, fake-sats auctions: Nostr identities, browser-owned Coco wallets,
+four-validator CometBFT ordering, 3-of-4 FROST monetary authorization and
+jmcorgan/fips transport. One operator controls the deployment. This is not a
+production release and fake sats have no redeemable value.
 
-This branch brings the 2026-11-06 payment-recovery candidate onto public
-checkpoint `a89e0783c2761883f95f6ada26b9f3fbf486d50c`. It is a Go auction
-application with a TypeScript/Coco wallet integration, CometBFT consensus,
-and experimental Rust 3-of-4 FROST signing. It is not the main marketplace app.
+## Start here
 
-Start here:
-
-- [Contributor setup and test commands](CONTRIBUTING.md)
+- [Contributor setup](CONTRIBUTING.md)
+- [Contributor guide and module map](docs/contributors/MAINTAINER-GUIDE.md)
 - [Architecture and trust boundaries](docs/contributors/ARCHITECTURE.md)
-- [Current verification and acceptance status](docs/contributors/STATUS.md)
-- [Source provenance and publication scope](docs/contributors/PROVENANCE.md)
+- [Current verification status](docs/contributors/STATUS.md)
+- [Checkpoint and publication gates](docs/contributors/CHECKPOINT-20261113.md)
+- [Publication/push plan](docs/contributors/PUSH-PLAN-20261113.md)
+- [Checkpoint provenance](docs/contributors/PROVENANCE.md)
+- [Agent instructions](AGENTS.md)
+- [Historical integration provenance](SOURCE-PROVENANCE.md)
+- [Historical test reality and provenance](TEST-REALITY-AND-PROVENANCE.md)
 
-## What this candidate changes
+This checkpoint prepares the selected R86 source snapshot for review; it is not
+a claim that the snapshot is currently deployed or that all live payment paths
+passed. Deployment and final payment evidence remain separate release gates.
+Historical root receipts describe earlier candidates and are not current run
+instructions. The previous README is preserved in
+[the historical appendix](docs/contributors/LEGACY-README-20261112.md).
 
-- Auction-scoped seller payout authorization, exact winner selection and durable
-  payout recovery, instead of requiring a new seller plan for each bid.
-- Per-actor/per-deployment faucet recovery and recovery after a lost response.
-- Bounded safe-read retry/pacing and wallet maintenance; no automatic replay
-  of mint mutations.
-- Auction creation waits for authenticated committed state before payout
-  authorization. The regression journey checks two outbid returns and
-  conservation of 20,000 fake sats.
-- Bounded service restart and nginx route regression fixtures. These are
-  review material, not installation instructions.
+## Local verification
 
-## Safety and maturity
+Install Bun and Go compatible with `cashu-wrapper/ts/package.json` and `go.mod`.
+Install pinned dependencies with `bun install --frozen-lockfile` inside
+`cashu-wrapper/ts`. Vendored Coco packages are required; do not replace them with
+registry packages silently.
 
-Never use real funds, real Lightning backends or an existing wallet seed.
-Tests use synthetic keys and worthless proofs. Local passing tests are not
-proof of production safety, independent cryptographic review, live settlement,
-or approval to deploy. The fresh live acceptance journey for this candidate
-remains outstanding. Catalogue UI work and the separately blocked consensus
-integer-overflow upgrade are not included.
+```sh
+go test ./...
+node --test internal/poc/catalogue_ui.test.js
+cd cashu-wrapper/ts
+bun run typecheck:friday
+bun run test:friday:browser
+bun run test:friday
+```
 
-The repository retains older public experiments, deployment templates and
-historical evidence for reproducibility. Dates and claims in root-level
-`FRIDAY-*`, `FIPS-*`, `STATUS.md`, `SIDEQUEST-STATUS.md`, `RUNBOOK.md`,
-`PUBLICATION-MANIFEST.json` and `evidence/` describe earlier revisions, not this
-branch. Do not run historical operations commands or target the hosts named
-there. Use the contributor guide and current status above first.
+These checks are local tests, not live settlement certification. Do not run
+live test scripts or start a coordinator against shared infrastructure without
+an explicit deployment/test assignment.

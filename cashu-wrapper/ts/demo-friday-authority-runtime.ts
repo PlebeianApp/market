@@ -9,7 +9,11 @@ import {
 	type DemoFridayTrustedTerminalSourcePort,
 	type DemoFridayTrustedTerminalCandidateV1,
 } from './demo-friday-authority-service'
-import type { DemoFridayCoordinatorRollbackAnchorPort, DemoFridayCoordinatorSqlite } from './demo-friday-coordinator-runtime'
+import {
+	demoFridayActionableNonterminal,
+	type DemoFridayCoordinatorRollbackAnchorPort,
+	type DemoFridayCoordinatorSqlite,
+} from './demo-friday-coordinator-runtime'
 import type {
 	DemoIntegratedThreshold3QueuedTerminalResult,
 	DemoIntegratedThreshold3TerminalRequest,
@@ -17,6 +21,7 @@ import type {
 
 const ID = /^[A-Za-z0-9_-]{1,160}$/
 const HEX_32 = /^[0-9a-f]{64}$/
+const AUTHORITY_COMMIT_TIMEOUT_MS = 10_000
 
 export interface DemoFridayTrustedTerminalReferenceV1 {
 	schema: 'PLEBEIAN_FRIDAY_TERMINAL_REFERENCE_V1'
@@ -158,13 +163,17 @@ export function createDemoFridayAuthorityHealth(options: {
 	rollbackAnchor: DemoFridayCoordinatorRollbackAnchorPort
 	terminalSource: DemoFridayTerminalSourceRuntimePort
 	commitReader: DemoFridayTrustedCommitReaderPort
+	preservedRecipientPending: ReadonlyMap<string, string>
  now?: () => number
+ signal?: AbortSignal
 }): DemoFridayAuthorityHealthPort {
 	if (!ID.test(options.deploymentId) || !ID.test(options.chainId)) throw new Error('DEMO_FRIDAY_HEALTH: deployment or chain is invalid')
  let lastHeight = 0, lastProgress = -Infinity, lastClock = -Infinity, safetyQuarantined = false
  const now = options.now ?? (() => performance.now())
  const read = async () => {
-   const queuePending = options.coordinatorStore.listNonterminal().length + options.terminalSource.pendingCount()
+   const queuePending = demoFridayActionableNonterminal(
+    options.coordinatorStore.listNonterminal(), options.preservedRecipientPending,
+   ).length + options.terminalSource.pendingCount()
    try { options.rollbackAnchor.observeExact(options.coordinatorStore.anchorSnapshot()) }
    catch { safetyQuarantined = true }
    const result = (consensusAvailable: boolean) => ({ deploymentId: options.deploymentId,
@@ -172,20 +181,31 @@ export function createDemoFridayAuthorityHealth(options: {
    if (safetyQuarantined) return result(false)
    let timer: ReturnType<typeof setTimeout> | undefined
    const abort = new AbortController()
+   let lifecycleAbort: (() => void) | undefined
+   const lifecycle = new Promise<never>((_, reject) => {
+    if (options.signal === undefined) return
+    lifecycleAbort = () => { abort.abort(); reject(new Error('stopped')) }
+    if (options.signal.aborted) lifecycleAbort(); else options.signal.addEventListener('abort', lifecycleAbort, { once: true })
+   })
    try {
     const started = now()
     const commit = await Promise.race([options.commitReader.readExact(abort.signal), new Promise<never>((_, reject) => {
-     timer = setTimeout(() => { abort.abort(); reject(new Error('commit timeout')) }, 5_000)
-    })])
+     timer = setTimeout(() => { abort.abort(); reject(new Error('commit timeout')) }, AUTHORITY_COMMIT_TIMEOUT_MS)
+    }), lifecycle])
     const observed = now()
-    if (!Number.isFinite(started) || !Number.isFinite(observed) || observed < started || observed < lastClock || observed - started > 5_000) return result(false)
+    if (!Number.isFinite(started) || !Number.isFinite(observed) || observed < started || observed < lastClock
+     || observed - started > AUTHORITY_COMMIT_TIMEOUT_MS) return result(false)
     lastClock = observed
     if (commit.chainId !== options.chainId || !Number.isSafeInteger(commit.height) || commit.height < 1
      || commit.height < lastHeight) { safetyQuarantined = true; return result(false) }
     if (commit.height > lastHeight) { lastHeight = commit.height; lastProgress = started }
     return result(observed - lastProgress < 20_000)
    } catch { return result(false) }
-   finally { clearTimeout(timer); abort.abort() }
+   finally {
+    clearTimeout(timer)
+    if (lifecycleAbort !== undefined) options.signal?.removeEventListener('abort', lifecycleAbort)
+    abort.abort()
+   }
  }
  let pending: ReturnType<typeof read> | undefined
  return Object.freeze({ readExact() {

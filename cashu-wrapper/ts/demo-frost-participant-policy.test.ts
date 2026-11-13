@@ -212,6 +212,43 @@ describe('participant-local FROST policy (committee-only fake-Testnut proof disc
 		expect(serialized).not.toContain('privateKey')
 	})
 
+	test('accepts a seller-signed auction catalog operation for a winner payout', async () => {
+		const policy = fixture()
+		const catalogOutputs = policy.outputs.map((output) => ({
+			id: output.id, B_: output.B_, amount: output.amount,
+		})).concat([{ id: 'keyset-1', B_: point(32), amount: 16 }])
+		policy.recipientCapability.operationId = 'seller-catalog-operation-1'
+		policy.recipientCapability.outputsDigest = demoOutputsDigest(catalogOutputs)
+		policy.recipientCapability.signature = bytesToHex(schnorr.sign(
+			hexToBytes(demoRecipientCapabilityDigest(policy.recipientCapability)),
+			hexToBytes(recipientPrivate),
+		))
+		policy.recipientCatalog = {
+			schema: 'COCO_DEMO_FROST_WINNER_RECIPIENT_CATALOG_V1',
+			operationId: policy.recipientCapability.operationId,
+			outputs: catalogOutputs,
+			selectedIndexes: [0, 1],
+		}
+		await expect(validate(policy)).resolves.toMatchObject({ authenticatedPackageDigest: policy.packageDigest })
+		const changed = structuredClone(policy)
+		changed.recipientCatalog!.selectedIndexes = [0, 2]
+		await expect(validate(changed)).rejects.toMatchObject({ code: 'DEMO_FROST_POLICY_RECIPIENT_CAPABILITY' })
+	})
+
+	test('keeps refund recipient capabilities bound to the funding operation', async () => {
+		const policy = fixture()
+		policy.role = 'refund'
+		policy.recipientPublicKey = point(12)
+		policy.recipientCapability.role = 'refund'
+		policy.recipientCapability.operationId = 'another-operation'
+		policy.recipientCapability.recipientPublicKey = policy.recipientPublicKey
+		policy.recipientCapability.signature = bytesToHex(schnorr.sign(
+			hexToBytes(demoRecipientCapabilityDigest(policy.recipientCapability)),
+			hexToBytes('0c'.padStart(64, '0')),
+		))
+		await expect(validate(policy)).rejects.toMatchObject({ code: 'DEMO_FROST_POLICY_RECIPIENT_CAPABILITY' })
+	})
+
 	test('accepts a V2 exact-package authorization from the browser-held payment key, not NIP-07', async () => {
 		const policy = fixture()
 		policy.actorPackageAuthorization = {

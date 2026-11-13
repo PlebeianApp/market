@@ -41,6 +41,17 @@ export interface DemoFrostPublicOutput {
 	B_: string
 }
 
+/**
+ * Participant-visible proof that a V3 winner's exact outputs are a deterministic
+ * subset of the seller-signed auction catalog.  It contains no output openings.
+ */
+export interface DemoFrostWinnerRecipientCatalogProof {
+	schema: 'COCO_DEMO_FROST_WINNER_RECIPIENT_CATALOG_V1'
+	operationId: string
+	outputs: DemoFrostPublicOutput[]
+	selectedIndexes: number[]
+}
+
 export type DemoFrostParticipantLocalEvidence =
 	| {
 		schema: 'COCO_DEMO_FROST_PARTICIPANT_LOCAL_CLOSURE_EVIDENCE_V1'
@@ -131,6 +142,8 @@ export interface DemoFrostParticipantPolicyPackage {
 	outputs: DemoFrostPublicOutput[]
 	/** Recipient-signed binding to these exact blinded outputs; contains no output openings. */
 	recipientCapability: DemoRecipientCapability
+	/** Required only when a V3 winner capability signs a full auction catalog. */
+	recipientCatalog?: DemoFrostWinnerRecipientCatalogProof
 	packageDigest: string
 	cashuSigAllDigest: string
 	actorPackageAuthorization: DemoFrostActorPackageAuthorization
@@ -174,12 +187,12 @@ export interface DemoFrostVerifiedSignedBid {
 
 export interface DemoFrostCertifiedClosureVerifierPort {
 	/** Verify the complete certificate/history evidence against participant-local trust roots. */
-	verifyAndDerive(evidence: unknown): Promise<DemoFrostVerifiedClosureDisposition>
+	verifyAndDerive(evidence: unknown, signal?: AbortSignal): Promise<DemoFrostVerifiedClosureDisposition>
 }
 
 export interface DemoFrostSignedBidVerifierPort {
 	/** Verify the original signed bid/event and derive its exact public deposit/actor facts. */
-	verifyAndDerive(evidence: unknown): Promise<DemoFrostVerifiedSignedBid>
+	verifyAndDerive(evidence: unknown, signal?: AbortSignal): Promise<DemoFrostVerifiedSignedBid>
 }
 
 export interface DemoFrostParticipantProofUsePort {
@@ -195,7 +208,7 @@ export interface DemoFrostParticipantProofUsePort {
 		bidId: string
 		policyPackageDigest: string
 		proofStateRefs: string[]
-	}): Promise<void>
+	}, signal?: AbortSignal): Promise<void>
 }
 
 export interface DemoFrostParticipantPolicyPorts {
@@ -341,6 +354,24 @@ function canonicalOutputs(value: DemoFrostPublicOutput[]): DemoFrostPublicOutput
 	return outputs
 }
 
+function canonicalWinnerRecipientCatalog(
+	value: DemoFrostWinnerRecipientCatalogProof,
+): DemoFrostWinnerRecipientCatalogProof {
+	exactKeys(value, ['schema', 'operationId', 'outputs', 'selectedIndexes'], 'recipientCatalog')
+	if (value.schema !== 'COCO_DEMO_FROST_WINNER_RECIPIENT_CATALOG_V1') {
+		refuse('DEMO_FROST_POLICY_RECIPIENT_CAPABILITY', 'unsupported winner recipient catalog proof')
+	}
+	requireText(value.operationId, 'recipientCatalog.operationId')
+	const outputs = canonicalOutputs(value.outputs)
+	if (!Array.isArray(value.selectedIndexes) || value.selectedIndexes.length === 0
+		|| value.selectedIndexes.some((index, offset) => !Number.isSafeInteger(index) || index < 0
+			|| index >= outputs.length || (offset > 0 && value.selectedIndexes[offset - 1]! >= index))) {
+		refuse('DEMO_FROST_POLICY_RECIPIENT_CAPABILITY', 'winner recipient catalog selection is invalid')
+	}
+	return { schema: value.schema, operationId: value.operationId, outputs,
+		selectedIndexes: [...value.selectedIndexes] }
+}
+
 function canonicalEnvelope(
 	value: DemoFrostEvidenceEnvelope,
 	field: string,
@@ -377,7 +408,7 @@ function canonicalPolicy(value: DemoFrostParticipantPolicyPackage): DemoFrostPar
 		'role', 'outcomeHeight', 'appStateHash', 'amount', 'inputFee', 'inputFeePpk', 'mintUrl', 'unit',
 		'activeKeysetId', 'locktime', 'bidderPublicKey', 'committeePublicKey', 'sellerRecipientPublicKey', 'recipientPublicKey',
 		'deposits', 'committeeLockedProofs', 'outputs', 'packageDigest', 'cashuSigAllDigest', 'actorPackageAuthorization',
-		'recipientCapability',
+		'recipientCapability', ...(value.recipientCatalog === undefined ? [] : ['recipientCatalog']),
 		'certifiedClosure', 'signedBid',
 	], 'policy')
 	if (value.schema !== 'COCO_DEMO_FROST_PARTICIPANT_POLICY_V1') refuse('DEMO_FROST_POLICY_SCHEMA', 'unsupported participant policy')
@@ -413,6 +444,8 @@ function canonicalPolicy(value: DemoFrostParticipantPolicyPackage): DemoFrostPar
 	const deposits = canonicalDeposits(value.deposits)
 	const committeeLockedProofs = canonicalCommitteeLockedProofs(value.committeeLockedProofs)
 	const outputs = canonicalOutputs(value.outputs)
+	const recipientCatalog = value.recipientCatalog === undefined ? undefined
+		: canonicalWinnerRecipientCatalog(value.recipientCatalog)
 	exactKeys(value.recipientCapability, [
 		'schema', 'network', 'chainId', 'auctionId', 'operationId', 'role', 'mintUrl', 'unit',
 		'recipientPublicKey', 'outputsDigest', 'signature',
@@ -435,6 +468,7 @@ function canonicalPolicy(value: DemoFrostParticipantPolicyPackage): DemoFrostPar
 		committeeLockedProofs,
 		outputs,
 		recipientCapability: { ...value.recipientCapability },
+		...(recipientCatalog === undefined ? {} : { recipientCatalog }),
 		actorPackageAuthorization: { ...value.actorPackageAuthorization },
 		certifiedClosure: canonicalEnvelope(
 			value.certifiedClosure,
@@ -537,12 +571,30 @@ function verifyRecipientCapability(policy: DemoFrostParticipantPolicyPackage): v
 	if (capability.schema !== 'COCO_DEMO_RECIPIENT_CAPABILITY_V1') {
 		refuse('DEMO_FROST_POLICY_RECIPIENT_CAPABILITY', 'unsupported recipient capability schema')
 	}
-	for (const field of ['network', 'chainId', 'auctionId', 'operationId', 'role', 'mintUrl', 'unit', 'recipientPublicKey'] as const) {
+	for (const field of ['network', 'chainId', 'auctionId', 'role', 'mintUrl', 'unit', 'recipientPublicKey'] as const) {
 		if (capability[field] !== policy[field]) {
 			refuse('DEMO_FROST_POLICY_RECIPIENT_CAPABILITY', `recipient capability ${field} mismatch`)
 		}
 	}
-	const exactOutputsDigest = demoOutputsDigest(policy.outputs)
+	const catalog = policy.recipientCatalog
+	let exactOutputsDigest: string
+	if (catalog === undefined) {
+		if (capability.operationId !== policy.operationId) {
+			refuse('DEMO_FROST_POLICY_RECIPIENT_CAPABILITY', 'recipient capability operationId mismatch')
+		}
+		exactOutputsDigest = demoOutputsDigest(policy.outputs)
+	} else {
+		if (policy.role !== 'winner_settlement' || capability.operationId !== catalog.operationId
+			|| catalog.selectedIndexes.length !== policy.outputs.length
+			|| catalog.selectedIndexes.some((index, offset) => {
+				const catalogOutput = catalog.outputs[index]!, policyOutput = policy.outputs[offset]!
+				return catalogOutput.amount !== policyOutput.amount || catalogOutput.id !== policyOutput.id
+					|| catalogOutput.B_ !== policyOutput.B_
+			})) {
+			refuse('DEMO_FROST_POLICY_RECIPIENT_CAPABILITY', 'winner catalog selection differs from exact outputs')
+		}
+		exactOutputsDigest = demoOutputsDigest(catalog.outputs)
+	}
 	if (capability.outputsDigest !== exactOutputsDigest) {
 		refuse('DEMO_FROST_POLICY_RECIPIENT_CAPABILITY', 'recipient capability does not bind the exact blinded outputs')
 	}
@@ -643,7 +695,9 @@ export async function validateDemoFrostParticipantPolicy(options: {
 	expectedPackageDigest: string
 	expectedCashuSigAllDigest: string
 	ports: DemoFrostParticipantPolicyPorts
+	signal?: AbortSignal
 }): Promise<DemoFrostParticipantPolicyEvidence> {
+	options.signal?.throwIfAborted()
 	const policy = cloneDemoFrostParticipantPolicy(options.policy)
 	const policyPackageDigest = demoFrostParticipantPolicyDigest(policy)
 	if (policy.packageDigest !== options.expectedPackageDigest) {
@@ -664,8 +718,8 @@ export async function validateDemoFrostParticipantPolicy(options: {
 	let bid: DemoFrostVerifiedSignedBid
 	try {
 		;[closure, bid] = await Promise.all([
-			options.ports.closureVerifier.verifyAndDerive(structuredClone(policy.certifiedClosure.evidence)),
-			options.ports.signedBidVerifier.verifyAndDerive(structuredClone(policy.signedBid.evidence)),
+			options.ports.closureVerifier.verifyAndDerive(structuredClone(policy.certifiedClosure.evidence), options.signal),
+			options.ports.signedBidVerifier.verifyAndDerive(structuredClone(policy.signedBid.evidence), options.signal),
 		])
 	} catch (error) {
 		if (error instanceof DemoFrostParticipantPolicyRefusedError) throw error
@@ -673,6 +727,7 @@ export async function validateDemoFrostParticipantPolicy(options: {
 	}
 	assertExactClosure(policy, closure)
 	assertExactVerifiedBid(policy, bid)
+	options.signal?.throwIfAborted()
 	try {
 		await options.ports.proofUse.assertExclusive({
 			network: policy.network,
@@ -685,11 +740,12 @@ export async function validateDemoFrostParticipantPolicy(options: {
 			bidId: policy.bidId,
 			policyPackageDigest,
 			proofStateRefs: policy.deposits.map((deposit) => deposit.proofStateRef),
-		})
+		}, options.signal)
 	} catch (error) {
 		if (error instanceof DemoFrostParticipantPolicyRefusedError) throw error
 		return refuse('DEMO_FROST_POLICY_PROOF_REUSE', error instanceof Error ? error.message : 'deposit proof exclusivity failed')
 	}
+	options.signal?.throwIfAborted()
 	return {
 		schema: 'COCO_DEMO_FROST_PARTICIPANT_POLICY_EVIDENCE_V1',
 		policyPackageDigest,

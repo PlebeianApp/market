@@ -178,7 +178,10 @@ describe('fixed Friday authority API', () => {
 				} },
 			},
 		})
-		const envelope = { schema: 'PLEBEIAN_FRIDAY_PREPARED_FUNDING_ENVELOPE_V1', authorization: signedFunding(), bundle: { opaque: true } }
+		const envelope = { schema: 'PLEBEIAN_FRIDAY_PREPARED_FUNDING_ENVELOPE_V1', authorization: signedFunding(),
+			bundle: { opaque: true, pad: 'x'.repeat(35_000) } }
+		expect(JSON.stringify(envelope).length).toBeGreaterThan(32 * 1024)
+		expect(JSON.stringify(envelope).length).toBeLessThanOrEqual(64 * 1024)
 		const response = await service.handle(new Request('http://127.0.0.1:8181/api/friday/funding', {
 			method: 'POST', headers: { origin: 'https://172.105.64.142', 'content-type': 'application/json' },
 			body: JSON.stringify(envelope),
@@ -393,7 +396,7 @@ describe('fixed Friday authority API', () => {
 		const held = fixture()
 		const response = await held.service.handle(new Request('http://127.0.0.1:8181/api/friday/funding', {
 			method: 'POST', headers: { origin: 'https://172.105.64.142', 'content-type': 'application/json' },
-			body: new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(32_769)); controller.close() } }),
+			body: new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(65_537)); controller.close() } }),
 		}))
 		expect(response.status).toBe(422)
 	})

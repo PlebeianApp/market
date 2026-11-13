@@ -10,6 +10,7 @@ import { schnorr } from '@noble/curves/secp256k1.js'
 import { openDemoDispositionSignerAnchor, type DemoDispositionSignerAnchor } from './demo-disposition-signer-anchor'
 import { createDemoSignerSerialization } from './demo-signer-serialization'
 import { type DemoSignerPureContext } from './demo-signer-pure-policy'
+import { runDemoSignerTerminalMutation } from './demo-signer-terminal-serialization'
 import { assertDemoFipsAdmissionPins, createDemoFipsAdmissionParticipant } from './demo-fips-admission-policy'
 import { assertDemoFipsFundingAbortPins, createDemoFipsFundingAbortParticipant } from './demo-fips-funding-abort-policy'
 import {
@@ -54,7 +55,16 @@ import {
 import { createDemoFrostThreshold3RustParticipantWorker, type DemoFrostThreshold3ParticipantWorker } from './demo-frost-threshold3-rust-participant-worker'
 import { createDemoSignerRpcHandler } from './demo-signer-rpc'
 import { createDemoSignerRpcHttpServer } from './demo-signer-rpc-server'
+import {
+	assertDemoFridayTerminalTimeoutOrder,
+	DEMO_FRIDAY_SIGNER_REQUEST_TIMEOUT_MS,
+} from './demo-friday-terminal-timeouts'
 import { DemoSignerRpcSqliteJournal } from './demo-signer-rpc-sqlite'
+import { demoSignerTerminalIncidentPermit20261110 } from './demo-signer-terminal-incident-20261110'
+import { demoSignerTerminalIncidentPermit20261111 } from './demo-signer-terminal-incident-20261111'
+import { demoSignerTerminalIncidentPermit20261111R59d } from './demo-signer-terminal-incident-20261111-r59d'
+import { demoSignerTerminalIncidentPermit20261111R62 } from './demo-signer-terminal-incident-20261111-r62'
+import { demoSignerTerminalIncidentPermit20261109 } from './demo-signer-terminal-incident-20261109'
 import {
 	assertDemoFridayPublicPackageBytes,
 	bindDemoFridaySignerDkgV2,
@@ -243,7 +253,9 @@ const signerJournal = new DemoSignerRpcSqliteJournal(signerJournalDatabase, {
 	dkgRunId: dkg.dkgRunId, publicKeyPackageSha256: dkg.publicKeyPackageSha256,
 	signerRosterDigest: dkg.signerRosterDigest, stateDirectory,
 	processIdentity: target.signerIdentity, verifyingShare: target.verifyingShare,
-})
+}, demoSignerTerminalIncidentPermit20261109(args.slot), demoSignerTerminalIncidentPermit20261110(args.slot),
+	demoSignerTerminalIncidentPermit20261111(args.slot), demoSignerTerminalIncidentPermit20261111R59d(args.slot),
+	demoSignerTerminalIncidentPermit20261111R62(args.slot))
 await signerJournal.assertReady()
 const publicBinding = await signerJournal.readBinding()
 await ensureDemoFridaySignerEnrollment({
@@ -468,12 +480,12 @@ const terminalWorker: DemoFrostThreshold3ParticipantWorker = {
 	},
 }
 const terminalProcessInstanceId = randomBytes(32).toString('hex')
+assertDemoFridayTerminalTimeoutOrder()
 const terminalHandler = createDemoSignerRpcHandler({
 	processInstanceId: terminalProcessInstanceId, coordinatorIdentity: dkg.coordinatorIdentity,
 	signerIdentityPrivateKey: signerPrivate, worker: terminalWorker, journal: signerJournal,
-	serialize: (signal, operation) => mutationGate.run(signal, async () => {
-		try { return await operation() } catch (error) { mutationGate.poison(); throw error }
-	}),
+	serialize: (signal, operation) => mutationGate.run(signal,
+		() => runDemoSignerTerminalMutation(() => mutationGate.poison(), operation)),
 })
 const healthHandler = createFridaySignerHealthHandler({
 	pins: { deploymentId: signerContract.deploymentId ?? signerContract.runId, chainId: facts.chain_id,
@@ -497,6 +509,7 @@ const server = createDemoSignerRpcHttpServer({
 	handle: terminalHandler,
 	admissionHandle: admissionHandler,
 	fundingAbortHandle: fundingAbortHandler,
+	requestTimeoutMs: DEMO_FRIDAY_SIGNER_REQUEST_TIMEOUT_MS,
 })
 
 const stopped = new Promise<void>((resolvePromise) => {

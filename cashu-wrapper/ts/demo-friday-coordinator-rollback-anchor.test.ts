@@ -1,5 +1,9 @@
 import { Database } from 'bun:sqlite'
 import { describe, expect, test } from 'bun:test'
+import { existsSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { DemoFridayCoordinatorRollbackAnchorSqlite } from './demo-friday-coordinator-rollback-anchor'
 import { DemoFridayCoordinatorSqlite } from './demo-friday-coordinator-runtime'
@@ -55,4 +59,39 @@ describe('Friday coordinator independent rollback anchor', () => {
 			expect(() => anchor.observeExact(store.anchorSnapshot())).toThrow(/anchor is missing/)
 		} finally { anchorDb.close(false); coordinatorDb.close(false) }
 	})
+
+	test('waits for a concurrent authority writer instead of crashing with SQLITE_BUSY', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'friday-coordinator-anchor-busy-'))
+		const anchorPath = join(directory, 'coordinator.sqlite3')
+		const lockedPath = join(directory, 'locked')
+		const coordinatorDb = new Database(':memory:', { strict: true })
+		const anchorDb = new Database(anchorPath, { create: true, strict: true })
+		let holder: ReturnType<typeof Bun.spawn> | undefined
+		try {
+			const store = new DemoFridayCoordinatorSqlite(coordinatorDb, 'friday-blue-20261023')
+			const anchor = new DemoFridayCoordinatorRollbackAnchorSqlite(anchorDb, true)
+			anchor.observeExact(store.anchorSnapshot())
+			store.enqueueAuthorized(authorized())
+			const script = `
+				import { Database } from 'bun:sqlite'
+				import { writeFileSync } from 'node:fs'
+				const database = new Database(${JSON.stringify(anchorPath)}, { strict: true })
+				database.exec('PRAGMA journal_mode=WAL; BEGIN IMMEDIATE')
+				writeFileSync(${JSON.stringify(lockedPath)}, 'locked\\n')
+				await Bun.sleep(250)
+				database.exec('COMMIT')
+				database.close(false)
+			`
+			holder = Bun.spawn([process.execPath, '-e', script], { stdout: 'pipe', stderr: 'pipe' })
+			for (let attempt = 0; attempt < 100 && !existsSync(lockedPath); attempt += 1) await Bun.sleep(10)
+			expect(existsSync(lockedPath)).toBe(true)
+			expect(() => anchor.observeExact(store.anchorSnapshot())).not.toThrow()
+			expect(await holder.exited).toBe(0)
+			expect(anchorDb.query<{ timeout: number }, []>('PRAGMA busy_timeout').get()).toEqual({ timeout: 5000 })
+		} finally {
+			if (holder !== undefined && holder.exitCode === null) holder.kill()
+			anchorDb.close(false); coordinatorDb.close(false)
+			await rm(directory, { recursive: true, force: true })
+		}
+	}, 10_000)
 })

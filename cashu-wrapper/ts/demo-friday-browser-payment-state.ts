@@ -95,6 +95,8 @@ export interface DemoFridaySellerTerminalAckRecordV1 {
 	auctionId: string
 	fundingOperationId: string
 	ack: DemoFridayTerminalAckV1
+	/** Durable proof that the exact acknowledgement request returned successfully. */
+	acknowledged?: true
 }
 
 export interface DemoFridayFakeFundingRecordV1 {
@@ -169,6 +171,14 @@ export interface DemoFridayBrowserPaymentOperationV1 {
 	winnerOutputsDigest: string
 	winnerAuctionAuthorizationDigest?: string
 	winnerAuctionSelectionDigest?: string
+	/** Canonical digest of every independently trusted deployment and participant field. */
+	trustedDeploymentDigest?: string
+	/**
+	 * Exact authenticated seller/auction funding inputs used to construct this
+	 * operation. Kept private so an interrupted pre-envelope operation can
+	 * resume without substituting a newer auction leader or winner selection.
+	 */
+	trustedAuctionFunding?: unknown
 	keysetId: string
 	denominationKeyDigest: string
 	denominationAmounts: number[]
@@ -196,6 +206,8 @@ export interface DemoFridayBrowserPaymentOperationV1 {
 	finalizedStatusDigest?: string
 	/** Canonical public ack persisted before dispatch; replayed byte-for-byte after loss. */
 	pendingTerminalAck?: DemoFridayTerminalAckV1
+	/** Durable proof that the exact pending acknowledgement returned successfully. */
+	terminalAckConfirmed?: true
 }
 
 export interface DemoFridayBrowserOpeningRefV1 {
@@ -244,6 +256,8 @@ export interface DemoFridayBrowserPaymentOperationInput extends DemoFridayBrowse
 	winnerOutputsDigest: string
 	winnerAuctionAuthorizationDigest?: string
 	winnerAuctionSelectionDigest?: string
+	trustedDeploymentDigest?: string
+	trustedAuctionFunding?: unknown
 	keysetId: string
 	denominationKeyDigest: string
 	denominationAmounts: number[]
@@ -304,6 +318,7 @@ function exactSellerTerminalAckRecord(value: DemoFridaySellerTerminalAckRecordV1
 		|| !Number.isSafeInteger(ack.importReceipt.amount) || ack.importReceipt.amount < 1
 		|| !Number.isSafeInteger(ack.importReceipt.proofCount) || ack.importReceipt.proofCount < 1
 		|| ack.importReceipt.imported !== true || !HEX_64.test(ack.recipientAckSignature)
+			|| (value.acknowledged !== undefined && value.acknowledged !== true)
 		|| Object.prototype.hasOwnProperty.call(ack.importReceipt, 'alreadyImported')) {
 		refuse('seller terminal acknowledgement record is malformed')
 	}
@@ -395,6 +410,9 @@ function validateRecord(value: DemoFridayBrowserPaymentOperationV1): DemoFridayB
 		|| ((value.winnerAuctionAuthorizationDigest === undefined) !== (value.winnerAuctionSelectionDigest === undefined))
 		|| (value.winnerAuctionAuthorizationDigest !== undefined && (!HEX_32.test(value.winnerAuctionAuthorizationDigest)
 			|| !HEX_32.test(value.winnerAuctionSelectionDigest!)))
+		|| (value.trustedDeploymentDigest !== undefined && !HEX_32.test(value.trustedDeploymentDigest))
+		|| (value.trustedAuctionFunding !== undefined && (value.trustedAuctionFunding === null
+			|| typeof value.trustedAuctionFunding !== 'object' || Array.isArray(value.trustedAuctionFunding)))
 		|| typeof value.keysetId !== 'string' || value.keysetId.length < 1
 		|| !COMPRESSED_KEY.test(value.mintPublicKey) || typeof value.mintServerVersion !== 'string' || value.mintServerVersion.length < 1
 		|| !HEX_32.test(value.denominationKeyDigest) || !Array.isArray(value.denominationAmounts)
@@ -495,6 +513,10 @@ function validateRecord(value: DemoFridayBrowserPaymentOperationV1): DemoFridayB
 			refuse('terminal ack is not the canonical public operation-bound receipt')
 		}
 	}
+	if (value.terminalAckConfirmed !== undefined
+		&& (value.terminalAckConfirmed !== true || value.pendingTerminalAck === undefined)) {
+		refuse('terminal acknowledgement confirmation lacks its exact persisted request')
+	}
 	return structuredClone(value)
 }
 
@@ -525,7 +547,8 @@ export function validateDemoFridayBrowserPaymentRevision(
 		|| (exactPrior.finalizedStatusDigest !== undefined
 			&& exactPrior.finalizedStatusDigest !== exact.finalizedStatusDigest)
 		|| (exactPrior.pendingTerminalAck !== undefined
-			&& JSON.stringify(exactPrior.pendingTerminalAck) !== JSON.stringify(exact.pendingTerminalAck))) {
+			&& JSON.stringify(exactPrior.pendingTerminalAck) !== JSON.stringify(exact.pendingTerminalAck))
+		|| (exactPrior.terminalAckConfirmed === true && exact.terminalAckConfirmed !== true)) {
 		refuse('operation revision, phase, or immutable terms changed')
 	}
 	return exact
@@ -574,6 +597,12 @@ export function createDemoFridayBrowserPaymentOperation(
 			winnerAuctionAuthorizationDigest: input.winnerAuctionAuthorizationDigest,
 			winnerAuctionSelectionDigest: input.winnerAuctionSelectionDigest,
 		}),
+		...(input.trustedDeploymentDigest === undefined ? {} : {
+			trustedDeploymentDigest: input.trustedDeploymentDigest,
+		}),
+		...(input.trustedAuctionFunding === undefined ? {} : {
+			trustedAuctionFunding: structuredClone(input.trustedAuctionFunding),
+		}),
 		denominationKeyDigest: input.denominationKeyDigest,
 		denominationAmounts: [...input.denominationAmounts].sort((a, b) => a - b), mintNuts: [...input.mintNuts].sort((a, b) => a - b),
 		inputFeePpk: input.inputFeePpk, committeeKeysetId: input.committeeKeysetId,
@@ -601,6 +630,8 @@ function sameIdentity(left: DemoFridayBrowserPaymentOperationV1, right: DemoFrid
 		&& left.winnerOutputsDigest === right.winnerOutputsDigest
 		&& left.winnerAuctionAuthorizationDigest === right.winnerAuctionAuthorizationDigest
 		&& left.winnerAuctionSelectionDigest === right.winnerAuctionSelectionDigest
+		&& left.trustedDeploymentDigest === right.trustedDeploymentDigest
+		&& JSON.stringify(left.trustedAuctionFunding) === JSON.stringify(right.trustedAuctionFunding)
 		&& left.keysetId === right.keysetId && JSON.stringify(left.lock) === JSON.stringify(right.lock)
 		&& left.denominationKeyDigest === right.denominationKeyDigest
 		&& JSON.stringify(left.denominationAmounts) === JSON.stringify(right.denominationAmounts)
@@ -727,7 +758,10 @@ export function createDemoFridayBrowserPaymentState(options: {
 			const record = exactSellerTerminalAckRecord(recordValue), key = operationKey(record)
 			await compareAndPut<DemoFridaySellerTerminalAckRecordV1>(indexedDB, SELLER_ACK_STORE, key, (priorValue) => {
 				const prior = priorValue === null ? null : exactSellerTerminalAckRecord(priorValue)
-				if (prior !== null && JSON.stringify(prior) !== JSON.stringify(record)) {
+				const acknowledgementTransition = prior !== null && prior.acknowledged === undefined
+					&& record.acknowledged === true
+					&& JSON.stringify({ ...record, acknowledged: undefined }) === JSON.stringify({ ...prior, acknowledged: undefined })
+				if (prior !== null && JSON.stringify(prior) !== JSON.stringify(record) && !acknowledgementTransition) {
 					refuse('seller terminal acknowledgement changed after import')
 				}
 				return record

@@ -16,10 +16,12 @@ async function settle() { for (let i = 0; i < 8; i++) await pause(); }
 async function fixture(initialReady) {
   const nodes = new Map(), requests = [], intervals = [];
   let available = initialReady, connected = 0, now = 1800000000000;
-  const pins = { schema: 'PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V1', deployment_id: 'deployment', auth_network_id: 'chain', chain_id: 'chain',
-    genesis_sha256: 'a'.repeat(64), cashu_mint_url: 'https://mint.example', committee_keyset_id: 'keyset', committee_keyset_version: '1',
+  const pins = { schema: 'PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V2', deployment_id: 'deployment', auth_network_id: 'chain', chain_id: 'chain',
+    genesis_sha256: 'a'.repeat(64), validators_hash: 'e'.repeat(64), cashu_mint_url: 'https://mint.example', committee_keyset_id: 'keyset', committee_keyset_version: '1',
     dkg_run_id: 'dkg', committee_public_key: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
-    public_key_package_sha256: 'b'.repeat(64), signer_roster_digest: 'c'.repeat(64), fake_funding_policy_digest: 'd'.repeat(64) };
+    public_key_package_sha256: 'b'.repeat(64), signer_roster_digest: 'c'.repeat(64), fake_funding_policy_digest: 'd'.repeat(64),
+    auction_policy_digest: '257fb5bf2b414f206278ada15464030a075d6f4f51b9c2f6b965259136f9a777',
+    auction_payment_policy_digest: '4d88017e3d191421aa46702ca9b6670fb324162c4c39d3ce4604bbfcfec3492b' };
   const fakeDate = class extends Date { static now() { return now; } };
   const element = id => { if (!nodes.has(id)) nodes.set(id, new Element()); return nodes.get(id); };
   const config = () => ({ ...pins, fake_funding_policy: { digest: pins.fake_funding_policy_digest }, threshold_custody: true, browser_threshold_wallet_ready: available,

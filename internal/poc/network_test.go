@@ -298,6 +298,45 @@ func TestLoadNetworkManifestRejectsFridayWildcardP2PListen(t *testing.T) {
 	}
 }
 
+func TestLoadNetworkManifestRejectsUnapprovedSevenDaySitePolicy(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "network")
+	hosts := []string{"fd42::21", "fd42::22", "fd42::23", "fd42::24"}
+	manifest, err := InitRemoteNetworkWithCommitteeAndOptions(root, DefaultPolicy(), hosts,
+		"0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798", RemoteNetworkOptions{
+			P2PPort: 27656, RPCPort: 27657,
+			MintURL: "http://127.0.0.1:3339/test-mint", CashuMintURL: "http://[fd42::21]:3438",
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadNetworkManifest(root); err != nil {
+		t.Fatalf("legacy one-hour manifest stopped loading: %v", err)
+	}
+	manifest.Policy = SevenDayPolicy()
+	raw, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "network.json"), append(raw, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadNetworkManifest(root); err == nil || !strings.Contains(err.Error(), "not bound to an approved deployment identity") {
+		t.Fatalf("unapproved seven-day site manifest error=%v", err)
+	}
+	manifest.Policy = DefaultPolicy()
+	manifest.Policy.MaxDurationSeconds = MaxAuctionDurationSeconds - 1
+	raw, err = json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "network.json"), append(raw, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadNetworkManifest(root); err == nil || !strings.Contains(err.Error(), "non-funding policy") {
+		t.Fatalf("unreviewed V4 duration policy error=%v", err)
+	}
+}
+
 func TestCustomRemoteOptionsAcceptPublicHTTPSCashuIdentityButRejectConflictingEndpoints(t *testing.T) {
 	hosts := []string{"fd00::1", "fd00::2", "fd00::3", "fd00::4"}
 	committee := "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"

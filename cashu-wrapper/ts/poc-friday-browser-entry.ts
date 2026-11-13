@@ -1,10 +1,13 @@
 import { useFridayWallet } from './demo-friday-wallet-drain'
+import { createClaveNip46Signer, createDevNsecSigner } from './poc-nostr-signers'
+import { readVerifiedNostrProfile } from './poc-nostr-profile'
 /** Actual browser composition for the fake-money Friday flow. */
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js'
 
 import {
 	createDemoFridayBrowserCocoClient,
+	type DemoFridayBidProgressObserver,
 	type DemoFridayBrowserFundingRequestV1,
 	type DemoFridayNostrSignerPort,
 } from './demo-friday-browser-coco-client'
@@ -252,6 +255,15 @@ function abortNostr(external: ExternalSigner): DemoFridayBrowserAbortNostrPort {
 	})
 }
 
+export type PlebeianFridayPaymentImportStatus = 'awaiting_terminal' | 'pending'
+	| 'wallet_imported_ack_pending' | 'settled'
+export type PlebeianFridayBidRecoveryStage = 'payment_prepared' | 'funds_locked' | 'authority_pending'
+export type PlebeianFridayBidResult =
+	| { status: 'seller_plan_pending'; fundingOperationId: string; sellerActor: string; expiresAt: number }
+	| { status: 'resume_required'; fundingOperationId: string; retainedBidAmount: number; recoveryStage: PlebeianFridayBidRecoveryStage }
+	| { status: 'prepared' | 'admitted' | 'rejected_return' | 'unknown'; fundingOperationId: string;
+		committedHeight?: number; recoveredBidAmount?: number; retainedBidAmount?: number }
+
 export interface PlebeianFridayBrowserController {
 	actor(): Promise<string>
 	fundingPolicy(): DemoFridayFakeFundingPolicyV1
@@ -264,10 +276,15 @@ export interface PlebeianFridayBrowserController {
 		| 'canonicalMintUrl' | 'activeSatKeysetId' | 'denominationKeyDigest' | 'validFrom'>):
 		Promise<DemoFridayAuctionPayoutAuthorizationEnvelopeV1>
 	readAuctionPayout(auctionId: string): Promise<DemoFridayAuctionPayoutAuthorizationEnvelopeV1 | null>
-	placeBid(request: Omit<DemoFridayBrowserFundingRequestV1, 'fundingOperationId'>): Promise<
-		{ status: 'seller_plan_pending'; fundingOperationId: string; sellerActor: string; expiresAt: number }
-		| { status: 'prepared' | 'admitted' | 'rejected_return' | 'unknown'; fundingOperationId: string; committedHeight?: number }
-	>
+	repairAuctionPayoutDiscovery?(auctionId: string): Promise<'missing' | 'retained' | 'settled'>
+	readAuctionPayoutImportStatus?(auctionId: string): Promise<PlebeianFridayPaymentImportStatus | null>
+	readBidReturnImportStatus?(fundingOperationId: string): Promise<Exclude<PlebeianFridayPaymentImportStatus, 'awaiting_terminal'> | null>
+	repairBidReturnAcknowledgement?(fundingOperationId: string): Promise<'not_applicable' | 'settled'>
+	placeBid(request: Omit<DemoFridayBrowserFundingRequestV1, 'fundingOperationId'>,
+		observe?: DemoFridayBidProgressObserver): Promise<PlebeianFridayBidResult>
+	retainedBidRecoveries?(): Promise<Array<{ auctionId: string; fundingOperationId: string; retainedBidAmount: number;
+		recoveryStage: PlebeianFridayBidRecoveryStage }>>
+	resumeBid?(fundingOperationId: string, observe?: DemoFridayBidProgressObserver): Promise<PlebeianFridayBidResult>
 	serviceSellerPlans(control?: Omit<DemoFridaySellerApprovalControl, 'expectedChallenge'> & { auctionIds?: string[]; deploymentPins?: DemoFridayR20AcceptancePinsV1 }): Promise<{ registered: number; operations: string[] }>
 	expiredPrelockPending(): Promise<Array<{
 		auctionId: string
@@ -280,7 +297,7 @@ export interface PlebeianFridayBrowserController {
 		auctionId: string
 		fundingOperationId: string
 	}>
-	importAvailable(): Promise<{ refunds: number; winnerPayments: number }>
+	importAvailable(): Promise<{ refunds: number; winnerPayments: number; winnerAuctionIds?: string[]; refundOperationIds?: string[] }>
 	cancelPending(fundingOperationId: string, reason?: 'prebroadcast_client_abandonment' | 'prebroadcast_service_failure'):
 		Promise<DemoFridayBrowserAbortResultV1>
 	recoverCancellation(fundingOperationId: string): Promise<DemoFridayBrowserAbortResultV1>
@@ -309,17 +326,45 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 	const terminal = createDemoFridayBrowserAuthorityTerminalHttp({ origin: publicOrigin })
 	const admission = createDemoFridayBrowserAuthorityFundingHttp({ origin: publicOrigin })
 	const abortAuthority = createDemoFridayBrowserAuthorityFundingAbortHttp({ origin: publicOrigin })
-	const client = async () => {
-		const trusted = await deployment.readExact()
+	const client = async (trustedValue?: Awaited<ReturnType<typeof deployment.readExact>>) => {
+		const trusted = trustedValue ?? await deployment.readExact()
 		return createDemoFridayBrowserCocoClient({ deployment, auction, walletFactory, state, nostrSigner: signer,
 			builder: createDemoFridayBrowserExactEnvelopeBuilder({ participants: trusted.participants }), admission, terminal })
 	}
 	const seller = createDemoFridayBrowserCocoSellerClient({ deployment, walletFactory, state, nostr: signer, plans, terminal })
 	const actor = () => signer.getPublicKey()
+	const recoveryStage = (phase: string): PlebeianFridayBidRecoveryStage | null => {
+		if (phase === 'coco_send_pending') return 'payment_prepared'
+		if (phase === 'coco_locked' || phase === 'envelope_prepared') return 'funds_locked'
+		if (phase === 'server_prepared' || phase === 'finalized') return 'authority_pending'
+		return null
+	}
+	const retainAuctionPayoutDiscovery = async (request: { owner: string; environmentId: string; auctionId: string;
+		authorization: DemoFridayAuctionPayoutAuthorizationEnvelopeV1 }): Promise<'retained'> => {
+		if (request.authorization.authorization.sellerActor !== request.owner
+			|| request.authorization.authorization.auctionId !== request.auctionId) {
+			refuse('auction payout authorization belongs to another seller or auction')
+		}
+		await updatePublicState((publicState) => {
+			publicState.auctionPayouts ??= []
+			const matches = publicState.auctionPayouts.filter((entry) => entry.actor === request.owner
+				&& entry.environmentId === request.environmentId && entry.auctionId === request.auctionId)
+			if (matches.length > 1 || (matches[0] !== undefined
+				&& matches[0].authorizationDigest !== request.authorization.authorizationDigest)) {
+				refuse('auction payout discovery differs from the exact registered authorization')
+			}
+			if (matches.length === 0) publicState.auctionPayouts.push({
+				schema: 'PLEBEIAN_FRIDAY_BROWSER_AUCTION_PAYOUT_V1', actor: request.owner,
+				environmentId: request.environmentId, auctionId: request.auctionId,
+				authorizationDigest: request.authorization.authorizationDigest,
+			})
+		})
+		return 'retained'
+	}
 	const abortClient = async (environmentId: string) => {
 		const trusted = await deployment.readExact()
 		if (trusted.environmentId !== environmentId) refuse('cancellation belongs to another deployment')
-		const browserClient = await client()
+		const browserClient = await client(trusted)
 		return createDemoFridayBrowserFundingAbortClient({
 			pins: { authNetworkId: trusted.authNetworkId, chainId: trusted.chainId,
 				genesisSha256: trusted.genesisSha256, mintUrl: trusted.canonicalMintUrl,
@@ -365,6 +410,57 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 				canonicalMintUrl: trusted.canonicalMintUrl })
 			return useFridayWallet(wallet, () => run(wallet))
 		})
+	}
+	const executeRetainedBid = async (pending: PublicPendingBidV1,
+		trusted: Awaited<ReturnType<typeof deployment.readExact>>, owner: string,
+		exactRequest: boolean, observe?: DemoFridayBidProgressObserver): Promise<PlebeianFridayBidResult> => {
+		const identity = { actor: owner, environmentId: trusted.environmentId,
+			fundingOperationId: pending.fundingOperationId }
+		const safeObserve: DemoFridayBidProgressObserver | undefined = observe === undefined ? undefined : (progress) => {
+			try { observe(progress) } catch {
+				// Presentation and timing instrumentation cannot own payment control flow.
+			}
+		}
+		try {
+			const browserClient = await client(trusted)
+			const durable = await state.loadOperation(identity)
+			// Once the authority has assigned a preparation identity, recovery must
+			// use only those persisted bytes. Earlier phases continue the same exact
+			// retained request and never allocate another funding operation.
+			const result = durable?.preparedBid !== undefined && durable.fundingAuthorizationEventId !== undefined
+				? await browserClient.recoverExact(identity, safeObserve)
+				: await browserClient.prepareAndFinalize({
+					auctionId: pending.auctionId, fundingOperationId: pending.fundingOperationId,
+					bidAmount: pending.bidAmount, fullPoolAmount: pending.fullPoolAmount,
+					reservedPoolAmount: pending.reservedPoolAmount, replacesBidId: pending.replacesBidId,
+					locktime: pending.locktime,
+				}, safeObserve)
+			if (result.status === 'admitted' || result.status === 'rejected_return') {
+				await updatePublicState((publicState) => {
+					const stored = publicState.pendingBids.find((entry) => entry.actor === owner
+						&& entry.environmentId === trusted.environmentId
+						&& entry.fundingOperationId === pending.fundingOperationId)
+					if (stored === undefined) refuse('admitted operation disappeared from public discovery')
+					stored.admitted = true
+				})
+				return { status: result.status, fundingOperationId: result.fundingOperationId,
+					...(!exactRequest ? { recoveredBidAmount: pending.bidAmount } : {}),
+					...(exactRequest ? { retainedBidAmount: pending.bidAmount } : {}),
+					...(result.committedHeight === undefined ? {} : { committedHeight: result.committedHeight }) }
+			}
+			const retained = await state.loadOperation(identity)
+			const stage = retained === null ? null : recoveryStage(retained.phase)
+			if (stage === null) refuse('nonterminal bid status lacks a retained payment recovery phase')
+			return { status: 'resume_required', fundingOperationId: pending.fundingOperationId,
+				retainedBidAmount: pending.bidAmount, recoveryStage: stage }
+		} catch (error) {
+			let retained: Awaited<ReturnType<typeof state.loadOperation>> = null
+			try { retained = await state.loadOperation(identity) } catch { throw error }
+			const stage = retained === null ? null : recoveryStage(retained.phase)
+			if (stage === null) throw error
+			return { status: 'resume_required', fundingOperationId: pending.fundingOperationId,
+				retainedBidAmount: pending.bidAmount, recoveryStage: stage }
+		}
 	}
 	return Object.freeze({
 		actor,
@@ -427,26 +523,101 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 					denominationKeyDigest: trusted.mintSnapshot.denominationKeyDigest,
 				})
 			}, owner)
-			await updatePublicState((publicState) => {
-				publicState.auctionPayouts ??= []
-				const prior = publicState.auctionPayouts.find((entry) => entry.actor === owner
-					&& entry.environmentId === trusted.environmentId && entry.auctionId === request.auctionId)
-				if (prior !== undefined && prior.authorizationDigest !== registered.authorizationDigest) {
-					refuse('auction already retains another payout authorization')
-				}
-				if (prior === undefined) publicState.auctionPayouts.push({
-					schema: 'PLEBEIAN_FRIDAY_BROWSER_AUCTION_PAYOUT_V1', actor: owner,
-					environmentId: trusted.environmentId, auctionId: request.auctionId,
-					authorizationDigest: registered.authorizationDigest,
-				})
-			})
+			await retainAuctionPayoutDiscovery({ owner, environmentId: trusted.environmentId,
+				auctionId: request.auctionId, authorization: registered })
 			return registered
 		},
 		async readAuctionPayout(auctionId: string) {
 			if (!ID.test(auctionId)) refuse('auction payout identity is invalid')
 			return auctionPayout.readExact(auctionId)
 		},
-		async placeBid(requestValue: Omit<DemoFridayBrowserFundingRequestV1, 'fundingOperationId'>) {
+		async repairAuctionPayoutDiscovery(auctionId: string) {
+			if (!ID.test(auctionId)) refuse('auction payout identity is invalid')
+			const [owner, trusted, authorization, winner] = await Promise.all([
+				actor(), deployment.readExact(), auctionPayout.readExact(auctionId), auctionPayout.readWinnerExact(auctionId),
+			])
+			if (authorization === null) return 'missing'
+			if (authorization.authorization.sellerActor !== owner
+				|| authorization.authorization.auctionId !== auctionId
+				|| (winner !== null && (winner.auctionId !== auctionId
+					|| winner.authorizationDigest !== authorization.authorizationDigest))) {
+				refuse('auction payout repair differs from the connected seller or exact winner')
+			}
+			if (winner !== null) {
+				const ack = await state.loadSellerTerminalAck({ actor: owner, environmentId: trusted.environmentId,
+					fundingOperationId: winner.selection.fundingOperationId })
+				if (ack !== null) {
+					if (ack.auctionId !== auctionId) refuse('seller payout acknowledgement belongs to another auction')
+					if (ack.acknowledged === true) return 'settled'
+				}
+			}
+			return retainAuctionPayoutDiscovery({ owner, environmentId: trusted.environmentId,
+				auctionId, authorization })
+		},
+		async readAuctionPayoutImportStatus(auctionId: string) {
+			if (!ID.test(auctionId)) refuse('auction payout identity is invalid')
+			const [owner, trusted, authorization, winner] = await Promise.all([
+				actor(), deployment.readExact(), auctionPayout.readExact(auctionId), auctionPayout.readWinnerExact(auctionId),
+			])
+			if (authorization === null) return null
+			if (authorization.authorization.sellerActor !== owner
+				|| authorization.authorization.auctionId !== auctionId
+				|| (winner !== null && (winner.auctionId !== auctionId
+					|| winner.authorizationDigest !== authorization.authorizationDigest))) {
+				refuse('auction payout import status differs from the connected seller or authorization')
+			}
+			if (winner === null) return 'awaiting_terminal'
+			const ack = await state.loadSellerTerminalAck({ actor: owner, environmentId: trusted.environmentId,
+				fundingOperationId: winner.selection.fundingOperationId })
+			if (ack === null) return 'pending'
+			if (ack.auctionId !== auctionId) refuse('seller payout acknowledgement belongs to another auction')
+			return ack.acknowledged === true ? 'settled' : 'wallet_imported_ack_pending'
+		},
+		async readBidReturnImportStatus(fundingOperationId: string) {
+			if (!ID.test(fundingOperationId)) refuse('bid return operation identity is invalid')
+			const [owner, trusted] = await Promise.all([actor(), deployment.readExact()])
+			const operation = await state.loadOperation({ actor: owner, environmentId: trusted.environmentId,
+				fundingOperationId })
+			if (operation === null && typeof terminal.readAcknowledgementStatusExact === 'function') {
+				const remote = await terminal.readAcknowledgementStatusExact({ actor: owner, fundingOperationId })
+				if (remote.actor !== owner || remote.fundingOperationId !== fundingOperationId) {
+					refuse('bid return acknowledgement status differs from the connected actor or operation')
+				}
+				if (remote.acknowledged === true) return 'settled'
+			}
+			if (operation === null) return null
+			if (operation.pendingTerminalAck === undefined) return 'pending'
+			return operation.terminalAckConfirmed === true ? 'settled' : 'wallet_imported_ack_pending'
+		},
+		async repairBidReturnAcknowledgement(fundingOperationId: string) {
+			if (!ID.test(fundingOperationId)) refuse('bid return operation identity is invalid')
+			const [owner, trusted, publicState] = await Promise.all([actor(), deployment.readExact(), snapshotPublicState()])
+			const identity = { actor: owner, environmentId: trusted.environmentId, fundingOperationId }
+			const discovery = publicState.pendingBids.filter((entry) => entry.fundingOperationId === fundingOperationId)
+			if (discovery.length > 1) refuse('bid return acknowledgement discovery is duplicated')
+			if (discovery[0] !== undefined) {
+				if (discovery[0].actor !== owner || discovery[0].environmentId !== trusted.environmentId) {
+					refuse('bid return acknowledgement discovery belongs to another actor or deployment')
+				}
+				// Current operations remain exclusively owned by importAvailable. This
+				// repair exists only for older releases that already removed the pointer.
+				return 'not_applicable'
+			}
+			const operation = await state.loadOperation(identity)
+			// This upgrade repair is intentionally acknowledgement-only. Without a
+			// persisted canonical request it must never open a wallet or import value.
+			if (operation === null || operation.pendingTerminalAck === undefined) return 'not_applicable'
+			if (operation.terminalAckConfirmed === true) return 'settled'
+			const result = await (await client(trusted)).importRefundExact(identity)
+			if (result === null) refuse('persisted bid return acknowledgement disappeared during repair')
+			const confirmed = await state.loadOperation(identity)
+			if (confirmed?.pendingTerminalAck === undefined || confirmed.terminalAckConfirmed !== true) {
+				refuse('bid return acknowledgement repair did not persist confirmation')
+			}
+			return 'settled'
+		},
+		async placeBid(requestValue: Omit<DemoFridayBrowserFundingRequestV1, 'fundingOperationId'>,
+			observe?: DemoFridayBidProgressObserver) {
 			if (!ID.test(requestValue.auctionId) || !Number.isSafeInteger(requestValue.bidAmount)
 				|| requestValue.bidAmount < 1 || !Number.isSafeInteger(requestValue.fullPoolAmount)
 				|| requestValue.fullPoolAmount !== requestValue.bidAmount
@@ -455,6 +626,7 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 				|| !Number.isSafeInteger(requestValue.locktime) || requestValue.locktime < nowSeconds() + 600) {
 				refuse('bid request is invalid; own raises remain fail-closed')
 			}
+			try { observe?.(Object.freeze({ phase: 'checking_identity' })) } catch {}
 			const [trusted, owner] = await Promise.all([deployment.readExact(), actor()])
 			const pending = await updatePublicState(async (publicState) => {
 				let held = publicState.pendingBids.find((entry) => entry.actor === owner
@@ -466,6 +638,9 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 				// admitted or code-zero rejected return after a lost response.  Removal
 				// is permitted only by the terminal import/acknowledgement lifecycle.
 				if (held !== undefined) return structuredClone(held)
+				const unresolved = publicState.pendingBids.find((entry) => entry.actor === owner
+					&& entry.environmentId === trusted.environmentId && entry.auctionId === requestValue.auctionId)
+				if (unresolved !== undefined) return structuredClone(unresolved)
 				const fundingOperationId = freshOperationId(), expiresAt = nowSeconds() + 240
 				const content: DemoFridaySellerPlanIntentContentV1 = {
 					schema: 'PLEBEIAN_FRIDAY_SELLER_PLAN_INTENT_V1', authNetworkId: trusted.authNetworkId,
@@ -473,7 +648,9 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 					bidAmount: requestValue.bidAmount, fullPoolAmount: requestValue.fullPoolAmount,
 					replacesBidId: requestValue.replacesBidId, canonicalMintUrl: trusted.canonicalMintUrl, expiresAt,
 				}
+				try { observe?.(Object.freeze({ phase: 'awaiting_intent_signature' })) } catch {}
 				const signed = await signer.signEvent(demoFridaySellerPlanIntentUnsignedEvent(owner, nowSeconds(), content))
+				try { observe?.(Object.freeze({ phase: 'checking_auction' })) } catch {}
 				const challenge = await intent.issueExact(signed)
 				held = { schema: 'PLEBEIAN_FRIDAY_BROWSER_PENDING_BID_V1', actor: owner,
 					environmentId: trusted.environmentId, sellerActor: challenge.sellerActor,
@@ -482,29 +659,48 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 				return structuredClone(held)
 			})
 			const exactPending = pending ?? refuse('pending bid did not persist')
+			const exactRequest = exactPending.bidAmount === requestValue.bidAmount
+				&& exactPending.fullPoolAmount === requestValue.fullPoolAmount
+				&& exactPending.reservedPoolAmount === requestValue.reservedPoolAmount
+				&& exactPending.replacesBidId === requestValue.replacesBidId
+				&& exactPending.locktime === requestValue.locktime
 			const registeredPayout = await auctionPayout.readExact(exactPending.auctionId)
 			const registered = registeredPayout === null ? await plans.readExact({ sellerActor: exactPending.sellerActor,
 				auctionId: exactPending.auctionId, fundingOperationId: exactPending.fundingOperationId })
 				: null
 			if (registeredPayout === null && registered === null) return { status: 'seller_plan_pending' as const,
 				fundingOperationId: exactPending.fundingOperationId, sellerActor: exactPending.sellerActor, expiresAt: exactPending.expiresAt }
-			const result = await (await client()).prepareAndFinalize({
-				auctionId: exactPending.auctionId, fundingOperationId: exactPending.fundingOperationId,
-				bidAmount: exactPending.bidAmount, fullPoolAmount: exactPending.fullPoolAmount,
-				reservedPoolAmount: exactPending.reservedPoolAmount, replacesBidId: exactPending.replacesBidId,
-				locktime: exactPending.locktime,
-			})
-			if (result.status === 'admitted' || result.status === 'rejected_return') {
-				await updatePublicState((publicState) => {
-					const stored = publicState.pendingBids.find((entry) => entry.actor === owner
-						&& entry.environmentId === trusted.environmentId
-						&& entry.fundingOperationId === exactPending.fundingOperationId)
-					if (stored === undefined) refuse('admitted operation disappeared from public discovery')
-					stored.admitted = true
-				})
+			return executeRetainedBid(exactPending, trusted, owner, exactRequest, observe)
+		},
+		async retainedBidRecoveries() {
+			const [owner, trusted, publicState] = await Promise.all([actor(), deployment.readExact(), snapshotPublicState()])
+			const retained = [] as Array<{ auctionId: string; fundingOperationId: string; retainedBidAmount: number;
+				recoveryStage: PlebeianFridayBidRecoveryStage }>
+			for (const pending of publicState.pendingBids.filter((entry) => entry.actor === owner
+				&& entry.environmentId === trusted.environmentId && entry.admitted === undefined)) {
+				const operation = await state.loadOperation({ actor: owner, environmentId: trusted.environmentId,
+					fundingOperationId: pending.fundingOperationId })
+				const stage = operation === null ? null : recoveryStage(operation.phase)
+				if (stage !== null) retained.push({ auctionId: pending.auctionId,
+					fundingOperationId: pending.fundingOperationId, retainedBidAmount: pending.bidAmount,
+					recoveryStage: stage })
 			}
-			return { status: result.status, fundingOperationId: result.fundingOperationId,
-				...(result.committedHeight === undefined ? {} : { committedHeight: result.committedHeight }) }
+			return retained.sort((left, right) => left.fundingOperationId.localeCompare(right.fundingOperationId))
+		},
+		async resumeBid(fundingOperationId: string, observe?: DemoFridayBidProgressObserver) {
+			if (!ID.test(fundingOperationId)) refuse('retained bid operation identity is invalid')
+			const [owner, trusted, publicState] = await Promise.all([actor(), deployment.readExact(), snapshotPublicState()])
+			const matches = publicState.pendingBids.filter((entry) => entry.actor === owner
+				&& entry.environmentId === trusted.environmentId && entry.fundingOperationId === fundingOperationId)
+			if (matches.length !== 1 || matches[0]!.admitted !== undefined) {
+				refuse('retained bid operation is absent, duplicated, or already terminal')
+			}
+			const operation = await state.loadOperation({ actor: owner, environmentId: trusted.environmentId,
+				fundingOperationId })
+			if (operation === null || recoveryStage(operation.phase) === null) {
+				refuse('retained bid has no resumable payment operation')
+			}
+			return executeRetainedBid(structuredClone(matches[0]!), trusted, owner, true, observe)
 		},
 		async serviceSellerPlans(control: Omit<DemoFridaySellerApprovalControl, 'expectedChallenge'> & { auctionIds?: string[]; deploymentPins?: DemoFridayR20AcceptancePinsV1 } = {}) {
 			const pins = control.deploymentPins === undefined ? undefined : structuredClone(control.deploymentPins)
@@ -620,8 +816,15 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 			const [owner, trusted] = await Promise.all([actor(), deployment.readExact()])
 			const publicState = await snapshotPublicState()
 			let refunds = 0, winnerPayments = 0
+			const failures: Error[] = []
+			const preserveFailure = (kind: string, identity: string, error: unknown) => {
+				const detail = error instanceof Error ? error.message : String(error)
+				failures.push(new Error(`${kind} ${identity}: ${detail}`))
+			}
+			const winnerAuctionIds = new Set<string>(), refundOperationIds = new Set<string>()
 			const completedRefunds = new Set<string>(), completedWinners = new Set<string>()
-			const browserClient = await client()
+			let browserClient: Awaited<ReturnType<typeof client>> | undefined
+			const bidderClient = async () => browserClient ??= await client(trusted)
 			for (const pending of publicState.pendingBids.filter((entry) => entry.actor === owner
 				&& entry.environmentId === trusted.environmentId)) {
 				const identity = { actor: owner, environmentId: pending.environmentId,
@@ -630,49 +833,59 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 				// manually re-enter a cancellation operation ID. Only a previously
 				// persisted, NIP-07-signed cancellation is resumed here; this never
 				// creates new abort authority on the user's behalf.
-				if (await state.loadFundingAbort(identity) !== null) {
-					const recovered = await (await abortClient(pending.environmentId)).recoverExact(identity)
-					if (recovered.status === 'COMMITTED_ABORT' && recovered.imported) {
-						completedRefunds.add(`${pending.environmentId}\u0000${pending.fundingOperationId}`)
-						if (!recovered.replay) refunds += 1
+				try {
+					if (await state.loadFundingAbort(identity) !== null) {
+						const recovered = await (await abortClient(pending.environmentId)).recoverExact(identity)
+						if (recovered.status === 'COMMITTED_ABORT' && recovered.imported) {
+							completedRefunds.add(`${pending.environmentId}\u0000${pending.fundingOperationId}`)
+							refundOperationIds.add(pending.fundingOperationId)
+							if (!recovered.replay) refunds += 1
+						}
+						continue
 					}
-					continue
-				}
-				const imported = await browserClient.importRefundExact({ actor: owner,
-					environmentId: pending.environmentId, fundingOperationId: pending.fundingOperationId })
-				if (imported !== null) {
-					completedRefunds.add(`${pending.environmentId}\u0000${pending.fundingOperationId}`)
-					if (imported.alreadyImported !== true) refunds += 1
-				}
+					const imported = await (await bidderClient()).importRefundExact({ actor: owner,
+						environmentId: pending.environmentId, fundingOperationId: pending.fundingOperationId })
+					if (imported !== null) {
+						completedRefunds.add(`${pending.environmentId}\u0000${pending.fundingOperationId}`)
+						refundOperationIds.add(pending.fundingOperationId)
+						if (imported.alreadyImported !== true) refunds += 1
+					}
+				} catch (error) { preserveFailure('bid return', pending.fundingOperationId, error) }
 			}
 			for (const operation of publicState.sellerOperations.filter((entry) => entry.actor === owner
 				&& entry.environmentId === trusted.environmentId)) {
-				const imported = await seller.importWinnerExact({ auctionId: operation.auctionId,
-					fundingOperationId: operation.fundingOperationId })
-				if (imported !== null) {
-					completedWinners.add(`${operation.environmentId}\u0000${operation.fundingOperationId}`)
-					if (imported.alreadyImported !== true) winnerPayments += 1
-				}
+				try {
+					const imported = await seller.importWinnerExact({ auctionId: operation.auctionId,
+						fundingOperationId: operation.fundingOperationId })
+					if (imported !== null) {
+						completedWinners.add(`${operation.environmentId}\u0000${operation.fundingOperationId}`)
+						winnerAuctionIds.add(operation.auctionId)
+						if (imported.alreadyImported !== true) winnerPayments += 1
+					}
+				} catch (error) { preserveFailure('seller payment', operation.fundingOperationId, error) }
 			}
 			const completedAuctionPayouts = new Set<string>()
 			for (const payout of (publicState.auctionPayouts ?? []).filter((entry) => entry.actor === owner
 				&& entry.environmentId === trusted.environmentId)) {
-				const [authorization, winner] = await Promise.all([
-					auctionPayout.readExact(payout.auctionId), auctionPayout.readWinnerExact(payout.auctionId),
-				])
-				if (authorization === null || winner === null) continue
-				if (authorization.authorizationDigest !== payout.authorizationDigest
-					|| winner.authorizationDigest !== payout.authorizationDigest) {
-					refuse('auction payout discovery differs from the retained authorization')
-				}
-				const imported = await walletUse((wallet) => importDemoFridayAuctionPayoutWinner({
-					actor: owner, environmentId: trusted.environmentId, authorization, winner,
-					keyset: trusted.keyset, state, wallet, terminal,
-				}), owner)
-				if (imported !== null) {
-					completedAuctionPayouts.add(`${payout.environmentId}\u0000${payout.auctionId}`)
-					if (imported.alreadyImported !== true) winnerPayments += 1
-				}
+				try {
+					const [authorization, winner] = await Promise.all([
+						auctionPayout.readExact(payout.auctionId), auctionPayout.readWinnerExact(payout.auctionId),
+					])
+					if (authorization === null || winner === null) continue
+					if (authorization.authorizationDigest !== payout.authorizationDigest
+						|| winner.authorizationDigest !== payout.authorizationDigest) {
+						refuse('auction payout discovery differs from the retained authorization')
+					}
+					const imported = await walletUse((wallet) => importDemoFridayAuctionPayoutWinner({
+						actor: owner, environmentId: trusted.environmentId, authorization, winner,
+						keyset: trusted.keyset, state, wallet, terminal,
+					}), owner)
+					if (imported !== null) {
+						completedAuctionPayouts.add(`${payout.environmentId}\u0000${payout.auctionId}`)
+						winnerAuctionIds.add(payout.auctionId)
+						if (imported.alreadyImported !== true) winnerPayments += 1
+					}
+				} catch (error) { preserveFailure('auction payout', payout.auctionId, error) }
 			}
 			// A terminal client returns only after the recipient import and its
 			// canonical acknowledgement are durable.  That is the sole automatic
@@ -691,7 +904,11 @@ export function createPlebeianFridayBrowserController(externalSigner: ExternalSi
 					))
 				})
 			}
-			return { refunds, winnerPayments }
+			if (failures.length > 0) {
+				throw new AggregateError(failures, `${failures.length} exact payment import(s) remain pending`)
+			}
+			return { refunds, winnerPayments, winnerAuctionIds: [...winnerAuctionIds].sort(),
+				refundOperationIds: [...refundOperationIds].sort() }
 		},
 		async cancelPending(fundingOperationId: string,
 			reason: 'prebroadcast_client_abandonment' | 'prebroadcast_service_failure' = 'prebroadcast_client_abandonment') {
@@ -781,4 +998,19 @@ Object.defineProperty(globalThis, 'plebeianFridayR20AcceptanceConnect', {
 Object.defineProperty(globalThis, 'plebeianFridayR20Connect', {
 	configurable: false, enumerable: false, writable: false,
 	value: connectPlebeianFridayR20Controller,
+})
+
+Object.defineProperty(globalThis, 'plebeianCreateClaveNip46Signer', {
+	configurable: false, enumerable: false, writable: false,
+	value: createClaveNip46Signer,
+})
+
+Object.defineProperty(globalThis, 'plebeianCreateDevNsecSigner', {
+	configurable: false, enumerable: false, writable: false,
+	value: createDevNsecSigner,
+})
+
+Object.defineProperty(globalThis, 'plebeianReadNostrProfile', {
+	configurable: false, enumerable: false, writable: false,
+	value: readVerifiedNostrProfile,
 })

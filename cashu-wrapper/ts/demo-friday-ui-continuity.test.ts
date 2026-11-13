@@ -19,10 +19,12 @@ function world() {
  const timers = new Map<number, Timer>(), requestTimes = new Map<number, number[]>(), contexts: vm.Context[] = []
  let sellerAuction = false
  const statuses: Array<{ tab: number; at: number; ready: boolean; reason: string; height: number }> = []
- const pins = { schema: 'PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V1', deployment_id: 'deployment', auth_network_id: 'chain', chain_id: 'chain',
-  genesis_sha256: 'a'.repeat(64), cashu_mint_url: 'https://mint.example', committee_keyset_id: 'keyset', committee_keyset_version: '1', dkg_run_id: 'dkg',
+ const pins = { schema: 'PLEBEIAN_FRIDAY_R20_BROWSER_RELEASE_PINS_V2', deployment_id: 'deployment', auth_network_id: 'chain', chain_id: 'chain',
+  genesis_sha256: 'a'.repeat(64), validators_hash: 'e'.repeat(64), cashu_mint_url: 'https://mint.example', committee_keyset_id: 'keyset', committee_keyset_version: '1', dkg_run_id: 'dkg',
   committee_public_key: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', public_key_package_sha256: 'b'.repeat(64),
-  signer_roster_digest: 'c'.repeat(64), fake_funding_policy_digest: 'd'.repeat(64) }
+  signer_roster_digest: 'c'.repeat(64), fake_funding_policy_digest: 'd'.repeat(64),
+  auction_policy_digest: '257fb5bf2b414f206278ada15464030a075d6f4f51b9c2f6b965259136f9a777',
+  auction_payment_policy_digest: '4d88017e3d191421aa46702ca9b6670fb324162c4c39d3ce4604bbfcfec3492b' }
  const healthPins: FridayHealthPins = { deploymentId: pins.deployment_id, chainId: pins.chain_id, genesisSha256: pins.genesis_sha256,
   validatorsHash: 'e'.repeat(64), committeeKeysetId: pins.committee_keyset_id, committeeKeysetVersion: pins.committee_keyset_version,
   dkgRunId: pins.dkg_run_id, publicKeyPackageSha256: pins.public_key_package_sha256, signerRosterDigest: pins.signer_roster_digest, mintUrl: pins.cashu_mint_url }

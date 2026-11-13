@@ -1,0 +1,100 @@
+{
+  "schema": "PLEBEIAN_AUCTIONS_CATALOGUE_UI_RELEASE_CANDIDATE_V1",
+  "status": "LOCAL_REVIEWED_CANDIDATE_NOT_DEPLOYED",
+  "generated_at_utc": "2026-11-11T18:26:15Z",
+  "source": {
+    "branch": "codex/catalogue-ui-integration",
+    "base_commit": "41c7098e13fb8854abf5e304653d91ca18e23d0b",
+    "implementation_commit": "26ff59362ed3590a8f7c3641590e4b6cff69034e",
+    "implementation_tree": "8f61781891acbb97a1968af9ee08d0fe1aa11e20",
+    "changed_file_count": 33
+  },
+  "build": {
+    "working_directory": "cashu-wrapper/ts",
+    "command": "bun build poc-friday-browser-entry.ts --outfile ../../internal/poc/static/friday-browser.js --target browser --minify",
+    "toolchain": {
+      "bun": "1.3.11",
+      "node": "v24.11.0",
+      "go": "go1.23.1 linux/amd64",
+      "git": "2.43.0"
+    },
+    "inputs": [
+      {
+        "path": "cashu-wrapper/ts/poc-friday-browser-entry.ts",
+        "sha256": "089b6c07085918260a764a25d6e471db7a21e9af55170d7e6f0290329449ad9d"
+      },
+      {
+        "path": "cashu-wrapper/ts/demo-friday-browser-coco-client.ts",
+        "sha256": "640767e47981fcfc30a79c5b95a3f9c0ac589919d498afb885e72825520a1538"
+      },
+      {
+        "path": "cashu-wrapper/ts/demo-auction-timing-policy.ts",
+        "sha256": "6a0c4b35f6eeed74298c01b12c0930b90544686fba1ba1023b137fa7de06f60d"
+      }
+    ],
+    "output": {
+      "path": "internal/poc/static/friday-browser.js",
+      "bytes": 1759266,
+      "sha256": "60a55fea6e625ce32f1517a3a1d04ec44bc5ac7c1e0d2ce66e74024e199ab3c0"
+    },
+    "reproducibility": {
+      "independent_builds": 2,
+      "byte_identical_to_each_other": true,
+      "byte_identical_to_committed_output": true
+    }
+  },
+  "ui_assets": [
+    {
+      "path": "internal/poc/static/app.js",
+      "sha256": "49d5e27e20553746e62979378924d3edfd8aa587b107dd8e91891a298c2e1d37"
+    },
+    {
+      "path": "internal/poc/static/index.html",
+      "sha256": "6cc836c5e42b2d85228de5f28049a80cb4242ae320bbae903f0a4812d4f60355"
+    },
+    {
+      "path": "internal/poc/static/styles.css",
+      "sha256": "0538984950828e59d81332298e8c2aa347f03d57f19311601e8282cfd6d6c655"
+    },
+    {
+      "path": "internal/poc/static/ui-helpers.js",
+      "sha256": "6708478be760eed35ab58878d0a96243c19687ad6e9fdb910ba292c6eb65da6f"
+    }
+  ],
+  "verification": {
+    "node_ui": "8 files passed, 0 failed",
+    "friday_typecheck": "passed",
+    "browser_payment": "132 passed, 0 failed, 489 assertions",
+    "r20": "58 passed, 0 failed, 1 root-only skip",
+    "friday_aggregate": "387 passed; 2 sandbox EPERM child-process cases passed 7/7 in the permitted focused rerun",
+    "go_all": "passed",
+    "go_internal_poc_final": "passed",
+    "git_diff_check": "passed",
+    "independent_review": "browser, consensus, and authorization reviews found no remaining blocker in scope"
+  },
+  "visual_verification": {
+    "desktop": "1440x900 loopback synthetic-pin fixture",
+    "mobile": "390x844 loopback synthetic-pin fixture",
+    "exercised": [
+      "identity connection",
+      "quick bid and exact minimum validation",
+      "committed-height feedback and leading state",
+      "seller payout checking/pending/imported presentation",
+      "responsive catalogue and auction detail layout"
+    ],
+    "limitation": "This is local presentation and state-transition evidence, not a fresh release-pinned live FIPS/FROST acceptance run."
+  },
+  "policy_and_release_boundary": {
+    "existing_recovery_profile": "one-hour maximum remains unchanged",
+    "seven_day_profile": "source candidate remains fail-closed and unactivated for every deployment identity",
+    "deployment": "not performed",
+    "push_or_publication": "not performed",
+    "live_services_or_payment_state": "not touched",
+    "required_next_gate": "fresh acceptance on the exact independently approved deployment identity and release pins"
+  },
+  "source_audit": {
+    "changed_paths_reviewed": 33,
+    "high_confidence_credential_or_private_key_matches": 0,
+    "prototype_media_or_unverified_assets_copied": false
+  }
+}

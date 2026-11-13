@@ -27,6 +27,7 @@ function fixture() {
    readExact: async () => { calls.push('status'); return {} as never },
   },
   terminalExchange: { readExact: () => { calls.push('terminal-read'); return {} as never },
+   readStatusExact: () => { calls.push('terminal-status'); return {} as never },
    acknowledgeExact: () => { calls.push('terminal-ack'); return {} as never } },
   fundingAbort: {
    registerBrowserCapsuleExact: async () => ({ capsuleDigest: 'c'.repeat(64) }),
@@ -61,11 +62,11 @@ test('degraded confirmation requires already-broadcast journal; terminal/status/
  const f = fixture(); f.mint(false)
  for (const id of ['b', 'c']) expect((await f.post('funding/confirm', { fundingAuthorizationEventId: id.repeat(64) })).status).toBe(503)
  expect((await f.post('funding/confirm', { fundingAuthorizationEventId: 'a'.repeat(64) })).status).toBe(201)
- for (const [path, status] of [['funding/status', 200], ['terminal/read', 200], ['terminal/ack', 200],
+ for (const [path, status] of [['funding/status', 200], ['terminal/read', 200], ['terminal/status', 200], ['terminal/ack', 200],
   ['funding-abort/prepare', 201], ['funding-abort/request', 202], ['funding-abort/status', 200]] as const) {
   expect((await f.post(path)).status).toBe(status)
  }
- expect(f.calls).toEqual(['confirm', 'status', 'terminal-read', 'terminal-ack', 'abort-prepare', 'abort-request', 'abort-status'])
+ expect(f.calls).toEqual(['confirm', 'status', 'terminal-read', 'terminal-status', 'terminal-ack', 'abort-prepare', 'abort-request', 'abort-status'])
 })
 test('missing readiness capability defaults to unready', async () => {
  const service = createDemoFridayFixedAuthorityService({ publicOrigin: origin, authNetworkId: 'chain', chainId: 'chain',

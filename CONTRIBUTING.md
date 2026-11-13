@@ -2,10 +2,14 @@
 
 ## Prerequisites and install
 
-Use an isolated checkout on Linux. Verified tooling for the checks below:
+Use an isolated checkout on Linux. Required tooling for the checks below:
 Go 1.23.1 (the actual selected binary, not an older system Go), Bun 1.3.11, Node 24.11.0, Python 3. Rust 1.86+ is required only
 for the additional participant gates. Check `GOTOOLCHAIN=local go version` before running the commands. Do not copy another checkout's
 `node_modules`, runtime databases, keys or configuration.
+
+Tool availability is not a test result. See the current
+[status record](docs/contributors/STATUS.md) for the checks actually run against
+this checkpoint.
 
 ```sh
 cd cashu-wrapper/ts
