@@ -29,6 +29,8 @@ export interface ExtensionCaller {
 	pubkey: string
 	isAdmin: boolean
 	transport: ExtensionActionTransport
+	/** Set by Platform only after it redeemed the caller's token for a marketplace-collected action. */
+	payment?: { collectedSats: number; mint: string }
 }
 
 /** Server handlers always receive host ports; `log` is unconditional. */
@@ -81,6 +83,7 @@ export const EXTENSION_ACTION_ERROR_STATUS = {
 	forbidden: 403,
 	not_found: 404,
 	rate_limited: 429,
+	payment_required: 402,
 	extension_failed: 500,
 	invalid_output: 502,
 	extension_unavailable: 503,
@@ -97,6 +100,7 @@ const PUBLIC_MESSAGES: Record<ExtensionActionWireErrorCode, string> = {
 	forbidden: 'Not allowed',
 	not_found: 'Not found',
 	rate_limited: 'Too many requests',
+	payment_required: 'Payment required',
 	extension_failed: 'Extension failed',
 	invalid_output: 'Extension returned an invalid response',
 	extension_unavailable: 'Extension is temporarily unavailable',
@@ -120,11 +124,15 @@ export class ExtensionActionError extends SdkError {
 export interface ExtensionActionErrorBody {
 	ok: false
 	error: { code: ExtensionActionWireErrorCode; message: string; retryable: boolean }
+	/** Marketplace-collected calls: the payment returned as a Cashu token when the call did not complete. */
+	refund?: { token: string }
 }
 
 export interface ExtensionActionSuccessBody<Output> {
 	ok: true
 	value: Output
+	/** Marketplace-collected calls: overpayment returned as a Cashu token. */
+	change?: { token: string }
 }
 
 export type ExtensionActionResponseBody<Output> = ExtensionActionSuccessBody<Output> | ExtensionActionErrorBody
@@ -144,21 +152,30 @@ export function extensionActionPath(extensionId: string, actionName: string): st
 	return `/api/extensions/${encodeURIComponent(extensionId)}/actions/${encodeURIComponent(actionName)}`
 }
 
+/** Lets Platform complete a declared price (e.g. accepted mints); `undefined` hides that paid action. */
+export type ExtensionPaymentResolver = (requirement: ExtensionPaymentRequirement) => ExtensionPaymentRequirement | undefined
+
 export function describeExtensionActions(
 	actions: Readonly<Record<string, AnyExtensionActionDefinition>> | undefined,
 	publicConfig?: unknown,
+	resolvePayment?: ExtensionPaymentResolver,
 ) {
 	if (!actions) return [] as PublicExtensionActionDescriptor[]
-	return Object.entries(actions).map(([name, action]): PublicExtensionActionDescriptor => {
-		const payment = publicConfig === undefined ? undefined : action.payment?.(publicConfig)
-		return {
-			name,
-			...(action.description ? { description: action.description } : {}),
-			auth: action.auth,
-			rateLimit: { ...action.rateLimit },
-			transports: [...actionTransports(action)],
-			...(payment ? { payment } : {}),
-		}
+	return Object.entries(actions).flatMap(([name, action]): PublicExtensionActionDescriptor[] => {
+		const declared = publicConfig === undefined ? undefined : action.payment?.(publicConfig)
+		const payment = declared && resolvePayment ? resolvePayment(declared) : declared
+		// A priced action whose price cannot be completed is not offered at all, rather than shown as free.
+		if (declared && !payment) return []
+		return [
+			{
+				name,
+				...(action.description ? { description: action.description } : {}),
+				auth: action.auth,
+				rateLimit: { ...action.rateLimit },
+				transports: [...actionTransports(action)],
+				...(payment ? { payment } : {}),
+			},
+		]
 	})
 }
 
@@ -204,7 +221,12 @@ export async function executeExtensionAction(params: ExecuteExtensionActionParam
 	// An action not exposed on the caller's transport is indistinguishable from a missing one.
 	if (!action || !actionTransports(action).includes(caller.transport)) return failure(new ExtensionActionError('not_found'))
 	if (action.auth === 'admin' && !caller.isAdmin) return failure(new ExtensionActionError('forbidden'))
-	if (action.payment?.(context.publicConfig)) return failure(new ExtensionActionError('forbidden', 'Paid action runs in the user wallet'))
+	const payment = action.payment?.(context.publicConfig)
+	if (payment?.collectedBy === 'payee') return failure(new ExtensionActionError('forbidden', 'Paid action runs in the user wallet'))
+	// The operator never pays for a priced call: without a collected payment the action does not run.
+	if (payment && (caller.payment?.collectedSats ?? 0) < payment.amountSats) {
+		return failure(new ExtensionActionError('payment_required'))
+	}
 
 	// The parse cause is withheld: schema errors can echo user input.
 	const input = validateWithSchema(rawInput, action.input)

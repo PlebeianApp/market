@@ -181,6 +181,7 @@ describe('routstr-listing-drafter user-paid mode', () => {
 		expect(describeExtension(routstrListingDrafter, config).actions[0].payment).toBeUndefined()
 		expect(describeExtension(routstrListingDrafter, userConfig).actions[0].payment).toEqual({
 			method: 'cashu',
+			collectedBy: 'payee',
 			payee: 'https://node.example',
 			amountSats: 40,
 			mints: ['https://mint.example'],
@@ -259,5 +260,38 @@ describe('routstr-listing-drafter user-paid mode', () => {
 			{ imageUrl: 'https://blossom.example/a.jpg' },
 		)
 		expect(outcome).not.toHaveProperty('changeToken')
+	})
+})
+
+describe('routstr-listing-drafter marketplace mode', () => {
+	const marketplaceConfig: RoutstrListingDrafterConfig = {
+		paymentMode: 'marketplace',
+		model: 'gemini-4-argon',
+		maxTokens: 700,
+		pricePerDraftSats: 100,
+	}
+
+	test('needs a price, declares a marketplace-collected price, and runs via routstrd once paid', async () => {
+		expect(parseExtensionConfig(routstrListingDrafterManifest, { publicConfig: { model: 'm', paymentMode: 'marketplace' } }).ok).toBe(false)
+		expect(routstrDraftPayment(marketplaceConfig)).toMatchObject({ collectedBy: 'marketplace', amountSats: 100 })
+		expect(routstrDraftPayment(marketplaceConfig)).not.toHaveProperty('payee')
+
+		const http = createFakeHttpPort(() => completion(JSON.stringify(draftJson)), { egress: [ROUTSTRD_ORIGIN] })
+		const context = createTestActionContext({ publicConfig: marketplaceConfig, host: { http: http.port } })
+		const run = (payment?: { collectedSats: number; mint: string }) =>
+			executeExtensionAction({
+				actions: routstrListingDrafter.actions,
+				actionName: 'draft-listing',
+				rawInput: { imageUrl: 'https://blossom.example/a.jpg' },
+				caller: { ...testCaller(), ...(payment ? { payment } : {}) },
+				context,
+			})
+		expect(await run()).toMatchObject({ ok: false })
+		expect(http.requests).toHaveLength(0)
+		expect(await run({ collectedSats: 100, mint: 'https://mint.minibits.cash/Bitcoin' })).toMatchObject({
+			ok: true,
+			value: { model: 'routstr · gemini-4-argon' },
+		})
+		expect(http.requests[0].url).toBe(`${ROUTSTRD_ORIGIN}${CHAT_COMPLETIONS_PATH}`)
 	})
 })

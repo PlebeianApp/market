@@ -4,21 +4,30 @@ import { ExtensionActionError } from './actions'
 import { isLocalhostOrigin } from './hostPorts'
 
 /**
- * User-paid extension calls (ADR-0023 §7.9). The user's own Cashu wallet pays the extension's payee directly from
- * the browser; the marketplace server never sees the token. This is not a marketplace payment: it creates no order
- * or payment-lifecycle state, and its states below are kept distinct rather than collapsed into "paid".
+ * User-paid extension calls (ADR-0023 §7.9). The user's own Cashu wallet pays per call, either the extension's payee
+ * directly from the browser (`collectedBy: 'payee'`) or this marketplace, which redeems the token before running the
+ * action (`collectedBy: 'marketplace'`). Neither is an order payment: no order or payment-lifecycle state is created,
+ * and the states below are kept distinct rather than collapsed into "paid".
  */
 export const EXTENSION_PAYMENT_METHODS = ['cashu'] as const
 export type ExtensionPaymentMethod = (typeof EXTENSION_PAYMENT_METHODS)[number]
+export const EXTENSION_PAYMENT_COLLECTORS = ['payee', 'marketplace'] as const
+export type ExtensionPaymentCollector = (typeof EXTENSION_PAYMENT_COLLECTORS)[number]
+/** Request header carrying the Cashu token for a marketplace-collected call. */
+export const EXTENSION_PAYMENT_HEADER = 'x-cashu'
 
 /** Public, client-safe price of one call, published on the action descriptor. Untrusted when parsed by a client. */
 export interface ExtensionPaymentRequirement {
 	method: ExtensionPaymentMethod
-	/** https origin the browser pays directly. */
-	payee: string
+	collectedBy: ExtensionPaymentCollector
+	/** `payee` only: https origin the browser pays directly. */
+	payee?: string
 	/** Face value of the token sent per call; unused value may come back as change. */
 	amountSats: number
-	/** Mints the payee accepts; the wallet pays from the first with enough balance. */
+	/**
+	 * Mints the collector accepts; the wallet pays from the first with enough balance. For `marketplace`, Platform
+	 * fills these from its collector wallet, so tokens from an arbitrary (worthless) mint are never accepted.
+	 */
 	mints: readonly string[]
 	/** True when the payee returns unspent value as a change token. */
 	refundsChange: boolean
@@ -65,8 +74,12 @@ export function parseExtensionPaymentRequirement(input: unknown): Result<Extensi
 	if (typeof input !== 'object' || input === null || Array.isArray(input)) return failure(new ValidationError('Payment must be an object'))
 	const raw = input as Record<string, unknown>
 	if (!(EXTENSION_PAYMENT_METHODS as readonly unknown[]).includes(raw.method)) return failure(new ValidationError('Unknown payment method'))
-	const payee = httpsOrigin(raw.payee)
-	if (!payee) return failure(new ValidationError('Payee must be an https origin', ['payee']))
+	const collectedBy: ExtensionPaymentCollector = raw.collectedBy === 'marketplace' ? 'marketplace' : 'payee'
+	if (raw.collectedBy !== undefined && !(EXTENSION_PAYMENT_COLLECTORS as readonly unknown[]).includes(raw.collectedBy)) {
+		return failure(new ValidationError('Unknown payment collector', ['collectedBy']))
+	}
+	const payee = collectedBy === 'payee' ? httpsOrigin(raw.payee) : undefined
+	if (collectedBy === 'payee' && !payee) return failure(new ValidationError('Payee must be an https origin', ['payee']))
 	const amount = raw.amountSats
 	if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0 || amount > MAX_AMOUNT_SATS) {
 		return failure(new ValidationError('amountSats must be a positive integer', ['amountSats']))
@@ -79,7 +92,8 @@ export function parseExtensionPaymentRequirement(input: unknown): Result<Extensi
 	const description = typeof raw.description === 'string' && raw.description.trim() ? raw.description.trim().slice(0, 200) : undefined
 	return success({
 		method: 'cashu',
-		payee,
+		collectedBy,
+		...(payee ? { payee } : {}),
 		amountSats: amount,
 		mints: [...new Set(mints as string[])],
 		refundsChange: raw.refundsChange === true,
@@ -124,7 +138,9 @@ const TRANSITIONS: Record<PaidCallState, readonly PaidCallState[]> = {
 
 export interface PaidCallRecord {
 	state: PaidCallState
-	payee: string
+	collectedBy: ExtensionPaymentCollector
+	/** Payee origin, or absent when this marketplace collected the payment. */
+	payee?: string
 	amountSats: number
 	mint?: string
 	/** Sats returned to the wallet as change or by reclaiming the unspent token. */
@@ -140,7 +156,8 @@ export interface PaidCallRecord {
 export function createPaidCallRecord(requirement: ExtensionPaymentRequirement, now = Date.now()): PaidCallRecord {
 	return {
 		state: 'awaiting_approval',
-		payee: requirement.payee,
+		collectedBy: requirement.collectedBy,
+		...(requirement.payee ? { payee: requirement.payee } : {}),
 		amountSats: requirement.amountSats,
 		history: [{ state: 'awaiting_approval', at: now }],
 	}
@@ -304,10 +321,7 @@ export async function runPaidExtensionCall<Input, Output>(
 	move('request_sent')
 
 	const result = await params
-		.executor(
-			{ token, config: params.config, fetch: createPayeeFetch(params.requirement.payee, params.fetch), signal: params.signal },
-			params.input,
-		)
+		.executor({ token, config: params.config, fetch: payeeFetchFor(params.requirement, params.fetch), signal: params.signal }, params.input)
 		.catch((cause): PaidExecutorOutcome<Output> => ({ outcome: 'rejected', error: toNetworkError(cause) }))
 
 	if (result.outcome === 'accepted') {
@@ -339,6 +353,30 @@ async function recoverChange(
 		move('change_received', { returnedSats: await wallet.receive(changeToken) })
 	} catch {
 		move('change_unclaimed', { unclaimedChangeToken: changeToken })
+	}
+}
+
+function payeeFetchFor(requirement: ExtensionPaymentRequirement, fetchImpl?: typeof fetch): PayeeFetch {
+	if (requirement.payee) return createPayeeFetch(requirement.payee, fetchImpl)
+	return async () => {
+		throw new ValidationError('This payment has no payee to call')
+	}
+}
+
+/** Response of a marketplace-collected call: change on success, a refund on failure, both Cashu tokens. */
+export interface CollectedCallResponse<Output> {
+	result: Result<Output, ExtensionActionError>
+	returnedToken?: string
+}
+
+/** Executor for marketplace-collected payments: sends the token with the signed action request. */
+export function createMarketplaceCollectedExecutor<Input, Output>(
+	invoke: (input: Input, token: string, signal?: AbortSignal) => Promise<CollectedCallResponse<Output>>,
+): PaidClientExecutor<Input, Output> {
+	return async ({ token, signal }, input) => {
+		const { result, returnedToken } = await invoke(input, token, signal)
+		const change = returnedToken ? { changeToken: returnedToken } : {}
+		return result.ok ? { outcome: 'accepted', output: result.value, ...change } : { outcome: 'rejected', error: result.error, ...change }
 	}
 }
 

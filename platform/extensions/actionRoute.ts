@@ -1,11 +1,14 @@
 import {
 	EXTENSION_ACTION_ERROR_STATUS,
+	EXTENSION_PAYMENT_HEADER,
 	executeExtensionAction,
 	ExtensionActionError,
 	toExtensionActionErrorResponse,
 	type ExtensionActionErrorCode,
 } from '@sdk/core/extensions'
+import { validateWithSchema } from '@sdk/core/validation'
 import { verifyHttpAuth, type HttpAuthReplayCache } from './nip98'
+import { checkCollectorToken, type CashuCollector } from './payments/collector'
 import type { ExtensionRateLimiter } from './rateLimiter'
 import type { ExtensionRegistry } from './registry'
 import type { RemoteActionTarget } from './remoteBindings'
@@ -26,6 +29,20 @@ export interface ExtensionActionHandlerDeps {
 	getRemoteTarget?: (extensionId: string, actionName: string) => RemoteActionTarget | undefined
 	/** Server-side diagnostics; receives the internal reason, never sent to the client. */
 	onError?: (info: { extensionId: string; actionName: string; reason: string; cause?: unknown }) => void
+	/** Wallet for marketplace-collected payments; without it, those actions are unavailable. */
+	collector?: CashuCollector
+	/** Ledger hook for collected payments. Never receives token contents. */
+	onPayment?: (event: CollectedPaymentEvent) => void
+}
+
+export interface CollectedPaymentEvent {
+	extensionId: string
+	actionName: string
+	pubkey: string
+	outcome: 'rejected' | 'collected' | 'change_sent' | 'change_failed' | 'refunded' | 'refund_failed'
+	sats?: number
+	mint?: string
+	reason?: string
 }
 
 /**
@@ -87,21 +104,95 @@ export function createExtensionActionHandler(deps: ExtensionActionHandlerDeps) {
 
 		if (remote) return respondRemote(remote, rawInput, auth.pubkey, request.signal, extensionId, actionName)
 
+		const { target: builtinTarget, action: builtinAction } = builtin!
+		const price = builtinAction.payment?.(builtinTarget.context.publicConfig)
+		let collected: { mint: string; sats: number; price: number } | undefined
+		if (price?.collectedBy === 'marketplace') {
+			// Nothing is collected for a request that cannot run.
+			if (!validateWithSchema(rawInput, builtinAction.input).ok) return errorResponse('invalid_input')
+			const payment = await collectPayment(request, price.amountSats, { extensionId, actionName, pubkey: auth.pubkey })
+			if (payment instanceof Response) return payment
+			collected = payment
+		}
+
 		// 5–7. Shared pipeline with a signal tied to the request, the extension lifetime, and a deadline.
-		const { target: builtinTarget } = builtin!
 		const signal = AbortSignal.any([builtinTarget.context.signal, request.signal, AbortSignal.timeout(ACTION_TIMEOUT_MS)])
 		const result = await executeExtensionAction({
 			actions: builtinTarget.definition.actions,
 			actionName,
 			rawInput,
-			caller: { pubkey: auth.pubkey, isAdmin: deps.isAdmin(auth.pubkey), transport: 'http' },
+			caller: {
+				pubkey: auth.pubkey,
+				isAdmin: deps.isAdmin(auth.pubkey),
+				transport: 'http',
+				...(collected ? { payment: { collectedSats: collected.sats, mint: collected.mint } } : {}),
+			},
 			context: { ...builtinTarget.context, signal },
 		})
-		if (result.ok) return json(200, { ok: true, value: result.value })
+		const ledger = { extensionId, actionName, pubkey: auth.pubkey }
+		if (result.ok) {
+			const change = collected ? await returnSats(collected.sats - collected.price, collected.mint, 'change', ledger) : undefined
+			return json(200, { ok: true, value: result.value, ...(change ? { change: { token: change } } : {}) })
+		}
 
 		deps.onError?.({ extensionId, actionName, reason: result.error.reason, cause: result.error.cause })
 		const response = toExtensionActionErrorResponse(result.error)
-		return json(response.status, response.body)
+		// The seller paid for a result they did not get: return everything they sent.
+		const refund = collected ? await returnSats(collected.sats, collected.mint, 'refund', ledger) : undefined
+		return json(response.status, { ...response.body, ...(refund ? { refund: { token: refund } } : {}) })
+	}
+
+	/**
+	 * Checks the seller's token offline (unit, accepted mint, amount), then redeems it into the collector wallet
+	 * before the action runs, so it cannot be reused. A rejected token is left untouched for the seller to reclaim.
+	 */
+	async function collectPayment(
+		request: Request,
+		price: number,
+		ledger: Pick<CollectedPaymentEvent, 'extensionId' | 'actionName' | 'pubkey'>,
+	): Promise<{ mint: string; sats: number; price: number } | Response> {
+		const collector = deps.collector
+		if (!collector) return errorResponse('extension_unavailable')
+		const token = request.headers.get(EXTENSION_PAYMENT_HEADER)?.trim()
+		if (!token) return errorResponse('payment_required')
+		let mints: string[]
+		try {
+			mints = await collector.acceptedMints()
+		} catch {
+			deps.onPayment?.({ ...ledger, outcome: 'rejected', reason: 'collector_unavailable' })
+			return errorResponse('extension_unavailable')
+		}
+		const check = checkCollectorToken(token, mints, price)
+		if (!check.ok || !check.mint || check.amount === undefined) {
+			deps.onPayment?.({ ...ledger, outcome: 'rejected', reason: check.reason, ...(check.mint ? { mint: check.mint } : {}) })
+			return errorResponse('payment_required')
+		}
+		try {
+			await collector.receive(token)
+		} catch {
+			// Spent, invalid at the mint, or the wallet is down; either way nothing was collected.
+			deps.onPayment?.({ ...ledger, outcome: 'rejected', reason: 'redeem_failed', mint: check.mint, sats: check.amount })
+			return errorResponse('payment_required')
+		}
+		deps.onPayment?.({ ...ledger, outcome: 'collected', mint: check.mint, sats: check.amount })
+		return { mint: check.mint, sats: check.amount, price }
+	}
+
+	async function returnSats(
+		sats: number,
+		mint: string,
+		kind: 'change' | 'refund',
+		ledger: Pick<CollectedPaymentEvent, 'extensionId' | 'actionName' | 'pubkey'>,
+	): Promise<string | undefined> {
+		if (sats <= 0 || !deps.collector) return undefined
+		try {
+			const token = await deps.collector.send(sats, mint)
+			deps.onPayment?.({ ...ledger, outcome: kind === 'change' ? 'change_sent' : 'refunded', sats, mint })
+			return token
+		} catch {
+			deps.onPayment?.({ ...ledger, outcome: kind === 'change' ? 'change_failed' : 'refund_failed', sats, mint })
+			return undefined
+		}
 	}
 
 	/** Remote tools take a JSON object; the remote server validates it against the pinned schema it announced. */

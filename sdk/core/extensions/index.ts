@@ -67,9 +67,15 @@ export type {
 	ExtensionActionTransport,
 	ExtensionActionWireErrorCode,
 	ExtensionCaller,
+	ExtensionPaymentResolver,
 	PublicExtensionActionDescriptor,
 } from './actions'
-export { invokeExtensionAction, parseExtensionActionEnvelope, parseExtensionActionResponse } from './client'
+export {
+	invokeExtensionAction,
+	invokeExtensionActionWithPayment,
+	parseExtensionActionEnvelope,
+	parseExtensionActionResponse,
+} from './client'
 export type { ExtensionActionFetch, InvokeExtensionActionOptions } from './client'
 export {
 	callerFromContextVmMeta,
@@ -149,6 +155,9 @@ export {
 } from './bindings'
 export type { RemoteActionOutput, RemoteBindingRequest, RemoteBindingState, RemoteBindingView } from './bindings'
 export {
+	createMarketplaceCollectedExecutor,
+	EXTENSION_PAYMENT_COLLECTORS,
+	EXTENSION_PAYMENT_HEADER,
 	advancePaidCall,
 	createPaidCallRecord,
 	createPayeeFetch,
@@ -161,6 +170,8 @@ export {
 	runPaidExtensionCall,
 } from './payments'
 export type {
+	CollectedCallResponse,
+	ExtensionPaymentCollector,
 	ExtensionPaymentMethod,
 	ExtensionPaymentRequirement,
 	PaidCallFailureReason,

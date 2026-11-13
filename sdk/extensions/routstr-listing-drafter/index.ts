@@ -71,10 +71,13 @@ const MintListSchema = z.preprocess(
 const PublicConfigSchema = z
 	.object({
 		/**
-		 * `operator`: the marketplace's routstrd wallet pays (server-side). `user`: each seller pays the node directly from
-		 * their own Cashu wallet in the browser; the server handler is refused.
+		 * Who pays for a draft:
+		 * - `operator`: the marketplace's routstrd wallet pays; sellers pay nothing.
+		 * - `marketplace`: each seller pays this marketplace `pricePerDraftSats` from their Cashu wallet; Platform
+		 *   redeems it into the collector wallet (routstrd) before the draft runs, and routstrd pays the node.
+		 * - `user`: each seller pays the node directly from the browser; the server handler is refused.
 		 */
-		paymentMode: z.enum(['operator', 'user']).default('operator'),
+		paymentMode: z.enum(['operator', 'marketplace', 'user']).default('operator'),
 		/** A vision-capable model id (`routstrd models`, or the node's `/v1/models`). */
 		model: z
 			.string()
@@ -91,6 +94,9 @@ const PublicConfigSchema = z
 		pricePerDraftSats: z.coerce.number().int().min(1).max(100_000).optional(),
 	})
 	.superRefine((config, issues) => {
+		if (config.paymentMode === 'marketplace' && !config.pricePerDraftSats) {
+			issues.addIssue({ code: 'custom', path: ['pricePerDraftSats'], message: 'Marketplace mode needs a price per draft' })
+		}
 		if (config.paymentMode !== 'user') return
 		if (!config.provider) issues.addIssue({ code: 'custom', path: ['provider'], message: 'User mode needs the provider node URL' })
 		if (!config.acceptedMints) issues.addIssue({ code: 'custom', path: ['acceptedMints'], message: 'User mode needs accepted mints' })
@@ -145,11 +151,25 @@ export const routstrListingDrafterManifest = {
 
 const action = defineActionFor(routstrListingDrafterManifest)
 
-/** The price of one draft when sellers pay; `undefined` in operator mode. */
+/**
+ * The price of one draft when sellers pay; `undefined` in operator mode. In marketplace mode Platform fills the
+ * accepted mints from its collector wallet.
+ */
 export function routstrDraftPayment(config: RoutstrListingDrafterConfig): ExtensionPaymentRequirement | undefined {
+	if (config.paymentMode === 'marketplace' && config.pricePerDraftSats) {
+		return {
+			method: 'cashu',
+			collectedBy: 'marketplace',
+			amountSats: config.pricePerDraftSats,
+			mints: [],
+			refundsChange: true,
+			description: `One AI listing draft (${config.model}), refunded if it fails`,
+		}
+	}
 	if (config.paymentMode !== 'user' || !config.provider || !config.acceptedMints || !config.pricePerDraftSats) return undefined
 	return {
 		method: 'cashu',
+		collectedBy: 'payee',
 		payee: new URL(config.provider).origin,
 		amountSats: config.pricePerDraftSats,
 		mints: config.acceptedMints,

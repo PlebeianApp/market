@@ -7,6 +7,7 @@ import {
 	type ExtensionHostPorts,
 	type ExtensionRuntime,
 	type PublicExtensionDescriptor,
+	type ExtensionPaymentResolver,
 } from '@sdk/core/extensions'
 import { failure, success, type Result } from '@sdk/core/result'
 
@@ -121,8 +122,8 @@ export class ExtensionRegistry {
 	}
 
 	/** Client-safe view for public config endpoints; private config is never included. */
-	getPublicDescriptors(): PublicExtensionDescriptor[] {
-		return this.configured.map(({ definition, publicConfig }) => describeExtension(definition, publicConfig))
+	getPublicDescriptors(resolvePayment?: ExtensionPaymentResolver): PublicExtensionDescriptor[] {
+		return this.configured.map(({ definition, publicConfig }) => describeExtension(definition, publicConfig, resolvePayment))
 	}
 
 	/** Enabled, running server extension and its action context; `undefined` hides disabled and unknown alike. */

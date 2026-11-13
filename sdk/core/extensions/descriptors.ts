@@ -6,6 +6,7 @@ import {
 	EXTENSION_ACTION_TRANSPORTS,
 	isValidExtensionActionName,
 	type ExtensionActionTransport,
+	type ExtensionPaymentResolver,
 	type PublicExtensionActionDescriptor,
 } from './actions'
 import { parseExtensionPaymentRequirement } from './payments'
@@ -25,7 +26,11 @@ export interface PublicExtensionDescriptor {
 }
 
 /** Builds the public descriptor for an enabled extension from its definition and parsed public config. */
-export function describeExtension(definition: AnyExtensionDefinition, publicConfig: unknown): PublicExtensionDescriptor {
+export function describeExtension(
+	definition: AnyExtensionDefinition,
+	publicConfig: unknown,
+	resolvePayment?: ExtensionPaymentResolver,
+): PublicExtensionDescriptor {
 	const { manifest } = definition
 	return {
 		id: manifest.id,
@@ -35,7 +40,7 @@ export function describeExtension(definition: AnyExtensionDefinition, publicConf
 		...(manifest.description ? { description: manifest.description } : {}),
 		capabilities: [...manifest.capabilities],
 		config: publicConfig,
-		actions: describeExtensionActions(definition.actions, publicConfig),
+		actions: describeExtensionActions(definition.actions, publicConfig, resolvePayment),
 	}
 }
 

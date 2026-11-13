@@ -827,6 +827,49 @@ neither receives nor relays the payment.
     that nodes allow cross-origin browser requests. Routstr documents
     per-request `X-Cashu` change as "coming soon".
 
+- **Marketplace-collected payments (`collectedBy: 'marketplace'`).** The
+  seller pays this marketplace, which runs the extension itself (for example
+  through its routstrd wallet). Unlike `payee` payments, the marketplace
+  receives money here, so the rules are stricter:
+  - **Token transport.** The token travels in the `X-Cashu` header of the
+    NIP-98-signed action request.
+  - **Order of checks.** Platform, not the extension, does all of this before
+    the handler runs:
+    1. validate the input;
+    2. read the token offline: unit `sat`, mint, and amount at least the price;
+    3. accept only mints the collector wallet already uses, so a token from a
+       self-run, worthless mint is never accepted;
+    4. redeem the token into the collector wallet, so it cannot be reused.
+
+    A token rejected at any step is not redeemed, and the client reclaims it.
+
+  - **The handler cannot run unpaid.** It runs only with
+    `caller.payment.collectedSats` of at least the price; the SDK pipeline
+    refuses otherwise (`payment_required`, HTTP 402). This is the user's
+    payment being refused, not operator billing.
+  - **Change and refunds.** Overpayment comes back as `change: { token }` on
+    success. A failed action refunds everything collected as
+    `refund: { token }`. Both are minted by the collector wallet and redeemed
+    into the seller's wallet by the client.
+  - **Ledger.** Every collection, change, refund, or rejection is logged as an
+    `[extensions:payments]` line: outcome, extension, pubkey, sats, mint,
+    reason. Token contents never appear. A failed refund or change is logged
+    as an error, "owed to the seller", for manual settlement.
+  - **Collector.** `EXTENSIONS_PAYMENT_COLLECTOR=routstrd` uses the local
+    routstrd wallet's (undocumented) routes `/wallet/mints`,
+    `/wallet/receive/cashu`, and `/wallet/send/cashu` on a loopback URL only
+    (`EXTENSIONS_ROUTSTRD_URL`).
+  - **No collector, no price.** Without a collector, or with no known mints,
+    marketplace-priced actions are omitted from `/api/config` rather than
+    shown free.
+  - **Not an order payment.** It creates no order, receipt, or
+    payment-lifecycle state. Collected sats are operating revenue that funds
+    inference.
+
+- **Routstr marketplace mode.** `PUBLIC_PAYMENT_MODE=marketplace` with
+  `PUBLIC_PRICE_PER_DRAFT_SATS`. The seller pays the marketplace, and the
+  draft runs through routstrd exactly as in operator mode.
+
 ## Rules
 
 - Extensions never import `@nostr-dev-kit/*`, `nostr-tools` relay classes, app

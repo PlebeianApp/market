@@ -36,6 +36,7 @@ import { createRepositoryLoader, readRepositoryConfig, REPOSITORY_CACHE_TTL_MS }
 import { createServerHandlers } from '../extensions/serverRoutes'
 import { DEFAULT_EXTENSIONS_STATE_PATH, SqliteExtensionStateStore, type ExtensionStateStore } from '../extensions/stateStore'
 import { ExtensionRegistry, type PublicExtensionDescriptor } from '../extensions/registry'
+import { createPaymentCollectorRuntime, type PaymentCollectorRuntime } from '../extensions/payments/runtime'
 import type { BunRoutes } from './http/types'
 
 interface ExtensionRuntimeState {
@@ -52,6 +53,8 @@ interface ExtensionRuntimeState {
 		disabledByAdmin: Set<string>
 		enableable: Set<string>
 	}
+	/** Wallet for marketplace-collected payments (ADR-0023 §7.9), when configured. */
+	payments?: PaymentCollectorRuntime
 	/** Remote binding runtime (ADR-0023 §7.5). */
 	remote: {
 		getCaller: () => RemoteToolCaller | undefined
@@ -82,7 +85,15 @@ export function getExtensionRegistry(): ExtensionRegistry | undefined {
 export function getPublicExtensionDescriptors(): PublicExtensionDescriptor[] {
 	const state = globalState[STATE_KEY]
 	if (!state) return []
-	return [...state.registry.getPublicDescriptors(), ...describeRemoteBindings(remoteBindingViews(state), state.repository.peek())]
+	return [
+		...state.registry.getPublicDescriptors((requirement) => state.payments?.resolve(requirement) ?? payeeOnly(requirement)),
+		...describeRemoteBindings(remoteBindingViews(state), state.repository.peek()),
+	]
+}
+
+/** Without a collector, only payee-collected prices can be offered. */
+function payeeOnly<T extends { collectedBy: string }>(requirement: T): T | undefined {
+	return requirement.collectedBy === 'payee' ? requirement : undefined
 }
 
 /** Binding states from the cached snapshot only; no relay I/O, so it is safe for public endpoints. */
@@ -149,6 +160,7 @@ export async function startExtensions(
 		stateStore,
 		remote,
 		builtins: { definitions, envConfig, disabledByAdmin: new Set(), enableable: new Set() },
+		payments: createPaymentCollectorRuntime(env),
 	}
 	globalState[STATE_KEY] = state
 	await applyBuiltins(state)
@@ -168,6 +180,7 @@ export async function stopExtensions(): Promise<void> {
 	if (!state) return
 	globalState[STATE_KEY] = undefined
 	clearInterval(state.remote.refreshTimer)
+	state.payments?.stop()
 	await state.remote.close().catch(() => undefined)
 	state.stateStore.close()
 	await state.registry.stop().catch((error) => console.error('[extensions] stop failed:', error instanceof Error ? error.message : error))
@@ -413,6 +426,10 @@ export const extensionRoutes: BunRoutes = {
 			replayCache,
 			rateLimiter,
 			acceptedOrigins,
+			get collector() {
+				return globalState[STATE_KEY]?.payments?.collector
+			},
+			onPayment: (event) => globalState[STATE_KEY]?.payments?.record(event),
 			onError: ({ extensionId, actionName, reason, cause }) => {
 				const name = cause instanceof Error ? cause.name : cause === undefined ? 'none' : typeof cause
 				console.warn(`[extensions] ${extensionId}.${actionName} failed: ${reason} (cause: ${name})`)

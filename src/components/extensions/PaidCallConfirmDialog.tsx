@@ -31,16 +31,24 @@ export function PaidCallConfirmDialog({
 					<dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
 						<dt className="text-muted-foreground">Paid to</dt>
 						<dd className="break-all" data-testid="paid-call-payee">
-							{host(requirement.payee)}
+							{requirement.payee ? host(requirement.payee) : 'This marketplace'}
 						</dd>
 						<dt className="text-muted-foreground">From</dt>
 						<dd className="break-all">Your wallet ({requirement.mints.map(host).join(', ')})</dd>
 						<dt className="text-muted-foreground">Change</dt>
-						<dd>{requirement.refundsChange ? 'Unused sats are returned to your wallet' : 'None'}</dd>
+						<dd>
+							{requirement.collectedBy === 'marketplace'
+								? 'Refunded to your wallet if it fails'
+								: requirement.refundsChange
+									? 'Unused sats are returned to your wallet'
+									: 'None'}
+						</dd>
 					</dl>
 				)}
 				<p className="text-xs text-muted-foreground">
-					Paid directly from your Cashu wallet. This marketplace does not receive the payment.
+					{requirement?.collectedBy === 'marketplace'
+						? 'Paid from your Cashu wallet to this marketplace, which runs the extension.'
+						: 'Paid directly from your Cashu wallet. This marketplace does not receive the payment.'}
 				</p>
 				<DialogFooter>
 					<Button variant="outline" onClick={onDecline} data-testid="paid-call-decline">

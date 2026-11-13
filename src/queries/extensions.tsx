@@ -19,6 +19,8 @@ import {
 	type ExtensionCatalog,
 	type PublicExtensionDescriptor,
 	PaidCallError,
+	createMarketplaceCollectedExecutor,
+	invokeExtensionActionWithPayment,
 	runPaidExtensionCall,
 	type ExtensionPaymentRequirement,
 	type PaidCallRecord,
@@ -70,6 +72,8 @@ export function extensionErrorMessage(error: ExtensionActionError): string {
 			return 'Your account is not allowed to use this extension action.'
 		case 'rate_limited':
 			return 'Too many requests. Please wait a bit and try again.'
+		case 'payment_required':
+			return 'The payment was not accepted (wrong mint, too small, or already spent).'
 		case 'invalid_input':
 			return 'Some fields are invalid. Check the image URL and field lengths.'
 		case 'not_found':
@@ -339,7 +343,16 @@ export function useProductListingDraft(extensionId?: string) {
 			findExtensionAction(scoped, PRODUCT_LISTING_DRAFT_CAPABILITY))
 		: anyTarget
 	const payment = found?.action.payment
-	const executor = found && payment ? findPaidExecutor(found.extensionId, found.action.name) : undefined
+	const executor = useMemo(() => {
+		if (!found || !payment) return undefined
+		if (payment.collectedBy === 'marketplace') {
+			// This marketplace collects the token with the signed request and returns change or a refund.
+			return createMarketplaceCollectedExecutor((input: unknown, token: string, signal?: AbortSignal) =>
+				invokeExtensionActionWithPayment(found.extensionId, found.action.name, input, { sign }, { paymentToken: token, signal }),
+			)
+		}
+		return findPaidExecutor(found.extensionId, found.action.name)
+	}, [found, payment])
 	// A priced action without a built-in executor (e.g. a remote one) cannot be paid, so it is not offered.
 	const target = payment && !executor ? undefined : found
 	const config = descriptors.find((descriptor) => descriptor.id === target?.extensionId)?.config
@@ -389,8 +402,8 @@ export function paidCallErrorMessage(error: PaidCallError): string {
 			const recovery: Partial<Record<PaidCallRecord['state'], string>> = {
 				reclaimed: 'Your payment was returned to your wallet.',
 				change_received: 'Unused sats were returned to your wallet.',
-				no_change: 'The provider kept the payment.',
-				reclaim_failed: 'The provider kept the payment; check pending tokens in your wallet.',
+				no_change: 'The payment was not returned.',
+				reclaim_failed: 'The payment was not returned; check pending tokens in your wallet.',
 				change_unclaimed: 'Change could not be added to your wallet; check your wallet.',
 			}
 			return [base, recovery[record.state]].filter(Boolean).join(' ')

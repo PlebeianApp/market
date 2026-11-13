@@ -4,6 +4,7 @@ import type { Signer, SignedEventLike } from '../ports/signer'
 import { failure, success, type Result } from '../result'
 import { validateWithSchema, type RuntimeSchema } from '../validation'
 import { EXTENSION_ACTION_ERROR_STATUS, ExtensionActionError, extensionActionPath, type ExtensionActionWireErrorCode } from './actions'
+import { EXTENSION_PAYMENT_HEADER } from './payments'
 
 export type ExtensionActionFetch = (
 	url: string,
@@ -21,6 +22,8 @@ export interface InvokeExtensionActionOptions<Output> {
 	fetch?: ExtensionActionFetch
 	signal?: AbortSignal
 	now?: () => number
+	/** Cashu token paying for a marketplace-collected action (ADR-0023 §7.9). */
+	paymentToken?: string
 }
 
 /**
@@ -34,10 +37,35 @@ export async function invokeExtensionAction<Output = unknown>(
 	signer: Signer<SignedEventLike & NostrEventLike>,
 	options: InvokeExtensionActionOptions<Output> = {},
 ): Promise<Result<Output, ExtensionActionError>> {
+	return (await invokeExtensionActionWithPayment(extensionId, actionName, input, signer, options)).result
+}
+
+/** Like `invokeExtensionAction`, also returning a change or refund token the server sent back. */
+export async function invokeExtensionActionWithPayment<Output = unknown>(
+	extensionId: string,
+	actionName: string,
+	input: unknown,
+	signer: Signer<SignedEventLike & NostrEventLike>,
+	options: InvokeExtensionActionOptions<Output> = {},
+): Promise<{ result: Result<Output, ExtensionActionError>; returnedToken?: string }> {
+	const result = await sendAction(extensionId, actionName, input, signer, options)
+	if ('result' in result) return result
+	const returnedToken = extractReturnedToken(result.text)
+	return { result: parseExtensionActionResponse(result.status, result.text, options.output), ...(returnedToken ? { returnedToken } : {}) }
+}
+
+async function sendAction<Output>(
+	extensionId: string,
+	actionName: string,
+	input: unknown,
+	signer: Signer<SignedEventLike & NostrEventLike>,
+	options: InvokeExtensionActionOptions<Output>,
+): Promise<{ status: number; text: string } | { result: Result<Output, ExtensionActionError> }> {
 	const baseUrl = options.baseUrl ?? (globalThis as { location?: { origin?: string } }).location?.origin
-	if (!baseUrl) return failure(new ExtensionActionError('network_error', 'invokeExtensionAction requires a baseUrl outside the browser'))
+	if (!baseUrl)
+		return { result: failure(new ExtensionActionError('network_error', 'invokeExtensionAction requires a baseUrl outside the browser')) }
 	const fetchImpl = options.fetch ?? (globalThis.fetch as unknown as ExtensionActionFetch | undefined)
-	if (!fetchImpl) return failure(new ExtensionActionError('network_error', 'No fetch implementation available'))
+	if (!fetchImpl) return { result: failure(new ExtensionActionError('network_error', 'No fetch implementation available')) }
 
 	const url = new URL(extensionActionPath(extensionId, actionName), baseUrl).toString()
 	const body = JSON.stringify(input ?? null)
@@ -48,7 +76,7 @@ export async function invokeExtensionAction<Output = unknown>(
 		const signed = await signer.sign(buildHttpAuthTemplate({ url, method: 'POST', body, createdAt }))
 		authorization = encodeHttpAuthHeader(toRawEvent(signed))
 	} catch (cause) {
-		return failure(new ExtensionActionError('unauthorized', 'Could not sign the request', cause))
+		return { result: failure(new ExtensionActionError('unauthorized', 'Could not sign the request', cause)) }
 	}
 
 	let status: number
@@ -56,17 +84,31 @@ export async function invokeExtensionAction<Output = unknown>(
 	try {
 		const response = await fetchImpl(url, {
 			method: 'POST',
-			headers: { 'content-type': 'application/json', authorization },
+			headers: {
+				'content-type': 'application/json',
+				authorization,
+				...(options.paymentToken ? { [EXTENSION_PAYMENT_HEADER]: options.paymentToken } : {}),
+			},
 			body,
 			signal: options.signal,
 		})
 		status = response.status
 		text = await response.text()
 	} catch (cause) {
-		return failure(new ExtensionActionError('network_error', undefined, cause))
+		return { result: failure(new ExtensionActionError('network_error', undefined, cause)) }
 	}
+	return { status, text }
+}
 
-	return parseExtensionActionResponse(status, text, options.output)
+/** A `change` (success) or `refund` (failure) Cashu token in an action response; anything else is ignored. */
+function extractReturnedToken(text: string): string | undefined {
+	try {
+		const body = JSON.parse(text) as { change?: { token?: unknown }; refund?: { token?: unknown } }
+		const token = body?.change?.token ?? body?.refund?.token
+		return typeof token === 'string' && /^cashu[AB][A-Za-z0-9_\-+/=]+$/.test(token) && token.length <= 20_000 ? token : undefined
+	} catch {
+		return undefined
+	}
 }
 
 /** Decodes an HTTP action response. Unknown shapes are reported as errors, never trusted. */
