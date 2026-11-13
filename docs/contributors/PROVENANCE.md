@@ -23,8 +23,9 @@ a merge or publishing local operational history.
 
 ## Deliberate exclusions
 
-- `9ed795b1810a63d735d6c96cc23e2164f63c8dd3` (R78 profile/demo UI), which is
-  a separate candidate based on R77 and has not been reconciled with R86.
+- `9ed795b1810a63d735d6c96cc23e2164f63c8dd3` (R78 profile/demo UI). It applies
+  cleanly to R86 and focused UI tests pass, but it remains deferred pending
+  relay privacy/CSP approval and fresh verification of the combined tree.
 - R87-R90 V3 signer/FIPS recovery continuations, which contain active
   operational recovery tooling and require a separate publication review.
 - Runtime databases, journals, browser storage, wallet proofs, private keys,
@@ -41,13 +42,19 @@ would make the contributor snapshot less complete.
 ## Generated and vendored material
 
 `internal/poc/static/friday-browser.js` is an intentionally tracked generated
-browser bundle. Publication review must compare it with a fresh build from the
-selected source. The tracked Coco tgz files are pinned dependency inputs; their
-archive members were inventoried during preparation, but licenses and full
-contents still require maintainer review.
+browser bundle. An isolated offline rebuild from the selected source and pinned
+cached dependencies was byte-identical; see `REPRODUCIBILITY-20261113.md`. The
+tracked Coco tgz files are pinned dependency inputs. Their contents were
+inventoried, but exact source-license and modification notices still require
+maintainer review.
 
 ## Deployment relationship
 
 Conversation and recovery records identify R86 as the latest selected
-application-source release, but this preparation did not read every host or
-prove the exact installed release. Deployment evidence remains a separate gate.
+application-source release. Public asset comparison found that three live
+assets match R86 while live `app.js` is a separate maintenance delta without a
+matching source commit or manifest. The deployed release therefore remains
+split-provenance and is a separate acceptance gate.
+
+See `PUBLICATION-RECONCILIATION-20261113.md` for the exact later-candidate and
+live-asset disposition.

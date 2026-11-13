@@ -5,9 +5,8 @@ restart, payment mutation, policy activation, or changes to live browser state.
 
 ## Exact inputs
 
-The R66 and readiness pins below were verified read-only in the separate clean
-recovery worktree
-`/home/maximoto/Documents/Codex/2026-11-06/task/plebeian-r64-ui-race`.
+The R66 and readiness pins below were verified read-only in a separate clean
+recovery worktree, represented here as `<R66-recovery-worktree>`.
 They are external provenance inputs and are not objects in this candidate
 repository. Reproduce their subjects and diffs with
 `git -C <recovery-worktree> show <commit>` before any later reconciliation.

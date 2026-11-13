@@ -24,22 +24,28 @@ audit, and it cannot certify earlier public history.
 
 ## Tests
 
-Fresh source tests are intentionally separated from this documentation and
-publication-preparation pass. Record exact commands and results here before
-publication. Until then:
+Fresh isolated offline verification against this checkpoint completed with the
+following results:
 
-- `node --test internal/poc/catalogue_ui.test.js`: **passed** (1 test, 0 failed,
-  Node reported 116.65 ms total duration).
-- `go test ./internal/poc`: **blocked before tests**. The installed Go is
-  1.22.2 while `go.mod` requires Go 1.23.1; no toolchain download was allowed.
-- `go test ./...`: **not run** after the focused Go gate was blocked.
-- `bun run typecheck:friday`: **not run**; this isolated checkout has no
-  `cashu-wrapper/ts/node_modules`, and dependency installation was outside this
-  bounded preparation pass.
-- `bun run test:friday:browser`: **not run** for the same dependency reason.
-- `bun run test:friday`: **not run** for the same dependency reason.
-- Rust participant tests: **not run**; Cargo/Rust were not available on PATH.
+- Node UI: **8 passed, 0 failed**.
+- `bun run typecheck:friday`: **passed**.
+- Browser suite: **158 passed, 0 failed**.
+- Full Friday suite: **2 pretests and 410 suite tests passed, 0 failed**.
+- R20: **58 passed, 1 root-only skip, 0 failed**.
+- DKG diagnostic: **73 passed, 0 failed**.
+- Coco threshold: **19 passed, 0 failed**.
+- V4 service: **94 passed, 0 failed**.
+- Integration: **197 passed, 0 failed**.
+- Browser bundle rebuild: **byte-identical**, 1,933,620 bytes, SHA-256
+  `6fbcb16bc2c660ed5710a19aea8d52f820966013ed8d8fdde19500a1aac5f214`.
+- Go tests/build: **blocked before execution**. Installed Go is 1.22.2 while
+  `go.mod` requires 1.23.1; no download was allowed.
+- Native Rust gate: **blocked before execution**. Rust/Cargo 1.86 is present,
+  but the offline cache lacks exact dependency `fs2 0.4.3`.
 - Live browser/payment acceptance: **not run**.
+
+See `REPRODUCIBILITY-20261113.md` for the execution boundary and exact grouped
+results.
 
 Historical results in `TEST-REALITY-AND-PROVENANCE.md`, dated evidence and the
 November 6 status document are tied to earlier commits. They must not be
@@ -54,3 +60,5 @@ reported as fresh results for this checkpoint.
 - Acceptance of the R87-R90 V3 recovery continuations.
 - Production security, cryptographic audit, marketplace merge readiness or
   permission to publish.
+- A project-license decision, complete third-party notice inventory or approval
+  to publish current topology/operational fingerprints.

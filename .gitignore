@@ -4,12 +4,52 @@
 bin/
 lab-bin/
 data/
-cashu-wrapper/ts/node_modules/
+node_modules/
 cashu-wrapper/dist/
 cashu-wrapper/frost-participant-3of4/target/
 cashu-wrapper/frost-public-inspect/target/
 *.log
 __pycache__/
+
+# Local credentials and private key material. Public examples must use one of
+# the explicit example suffixes below.
+.env
+.env.*
+!.env.example
+!.env.*.example
+!*.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+!*.example.pem
+!*.example.key
+
+# Runtime databases, payment journals and browser-local wallet/profile state.
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+*.wal
+*.journal
+.browser-profile/
+browser-profile/
+browser-data/
+playwright-report/
+test-results/
+.ngit-cache/
+
+# Coverage, editor and temporary output.
+coverage/
+.nyc_output/
+.tmp/
+tmp/
+*.tmp
+*.swp
+*~
 
 # Contributor-generated outputs
 /dist/

@@ -49,10 +49,18 @@ not exist on either remote. No push occurs during preparation.
 
 - Reconcile the currently deployed release and V3 recovery result against the
   selected R86 source snapshot.
-- Review the separate profile candidate before inclusion.
-- Complete independent review of the outgoing snapshot, vendored archives and
-  publication diff. The bounded scan performed here is not a formal secret audit.
-- Run the full test matrix against the final combined tip.
+- Review the separate profile candidate's five-relay privacy/CSP policy and run
+  combined-tree verification before inclusion.
+- Confirm the project license and exact third-party notices for the four
+  vendored Coco archives and local modifications.
+- Decide whether current topology and operational fingerprints may be public;
+  otherwise replace them with synthetic fixtures.
+- Run Go 1.23.1 and the native Rust gate. The cached TypeScript/Node matrix and
+  byte-identical browser bundle rebuild passed; see
+  `REPRODUCIBILITY-20261113.md`.
+- Run a recognized full-history secret scanner and an SBOM/license tool. The
+  bounded content/archive scan found no credential material but is not a formal
+  certification.
 - Complete live bid/refund/close/payout/acknowledgement/conservation acceptance.
 - Verify GitHub/ngit write permission immediately before publication and use the
   recorded remote tips as safety anchors. The recommended operation creates a new
