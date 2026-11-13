@@ -2,7 +2,7 @@ import { EXTENSION_HOST_PORTS, parseExtensionConfig, type AnyExtensionDefinition
 import type { ExtensionInstanceSetting } from './registry'
 
 /** Keys under an extension's prefix that configure Platform policy rather than extension config. */
-const RESERVED_KEYS = new Set(['ENABLED', 'EGRESS', 'HOST_PORTS'])
+const RESERVED_KEYS = new Set(['ENABLED', 'EGRESS', 'HOST_PORTS', 'ALLOW_LOCALHOST'])
 const PUBLIC_PREFIX = 'PUBLIC_'
 
 export interface ExtensionEnvPolicy {
@@ -10,6 +10,11 @@ export interface ExtensionEnvPolicy {
 	egress?: string[]
 	/** Operator port grants (`EXTENSION_<ID>_HOST_PORTS`, comma-separated); defaults to everything requested. */
 	hostPorts?: ExtensionHostPortName[]
+	/**
+	 * Operator opt-in (`EXTENSION_<ID>_ALLOW_LOCALHOST=true`) for loopback egress in production, e.g. a local
+	 * routstrd daemon. Only loopback origins the manifest declares become reachable.
+	 */
+	allowLocalhost?: boolean
 }
 
 export interface ExtensionEnvConfig {
@@ -107,6 +112,7 @@ function parsePolicy(fields: Map<string, string>): { ok: true; value: ExtensionE
 	const policy: ExtensionEnvPolicy = {}
 	const egress = fields.get('EGRESS')
 	if (egress !== undefined) policy.egress = splitList(egress)
+	if (isTruthy(fields.get('ALLOW_LOCALHOST'))) policy.allowLocalhost = true
 	const hostPorts = fields.get('HOST_PORTS')
 	if (hostPorts !== undefined) {
 		const ports = splitList(hostPorts)

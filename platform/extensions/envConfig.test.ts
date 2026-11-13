@@ -1,3 +1,4 @@
+import { routstrListingDrafter } from '@sdk/extensions/routstr-listing-drafter'
 import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { defineExtension } from '@sdk/core/extensions'
@@ -78,5 +79,30 @@ describe('extension env config', () => {
 	test('rejects private values for extensions without a private schema and unknown host ports', () => {
 		expect(readExtensionEnvConfig([short], { EXTENSION_AI_ENABLED: 'true', EXTENSION_AI_TOKEN: 'x' }).errors).toHaveLength(1)
 		expect(readExtensionEnvConfig([short], { EXTENSION_AI_ENABLED: 'true', EXTENSION_AI_HOST_PORTS: 'signer' }).errors).toHaveLength(1)
+	})
+
+	test('ALLOW_LOCALHOST is an explicit operator opt-in and never becomes extension config', () => {
+		const on = readExtensionEnvConfig([short], { EXTENSION_AI_ENABLED: 'true', EXTENSION_AI_ALLOW_LOCALHOST: 'true' })
+		expect(on.errors).toEqual([])
+		expect(on.policies.get('ai')).toEqual({ allowLocalhost: true })
+		expect(on.settings[0]).not.toHaveProperty('privateConfig')
+		const off = readExtensionEnvConfig([short], { EXTENSION_AI_ENABLED: 'true', EXTENSION_AI_ALLOW_LOCALHOST: 'no' })
+		expect(off.policies.get('ai')).toEqual({})
+	})
+
+	test('the documented routstr-listing-drafter variables parse into public config and policy', () => {
+		const config = readExtensionEnvConfig([routstrListingDrafter], {
+			EXTENSION_ROUTSTR_LISTING_DRAFTER_ENABLED: 'true',
+			EXTENSION_ROUTSTR_LISTING_DRAFTER_PUBLIC_MODEL: 'qwen2.5-vl-72b',
+			EXTENSION_ROUTSTR_LISTING_DRAFTER_PUBLIC_MAX_TOKENS: '600',
+			EXTENSION_ROUTSTR_LISTING_DRAFTER_ALLOW_LOCALHOST: 'true',
+		})
+		expect(config.errors).toEqual([])
+		expect(config.settings[0]).toEqual({
+			id: 'routstr-listing-drafter',
+			enabled: true,
+			publicConfig: { model: 'qwen2.5-vl-72b', maxTokens: '600' },
+		})
+		expect(config.policies.get('routstr-listing-drafter')).toEqual({ allowLocalhost: true })
 	})
 })

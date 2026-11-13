@@ -194,6 +194,9 @@ export function AiProductWizard({ onPublished, extensionId }: { onPublished: () 
 							}}
 						/>
 					</div>
+					<p className="text-xs text-muted-foreground" data-testid="ai-product-disclosure">
+						The photo link is sent to an AI provider to draft the listing.
+					</p>
 					{draft.isPending && (
 						<p className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="ai-product-thinking">
 							<Sparkles className="h-4 w-4 animate-pulse" /> Describing your product…

@@ -138,4 +138,38 @@ describe('extension host builder', () => {
 		expect(Object.keys(none.host)).toEqual(['log'])
 		expect(relayPortCreated).toBe(1)
 	})
+
+	test('loopback egress needs the stage default or a per-extension operator opt-in', async () => {
+		const loopback = { ...manifest, id: 'local', hostPorts: ['http'] as const, egress: ['http://127.0.0.1:8008'] }
+		const calls: string[] = []
+		const environment = {
+			relayUrls: [],
+			getRelayPort: () => recordingRelayPort().port,
+			storage: createMemoryKeyValueStorage(),
+			allowLocalhostEgress: false,
+			fetch: async (url: string | URL | Request) => {
+				calls.push(String(url))
+				return new Response('{}')
+			},
+			logSink: () => undefined,
+		}
+		const request = { url: 'http://127.0.0.1:8008/v1/chat/completions', method: 'POST' as const, body: '{}' }
+		const denied = buildExtensionHost(loopback, undefined, environment, new AbortController().signal)
+		expect((await denied.host.http!.request(request)).ok).toBe(false)
+		const optedIn = buildExtensionHost(
+			loopback,
+			undefined,
+			{ ...environment, operatorAllowsLocalhost: (id: string) => id === 'local' },
+			new AbortController().signal,
+		)
+		expect((await optedIn.host.http!.request(request)).ok).toBe(true)
+		const otherOptIn = buildExtensionHost(
+			loopback,
+			undefined,
+			{ ...environment, operatorAllowsLocalhost: (id: string) => id === 'someone-else' },
+			new AbortController().signal,
+		)
+		expect((await otherOptIn.host.http!.request(request)).ok).toBe(false)
+		expect(calls).toEqual(['http://127.0.0.1:8008/v1/chat/completions'])
+	})
 })

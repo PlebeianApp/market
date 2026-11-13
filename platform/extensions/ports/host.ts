@@ -25,6 +25,8 @@ export interface ExtensionHostEnvironment {
 	/** Operator switch per extension; `undefined` grants every port the manifest requests. */
 	grantedPorts?: (extensionId: string) => readonly ExtensionHostPortName[] | undefined
 	operatorEgress?: (extensionId: string) => readonly string[] | undefined
+	/** Per-extension operator opt-in for loopback egress when `allowLocalhostEgress` is false. */
+	operatorAllowsLocalhost?: (extensionId: string) => boolean
 }
 
 export interface BuiltExtensionHost {
@@ -75,7 +77,7 @@ export function buildExtensionHost(
 		const http = createScopedHttpPort({
 			egress: manifest.egress ?? [],
 			operatorEgress: environment.operatorEgress?.(manifest.id),
-			allowLocalhost: environment.allowLocalhostEgress,
+			allowLocalhost: environment.allowLocalhostEgress || environment.operatorAllowsLocalhost?.(manifest.id) === true,
 			fetch: environment.fetch,
 			signal,
 		})

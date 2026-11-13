@@ -220,6 +220,7 @@ async function applyBuiltins(state: ExtensionRuntimeState): Promise<void> {
 					allowLocalhostEgress: determineStage() !== 'production',
 					grantedPorts: (id) => policyFor(id)?.hostPorts,
 					operatorEgress: (id) => policyFor(id)?.egress,
+					operatorAllowsLocalhost: (id) => policyFor(id)?.allowLocalhost === true,
 				},
 				signal,
 			)

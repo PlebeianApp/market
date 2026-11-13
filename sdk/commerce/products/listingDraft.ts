@@ -4,6 +4,19 @@ import { failure, success, type Result } from '../../core/result'
 /** Capability a bound extension offers to draft a product listing from an image (ADR-0023 §3). */
 export const PRODUCT_LISTING_DRAFT_CAPABILITY = 'product.listing.draft'
 
+/** Marketplace product categories; a listing's main category is one of these (the last is the fallback). */
+export const MARKETPLACE_PRODUCT_CATEGORIES = [
+	'Bitcoin',
+	'Art',
+	'Clothing',
+	'Food & Drink',
+	'Home & Technology',
+	'Health & Beauty',
+	'Sports & Outside',
+	'Services',
+	'Other',
+] as const
+
 /**
  * A draft produced by an extension (e.g. an AI over ContextVM). It is untrusted plain text: the seller reviews it and
  * only the seller signs and publishes the listing. Price is never part of a draft.

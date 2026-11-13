@@ -719,6 +719,32 @@ asks the user to opt in once per capability before the first call.
   capability through its `draft-listing` action (`mockListingDraft`, no image
   analysis); the dev sandbox serves the same mock as a remote
   `draft_product_listing` tool. Clients prefer an action named `draft-listing`.
+- **Routstr listing drafter (real AI, `routstr-listing-drafter`).** A built-in
+  `draft-listing` action that calls a vision model through a local
+  [routstrd](https://github.com/routstr/routstrd) daemon:
+  - **Network path.** Platform → `http://127.0.0.1:8008/v1/chat/completions`
+    (manifest egress, exact origin) → routstrd → a Routstr node it picks over
+    Nostr (cheapest, with failover, or pinned via `x-routstr-provider`). The
+    node fetches the image URL. The handler calls no other daemon path,
+    because routstrd's wallet routes are unauthenticated.
+  - **Loopback in production.** Loopback egress stays blocked in production
+    unless the operator sets `EXTENSION_ROUTSTR_LISTING_DRAFTER_ALLOW_LOCALHOST=true`.
+    The opt-in is per extension and only opens loopback origins the manifest
+    declares. Port 8008 must never be exposed.
+  - **Who pays.** The operator's routstrd Cashu wallet, per call. There is no
+    API key and no private config. This spend is an operating cost: it is not
+    a marketplace payment and creates no order or payment state. A 402 (wallet
+    empty) is reported to sellers as `extension_unavailable` and logged with a
+    top-up hint; the provider body is never logged or returned. The action is
+    limited to 10 calls per seller per hour.
+  - **Data sent.** The image URL and seller notes go to the node; the wizard
+    tells the seller. The system prompt is built from constants; seller text
+    goes only in the user message.
+  - **Output.** Model output is parsed by `parseProductListingDraft` on the
+    server and again on the client.
+  - **Order and dev setup.** It is registered before the mock, so it wins when
+    both are enabled. For development and e2e, `bun run dev:routstrd-stub`
+    serves canned replies on the same origin.
 
 #### 7.8 Settings store prerequisite
 
