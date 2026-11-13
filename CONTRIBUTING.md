@@ -40,9 +40,11 @@ Go may need its pinned modules downloaded on the first run. To explicitly
 forbid downloads in a populated module cache, add `GOPROXY=off GOSUMDB=off`.
 Do not use a broad `bun test` run as the quick-start command: the tree also
 contains opt-in live, historical and environment-specific suites.
-The Friday suite may exceed Bun's default 5-second per-test timeout on a busy
-machine; an explicit `bun run test:friday --timeout 15000` rerun passed here,
-with the initial timeout retained in the status record.
+Historical runs on an earlier revision occasionally exceeded Bun's default
+5-second per-test timeout on a busy machine. No Friday suite was run for this
+checkpoint; see the current status record. If a maintainer uses an explicit
+`bun run test:friday --timeout 15000` diagnostic rerun, report both the original
+result and the rerun rather than replacing one with the other.
 The scoped TypeScript check is not a claim that the whole historic tree is
 strictly type-clean. Consult the current status for actual outcomes.
 
