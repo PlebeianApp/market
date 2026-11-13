@@ -64,10 +64,10 @@ function parseTags(value: string): string[] {
  * Create a product from a photo: an extension drafts the listing, every field stays editable, the price starts
  * empty, and the seller's first shipping option is preselected. Only the seller signs and publishes.
  */
-export function AiProductWizard({ onPublished }: { onPublished: () => void }) {
+export function AiProductWizard({ onPublished, extensionId }: { onPublished: () => void; extensionId?: string }) {
 	const { user } = useStore(authStore)
 	const queryClient = useQueryClient()
-	const draft = useProductListingDraft()
+	const draft = useProductListingDraft(extensionId)
 	const shippingOptionsQuery = useShippingOptionsByPubkey(user?.pubkey ?? '')
 	const publishShipping = usePublishShippingOptionMutation()
 	const [imageUrl, setImageUrl] = useState<string | null>(null)

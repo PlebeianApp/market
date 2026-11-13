@@ -294,8 +294,18 @@ export function useRemoteActionInvoke() {
  * Drafts a product listing from an image through whichever extension offers `product.listing.draft` (e.g. a bound
  * ContextVM tool). The reply is untrusted: it is parsed, capped, and shown for review; nothing is published here.
  */
-export function useProductListingDraft() {
-	const { target } = useExtensionCapability(PRODUCT_LISTING_DRAFT_CAPABILITY, 'draft-listing')
+/** Drafts a listing from a photo. With `extensionId`, only that extension is used (e.g. on its own page). */
+export function useProductListingDraft(extensionId?: string) {
+	const { descriptors } = useExtensionDescriptors()
+	const scoped = useMemo(
+		() => (extensionId ? descriptors.filter((descriptor) => descriptor.id === extensionId) : undefined),
+		[descriptors, extensionId],
+	)
+	const anyTarget = useExtensionCapability(PRODUCT_LISTING_DRAFT_CAPABILITY, 'draft-listing').target
+	const target = scoped
+		? (findExtensionAction(scoped, PRODUCT_LISTING_DRAFT_CAPABILITY, { actionName: 'draft-listing' }) ??
+			findExtensionAction(scoped, PRODUCT_LISTING_DRAFT_CAPABILITY))
+		: anyTarget
 	const mutation = useMutation<ProductListingDraft, ExtensionActionError, { imageUrl: string; notes?: string }>({
 		mutationFn: async (input) => {
 			if (!target) throw new ExtensionActionError('not_found')

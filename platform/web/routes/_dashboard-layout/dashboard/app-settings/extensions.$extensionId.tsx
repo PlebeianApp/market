@@ -1,3 +1,4 @@
+import { AiProductWizard } from '@/components/products/AiProductWizard'
 import { useConfigQuery } from '@/queries/config'
 import { useUserRole } from '@/queries/app-settings'
 import {
@@ -18,10 +19,11 @@ import {
 	SettingsLoadingSkeleton,
 } from '@ui/index'
 import { Button } from '@ui/primitives/button'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Puzzle } from 'lucide-react'
 import { parseRemoteExtensionId } from '@sdk/core/extensions'
 import { PRODUCT_IMAGE_DESCRIBE_CAPABILITY } from '@sdk/extensions/product-image-describer'
+import { PRODUCT_LISTING_DRAFT_CAPABILITY } from '@sdk/commerce/products'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/extensions/$extensionId')({
 	component: ExtensionPageComponent,
@@ -40,12 +42,17 @@ function ExtensionPageComponent() {
 	const bindingControls = useBindingMutations(currentUserPubkey)
 	const describe = useDescribeProductImage()
 	const remoteInvoke = useRemoteActionInvoke()
+	const navigate = useNavigate()
 
 	const descriptor = descriptors.find((item) => item.id === extensionId)
 	const entry = serverPubkey
 		? catalog.data?.repository?.entries.find((item) => item.serverPubkey === serverPubkey && item.added)
 		: undefined
 	useDashboardTitle(entry?.name ?? descriptor?.displayName ?? 'Extension')
+	const draftsListings = Boolean(descriptor?.capabilities.includes(PRODUCT_LISTING_DRAFT_CAPABILITY))
+	const productWizard = draftsListings && descriptor && (
+		<AiProductWizard extensionId={descriptor.id} onPublished={() => navigate({ to: '/dashboard/products/products' })} />
+	)
 
 	if (isLoading || isRoleLoading || (serverPubkey && catalog.isFetching && !catalog.data)) return <SettingsLoadingSkeleton />
 	if (!amIAdmin) return <SettingsAccessDenied header={header} message="Only marketplace admins can view extensions." />
@@ -55,7 +62,8 @@ function ExtensionPageComponent() {
 		return (
 			<div className="space-y-4" data-testid="extension-page">
 				<ExtensionCard descriptor={descriptor} />
-				{descriptor.capabilities.includes(PRODUCT_IMAGE_DESCRIBE_CAPABILITY) && describe.available && (
+				{productWizard}
+				{!draftsListings && descriptor.capabilities.includes(PRODUCT_IMAGE_DESCRIBE_CAPABILITY) && describe.available && (
 					<ImageDescribePanel
 						pending={describe.isPending}
 						result={describe.data}
@@ -69,14 +77,18 @@ function ExtensionPageComponent() {
 
 	if (!entry) return <NotAdded />
 	const bindings = (catalog.data?.bindings ?? []).filter((binding) => binding.serverPubkey === serverPubkey)
-	const actions = (descriptor?.actions ?? []).map((action) => ({ extensionId, actionName: action.name, label: action.name }))
+	// Listing drafts get the upload-and-form flow; other tools keep the generic JSON try panel.
+	const actions = (descriptor?.actions ?? [])
+		.filter((action) => !(draftsListings && (action.name === 'draft-listing' || descriptor?.actions.length === 1)))
+		.map((action) => ({ extensionId, actionName: action.name, label: action.name }))
 
 	return (
 		<div className="space-y-4" data-testid="extension-page">
 			<ul>
 				<RepositoryEntryCard entry={entry} bindings={bindings} bindingControls={bindingControls} />
 			</ul>
-			{actions.length === 0 && (
+			{productWizard}
+			{actions.length === 0 && !draftsListings && (
 				<p className="text-sm text-muted-foreground">
 					No active actions. Accept its suggested bindings in the{' '}
 					<Link to="/dashboard/app-settings/extension-store" className="underline">
