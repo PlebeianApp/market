@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { parseMarketConfig, type PublicConfigSchemaVersion } from '@sdk/core'
+import { parseMarketConfig, type PublicConfigSchemaVersion, type PublicExtensionDescriptor } from '@sdk/core'
 import { BUG_RELAY, DEFAULT_PUBLIC_RELAYS, DEFAULT_TRUSTED_MINTS, type Stage } from './constants'
 import { RelayUrlSchema, SocialLinksSchema, WebUrlSchema, type AppSettings, type SocialLinks } from './schemas/app'
 
@@ -38,6 +38,8 @@ export interface PublicAppConfig extends InstanceConfig {
 	needsSetup: boolean
 	serverReady: boolean
 	externalZapRelaysEnabled: boolean
+	/** Enabled extensions (ADR-0023); public descriptors only, never private config. Parse with `parsePublicExtensionDescriptors`. */
+	extensions?: PublicExtensionDescriptor[]
 }
 
 export type MarketConfigSource = Pick<

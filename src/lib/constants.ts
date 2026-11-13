@@ -1,3 +1,5 @@
+import { MARKETPLACE_PRODUCT_CATEGORIES } from '@sdk/commerce/products/listingDraft'
+
 export type ObjectValues<T> = T[keyof T]
 
 // =============================================================================
@@ -152,17 +154,7 @@ export type PaymentDetailsMethod = ObjectValues<typeof PAYMENT_DETAILS_METHOD>
 
 export { CITIES_BY_COUNTRY, COUNTRIES_ISO, COUNTRY_DIALING_CODES, type ISO3 } from '@sdk/core/geo'
 
-export const PRODUCT_CATEGORIES = [
-	'Bitcoin',
-	'Art',
-	'Clothing',
-	'Food & Drink',
-	'Home & Technology',
-	'Health & Beauty',
-	'Sports & Outside',
-	'Services',
-	'Other',
-] as const
+export const PRODUCT_CATEGORIES = MARKETPLACE_PRODUCT_CATEGORIES
 
 export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number]
 

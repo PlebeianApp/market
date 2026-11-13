@@ -1,4 +1,5 @@
 import { serve, type Server } from 'bun'
+import { extensionRoutes } from './extensions'
 import { configRoutes } from './http/config'
 import { nip05Routes } from './http/nip05'
 import { ogRoutes } from './http/og'
@@ -35,6 +36,7 @@ export function buildServer({ indexHtml }: BuildServerOptions): Server<undefined
 		...configRoutes,
 		...zapPurchaseRoutes,
 		...nip05Routes,
+		...extensionRoutes,
 		...staticRoutes,
 		// Product pages get og: meta tags server-rendered into the initial
 		// HTML (issue #459) — must beat the catch-all below.

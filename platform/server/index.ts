@@ -28,3 +28,4 @@ export type { EventHandlerConfig, EventValidationResult, ProcessedEvent, AdminMa
 export { buildServer, type BuildServerOptions } from './buildServer'
 export { initializeAppSettings, startEventHandlerInitialization } from './startup'
 export { determineStage } from './runtime'
+export { getExtensionRegistry, getPublicExtensionDescriptors, startExtensions, stopExtensions } from './extensions'

@@ -118,6 +118,16 @@ export const dashboardNavigation: NavSection[] = [
 				path: '/dashboard/app-settings/featured-items',
 				adminOnly: true,
 			},
+			{
+				title: '🧩 Extensions',
+				path: '/dashboard/app-settings/extensions',
+				adminOnly: true,
+			},
+			{
+				title: '🛍️ Extension store',
+				path: '/dashboard/app-settings/extension-store',
+				adminOnly: true,
+			},
 		],
 	},
 	{

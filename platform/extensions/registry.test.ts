@@ -48,7 +48,7 @@ describe('ExtensionRegistry', () => {
 		expect(registry.isEnabled('maps')).toBe(true)
 		expect(registry.hasCapability('mailer:use')).toBe(false)
 		expect(registry.getPublicDescriptors()).toEqual([
-			{ id: 'maps', version: '1.0.0', capabilities: ['maps:use'], config: { tiles: 'osm' } },
+			{ id: 'maps', version: '1.0.0', displayName: 'maps', capabilities: ['maps:use'], config: { tiles: 'osm' }, actions: [] },
 		])
 		expect(JSON.stringify(registry.getPublicDescriptors())).not.toContain('secret')
 	})
@@ -113,5 +113,52 @@ describe('ExtensionRegistry', () => {
 		const b = new ExtensionRegistry('market-b').register(createExtension('maps', ['client'], []))
 		a.configure([{ id: 'maps', enabled: true, publicConfig: {} }])
 		expect(b.isEnabled('maps')).toBe(false)
+	})
+
+	test('isolated start skips a failing extension and keeps the others running', async () => {
+		const log: string[] = []
+		const registry = new ExtensionRegistry('market-a')
+			.register(createExtension('a', ['server'], log))
+			.register(createExtension('b', ['server'], log, { failStart: true }))
+		registry.configure([
+			{ id: 'a', enabled: true, publicConfig: {}, privateConfig: {} },
+			{ id: 'b', enabled: true, publicConfig: {}, privateConfig: {} },
+		])
+		const failures = await registry.start('server', { isolateFailures: true })
+		expect(failures.map((failure) => failure.id)).toEqual(['b'])
+		expect(log).toEqual(['start a server private={}'])
+		expect(registry.getPublicDescriptors().map((descriptor) => descriptor.id)).toEqual(['a'])
+		expect(registry.isEnabled('b')).toBe(false)
+	})
+
+	test('exposes action targets only for running server extensions with host ports', async () => {
+		const actions = {
+			ping: {
+				input: record,
+				output: record,
+				auth: 'user' as const,
+				rateLimit: { perPubkey: 1, windowSeconds: 1 },
+				handler: async () => ({ ok: true as const, value: {} }),
+			},
+		}
+		const withActions = defineExtension({
+			manifest: { id: 'act', version: '1.0.0', displayName: 'act', capabilities: [], runtimes: ['server'], publicConfig: record },
+			actions,
+		})
+		const registry = new ExtensionRegistry('market-a').register(withActions)
+		registry.configure([{ id: 'act', enabled: true, publicConfig: {} }])
+
+		expect((await registry.start('server', { isolateFailures: true })).map((failure) => failure.id)).toEqual(['act'])
+		expect(registry.getActionTarget('act')).toBeUndefined()
+
+		expect(registry.isEnabled('act')).toBe(false)
+		registry.configure([{ id: 'act', enabled: true, publicConfig: {} }])
+		const log = { debug() {}, info() {}, warn() {}, error() {} }
+		await registry.start('server', { createHost: () => ({ log }) })
+		const target = registry.getActionTarget('act')
+		expect(target?.context.host.log).toBe(log)
+		expect(registry.getActionTarget('missing')).toBeUndefined()
+		await registry.stop()
+		expect(registry.getActionTarget('act')).toBeUndefined()
 	})
 })

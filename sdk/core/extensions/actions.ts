@@ -1,0 +1,279 @@
+import { SdkError } from '../errors'
+import { failure, success, type Result } from '../result'
+import { validateWithSchema, type RuntimeSchema } from '../validation'
+import type { ExtensionContext } from './extension'
+import type { ExtensionHostPorts } from './hostPorts'
+import type { ExtensionPaymentRequirement } from './payments'
+
+export const EXTENSION_ACTION_AUTH = ['user', 'admin'] as const
+export type ExtensionActionAuth = (typeof EXTENSION_ACTION_AUTH)[number]
+
+/**
+ * Transports an action is exposed on. ContextVM tools can be discoverable on public relays, so exposure
+ * there is an explicit per-action opt-in; Platform must also enable it per instance.
+ */
+export const EXTENSION_ACTION_TRANSPORTS = ['http', 'contextvm'] as const
+export type ExtensionActionTransport = (typeof EXTENSION_ACTION_TRANSPORTS)[number]
+export const DEFAULT_EXTENSION_ACTION_TRANSPORTS: readonly ExtensionActionTransport[] = ['http']
+
+export interface ExtensionActionRateLimit {
+	perPubkey: number
+	windowSeconds: number
+}
+
+/**
+ * Authenticated caller as established by Platform: NIP-98 over HTTP, or the signed request event over
+ * ContextVM. Extensions never authenticate on their own, and the same per-pubkey rate limit spans transports.
+ */
+export interface ExtensionCaller {
+	pubkey: string
+	isAdmin: boolean
+	transport: ExtensionActionTransport
+	/** Set by Platform only after it redeemed the caller's token for a marketplace-collected action. */
+	payment?: { collectedSats: number; mint: string }
+}
+
+/** Server handlers always receive host ports; `log` is unconditional. */
+export type ExtensionActionContext<PublicConfig = unknown, PrivateConfig = never> = ExtensionContext<PublicConfig, PrivateConfig> & {
+	host: ExtensionHostPorts
+}
+
+export interface ExtensionActionDefinition<Input = unknown, Output = unknown, PublicConfig = unknown, PrivateConfig = never> {
+	/** Public, client-safe description surfaced in extension descriptors. */
+	description?: string
+	input: RuntimeSchema<Input>
+	output: RuntimeSchema<Output>
+	auth: ExtensionActionAuth
+	rateLimit: ExtensionActionRateLimit
+	/** Defaults to `['http']`. */
+	transports?: readonly ExtensionActionTransport[]
+	/** JSON Schema for the input, published as the ContextVM/MCP tool `inputSchema`. Parsing still uses `input`. */
+	inputJsonSchema?: Readonly<Record<string, unknown>>
+	/**
+	 * Price of one call when the user pays the payee directly with Cashu (ADR-0023 §7.9). When it returns a
+	 * requirement, the action runs only in the browser through a built-in client executor; the server handler is
+	 * refused so the operator never pays for it by accident.
+	 */
+	payment?: (publicConfig: PublicConfig) => ExtensionPaymentRequirement | undefined
+	handler(
+		context: ExtensionActionContext<PublicConfig, PrivateConfig>,
+		input: Input,
+		caller: ExtensionCaller,
+	): Promise<Result<Output, SdkError>>
+}
+
+export type AnyExtensionActionDefinition = ExtensionActionDefinition<any, any, any, any>
+
+export interface PublicExtensionActionDescriptor {
+	name: string
+	description?: string
+	auth: ExtensionActionAuth
+	rateLimit: ExtensionActionRateLimit
+	transports: readonly ExtensionActionTransport[]
+	payment?: ExtensionPaymentRequirement
+}
+
+/**
+ * Wire-level error vocabulary shared by Platform and the SDK client. Provider billing failures
+ * are availability errors: payment-state vocabulary is reserved for marketplace payments.
+ */
+export const EXTENSION_ACTION_ERROR_STATUS = {
+	invalid_input: 400,
+	unauthorized: 401,
+	forbidden: 403,
+	not_found: 404,
+	rate_limited: 429,
+	payment_required: 402,
+	extension_failed: 500,
+	invalid_output: 502,
+	extension_unavailable: 503,
+	upstream_timeout: 504,
+} as const
+
+export type ExtensionActionWireErrorCode = keyof typeof EXTENSION_ACTION_ERROR_STATUS
+/** `extension_misconfigured` is server-internal and is reported to clients as `extension_unavailable`. */
+export type ExtensionActionErrorCode = ExtensionActionWireErrorCode | 'extension_misconfigured' | 'network_error'
+
+const PUBLIC_MESSAGES: Record<ExtensionActionWireErrorCode, string> = {
+	invalid_input: 'Invalid action input',
+	unauthorized: 'Authentication required',
+	forbidden: 'Not allowed',
+	not_found: 'Not found',
+	rate_limited: 'Too many requests',
+	payment_required: 'Payment required',
+	extension_failed: 'Extension failed',
+	invalid_output: 'Extension returned an invalid response',
+	extension_unavailable: 'Extension is temporarily unavailable',
+	upstream_timeout: 'Extension timed out',
+}
+
+const RETRYABLE: ReadonlySet<ExtensionActionErrorCode> = new Set(['rate_limited', 'upstream_timeout', 'network_error'])
+
+export class ExtensionActionError extends SdkError {
+	readonly reason: ExtensionActionErrorCode
+	readonly retryable: boolean
+
+	constructor(reason: ExtensionActionErrorCode, message?: string, cause?: unknown) {
+		super('operation_failed', message ?? defaultMessage(reason), cause)
+		this.name = 'ExtensionActionError'
+		this.reason = reason
+		this.retryable = RETRYABLE.has(reason)
+	}
+}
+
+export interface ExtensionActionErrorBody {
+	ok: false
+	error: { code: ExtensionActionWireErrorCode; message: string; retryable: boolean }
+	/** Marketplace-collected calls: the payment returned as a Cashu token when the call did not complete. */
+	refund?: { token: string }
+}
+
+export interface ExtensionActionSuccessBody<Output> {
+	ok: true
+	value: Output
+	/** Marketplace-collected calls: overpayment returned as a Cashu token. */
+	change?: { token: string }
+}
+
+export type ExtensionActionResponseBody<Output> = ExtensionActionSuccessBody<Output> | ExtensionActionErrorBody
+
+const ACTION_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
+const MAX_ACTION_NAME_LENGTH = 64
+
+export function isValidExtensionActionName(name: string): boolean {
+	return name.length <= MAX_ACTION_NAME_LENGTH && ACTION_NAME.test(name)
+}
+
+export function actionTransports(action: AnyExtensionActionDefinition): readonly ExtensionActionTransport[] {
+	return action.transports ?? DEFAULT_EXTENSION_ACTION_TRANSPORTS
+}
+
+export function extensionActionPath(extensionId: string, actionName: string): string {
+	return `/api/extensions/${encodeURIComponent(extensionId)}/actions/${encodeURIComponent(actionName)}`
+}
+
+/** Lets Platform complete a declared price (e.g. accepted mints); `undefined` hides that paid action. */
+export type ExtensionPaymentResolver = (requirement: ExtensionPaymentRequirement) => ExtensionPaymentRequirement | undefined
+
+export function describeExtensionActions(
+	actions: Readonly<Record<string, AnyExtensionActionDefinition>> | undefined,
+	publicConfig?: unknown,
+	resolvePayment?: ExtensionPaymentResolver,
+) {
+	if (!actions) return [] as PublicExtensionActionDescriptor[]
+	return Object.entries(actions).flatMap(([name, action]): PublicExtensionActionDescriptor[] => {
+		const declared = publicConfig === undefined ? undefined : action.payment?.(publicConfig)
+		const payment = declared && resolvePayment ? resolvePayment(declared) : declared
+		// A priced action whose price cannot be completed is not offered at all, rather than shown as free.
+		if (declared && !payment) return []
+		return [
+			{
+				name,
+				...(action.description ? { description: action.description } : {}),
+				auth: action.auth,
+				rateLimit: { ...action.rateLimit },
+				transports: [...actionTransports(action)],
+				...(payment ? { payment } : {}),
+			},
+		]
+	})
+}
+
+/** Converts any handler/pipeline failure into a status and a body that never carries internal messages or causes. */
+export function toExtensionActionErrorResponse(error: unknown): { status: number; body: ExtensionActionErrorBody } {
+	const reason = error instanceof ExtensionActionError ? error.reason : 'extension_failed'
+	const code = toWireCode(reason)
+	return {
+		status: EXTENSION_ACTION_ERROR_STATUS[code],
+		body: { ok: false, error: { code, message: PUBLIC_MESSAGES[code], retryable: RETRYABLE.has(code) } },
+	}
+}
+
+/**
+ * Maps an upstream provider HTTP status (e.g. an OpenAI-compatible API) to an action error.
+ * 401/403 → misconfigured, 402 → unavailable (operator balance), 408/504 → timeout, 429/5xx → unavailable.
+ */
+export function providerStatusToActionError(status: number): ExtensionActionError | undefined {
+	if (status >= 200 && status < 300) return undefined
+	if (status === 401 || status === 403)
+		return new ExtensionActionError('extension_misconfigured', `Provider rejected credentials (${status})`)
+	if (status === 402) return new ExtensionActionError('extension_unavailable', 'Provider balance insufficient')
+	if (status === 408 || status === 504) return new ExtensionActionError('upstream_timeout', `Provider timed out (${status})`)
+	if (status === 429 || status >= 500) return new ExtensionActionError('extension_unavailable', `Provider unavailable (${status})`)
+	return new ExtensionActionError('extension_failed', `Provider request failed (${status})`)
+}
+
+export interface ExecuteExtensionActionParams {
+	actions: Readonly<Record<string, AnyExtensionActionDefinition>> | undefined
+	actionName: string
+	rawInput: unknown
+	caller: ExtensionCaller
+	context: ExtensionActionContext<any, any>
+}
+
+/**
+ * Transport-neutral action pipeline: lookup, role check, input parse, handler, output parse.
+ * Authentication (NIP-98 or the ContextVM request event) and rate limiting stay with the transport in Platform.
+ */
+export async function executeExtensionAction(params: ExecuteExtensionActionParams): Promise<Result<unknown, ExtensionActionError>> {
+	const { actions, actionName, rawInput, caller, context } = params
+	const action = actions && Object.hasOwn(actions, actionName) ? actions[actionName] : undefined
+	// An action not exposed on the caller's transport is indistinguishable from a missing one.
+	if (!action || !actionTransports(action).includes(caller.transport)) return failure(new ExtensionActionError('not_found'))
+	if (action.auth === 'admin' && !caller.isAdmin) return failure(new ExtensionActionError('forbidden'))
+	const payment = action.payment?.(context.publicConfig)
+	if (payment?.collectedBy === 'payee') return failure(new ExtensionActionError('forbidden', 'Paid action runs in the user wallet'))
+	// The operator never pays for a priced call: without a collected payment the action does not run.
+	if (payment && (caller.payment?.collectedSats ?? 0) < payment.amountSats) {
+		return failure(new ExtensionActionError('payment_required'))
+	}
+
+	// The parse cause is withheld: schema errors can echo user input.
+	const input = validateWithSchema(rawInput, action.input)
+	if (!input.ok) return failure(new ExtensionActionError('invalid_input'))
+
+	if (context.signal.aborted) return failure(new ExtensionActionError('upstream_timeout'))
+
+	let result: Result<unknown, SdkError>
+	try {
+		// Raced so a handler that ignores the signal still cannot outlive the request deadline.
+		result = await raceAbort(action.handler(context, input.value, caller), context.signal)
+	} catch (cause) {
+		if (context.signal.aborted) return failure(new ExtensionActionError('upstream_timeout', undefined, cause))
+		return failure(new ExtensionActionError('extension_failed', undefined, cause))
+	}
+	if (!result.ok) {
+		return failure(
+			result.error instanceof ExtensionActionError ? result.error : new ExtensionActionError('extension_failed', undefined, result.error),
+		)
+	}
+
+	const output = validateWithSchema(result.value, action.output)
+	if (!output.ok) return failure(new ExtensionActionError('invalid_output', undefined, output.error))
+	return success(output.value)
+}
+
+function raceAbort<Value>(promise: Promise<Value>, signal: AbortSignal): Promise<Value> {
+	if (signal.aborted) {
+		promise.catch(() => undefined)
+		return Promise.reject(signal.reason)
+	}
+	let onAbort: () => void = () => undefined
+	const aborted = new Promise<never>((_, reject) => {
+		onAbort = () => reject(signal.reason)
+		signal.addEventListener('abort', onAbort, { once: true })
+	})
+	return Promise.race([promise, aborted]).finally(() => signal.removeEventListener('abort', onAbort))
+}
+
+function toWireCode(reason: ExtensionActionErrorCode): ExtensionActionWireErrorCode {
+	if (reason === 'extension_misconfigured') return 'extension_unavailable'
+	if (reason === 'network_error') return 'extension_failed'
+	return reason
+}
+
+function defaultMessage(reason: ExtensionActionErrorCode): string {
+	if (reason === 'extension_misconfigured') return 'Extension is misconfigured'
+	if (reason === 'network_error') return 'Could not reach the extension endpoint'
+	return PUBLIC_MESSAGES[reason]
+}

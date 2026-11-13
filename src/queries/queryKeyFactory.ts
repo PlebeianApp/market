@@ -203,3 +203,9 @@ export const liveActivityKeys = {
 	byCoord: (auctionCoord: string) => [...liveActivityKeys.all, 'byCoord', auctionCoord] as const,
 	chatMessages: (liveActivityCoord: string) => [...liveActivityKeys.all, 'chat', liveActivityCoord] as const,
 } as const
+
+export const extensionKeys = {
+	all: ['extensions'] as const,
+	/** Admin-only store catalog; scoped by pubkey so a different login never sees a cached listing. */
+	catalog: (pubkey: string) => [...extensionKeys.all, 'catalog', pubkey] as const,
+} as const

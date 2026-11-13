@@ -10,6 +10,8 @@ export interface SettingsPageHeaderProps {
 	icon: IconComponent
 	title: string
 	description: string
+	/** Rendered at the top right of the header, e.g. page-level buttons. */
+	actions?: ReactNode
 }
 
 function SettingsHeading({ icon: Icon, title, description }: SettingsPageHeaderProps) {
@@ -29,14 +31,16 @@ export function SettingsPageHeader(props: SettingsPageHeaderProps) {
 	return (
 		<div className="sticky top-0 z-10 hidden items-center justify-between border-b bg-white px-4 py-4 lg:flex lg:px-6">
 			<SettingsHeading {...props} />
+			{props.actions && <div className="flex items-center gap-2">{props.actions}</div>}
 		</div>
 	)
 }
 
 export function SettingsMobileHeader(props: SettingsPageHeaderProps) {
 	return (
-		<div className="mb-6 lg:hidden">
+		<div className="mb-6 flex items-start justify-between gap-3 lg:hidden">
 			<SettingsHeading {...props} />
+			{props.actions && <div className="flex shrink-0 items-center gap-2">{props.actions}</div>}
 		</div>
 	)
 }
