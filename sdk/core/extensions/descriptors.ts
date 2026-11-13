@@ -8,6 +8,7 @@ import {
 	type ExtensionActionTransport,
 	type PublicExtensionActionDescriptor,
 } from './actions'
+import { parseExtensionPaymentRequirement } from './payments'
 import { isValidExtensionIcon, MAX_DESCRIPTION_LENGTH, type AnyExtensionDefinition } from './extension'
 
 /** Client-safe view of an enabled extension, as published in `/api/config`. Never carries private config. */
@@ -34,7 +35,7 @@ export function describeExtension(definition: AnyExtensionDefinition, publicConf
 		...(manifest.description ? { description: manifest.description } : {}),
 		capabilities: [...manifest.capabilities],
 		config: publicConfig,
-		actions: describeExtensionActions(definition.actions),
+		actions: describeExtensionActions(definition.actions, publicConfig),
 	}
 }
 
@@ -109,7 +110,7 @@ function parseDescriptor(input: unknown): PublicExtensionDescriptor | undefined 
 
 export function parsePublicExtensionAction(input: unknown): PublicExtensionActionDescriptor | undefined {
 	if (!isRecord(input)) return undefined
-	const { name, description, auth, rateLimit, transports } = input
+	const { name, description, auth, rateLimit, transports, payment } = input
 	if (typeof name !== 'string' || !isValidExtensionActionName(name)) return undefined
 	if (typeof auth !== 'string' || !(EXTENSION_ACTION_AUTH as readonly string[]).includes(auth)) return undefined
 	if (!isRecord(rateLimit) || !isPositiveInteger(rateLimit.perPubkey) || !isPositiveInteger(rateLimit.windowSeconds)) return undefined
@@ -121,12 +122,16 @@ export function parsePublicExtensionAction(input: unknown): PublicExtensionActio
 	) {
 		return undefined
 	}
+	// A paid action whose price cannot be read is not callable at all, free or paid.
+	const parsedPayment = payment === undefined ? undefined : parseExtensionPaymentRequirement(payment)
+	if (parsedPayment && !parsedPayment.ok) return undefined
 	return {
 		name,
 		...(typeof description === 'string' && description ? { description: description.slice(0, MAX_TEXT) } : {}),
 		auth: auth as PublicExtensionActionDescriptor['auth'],
 		rateLimit: { perPubkey: rateLimit.perPubkey, windowSeconds: rateLimit.windowSeconds },
 		transports: [...new Set(parsedTransports as ExtensionActionTransport[])],
+		...(parsedPayment?.ok ? { payment: parsedPayment.value } : {}),
 	}
 }
 

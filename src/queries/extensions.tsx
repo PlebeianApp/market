@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
 	findExtensionAction,
 	invokeExtensionAction,
@@ -18,6 +18,10 @@ import {
 	setBuiltinExtensionEnabled,
 	type ExtensionCatalog,
 	type PublicExtensionDescriptor,
+	PaidCallError,
+	runPaidExtensionCall,
+	type ExtensionPaymentRequirement,
+	type PaidCallRecord,
 } from '@sdk/core/extensions'
 import {
 	DescribeImageOutputSchema,
@@ -26,6 +30,7 @@ import {
 	type DescribeImageOutput,
 } from '@sdk/extensions/product-image-describer'
 import { sign } from '@/lib/nostr/io'
+import { findPaidExecutor, nip60PaidCallWallet } from '@/lib/extensions/paidCalls'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
 import { PRODUCT_LISTING_DRAFT_CAPABILITY, parseProductListingDraft, type ProductListingDraft } from '@sdk/commerce/products'
 import type { PublicAppConfig } from '@/lib/instance-config'
@@ -295,6 +300,33 @@ export function useRemoteActionInvoke() {
  * ContextVM tool). The reply is untrusted: it is parsed, capped, and shown for review; nothing is published here.
  */
 /** Drafts a listing from a photo. With `extensionId`, only that extension is used (e.g. on its own page). */
+/**
+ * Asks the user to approve one payment. The returned promise resolves when the user answers the dialog that renders
+ * `pending`; nothing is paid unless they approve.
+ */
+export function usePaymentApproval() {
+	const [pending, setPending] = useState<ExtensionPaymentRequirement>()
+	const resolver = useRef<(approved: boolean) => void>(undefined)
+	const request = useCallback(
+		(requirement: ExtensionPaymentRequirement) =>
+			new Promise<boolean>((resolve) => {
+				resolver.current?.(false)
+				resolver.current = resolve
+				setPending(requirement)
+			}),
+		[],
+	)
+	const settle = useCallback((approved: boolean) => {
+		resolver.current?.(approved)
+		resolver.current = undefined
+		setPending(undefined)
+	}, [])
+	return { pending, request, approve: () => settle(true), decline: () => settle(false) }
+}
+
+export type ListingDraftResult = ProductListingDraft & { payment?: PaidCallRecord }
+
+/** Drafts a listing from a photo. With `extensionId`, only that extension is used (e.g. on its own page). */
 export function useProductListingDraft(extensionId?: string) {
 	const { descriptors } = useExtensionDescriptors()
 	const scoped = useMemo(
@@ -302,13 +334,36 @@ export function useProductListingDraft(extensionId?: string) {
 		[descriptors, extensionId],
 	)
 	const anyTarget = useExtensionCapability(PRODUCT_LISTING_DRAFT_CAPABILITY, 'draft-listing').target
-	const target = scoped
+	const found = scoped
 		? (findExtensionAction(scoped, PRODUCT_LISTING_DRAFT_CAPABILITY, { actionName: 'draft-listing' }) ??
 			findExtensionAction(scoped, PRODUCT_LISTING_DRAFT_CAPABILITY))
 		: anyTarget
-	const mutation = useMutation<ProductListingDraft, ExtensionActionError, { imageUrl: string; notes?: string }>({
+	const payment = found?.action.payment
+	const executor = found && payment ? findPaidExecutor(found.extensionId, found.action.name) : undefined
+	// A priced action without a built-in executor (e.g. a remote one) cannot be paid, so it is not offered.
+	const target = payment && !executor ? undefined : found
+	const config = descriptors.find((descriptor) => descriptor.id === target?.extensionId)?.config
+	const approval = usePaymentApproval()
+	const [paymentRecord, setPaymentRecord] = useState<PaidCallRecord>()
+
+	const mutation = useMutation<ListingDraftResult, ExtensionActionError | PaidCallError, { imageUrl: string; notes?: string }>({
 		mutationFn: async (input) => {
 			if (!target) throw new ExtensionActionError('not_found')
+			if (payment && executor) {
+				setPaymentRecord(undefined)
+				const { output, record } = await runPaidExtensionCall({
+					requirement: payment,
+					executor,
+					input,
+					config,
+					wallet: nip60PaidCallWallet,
+					approve: approval.request,
+					onState: setPaymentRecord,
+				})
+				const draft = parseProductListingDraft(output, PRODUCT_CATEGORIES)
+				if (!draft.ok) throw new ExtensionActionError('invalid_output', draft.error.message)
+				return { ...draft.value, payment: record }
+			}
 			const result = await invokeExtensionAction(target.extensionId, target.action.name, input, { sign })
 			if (!result.ok) throw result.error
 			const draft = parseProductListingDraft(listingDraftPayload(result.value), PRODUCT_CATEGORIES)
@@ -316,7 +371,33 @@ export function useProductListingDraft(extensionId?: string) {
 			return draft.value
 		},
 	})
-	return { available: Boolean(target), target, ...mutation }
+	return { available: Boolean(target), target, payment: target ? payment : undefined, approval, paymentRecord, ...mutation }
+}
+
+/** User-facing copy for a paid call that did not produce a result, including where the sats went. */
+export function paidCallErrorMessage(error: PaidCallError): string {
+	const { record } = error
+	switch (error.reason) {
+		case 'declined':
+			return 'Payment cancelled. Nothing was paid.'
+		case 'insufficient_funds':
+			return `Your wallet needs at least ${record.amountSats} sats at a mint this extension accepts. Top up from the wallet in the header.`
+		case 'wallet_failed':
+			return 'Your wallet could not create the payment. Nothing was paid.'
+		case 'provider_rejected': {
+			const base = error.providerError ? extensionErrorMessage(error.providerError) : 'The extension could not complete the request.'
+			const recovery: Partial<Record<PaidCallRecord['state'], string>> = {
+				reclaimed: 'Your payment was returned to your wallet.',
+				change_received: 'Unused sats were returned to your wallet.',
+				no_change: 'The provider kept the payment.',
+				reclaim_failed: 'The provider kept the payment; check pending tokens in your wallet.',
+				change_unclaimed: 'Change could not be added to your wallet; check your wallet.',
+			}
+			return [base, recovery[record.state]].filter(Boolean).join(' ')
+		}
+		default:
+			return 'The payment could not be completed.'
+	}
 }
 
 /** Built-in actions return the draft itself; remote (ContextVM) actions wrap it as `{ text, data }`. */

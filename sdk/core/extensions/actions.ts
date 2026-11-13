@@ -3,6 +3,7 @@ import { failure, success, type Result } from '../result'
 import { validateWithSchema, type RuntimeSchema } from '../validation'
 import type { ExtensionContext } from './extension'
 import type { ExtensionHostPorts } from './hostPorts'
+import type { ExtensionPaymentRequirement } from './payments'
 
 export const EXTENSION_ACTION_AUTH = ['user', 'admin'] as const
 export type ExtensionActionAuth = (typeof EXTENSION_ACTION_AUTH)[number]
@@ -46,6 +47,12 @@ export interface ExtensionActionDefinition<Input = unknown, Output = unknown, Pu
 	transports?: readonly ExtensionActionTransport[]
 	/** JSON Schema for the input, published as the ContextVM/MCP tool `inputSchema`. Parsing still uses `input`. */
 	inputJsonSchema?: Readonly<Record<string, unknown>>
+	/**
+	 * Price of one call when the user pays the payee directly with Cashu (ADR-0023 §7.9). When it returns a
+	 * requirement, the action runs only in the browser through a built-in client executor; the server handler is
+	 * refused so the operator never pays for it by accident.
+	 */
+	payment?: (publicConfig: PublicConfig) => ExtensionPaymentRequirement | undefined
 	handler(
 		context: ExtensionActionContext<PublicConfig, PrivateConfig>,
 		input: Input,
@@ -61,6 +68,7 @@ export interface PublicExtensionActionDescriptor {
 	auth: ExtensionActionAuth
 	rateLimit: ExtensionActionRateLimit
 	transports: readonly ExtensionActionTransport[]
+	payment?: ExtensionPaymentRequirement
 }
 
 /**
@@ -136,17 +144,22 @@ export function extensionActionPath(extensionId: string, actionName: string): st
 	return `/api/extensions/${encodeURIComponent(extensionId)}/actions/${encodeURIComponent(actionName)}`
 }
 
-export function describeExtensionActions(actions: Readonly<Record<string, AnyExtensionActionDefinition>> | undefined) {
+export function describeExtensionActions(
+	actions: Readonly<Record<string, AnyExtensionActionDefinition>> | undefined,
+	publicConfig?: unknown,
+) {
 	if (!actions) return [] as PublicExtensionActionDescriptor[]
-	return Object.entries(actions).map(
-		([name, action]): PublicExtensionActionDescriptor => ({
+	return Object.entries(actions).map(([name, action]): PublicExtensionActionDescriptor => {
+		const payment = publicConfig === undefined ? undefined : action.payment?.(publicConfig)
+		return {
 			name,
 			...(action.description ? { description: action.description } : {}),
 			auth: action.auth,
 			rateLimit: { ...action.rateLimit },
 			transports: [...actionTransports(action)],
-		}),
-	)
+			...(payment ? { payment } : {}),
+		}
+	})
 }
 
 /** Converts any handler/pipeline failure into a status and a body that never carries internal messages or causes. */
@@ -191,6 +204,7 @@ export async function executeExtensionAction(params: ExecuteExtensionActionParam
 	// An action not exposed on the caller's transport is indistinguishable from a missing one.
 	if (!action || !actionTransports(action).includes(caller.transport)) return failure(new ExtensionActionError('not_found'))
 	if (action.auth === 'admin' && !caller.isAdmin) return failure(new ExtensionActionError('forbidden'))
+	if (action.payment?.(context.publicConfig)) return failure(new ExtensionActionError('forbidden', 'Paid action runs in the user wallet'))
 
 	// The parse cause is withheld: schema errors can echo user input.
 	const input = validateWithSchema(rawInput, action.input)

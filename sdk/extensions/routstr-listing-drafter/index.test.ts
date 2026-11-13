@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { ExtensionHttpError, executeExtensionAction, parseExtensionConfig, validateExtensionDefinition } from '../../core/extensions'
+import {
+	ExtensionHttpError,
+	describeExtension,
+	executeExtensionAction,
+	parseExtensionConfig,
+	validateExtensionDefinition,
+	type PayeeFetch,
+} from '../../core/extensions'
 import {
 	createFakeHttpPort,
 	createRecordingLogger,
@@ -8,6 +15,9 @@ import {
 	testCaller,
 } from '../../core/testing/extensionHost'
 import {
+	REFUND_PATH,
+	draftListingWithCashu,
+	routstrDraftPayment,
 	CHAT_COMPLETIONS_PATH,
 	ROUTSTRD_ORIGIN,
 	buildChatRequest,
@@ -17,7 +27,7 @@ import {
 	type RoutstrListingDrafterConfig,
 } from '.'
 
-const config: RoutstrListingDrafterConfig = { model: 'qwen2.5-vl-72b', maxTokens: 700 }
+const config: RoutstrListingDrafterConfig = { paymentMode: 'operator', model: 'qwen2.5-vl-72b', maxTokens: 700 }
 const draftJson = {
 	title: 'Hand-thrown Ceramic Mug',
 	summary: 'A glazed stoneware mug.',
@@ -139,5 +149,115 @@ describe('routstr helpers', () => {
 		const body = buildChatRequest({ imageUrl: 'https://x.example/a.jpg' }, config)
 		expect(JSON.stringify(body.messages[1])).not.toContain('Seller notes')
 		expect(body.max_tokens).toBe(700)
+	})
+})
+
+describe('routstr-listing-drafter user-paid mode', () => {
+	const userConfig: RoutstrListingDrafterConfig = {
+		paymentMode: 'user',
+		model: 'qwen2.5-vl-72b',
+		maxTokens: 700,
+		provider: 'https://node.example',
+		acceptedMints: ['https://mint.example'],
+		pricePerDraftSats: 40,
+	}
+
+	test('user mode needs a node, mints, and a price; env-style mint lists are split', () => {
+		expect(parseExtensionConfig(routstrListingDrafterManifest, { publicConfig: { model: 'm', paymentMode: 'user' } }).ok).toBe(false)
+		expect(
+			parseExtensionConfig(routstrListingDrafterManifest, {
+				publicConfig: {
+					model: 'm',
+					paymentMode: 'user',
+					provider: 'https://node.example',
+					acceptedMints: 'https://mint.a, https://mint.b',
+					pricePerDraftSats: '40',
+				},
+			}),
+		).toMatchObject({ ok: true, value: { publicConfig: { acceptedMints: ['https://mint.a', 'https://mint.b'], pricePerDraftSats: 40 } } })
+	})
+
+	test('publishes the price on the descriptor only in user mode', () => {
+		expect(describeExtension(routstrListingDrafter, config).actions[0].payment).toBeUndefined()
+		expect(describeExtension(routstrListingDrafter, userConfig).actions[0].payment).toEqual({
+			method: 'cashu',
+			payee: 'https://node.example',
+			amountSats: 40,
+			mints: ['https://mint.example'],
+			refundsChange: true,
+			description: 'One AI listing draft (qwen2.5-vl-72b) from a Routstr node',
+		})
+		expect(routstrDraftPayment(config)).toBeUndefined()
+	})
+
+	test('the server refuses to run a user-paid draft, so the operator never pays', async () => {
+		const { result, requests } = run(() => completion(JSON.stringify(draftJson)), { config: userConfig })
+		const outcome = await result
+		expect(outcome.ok).toBe(false)
+		expect(!outcome.ok && (outcome.error as { reason: string }).reason).toBe('forbidden')
+		expect(requests).toHaveLength(0)
+	})
+
+	function payeeFetch(routes: Record<string, () => { status: number; body: string } | Error>) {
+		const calls: { path: string; headers?: Record<string, string>; body?: string }[] = []
+		const fetch: PayeeFetch = async (path, init) => {
+			calls.push({ path, headers: init.headers, body: init.body })
+			const route = routes[path]?.()
+			if (!route) return { status: 404, body: '' }
+			if (route instanceof Error) throw route
+			return route
+		}
+		return { fetch, calls }
+	}
+	const ok = (body: unknown) => () => ({ status: 200, body: JSON.stringify(body) })
+
+	test('pays with the token as bearer credential, then asks for change', async () => {
+		const { fetch, calls } = payeeFetch({
+			[CHAT_COMPLETIONS_PATH]: ok({ choices: [{ message: { content: JSON.stringify(draftJson) } }] }),
+			[REFUND_PATH]: ok({ token: 'cashuBchange', msats: '12000' }),
+		})
+		const outcome = await draftListingWithCashu(
+			{ token: 'cashuBpay', config: userConfig, fetch },
+			{ imageUrl: 'https://blossom.example/a.jpg' },
+		)
+		expect(outcome).toMatchObject({ outcome: 'accepted', output: { title: 'Hand-thrown Ceramic Mug' }, changeToken: 'cashuBchange' })
+		expect(calls.map((call) => call.path)).toEqual([CHAT_COMPLETIONS_PATH, REFUND_PATH])
+		expect(calls.every((call) => call.headers?.authorization === 'Bearer cashuBpay')).toBe(true)
+	})
+
+	test('a failed draft still returns change when the node kept the token', async () => {
+		const { fetch } = payeeFetch({
+			[CHAT_COMPLETIONS_PATH]: () => ({ status: 402, body: '{}' }),
+			[REFUND_PATH]: ok({ token: 'cashuBchange' }),
+		})
+		const outcome = await draftListingWithCashu(
+			{ token: 'cashuBpay', config: userConfig, fetch },
+			{ imageUrl: 'https://blossom.example/a.jpg' },
+		)
+		expect(outcome).toMatchObject({ outcome: 'rejected', changeToken: 'cashuBchange' })
+		expect(outcome.outcome === 'rejected' && outcome.error.reason).toBe('extension_unavailable')
+	})
+
+	test('an unreachable node returns no change, leaving the runner to reclaim the token', async () => {
+		const { fetch, calls } = payeeFetch({ [CHAT_COMPLETIONS_PATH]: () => new Error('CORS') })
+		const outcome = await draftListingWithCashu(
+			{ token: 'cashuBpay', config: userConfig, fetch },
+			{ imageUrl: 'https://blossom.example/a.jpg' },
+		)
+		expect(outcome).toMatchObject({ outcome: 'rejected' })
+		expect(outcome).not.toHaveProperty('changeToken')
+		expect(calls).toHaveLength(1)
+	})
+
+	test('ignores a refund body that is not a Cashu token', async () => {
+		const { fetch } = payeeFetch({
+			[CHAT_COMPLETIONS_PATH]: ok({ choices: [{ message: { content: JSON.stringify(draftJson) } }] }),
+			[REFUND_PATH]: ok({ token: 'javascript:alert(1)' }),
+		})
+		const outcome = await draftListingWithCashu(
+			{ token: 'cashuBpay', config: userConfig, fetch },
+			{ imageUrl: 'https://blossom.example/a.jpg' },
+		)
+		expect(outcome).not.toHaveProperty('changeToken')
 	})
 })

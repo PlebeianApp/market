@@ -148,3 +148,28 @@ export {
 	updateRemoteBinding,
 } from './bindings'
 export type { RemoteActionOutput, RemoteBindingRequest, RemoteBindingState, RemoteBindingView } from './bindings'
+export {
+	advancePaidCall,
+	createPaidCallRecord,
+	createPayeeFetch,
+	EXTENSION_PAYMENT_METHODS,
+	isTerminalPaidCallState,
+	normalizePaymentMintUrl,
+	PaidCallError,
+	paidCallSpentSats,
+	parseExtensionPaymentRequirement,
+	runPaidExtensionCall,
+} from './payments'
+export type {
+	ExtensionPaymentMethod,
+	ExtensionPaymentRequirement,
+	PaidCallFailureReason,
+	PaidCallRecord,
+	PaidCallState,
+	PaidCallWallet,
+	PaidClientExecutor,
+	PaidExecutorOutcome,
+	PayeeFetch,
+	PayeeResponse,
+	RunPaidCallParams,
+} from './payments'

@@ -758,6 +758,75 @@ The store never writes extension settings, bindings, sources, or install state
 to relays. Public visitors never see the store. They see only the resulting
 capabilities in `/api/config`.
 
+#### 7.9 User-paid calls (Cashu, paid directly by the user)
+
+**Decision.** An action can be paid per call by the user. The user's own Cashu
+wallet pays the extension's payee directly from the browser. The marketplace
+neither receives nor relays the payment.
+
+- **Contract** (`sdk/core/extensions/payments.ts`):
+  - An action may declare `payment(publicConfig)` returning an
+    `ExtensionPaymentRequirement`:
+    - `method: 'cashu'`;
+    - an https `payee` origin;
+    - `amountSats`, the face value of the token sent per call;
+    - accepted `mints`;
+    - `refundsChange`.
+  - The requirement is published on the action descriptor in `/api/config` and
+    parsed as untrusted. An action whose price cannot be read is dropped,
+    whether free or paid.
+- **No operator fallback.** When an action has a requirement, the server
+  pipeline refuses it (`forbidden`), so the operator never pays for a user-paid
+  call by accident.
+- **Who can be paid.**
+  - Only built-in extensions can ship the browser code that runs a paid call
+    (a `PaidClientExecutor`, registered in `src/lib/extensions/paidCalls.ts`).
+    It is a pure function given a payee-scoped fetch (same origin only, no
+    redirects, no cookies).
+  - A remote extension whose descriptor carries a price is therefore not
+    callable. Paid ContextVM tools stay unbindable (§7.2).
+- **Approval.** Every payment is confirmed in a dialog showing the amount,
+  payee, accepted mints, and whether change is returned. There is no
+  auto-approve and no budget.
+- **Insufficient funds.** If no accepted mint holds enough balance, the call is
+  blocked and the user is pointed to their wallet. Nothing is sent.
+- **Lifecycle.** Every step is a recorded state, never a boolean. The
+  happy-path sequence is:
+
+  ```
+  awaiting_approval → approved → token_created → request_sent
+    → provider_accepted | provider_rejected
+  ```
+
+  Terminal states:
+  - before any request: `declined`, `insufficient_funds`, `wallet_failed`;
+  - after a request: `change_received`, `change_unclaimed`, `no_change`,
+    `reclaimed`, `reclaim_failed`.
+
+  Recovery after the request:
+  - on success, change is redeemed into the wallet;
+  - on failure, change is redeemed if the payee returned it; otherwise the
+    untouched token is reclaimed;
+  - a change token the wallet cannot redeem is kept on the record for the user
+    and never logged.
+
+- **Not a marketplace payment.** This creates no order, receipt, or
+  payment-lifecycle state, and it does not use marketplace payment vocabulary
+  in the UI.
+- **Wallet.** The paid-call wallet adapter wraps the header's NIP-60 wallet
+  (`nip60Actions.sendEcash` / `receiveEcash` / `reclaimToken`). Tokens it
+  sends are pending, reclaimable tokens like any other send.
+- **First user: Routstr.**
+  - `routstr-listing-drafter` with `PUBLIC_PAYMENT_MODE=user`. It also needs
+    `PUBLIC_PROVIDER` (the node), `PUBLIC_ACCEPTED_MINTS`, and
+    `PUBLIC_PRICE_PER_DRAFT_SATS`.
+  - The browser sends the token as the `Authorization: Bearer` credential to
+    the node's `/v1/chat/completions`, then asks `/v1/balance/refund` for the
+    unspent value.
+  - **Unverified:** that a raw-token credential can be refunded this way, and
+    that nodes allow cross-origin browser requests. Routstr documents
+    per-request `X-Cashu` change as "coming soon".
+
 ## Rules
 
 - Extensions never import `@nostr-dev-kit/*`, `nostr-tools` relay classes, app

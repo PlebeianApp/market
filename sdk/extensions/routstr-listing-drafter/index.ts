@@ -6,8 +6,11 @@ import {
 	providerStatusToActionError,
 	type ExtensionHttpError,
 	type ExtensionManifest,
+	type ExtensionPaymentRequirement,
+	type PaidClientExecutor,
+	type PayeeFetch,
 } from '../../core/extensions'
-import { failure, success } from '../../core/result'
+import { failure, success, type Result } from '../../core/result'
 import {
 	LISTING_DRAFT_LIMITS,
 	MARKETPLACE_PRODUCT_CATEGORIES,
@@ -22,6 +25,8 @@ import {
  */
 export const ROUTSTRD_ORIGIN = 'http://127.0.0.1:8008'
 export const CHAT_COMPLETIONS_PATH = '/v1/chat/completions'
+/** Routstr returns a token's unspent balance as a Cashu token here (unverified for raw-token credentials). */
+export const REFUND_PATH = '/v1/balance/refund'
 const PROVIDER_HEADER = 'x-routstr-provider'
 
 const HttpsUrlSchema = z
@@ -37,18 +42,61 @@ const HttpsUrlSchema = z
 		}
 	}, 'Must be an https URL')
 
-const PublicConfigSchema = z.object({
-	/** A vision-capable model id the daemon advertises (`routstrd models`). */
-	model: z
-		.string()
-		.trim()
-		.min(1)
-		.max(120)
-		.regex(/^[\w.:/@-]+$/, 'Model id has unexpected characters'),
-	/** Optional strict pin to one Routstr node (sent as `x-routstr-provider`). */
-	provider: HttpsUrlSchema.optional(),
-	maxTokens: z.coerce.number().int().min(100).max(2000).default(700),
-})
+/** Mint URLs: https, or http on loopback for the local e2e mint. */
+const MintUrlSchema = z
+	.string()
+	.trim()
+	.max(2048)
+	.refine((value) => {
+		try {
+			const url = new URL(value)
+			const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+			return (url.protocol === 'https:' || (url.protocol === 'http:' && loopback)) && !url.username && !url.password
+		} catch {
+			return false
+		}
+	}, 'Mint must be an https URL')
+
+const MintListSchema = z.preprocess(
+	(value) =>
+		typeof value === 'string'
+			? value
+					.split(',')
+					.map((item) => item.trim())
+					.filter(Boolean)
+			: value,
+	z.array(MintUrlSchema).min(1).max(10),
+)
+
+const PublicConfigSchema = z
+	.object({
+		/**
+		 * `operator`: the marketplace's routstrd wallet pays (server-side). `user`: each seller pays the node directly from
+		 * their own Cashu wallet in the browser; the server handler is refused.
+		 */
+		paymentMode: z.enum(['operator', 'user']).default('operator'),
+		/** A vision-capable model id (`routstrd models`, or the node's `/v1/models`). */
+		model: z
+			.string()
+			.trim()
+			.min(1)
+			.max(120)
+			.regex(/^[\w.:/@-]+$/, 'Model id has unexpected characters'),
+		/** Operator mode: optional strict pin (`x-routstr-provider`). User mode: the node the browser pays (required). */
+		provider: HttpsUrlSchema.optional(),
+		maxTokens: z.coerce.number().int().min(100).max(2000).default(700),
+		/** User mode: mints the node accepts. */
+		acceptedMints: MintListSchema.optional(),
+		/** User mode: face value of the token sent per draft; the node refunds what the draft did not use. */
+		pricePerDraftSats: z.coerce.number().int().min(1).max(100_000).optional(),
+	})
+	.superRefine((config, issues) => {
+		if (config.paymentMode !== 'user') return
+		if (!config.provider) issues.addIssue({ code: 'custom', path: ['provider'], message: 'User mode needs the provider node URL' })
+		if (!config.acceptedMints) issues.addIssue({ code: 'custom', path: ['acceptedMints'], message: 'User mode needs accepted mints' })
+		if (!config.pricePerDraftSats)
+			issues.addIssue({ code: 'custom', path: ['pricePerDraftSats'], message: 'User mode needs a price per draft' })
+	})
 
 export type RoutstrListingDrafterConfig = z.infer<typeof PublicConfigSchema>
 
@@ -97,6 +145,19 @@ export const routstrListingDrafterManifest = {
 
 const action = defineActionFor(routstrListingDrafterManifest)
 
+/** The price of one draft when sellers pay; `undefined` in operator mode. */
+export function routstrDraftPayment(config: RoutstrListingDrafterConfig): ExtensionPaymentRequirement | undefined {
+	if (config.paymentMode !== 'user' || !config.provider || !config.acceptedMints || !config.pricePerDraftSats) return undefined
+	return {
+		method: 'cashu',
+		payee: new URL(config.provider).origin,
+		amountSats: config.pricePerDraftSats,
+		mints: config.acceptedMints,
+		refundsChange: true,
+		description: `One AI listing draft (${config.model}) from a Routstr node`,
+	}
+}
+
 /** Built from constants only; seller text goes in the user message, never in the instructions. */
 export const SYSTEM_PROMPT = [
 	'You write marketplace product listings from a single product photo.',
@@ -142,6 +203,20 @@ export function extractJsonObject(content: string): unknown {
 	}
 }
 
+/** Parses an OpenAI-style completion body into a draft. Model text stays untrusted until this returns ok. */
+export function parseCompletionDraft(body: string, model: string): Result<RoutstrDraftOutput, ExtensionActionError> {
+	let content: unknown
+	try {
+		content = (JSON.parse(body) as { choices?: { message?: { content?: unknown } }[] }).choices?.[0]?.message?.content
+	} catch {
+		return failure(new ExtensionActionError('invalid_output', 'Completion body is not JSON'))
+	}
+	if (typeof content !== 'string') return failure(new ExtensionActionError('invalid_output', 'No message content'))
+	const draft = parseProductListingDraft(extractJsonObject(content), MARKETPLACE_PRODUCT_CATEGORIES)
+	if (!draft.ok) return failure(new ExtensionActionError('invalid_output', draft.error.message))
+	return success({ ...draft.value, model: `routstr · ${model}` })
+}
+
 function httpErrorToActionError(error: ExtensionHttpError): ExtensionActionError {
 	switch (error.reason) {
 		case 'timeout':
@@ -173,6 +248,7 @@ export const routstrListingDrafter = defineExtension({
 			auth: 'user',
 			// Every call spends sats from the operator's routstrd wallet.
 			rateLimit: { perPubkey: 10, windowSeconds: 3600 },
+			payment: routstrDraftPayment,
 			async handler(context, input) {
 				const http = context.host.http
 				if (!http) return failure(new ExtensionActionError('extension_misconfigured', 'http host port not granted'))
@@ -197,19 +273,53 @@ export const routstrListingDrafter = defineExtension({
 					return failure(statusError)
 				}
 
-				let content: unknown
-				try {
-					const body = JSON.parse(response.value.body) as { choices?: { message?: { content?: unknown } }[] }
-					content = body.choices?.[0]?.message?.content
-				} catch {
-					return failure(new ExtensionActionError('invalid_output', 'routstrd body is not JSON'))
-				}
-				if (typeof content !== 'string') return failure(new ExtensionActionError('invalid_output', 'No message content'))
-
-				const draft = parseProductListingDraft(extractJsonObject(content), MARKETPLACE_PRODUCT_CATEGORIES)
-				if (!draft.ok) return failure(new ExtensionActionError('invalid_output', draft.error.message))
-				return success({ ...draft.value, model: `routstr · ${config.model}` })
+				return parseCompletionDraft(response.value.body, config.model)
 			},
 		}),
 	},
 })
+
+async function requestRefund(payeeFetch: PayeeFetch, token: string, signal?: AbortSignal): Promise<string | undefined> {
+	try {
+		const response = await payeeFetch(REFUND_PATH, { method: 'POST', headers: { authorization: `Bearer ${token}` }, signal })
+		if (response.status < 200 || response.status >= 300) return undefined
+		const change = (JSON.parse(response.body) as { token?: unknown }).token
+		return typeof change === 'string' && change.startsWith('cashu') ? change : undefined
+	} catch {
+		return undefined
+	}
+}
+
+/**
+ * User-paid draft, run in the seller's browser: the token is the bearer credential on the node, and whatever the
+ * draft did not spend is requested back as change. The marketplace server never sees the token.
+ */
+export const draftListingWithCashu: PaidClientExecutor<RoutstrDraftInput, RoutstrDraftOutput> = async (
+	{ token, config, fetch: payeeFetch, signal },
+	rawInput,
+) => {
+	const parsedConfig = PublicConfigSchema.safeParse(config)
+	const input = RoutstrDraftInputSchema.safeParse(rawInput)
+	if (!parsedConfig.success) return { outcome: 'rejected', error: new ExtensionActionError('extension_misconfigured') }
+	if (!input.success) return { outcome: 'rejected', error: new ExtensionActionError('invalid_input') }
+
+	let response
+	try {
+		response = await payeeFetch(CHAT_COMPLETIONS_PATH, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+			body: JSON.stringify(buildChatRequest(input.data, parsedConfig.data)),
+			signal,
+		})
+	} catch (cause) {
+		// The node may never have seen the token; the runner reclaims it.
+		return { outcome: 'rejected', error: new ExtensionActionError('network_error', 'Node unreachable', cause) }
+	}
+	const changeToken = await requestRefund(payeeFetch, token, signal)
+	const withChange = changeToken ? { changeToken } : {}
+	const statusError = providerStatusToActionError(response.status)
+	if (statusError) return { outcome: 'rejected', error: statusError, ...withChange }
+	const draft = parseCompletionDraft(response.body, parsedConfig.data.model)
+	if (!draft.ok) return { outcome: 'rejected', error: draft.error, ...withChange }
+	return { outcome: 'accepted', output: draft.value, ...withChange }
+}

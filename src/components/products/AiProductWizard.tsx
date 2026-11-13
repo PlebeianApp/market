@@ -4,9 +4,11 @@ import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore } from '@/lib/stores/product'
 import { usePublishShippingOptionMutation } from '@/publish/shipping'
-import { extensionErrorMessage, useProductListingDraft } from '@/queries/extensions'
+import { PaidCallConfirmDialog } from '@/components/extensions/PaidCallConfirmDialog'
+import { extensionErrorMessage, paidCallErrorMessage, useProductListingDraft } from '@/queries/extensions'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { getSellerProductFormValidationIssues, type ProductListingDraft } from '@sdk/commerce/products'
+import { PaidCallError, paidCallSpentSats, type PaidCallRecord } from '@sdk/core/extensions'
 import { Badge } from '@ui/primitives/badge'
 import { Button } from '@ui/primitives/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@ui/primitives/card'
@@ -47,6 +49,20 @@ function fieldsFromDraft(draft: ProductListingDraft): ListingFields {
 		category: draft.category,
 		tags: draft.tags.join(', '),
 	}
+}
+
+function draftErrorMessage(error: Error): string {
+	if (error instanceof PaidCallError) return paidCallErrorMessage(error)
+	if ('reason' in error && error.reason === 'invalid_output') return 'The extension returned an unusable draft.'
+	return extensionErrorMessage(error as Parameters<typeof extensionErrorMessage>[0])
+}
+
+function paymentReceipt(record: PaidCallRecord): string | undefined {
+	const spent = paidCallSpentSats(record)
+	if (spent === undefined) return undefined
+	const returned = record.returnedSats ? ` · ${record.returnedSats} returned` : ''
+	const unclaimed = record.state === 'change_unclaimed' ? ' · change could not be added to your wallet' : ''
+	return `Paid ${spent} sats from your wallet${returned}${unclaimed}`
 }
 
 function parseTags(value: string): string[] {
@@ -196,6 +212,7 @@ export function AiProductWizard({ onPublished, extensionId }: { onPublished: () 
 					</div>
 					<p className="text-xs text-muted-foreground" data-testid="ai-product-disclosure">
 						The photo link is sent to an AI provider to draft the listing.
+						{draft.payment && ` Each draft costs ${draft.payment.amountSats} sats from your wallet; you confirm before paying.`}
 					</p>
 					{draft.isPending && (
 						<p className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="ai-product-thinking">
@@ -205,7 +222,7 @@ export function AiProductWizard({ onPublished, extensionId }: { onPublished: () 
 					{draft.error && (
 						<div className="flex items-center gap-2">
 							<p role="alert" className="text-sm text-red-600" data-testid="ai-product-error">
-								{draft.error.reason === 'invalid_output' ? 'The extension returned an unusable draft.' : extensionErrorMessage(draft.error)}
+								{draftErrorMessage(draft.error)}
 							</p>
 							{imageUrl && (
 								<Button size="sm" variant="outline" onClick={() => describe(imageUrl)}>
@@ -231,6 +248,11 @@ export function AiProductWizard({ onPublished, extensionId }: { onPublished: () 
 						</div>
 					</CardHeader>
 					<CardContent className="space-y-4">
+						{draft.data.payment && paymentReceipt(draft.data.payment) && (
+							<p className="text-xs text-muted-foreground" data-testid="ai-product-payment-receipt">
+								{paymentReceipt(draft.data.payment)}
+							</p>
+						)}
 						<div className="space-y-1">
 							<Label htmlFor="ai-product-title">Title</Label>
 							<Input
@@ -325,6 +347,7 @@ export function AiProductWizard({ onPublished, extensionId }: { onPublished: () 
 					</CardContent>
 				</Card>
 			)}
+			<PaidCallConfirmDialog requirement={draft.approval.pending} onApprove={draft.approval.approve} onDecline={draft.approval.decline} />
 		</div>
 	)
 }
