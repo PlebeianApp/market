@@ -102,3 +102,19 @@ The `deploy/` tree is historical/pinned operational source. Contributor tests
 inspect templates and synthetic fixtures; do not install those units, apply
 nginx files or invoke production validators. Public topology values in old
 fixtures are not invitations to contact those hosts.
+
+## Contribution licensing
+
+Original Plebeian Auctions code is licensed under GPL-3.0-only. By submitting
+a contribution, you confirm that you have the right to submit it and agree to
+license that contribution under GPL-3.0-only. You retain your copyright unless
+you have separately agreed otherwise.
+
+Do not submit copied, generated or modified third-party material unless its
+license permits redistribution under the proposed form and its provenance,
+copyright notices, license text and modification record are included. Clearly
+identify AI-assisted contributions in the review description when that context
+helps maintainers verify provenance; AI assistance does not remove the
+contributor's responsibility to review the result and confirm the right to
+submit it. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
+[SOURCE-PROVENANCE.md](SOURCE-PROVENANCE.md).

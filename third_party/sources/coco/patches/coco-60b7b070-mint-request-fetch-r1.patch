@@ -1,0 +1,414 @@
+diff --git a/.changeset/market-mint-request-fetch.md b/.changeset/market-mint-request-fetch.md
+new file mode 100644
+index 00000000..b83dc5e0
+--- /dev/null
++++ b/.changeset/market-mint-request-fetch.md
+@@ -0,0 +1,5 @@
++---
++'@cashu/coco-core': patch
++---
++
++Allow callers to inject the fetch-compatible transport used by Coco's shared mint HTTP request provider, and accept `webSocketFactory: null` to force polling-only subscriptions.
+diff --git a/packages/core/Manager.ts b/packages/core/Manager.ts
+index a95b57a2..97464bdc 100644
+--- a/packages/core/Manager.ts
++++ b/packages/core/Manager.ts
+@@ -1,6 +1,6 @@
+ import { CoreReceiveTransactions } from './transactions/receive/ReceiveTransactions.ts';
+ import { CashuReceiveRemote } from './infra/handlers/receive/CashuReceiveRemote.ts';
+-import type { OutputDataCreator } from '@cashu/cashu-ts';
++import type { OutputDataCreator, RequestFetch } from '@cashu/cashu-ts';
+ import { CoreMintMetadataTransactions } from './transactions/mints/MintMetadataTransactions.ts';
+ import { StoredMintQueries } from './mints/MintMetadata.ts';
+ import { CashuSendRemote } from './infra/handlers/send/CashuSendRemote.ts';
+@@ -115,8 +115,10 @@ export interface CocoConfig {
+   seedGetter: () => Promise<Uint8Array>;
+   /** Optional logger instance (defaults to NullLogger) */
+   logger?: Logger;
+-  /** Optional WebSocket factory for real-time subscriptions */
+-  webSocketFactory?: WebSocketFactory;
++  /** Optional WebSocket factory for real-time subscriptions; null forces HTTP polling only. */
++  webSocketFactory?: WebSocketFactory | null;
++  /** Optional fetch-compatible transport for all mint HTTP handled by the shared request provider. */
++  requestFetch?: RequestFetch;
+   /** Optional plugins to extend functionality */
+   plugins?: Plugin[];
+   /**
+@@ -421,6 +423,7 @@ export class Manager {
+         config.subscriptions,
+         config.outputDataCreator,
+         config.lifecycle,
++        config.requestFetch,
+       );
+       manager.#factoryBoot = true;
+       manager.#repositoryAttachment = attachment;
+@@ -513,13 +516,14 @@ export class Manager {
+     repositories: Repositories,
+     seedGetter: () => Promise<Uint8Array>,
+     logger?: Logger,
+-    webSocketFactory?: WebSocketFactory,
++    webSocketFactory?: WebSocketFactory | null,
+     plugins?: Plugin[],
+     watchers?: CocoConfig['watchers'],
+     processors?: CocoConfig['processors'],
+     subscriptions?: CocoConfig['subscriptions'],
+     outputDataCreator?: OutputDataCreator,
+     lifecycle?: CocoConfig['lifecycle'],
++    requestFetch?: RequestFetch,
+   ) {
+     this.#repositories = repositories;
+     this.#logger = logger ?? new NullLogger();
+@@ -536,6 +540,7 @@ export class Manager {
+     this.#mintRequestProvider = new MintRequestProvider({
+       capacity: 20,
+       refillPerMinute: 20,
++      requestFetch,
+       logger: this.#getChildLogger('RequestRateLimiter'),
+     });
+     this.#mintAdapter = new MintAdapter(this.#mintRequestProvider);
+@@ -1256,31 +1261,36 @@ export class Manager {
+   }
+ 
+   #createSubscriptionManager(
+-    webSocketFactory?: WebSocketFactory,
++    webSocketFactory?: WebSocketFactory | null,
+     subscriptionOptions?: CocoConfig['subscriptions'],
+   ): SubscriptionManager {
+     const wsLogger = this.#getChildLogger('SubscriptionManager');
+-    // Detect global WebSocket if available, otherwise require injected factory
+-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+-    const hasGlobalWs = typeof (globalThis as any).WebSocket !== 'undefined';
+-    const defaultFactory: WebSocketFactory | undefined = hasGlobalWs
+-      ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+-        (url: string) => new (globalThis as any).WebSocket(url)
+-      : undefined;
+-    const wsFactoryToUse = webSocketFactory ?? defaultFactory;
+     const options = {
+       slowPollingIntervalMs: subscriptionOptions?.slowPollingIntervalMs ?? 20000,
+       fastPollingIntervalMs: subscriptionOptions?.fastPollingIntervalMs ?? 5000,
+     };
+-    if (!wsFactoryToUse) {
+-      // Fallback to polling transport when WS is unavailable
+-      const polling = new PollingTransport(
++    const pollingTransport = () =>
++      new PollingTransport(
+         this.#mintAdapter,
+         { intervalMs: options.fastPollingIntervalMs },
+         wsLogger,
+         this.#quoteLifecycle,
+       );
+-      return new SubscriptionManager(polling, this.#mintAdapter, wsLogger, options);
++    // `null` is the explicit polling-only value and must ignore a browser global WebSocket.
++    if (webSocketFactory === null) {
++      return new SubscriptionManager(pollingTransport(), this.#mintAdapter, wsLogger, options);
++    }
++    // Detect global WebSocket if available, otherwise require injected factory.
++    // eslint-disable-next-line @typescript-eslint/no-explicit-any
++    const hasGlobalWs = typeof (globalThis as any).WebSocket !== 'undefined';
++    const defaultFactory: WebSocketFactory | undefined = hasGlobalWs
++      ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
++        (url: string) => new (globalThis as any).WebSocket(url)
++      : undefined;
++    const wsFactoryToUse = webSocketFactory ?? defaultFactory;
++    if (!wsFactoryToUse) {
++      // Fallback to polling transport when WS is unavailable
++      return new SubscriptionManager(pollingTransport(), this.#mintAdapter, wsLogger, options);
+     }
+     return new SubscriptionManager(
+       wsFactoryToUse,
+diff --git a/packages/core/README.md b/packages/core/README.md
+index d7eb617c..5d296665 100644
+--- a/packages/core/README.md
++++ b/packages/core/README.md
+@@ -180,7 +180,10 @@ await manager.disableProofStateWatcher();
+ - `repo`: `Repositories` implementation (required)
+ - `seedGetter`: async seed provider (required)
+ - `logger`: optional logger (defaults to `NullLogger`)
+-- `webSocketFactory`: optional WebSocket factory
++- `webSocketFactory`: optional WebSocket factory; pass `null` to force HTTP polling even when a
++  browser global `WebSocket` exists
++- `requestFetch`: optional fetch-compatible transport captured by Coco's shared mint request
++  provider (rate limiting, JSON parsing, and protocol errors remain inside Coco)
+ - `plugins`: optional plugin list
+ - `watchers`: enable/disable watcher services (`mintOperationWatcher`, `meltQuoteWatcher`,
+   `proofStateWatcher`)
+@@ -419,7 +422,8 @@ application flows and operation APIs when a mint or melt should be finalized.
+ `Manager` will auto-detect a global `WebSocket` if available (e.g., browsers).
+ In non-browser environments, provide a `webSocketFactory` through
+ `initializeCoco` or `Manager` construction. App code should not need transport
+-internals.
++internals. Pass `webSocketFactory: null` to explicitly disable WebSockets and
++use HTTP polling only.
+ 
+ ## Core events
+ 
+diff --git a/packages/core/infra/MintRequestProvider.ts b/packages/core/infra/MintRequestProvider.ts
+index 861b299f..4edd28bb 100644
+--- a/packages/core/infra/MintRequestProvider.ts
++++ b/packages/core/infra/MintRequestProvider.ts
+@@ -1,4 +1,5 @@
+ import type { Logger } from '../logging/Logger.ts';
++import type { RequestFetch } from '@cashu/cashu-ts';
+ import { RequestRateLimiter } from './RequestRateLimiter.ts';
+ 
+ /**
+@@ -18,6 +19,8 @@ export interface MintRequestProviderOptions {
+   refillPerMinute?: number;
+   /** Path prefixes to bypass rate limiting */
+   bypassPathPrefixes?: string[];
++  /** Optional fetch-compatible transport captured by every per-mint rate limiter. */
++  requestFetch?: RequestFetch;
+   /** Optional per-mint configuration override */
+   configForMint?: (mintUrl: string) => Partial<{
+     capacity: number;
+@@ -37,10 +40,11 @@ export interface MintRequestProviderOptions {
+ export class MintRequestProvider {
+   private readonly limiters = new Map<string, RequestRateLimiter>();
+   private readonly options: Required<
+-    Omit<MintRequestProviderOptions, 'configForMint' | 'logger'>
++    Omit<MintRequestProviderOptions, 'configForMint' | 'logger' | 'requestFetch'>
+   > & {
+     configForMint?: MintRequestProviderOptions['configForMint'];
+     logger?: Logger;
++    requestFetch?: RequestFetch;
+   };
+ 
+   constructor(options?: MintRequestProviderOptions) {
+@@ -48,6 +52,7 @@ export class MintRequestProvider {
+       capacity: options?.capacity ?? 20,
+       refillPerMinute: options?.refillPerMinute ?? 20,
+       bypassPathPrefixes: options?.bypassPathPrefixes ?? [],
++      requestFetch: options?.requestFetch,
+       configForMint: options?.configForMint,
+       logger: options?.logger,
+     };
+@@ -73,6 +78,7 @@ export class MintRequestProvider {
+       capacity: perMintConfig.capacity ?? this.options.capacity,
+       refillPerMinute: perMintConfig.refillPerMinute ?? this.options.refillPerMinute,
+       bypassPathPrefixes: perMintConfig.bypassPathPrefixes ?? this.options.bypassPathPrefixes,
++      requestFetch: this.options.requestFetch,
+       logger: this.options.logger?.child
+         ? this.options.logger.child({ module: 'RequestRateLimiter', mintUrl })
+         : this.options.logger,
+diff --git a/packages/core/infra/RequestRateLimiter.ts b/packages/core/infra/RequestRateLimiter.ts
+index d19b8642..0af83399 100644
+--- a/packages/core/infra/RequestRateLimiter.ts
++++ b/packages/core/infra/RequestRateLimiter.ts
+@@ -1,4 +1,4 @@
+-import { JSONInt } from '@cashu/cashu-ts';
++import { JSONInt, type RequestFetch } from '@cashu/cashu-ts';
+ import type { Logger } from '../logging/Logger.ts';
+ import { HttpResponseError, NetworkError, MintOperationError } from '../models/Error';
+ 
+@@ -14,6 +14,7 @@ interface RateLimiterOptions {
+   capacity?: number;
+   refillPerMinute?: number;
+   bypassPathPrefixes?: string[];
++  requestFetch?: RequestFetch;
+   logger?: Logger;
+ }
+ 
+@@ -45,6 +46,7 @@ export class RequestRateLimiter {
+   private lastRefillAt: number;
+   private readonly bypassPathPrefixes: string[];
+   private readonly logger?: Logger;
++  private readonly requestFetch: RequestFetch;
+ 
+   private queue: Array<() => void> = [];
+   private processingTimer: ReturnType<typeof setTimeout> | null = null;
+@@ -56,11 +58,13 @@ export class RequestRateLimiter {
+     this.lastRefillAt = Date.now();
+     this.bypassPathPrefixes = options?.bypassPathPrefixes ?? [];
+     this.logger = options?.logger;
++    this.requestFetch =
++      options?.requestFetch ?? (((input, init) => fetch(input, init)) as RequestFetch);
+   }
+ 
+   /**
+    * The request function compatible with cashu-ts's `request(options)` signature.
+-   * It uses the global fetch under the hood.
++   * It uses the captured transport, defaulting to the global fetch behavior.
+    */
+   public request: RequestFunction = async (options) => {
+     const url = new URL(options.endpoint);
+@@ -113,7 +117,7 @@ export class RequestRateLimiter {
+ 
+     let response: Response;
+     try {
+-      response = await fetch(endpoint, {
++      response = await this.requestFetch(endpoint, {
+         ...(init as any),
+         headers: finalHeaders as any,
+         body: body as any,
+diff --git a/packages/core/test/unit/Manager.test.ts b/packages/core/test/unit/Manager.test.ts
+index 2906f0e8..47393d8b 100644
+--- a/packages/core/test/unit/Manager.test.ts
++++ b/packages/core/test/unit/Manager.test.ts
+@@ -151,6 +151,126 @@ describe('initializeCoco', () => {
+     },
+   } satisfies Pick<CocoConfig, 'watchers' | 'processors'>;
+ 
++  it('uses the configured mint fetch and null WebSocket factory for polling-only HTTP', async () => {
++    const originalFetch = globalThis.fetch;
++    const webSocketRoot = globalThis as unknown as { WebSocket?: unknown };
++    const originalWebSocket = webSocketRoot.WebSocket;
++    const requests: Array<{ path: string; method: string }> = [];
++    let webSocketConstructions = 0;
++    const quoteId = 'request-fetch-quote';
++    const expiry = Math.floor(Date.now() / 1000) + 3600;
++    const requestFetch = (async (input, init) => {
++      const url = new URL(String(input));
++      const method = init?.method ?? 'GET';
++      requests.push({ path: url.pathname, method });
++      let body: unknown;
++      if (url.pathname === '/v1/info') {
++        body = {
++          name: 'Request Fetch Mint',
++          version: '1.0.0',
++          pubkey: '',
++          contact: [],
++          nuts: {
++            '4': { methods: [{ method: 'bolt11', unit: 'sat' }], disabled: false },
++          },
++        };
++      } else if (url.pathname === '/v1/keysets') {
++        body = { keysets: [{ id: keysetId, unit: 'sat', active: true, input_fee_ppk: 0 }] };
++      } else if (url.pathname === `/v1/keys/${keysetId}`) {
++        body = { keysets: [{ id: keysetId, unit: 'sat', keys: keypairs }] };
++      } else if (url.pathname === '/v1/mint/quote/bolt11' && method === 'POST') {
++        body = {
++          quote: quoteId,
++          request: 'lnbc1requestfetch',
++          state: 'PAID',
++          expiry,
++          amount: 1,
++          amount_paid: 1,
++          amount_issued: 0,
++          unit: 'sat',
++        };
++      } else if (url.pathname === `/v1/mint/quote/bolt11/${quoteId}`) {
++        body = {
++          quote: quoteId,
++          request: 'lnbc1requestfetch',
++          state: 'PAID',
++          expiry,
++          amount: 1,
++          amount_paid: 1,
++          amount_issued: 0,
++          unit: 'sat',
++        };
++      } else if (url.pathname === '/v1/mint/bolt11' && method === 'POST') {
++        throw new Error('injected-mint-transport-probe');
++      } else {
++        throw new Error(`unexpected request: ${method} ${url.pathname}`);
++      }
++      return new Response(JSON.stringify(body), {
++        status: 200,
++        headers: { 'content-type': 'application/json' },
++      });
++    }) as typeof fetch;
++
++    globalThis.fetch = (async () => {
++      throw new Error('global fetch must not be consulted');
++    }) as unknown as typeof fetch;
++    webSocketRoot.WebSocket = class {
++      constructor() {
++        webSocketConstructions += 1;
++        throw new Error('WebSocket must not be constructed');
++      }
++    };
++
++    let manager: Manager | undefined;
++    let unsubscribe: (() => Promise<void>) | undefined;
++    try {
++      manager = await initializeCoco({
++        ...baseConfig,
++        ...disabledRuntime,
++        seedGetter: async () => new Uint8Array(64),
++        requestFetch,
++        webSocketFactory: null,
++        subscriptions: { fastPollingIntervalMs: 5, slowPollingIntervalMs: 5 },
++      });
++      await manager.mint.addMint(mintUrl, { trusted: true });
++      const quote = await manager.quotes.mint.create({
++        mintUrl,
++        method: 'bolt11',
++        amount: Amount.from(1),
++      });
++      await manager.quotes.mint.refresh({ mintUrl, quoteId: quote.quoteId });
++      ({ unsubscribe } = await manager.subscriptions.subscribe(mintUrl, 'bolt11_mint_quote', [
++        quote.quoteId,
++      ]));
++      for (let attempt = 0; attempt < 50; attempt += 1) {
++        const checks = requests.filter(({ path }) => path.endsWith(`/${quoteId}`));
++        if (checks.length >= 2) break;
++        await new Promise((resolve) => setTimeout(resolve, 2));
++      }
++
++      expect(webSocketConstructions).toBe(0);
++      expect(requests).toContainEqual({ path: '/v1/info', method: 'GET' });
++      expect(requests).toContainEqual({ path: '/v1/mint/quote/bolt11', method: 'POST' });
++      expect(
++        requests.filter(({ path }) => path.endsWith(`/${quoteId}`)).length,
++      ).toBeGreaterThanOrEqual(2);
++      const operation = await manager.ops.mint.prepare({
++        quote: { mintUrl, quoteId: quote.quoteId, method: 'bolt11' },
++        amount: Amount.from(1),
++      });
++      await expect(manager.ops.mint.execute(operation)).rejects.toThrow(
++        'injected-mint-transport-probe',
++      );
++      expect(requests).toContainEqual({ path: '/v1/mint/bolt11', method: 'POST' });
++    } finally {
++      await unsubscribe?.();
++      await manager?.dispose();
++      globalThis.fetch = originalFetch;
++      if (originalWebSocket === undefined) delete webSocketRoot.WebSocket;
++      else webSocketRoot.WebSocket = originalWebSocket;
++    }
++  });
++
+   it('acquires authority and completes all recovery before autonomous work starts', async () => {
+     const events: string[] = [];
+     const repo = new MemoryRepositories();
+diff --git a/packages/core/test/unit/RequestRateLimiter.test.ts b/packages/core/test/unit/RequestRateLimiter.test.ts
+index c49ec546..25a0da6c 100644
+--- a/packages/core/test/unit/RequestRateLimiter.test.ts
++++ b/packages/core/test/unit/RequestRateLimiter.test.ts
+@@ -57,6 +57,36 @@ describe('RequestRateLimiter', () => {
+     expect(hdrs.get('Content-Type')).toBe('application/json');
+   });
+ 
++  it('captures and uses an injected fetch without consulting global fetch', async () => {
++    const originalFetch = globalThis.fetch;
++    const injectedCalls: Array<{ input: Parameters<typeof fetch>[0]; init?: RequestInit }> = [];
++    const injectedFetch = (async (input, init) => {
++      injectedCalls.push({ input, init });
++      return new Response(JSON.stringify({ transport: 'injected' }), {
++        status: 200,
++        headers: { 'content-type': 'application/json' },
++      });
++    }) as typeof fetch;
++    const limiter = new RequestRateLimiter({ requestFetch: injectedFetch });
++    // The limiter must retain the injected function even if the ambient global changes later.
++    globalThis.fetch = (async () => {
++      throw new Error('global fetch must not be consulted');
++    }) as unknown as typeof fetch;
++
++    try {
++      const result = await limiter.request<{ transport: string }>({
++        endpoint: 'https://mint.test/v1/info',
++        method: 'GET',
++      });
++
++      expect(result).toEqual({ transport: 'injected' });
++      expect(injectedCalls).toHaveLength(1);
++      expect(String(injectedCalls[0]!.input)).toBe('https://mint.test/v1/info');
++    } finally {
++      globalThis.fetch = originalFetch;
++    }
++  });
++
+   it('serializes bigint request bodies as JSON numbers', async () => {
+     let capturedBody: unknown;
+     // @ts-ignore

@@ -28,6 +28,21 @@ Historical root receipts describe earlier candidates and are not current run
 instructions. The previous README is preserved in
 [the historical appendix](docs/contributors/LEGACY-README-20261112.md).
 
+## License and notices
+
+Original Plebeian Auctions code is licensed under
+[GPL-3.0-only](LICENSE). Plebeian Auctions is a Plebeian Apps project;
+contributors retain their respective copyright unless otherwise agreed.
+Third-party components remain under their respective terms. See
+[COPYRIGHT](COPYRIGHT), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
+[source provenance](SOURCE-PROVENANCE.md). The sanitized exact dependency
+evidence is in
+[third_party/DEPENDENCY-LICENSE-INVENTORY.json](third_party/DEPENDENCY-LICENSE-INVENTORY.json).
+
+Run `sh scripts/check-publication-notices.sh` to verify the bounded license,
+notice and directly redistributed archive hashes. This does not replace the
+final SBOM/license review.
+
 ## Local verification
 
 Install Bun and Go compatible with `cashu-wrapper/ts/package.json` and `go.mod`.

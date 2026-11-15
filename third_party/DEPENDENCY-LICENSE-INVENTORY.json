@@ -1,0 +1,4541 @@
+{
+  "candidateCommit": "0abbf066dd6974bdf95698fd2f0e47f93a96695d",
+  "candidateTree": "1f12bd1dbf14d53bacaca8e92ac4bb5d74a0171c",
+  "components": {
+    "cargo": [
+      {
+        "checksum": "d122413f284cf2d62fb1b7db97e02edb8cda96d769b16e443a4f6195e35662b0",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10850,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "b1cf9a3333ca78152b859012cd4a804156e5243e9ca20ad1df7327ba5ea7405c"
+          },
+          {
+            "bytes": 1112,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "949ab7b3e7140fee216f06fe3a2bd67d68dd511f8ea73c1e01c98cb348e9c8ae"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "aead",
+        "purl": "pkg:cargo/aead@0.5.2",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.5.2"
+      },
+      {
+        "checksum": "8cf2bce30dfe09ef0bfaef228b9d414faaf7e563035494d7fe092dba54b300f4",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1061,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "8924c88b998da95624f60eeb8705eaa581586e65b686e6d3367ffb14067b8451"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "atomic-polyfill",
+        "purl": "pkg:cargo/atomic-polyfill@1.0.3",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.3"
+      },
+      {
+        "checksum": "4c7f02d4ea65f2c1853089ffd8d2787bdbc63de2f0d29dedbcf8ccdfa0ccd4cf",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1143,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "0aa8963e105e8b6e02f634484145d4e5b0f42d0a6dd05c16f8148f033383adef"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "base16ct",
+        "purl": "pkg:cargo/base16ct@0.2.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.2.0"
+      },
+      {
+        "checksum": "89e25b6adfb930f02d1981565a6e5d9c547ac15a96606256d3b59040e5cd4ca3",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1148,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "2d1c57bff28344b9e698f51063bc8509799cc4c99a4e0cf2aa3f7e7c3e1f9a9d"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "base64ct",
+        "purl": "pkg:cargo/base64ct@1.7.3",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.7.3"
+      },
+      {
+        "checksum": "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1082,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "d5c22aa3118d240e877ad41c5d9fa232f9c77d757d4aac0c2f943afc0a95e0ef"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "block-buffer",
+        "purl": "pkg:cargo/block-buffer@0.10.4",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.10.4"
+      },
+      {
+        "checksum": "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Unlicense OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 126,
+            "classification": "Unlicense OR MIT",
+            "name": "COPYING",
+            "sha256": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f"
+          },
+          {
+            "bytes": 1081,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "byteorder",
+        "purl": "pkg:cargo/byteorder@1.5.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.5.0"
+      },
+      {
+        "checksum": "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1057,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "cfg-if",
+        "purl": "pkg:cargo/cfg-if@1.0.5",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.5"
+      },
+      {
+        "checksum": "c3613f74bd2eac03dad61bd53dbe620703d4371614fe0bc3b9f04dd36fe4e818",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1082,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "b6f6f01b03ee7e93c0ae96d62ed39527e98a120fb951afc9de456a741ef3f204"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "chacha20",
+        "purl": "pkg:cargo/chacha20@0.9.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.9.1"
+      },
+      {
+        "checksum": "10cd79432192d1c0f4e1a0fef9527696cc039165d729fb41b3f4f4f354c2dc35",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1077,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "3c0dfa33fd2e6976038555b52095699452653b1fcabe113074f14e0848a6b11e"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "chacha20poly1305",
+        "purl": "pkg:cargo/chacha20poly1305@0.10.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.10.1"
+      },
+      {
+        "checksum": "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1070,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "5c7bd92d1f096f12203dc1b601e3cb17484fa1b023e30b6b8edcc80e416237ec"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "cipher",
+        "purl": "pkg:cargo/cipher@0.4.4",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.4.4"
+      },
+      {
+        "checksum": "0fa961b519f0b462e3a3b4a34b64d119eeaca1d59af726fe450bbba07a9fc0a1",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 11358,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08"
+          },
+          {
+            "bytes": 1066,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "e0cfa1006a64520633de6bfbf563f5b1bea04ef0c5b73f049681931fa297dda3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "cobs",
+        "purl": "pkg:cargo/cobs@0.3.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.3.0"
+      },
+      {
+        "checksum": null,
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "GPL-3.0-only",
+        "licenseEvidence": "successor local Cargo.toml",
+        "licenseFiles": [],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "coco-demo-frost-participant-3of4-demo",
+        "purl": "pkg:cargo/coco-demo-frost-participant-3of4-demo@0.2.0",
+        "sourceLocator": "local-workspace",
+        "version": "0.2.0"
+      },
+      {
+        "checksum": null,
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "GPL-3.0-only",
+        "licenseEvidence": "successor local Cargo.toml",
+        "licenseFiles": [],
+        "lockfiles": [
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "coco-demo-frost-public-inspect",
+        "purl": "pkg:cargo/coco-demo-frost-public-inspect@0.1.0",
+        "sourceLocator": "local-workspace",
+        "version": "0.1.0"
+      },
+      {
+        "checksum": "808ac43170e95b11dd23d78aa9eaac5bea45776a602955552c4e833f3f0f823d",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 1072,
+            "classification": "MIT",
+            "name": "LICENSE",
+            "sha256": "2db2a6fac9328dc0eb96dfec80e3ce70bfbbc7b3234e51bdcc4ce9dde8068bf6"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "const-crc32-nostd",
+        "purl": "pkg:cargo/const-crc32-nostd@1.3.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.3.1"
+      },
+      {
+        "checksum": "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1082,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "bada9e7ed8dc00d63502053c455d7c8d7575dfb7e8277a2a832531844d900682"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "const-oid",
+        "purl": "pkg:cargo/const-oid@0.9.6",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.9.6"
+      },
+      {
+        "checksum": "59ed5838eebb26a2bb2e58f6d5b5316989ae9d08bab10e0e6d103e656d1b0280",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1082,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "ae9baa7beea910273c2f384c2a6b721fb7bd02bda3436074a1072e4ee689f985"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "cpufeatures",
+        "purl": "pkg:cargo/cpufeatures@0.2.17",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.2.17"
+      },
+      {
+        "checksum": "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1072,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "fee6bdac4b917351332567b9fd5013c2ef3c847dd113fd6216cf28e96637a157"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "critical-section",
+        "purl": "pkg:cargo/critical-section@1.2.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.2.0"
+      },
+      {
+        "checksum": "0dc92fb57ca44df6db8059111ab3af99a63d5d0f8375d9972e319a379c6bab76",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1077,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "90c503b61dee04e1449c323ec34c229dfb68d7adcb96c7e140ee55f70fce2d8e"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "crypto-bigint",
+        "purl": "pkg:cargo/crypto-bigint@0.5.5",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.5.5"
+      },
+      {
+        "checksum": "1bfb12502f3fc46cca1bb51ac28df9d618d813cdc3d2f25b9fe775a34af26bb3",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1065,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "3521672491a3479422d5fe1aca6645dd2984090f85da6e5205abfb18fb7a6897"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "crypto-common",
+        "purl": "pkg:cargo/crypto-common@0.1.6",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.1.6"
+      },
+      {
+        "checksum": "e7c1832837b905bbfb5101e07cc24c8deddf52f93225eee6ead5f4d63d53ddcb",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1082,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "ad64fcb9589f162720f3cc5010ad76ca6ad3764e11861f9192c489df176bb71d"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "der",
+        "purl": "pkg:cargo/der@0.7.10",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.7.10"
+      },
+      {
+        "checksum": "74ef43543e701c01ad77d3a5922755c6a1d71b22d942cb8042be4994b380caff",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 1071,
+            "classification": "MIT",
+            "name": "LICENSE",
+            "sha256": "d00f0a91e6a99ef105937c11440c2c97b558aeab63a6e01c03add02cbf69212d"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "derive-getters",
+        "purl": "pkg:cargo/derive-getters@0.5.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.5.0"
+      },
+      {
+        "checksum": "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1057,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "9e0dfd2dd4173a530e238cb6adb37aa78c34c6bc7444e0e10c1ab5d8881f63ba"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "digest",
+        "purl": "pkg:cargo/digest@0.10.7",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.10.7"
+      },
+      {
+        "checksum": "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10280,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff"
+          },
+          {
+            "bytes": 1082,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "aa893340d14b9844625be6a50ac644169a01b52f0211cbf81b09e1874c8cd81d"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "document-features",
+        "purl": "pkg:cargo/document-features@0.2.12",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.2.12"
+      },
+      {
+        "checksum": "ee27f32b5c5292967d2d4a9d7f1e0b0aed2c15daded5a60300e4abb9d8020bca",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10846,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "78779d420019e6b4630376af8e86b6b335ee8a2f89ede6e0411e0469a326aaa4"
+          },
+          {
+            "bytes": 1070,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "bdebaf9156a298f8fdab56dd26cb5144673de522d80f4c0d88e0039145f147f9"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "ecdsa",
+        "purl": "pkg:cargo/ecdsa@0.16.9",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.16.9"
+      },
+      {
+        "checksum": "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1043,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "7576269ea71f767b99297934c0b2367532690f8c4badc695edf8e04ab6a1e545"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "either",
+        "purl": "pkg:cargo/either@1.19.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.19.0"
+      },
+      {
+        "checksum": "b5e6043086bf7973472e0c7dff2142ea0b680d30e18d9cc40f267efbf222bd47",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1070,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "d27687b51f2874822c1530976b7e837eac4f308d94bf3dd42047011b7d437b47"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "elliptic-curve",
+        "purl": "pkg:cargo/elliptic-curve@0.13.8",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.13.8"
+      },
+      {
+        "checksum": "ef1a6892d9eef45c8fa6b9e0086428a2cca8491aca8f787c534a3d6d0bcb3ced",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1067,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "423e1c4900b3fbb41cda3e34530b2597d50c2e61473e18c085756c507e46fe1c"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "embedded-io",
+        "purl": "pkg:cargo/embedded-io@0.4.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.4.0"
+      },
+      {
+        "checksum": "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1067,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "47674f8b7d98c232c6f81346c4cfe48933d913a9e257d7a522ad9f42e3dd61e1"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "embedded-io",
+        "purl": "pkg:cargo/embedded-io@0.6.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.6.1"
+      },
+      {
+        "checksum": "c0b50bfb653653f9ca9095b427bed08ab8d75a137839d9ad64eb11810d5b6393",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT/Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10848,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "3708458dee7f359ac6c9c5558023ed481be87e5372c43ebd7f2ca7ad23c12026"
+          },
+          {
+            "bytes": 1076,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "8d0c1d1d4b2bebf5b9211f0e883d5a482b7808f3ed31320da14ddee95811f4ef"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "ff",
+        "purl": "pkg:cargo/ff@0.13.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.13.1"
+      },
+      {
+        "checksum": "81ef2787af391c7e8bedc037a3b9ea03dde803fbd93e778e6bb369547800e5cd",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "frost-core",
+        "purl": "pkg:cargo/frost-core@3.0.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "3.0.0"
+      },
+      {
+        "checksum": "8f4c5cedd2426728adef2c0b1720f57676354c473836d1ccc50d0f0d1c91942b",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "frost-rerandomized",
+        "purl": "pkg:cargo/frost-rerandomized@3.0.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "3.0.0"
+      },
+      {
+        "checksum": "c6fca4ca9f057cf22066f3eb5bbda59d2af51f429f2aac5982a11a8a841c0993",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "frost-secp256k1-tr",
+        "purl": "pkg:cargo/frost-secp256k1-tr@3.0.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "3.0.0"
+      },
+      {
+        "checksum": "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT/Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1071,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "fs2",
+        "purl": "pkg:cargo/fs2@0.4.3",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.4.3"
+      },
+      {
+        "checksum": "4bb6743198531e02858aeaea5398fcc883e71851fcbcb5a2f773e2fb6cb1edf2",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 1107,
+            "classification": "MIT",
+            "name": "LICENSE",
+            "sha256": "c09aae9d3c77b531f56351a9947bc7446511d6b025b3255312d3e3442a9a7583"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "generic-array",
+        "purl": "pkg:cargo/generic-array@0.14.9",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.14.9"
+      },
+      {
+        "checksum": "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "aaff376532ea30a0cd5330b9502ad4a4c8bf769c539c87ffe78819d188a18ebf"
+          },
+          {
+            "bytes": 1130,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "42fa16951ce7f24b5a467a40e5b449a1d41e662f97ca779864f053f39e097737"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "getrandom",
+        "purl": "pkg:cargo/getrandom@0.2.17",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.2.17"
+      },
+      {
+        "checksum": "f0f9ef7462f7c099f518d754361858f86d8a07af53ba9af0fe635bbccb151a63",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT/Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "group",
+        "purl": "pkg:cargo/group@0.13.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.13.0"
+      },
+      {
+        "checksum": "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1058,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "c986bcdb83103d4ddf58aeb7b5302359782e54dc4eea14a0cc27c62dcbd50729"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "hash32",
+        "purl": "pkg:cargo/hash32@0.2.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.2.1"
+      },
+      {
+        "checksum": "cdc6457c0eb62c71aac4bc17216026d8410337c4126773b9c5daba343f17964f",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1058,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "035e70219855119df4273b3c5b97543ae82e0dd60c520416e759107c602f651b"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "heapless",
+        "purl": "pkg:cargo/heapless@0.7.17",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.7.17"
+      },
+      {
+        "checksum": "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 11358,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08"
+          },
+          {
+            "bytes": 1125,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "f7bdb3426d045cd50efd4953026e3eb5a83d0199f458a075602611b9344da5b9"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "hex",
+        "purl": "pkg:cargo/hex@0.4.3",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.4.3"
+      },
+      {
+        "checksum": "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1057,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "9e0dfd2dd4173a530e238cb6adb37aa78c34c6bc7444e0e10c1ab5d8881f63ba"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "hmac",
+        "purl": "pkg:cargo/hmac@0.12.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.12.1"
+      },
+      {
+        "checksum": "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1110,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "304b898acad7f02e03d6d8832d682a3b43ee729ab5d3a069af5a36979083b6b4"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "inout",
+        "purl": "pkg:cargo/inout@0.1.4",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.1.4"
+      },
+      {
+        "checksum": "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1043,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "7576269ea71f767b99297934c0b2367532690f8c4badc695edf8e04ab6a1e545"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "itertools",
+        "purl": "pkg:cargo/itertools@0.14.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.14.0"
+      },
+      {
+        "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "itoa",
+        "purl": "pkg:cargo/itoa@1.0.18",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.18"
+      },
+      {
+        "checksum": "f6e3919bbaa2945715f0bb6d3934a173d1e9a59ac23767fbaaef277265a7411b",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1070,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "3b4f73047906835fba5005acdf68f25a460b9ee298dae710f22b435d335a6f7b"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "k256",
+        "purl": "pkg:cargo/k256@0.13.4",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.13.4"
+      },
+      {
+        "checksum": "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1066,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "123a331b5dbf04c30097fa43b8f858bc85df671fe776de498d01f3d6b7c1f69e"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "libc",
+        "purl": "pkg:cargo/libc@0.2.190",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.2.190"
+      },
+      {
+        "checksum": "4744e383959f0db86ede514b809b1c53251889093803c05267acc7d4e7030d70",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1062,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "7dc1552e88f49132cb358b1b962fc5e79fa42d70bcbb88c526d33e45b8e98036"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "litrs",
+        "purl": "pkg:cargo/litrs@1.0.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.1"
+      },
+      {
+        "checksum": "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1071,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "c9a75f18b9ab2927829a208fc6aa2cf4e63b8420887ba29cdb265d6619ae82d5"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "lock_api",
+        "purl": "pkg:cargo/lock_api@0.4.14",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.4.14"
+      },
+      {
+        "checksum": "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Unlicense OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 126,
+            "classification": "Unlicense OR MIT",
+            "name": "COPYING",
+            "sha256": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f"
+          },
+          {
+            "bytes": 1081,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "memchr",
+        "purl": "pkg:cargo/memchr@2.8.3",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "2.8.3"
+      },
+      {
+        "checksum": "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "once_cell",
+        "purl": "pkg:cargo/once_cell@1.21.3",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.21.3"
+      },
+      {
+        "checksum": "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1082,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "f59f5a78193597e04fd932ee9af86254d14d08be5c9d0e003ab888feccce2161"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "opaque-debug",
+        "purl": "pkg:cargo/opaque-debug@0.3.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.3.1"
+      },
+      {
+        "checksum": "f950b2377845cebe5cf8b5165cb3cc1a5e0fa5cfa3e1f7f55707d8fd82e0a7b7",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1082,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "ad64fcb9589f162720f3cc5010ad76ca6ad3764e11861f9192c489df176bb71d"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "pkcs8",
+        "purl": "pkg:cargo/pkcs8@0.10.2",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.10.2"
+      },
+      {
+        "checksum": "8159bd90725d2df49889a078b54f4f79e87f1f8a8444194cdca81d38f5393abf",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1070,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "6d99fffea918d1f7dfe567029c7bd21d6fcaf310ad28c44e6511a0e1f68c79ea"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "poly1305",
+        "purl": "pkg:cargo/poly1305@0.8.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.8.0"
+      },
+      {
+        "checksum": "6764c3b5dd454e283a30e6dfe78e9b31096d9e32036b5d1eaac7a6119ccb9a24",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1063,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "177540cad091a40e8071db310bc3b6115c4e329a92a234609b60c154b008a888"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "postcard",
+        "purl": "pkg:cargo/postcard@1.1.3",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.1.3"
+      },
+      {
+        "checksum": "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10854,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "0218327e7a480793ffdd4eb792379a9709e5c135c7ba267f709d6f6d4d70af0a"
+          },
+          {
+            "bytes": 1076,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "4cada0bd02ea3692eee6f16400d86c6508bbd3bafb2b65fed0419f36d4f83e8f"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "ppv-lite86",
+        "purl": "pkg:cargo/ppv-lite86@0.2.21",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.2.21"
+      },
+      {
+        "checksum": "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "proc-macro2",
+        "purl": "pkg:cargo/proc-macro2@1.0.107",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.107"
+      },
+      {
+        "checksum": "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "quote",
+        "purl": "pkg:cargo/quote@1.0.47",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.47"
+      },
+      {
+        "checksum": "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9724,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "35242e7a83f69875e6edeff02291e688c97caafe2f8902e4e19b49d3e78b4cab"
+          },
+          {
+            "bytes": 1117,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "209fbbe0ad52d9235e37badf9cadfe4dbdc87203179c0899e738b39ade42177b"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "rand",
+        "purl": "pkg:cargo/rand@0.8.5",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.8.5"
+      },
+      {
+        "checksum": "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "aaff376532ea30a0cd5330b9502ad4a4c8bf769c539c87ffe78819d188a18ebf"
+          },
+          {
+            "bytes": 1117,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "209fbbe0ad52d9235e37badf9cadfe4dbdc87203179c0899e738b39ade42177b"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "rand_chacha",
+        "purl": "pkg:cargo/rand_chacha@0.3.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.3.1"
+      },
+      {
+        "checksum": "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10282,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "6df43f6f4b5d4587f3d8d71e45532c688fd168afa5fe89d571cb32fa09c4ef51"
+          },
+          {
+            "bytes": 1117,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "209fbbe0ad52d9235e37badf9cadfe4dbdc87203179c0899e738b39ade42177b"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "rand_core",
+        "purl": "pkg:cargo/rand_core@0.6.4",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.6.4"
+      },
+      {
+        "checksum": "f8dd2a808d456c4a54e300a23e9f5a67e122c3024119acbfd73e3bf664491cb2",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10846,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "78779d420019e6b4630376af8e86b6b335ee8a2f89ede6e0411e0469a326aaa4"
+          },
+          {
+            "bytes": 1070,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "bdebaf9156a298f8fdab56dd26cb5144673de522d80f4c0d88e0039145f147f9"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "rfc6979",
+        "purl": "pkg:cargo/rfc6979@0.4.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.4.0"
+      },
+      {
+        "checksum": "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1071,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "c9a75f18b9ab2927829a208fc6aa2cf4e63b8420887ba29cdb265d6619ae82d5"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "rustc_version",
+        "purl": "pkg:cargo/rustc_version@0.4.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.4.1"
+      },
+      {
+        "checksum": "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR BSL-1.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1338,
+            "classification": "MIT",
+            "name": "LICENSE-BOOST",
+            "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "ryu",
+        "purl": "pkg:cargo/ryu@1.0.23",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.23"
+      },
+      {
+        "checksum": "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1097,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "fb77f0a9c53e473abe5103c8632ef9f0f2874d4fb3f17cb2d8c661aab9cee9d7"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "scopeguard",
+        "purl": "pkg:cargo/scopeguard@1.2.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.2.0"
+      },
+      {
+        "checksum": "d3e97a565f76233a6003f9f5c54be1d9c5bdfa3eccfb189469f11ec4901c47dc",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1082,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "4a883ecc3bb1010faed542bf63d53e530fea5e5e12cf676aed588784298ba929"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "sec1",
+        "purl": "pkg:cargo/sec1@0.7.3",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.7.3"
+      },
+      {
+        "checksum": "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "semver",
+        "purl": "pkg:cargo/semver@1.0.28",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.28"
+      },
+      {
+        "checksum": "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "serde",
+        "purl": "pkg:cargo/serde@1.0.228",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.228"
+      },
+      {
+        "checksum": "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "serde_core",
+        "purl": "pkg:cargo/serde_core@1.0.228",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.228"
+      },
+      {
+        "checksum": "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "serde_derive",
+        "purl": "pkg:cargo/serde_derive@1.0.228",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.228"
+      },
+      {
+        "checksum": "402a6f66d8c709116cf22f558eab210f5a50187f702eb4d7e5ef38d9a7f1c79c",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "serde_json",
+        "purl": "pkg:cargo/serde_json@1.0.145",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.145"
+      },
+      {
+        "checksum": "a84f14a19e9a014bb9f4512488d9829a68e04ecabffb0f9904cd1ace94598177",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 11358,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          },
+          {
+            "bytes": 1090,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "8510ba89044a4985037330b8a1a4a2fe291b2cb781e6b9f7fd391399e88be09b"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "serdect",
+        "purl": "pkg:cargo/serdect@0.2.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.2.0"
+      },
+      {
+        "checksum": "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1138,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "b4eb00df6e2a4d22518fcaa6a2b4646f249b3a3c9814509b22bd2091f1392ff1"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "sha2",
+        "purl": "pkg:cargo/sha2@0.10.9",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.10.9"
+      },
+      {
+        "checksum": "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1070,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "b3470648aff02beb36d7a53240fc9260ed80ed93bd43bace6b67d7ef7336ee33"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "signature",
+        "purl": "pkg:cargo/signature@2.2.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "2.2.0"
+      },
+      {
+        "checksum": "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 1084,
+            "classification": "MIT",
+            "name": "LICENSE",
+            "sha256": "6ac8711fb340c62ce0a4ecd463342d3fa0e8e70de697c863a2e1c0c53006003c"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "spin",
+        "purl": "pkg:cargo/spin@0.9.9",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.9.9"
+      },
+      {
+        "checksum": "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1082,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "c995204cc6bad2ed67dd41f7d89bb9f1a9d48e0edd745732b30640d7912089a4"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "spki",
+        "purl": "pkg:cargo/spki@0.7.3",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.7.3"
+      },
+      {
+        "checksum": "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1056,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "5e05b024f653a5ce199e77cbbbd42fb5553562ec714b819421ed0c3e552a75d7"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "stable_deref_trait",
+        "purl": "pkg:cargo/stable_deref_trait@1.2.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.2.1"
+      },
+      {
+        "checksum": "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "BSD-3-Clause",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 1582,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "d1fc1bc0d155df60b2e7705b6b2ae02a05c96f948e1cec6e2fb86360b09f346b"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "subtle",
+        "purl": "pkg:cargo/subtle@2.6.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "2.6.1"
+      },
+      {
+        "checksum": "872831b642d1a07999a962a351ed35b955ea2cfc8f3862091e2a240a84f17297",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "syn",
+        "purl": "pkg:cargo/syn@2.0.119",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "2.0.119"
+      },
+      {
+        "checksum": "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "syn",
+        "purl": "pkg:cargo/syn@3.0.9",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "3.0.9"
+      },
+      {
+        "checksum": "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "thiserror",
+        "purl": "pkg:cargo/thiserror@2.0.21",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "2.0.21"
+      },
+      {
+        "checksum": "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "thiserror-impl",
+        "purl": "pkg:cargo/thiserror-impl@2.0.21",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "2.0.21"
+      },
+      {
+        "checksum": "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 17,
+            "classification": "MIT OR Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "db11fec9946737df39ca3898d9cd8c10ec6f6c3a884a6802b0ad0b81b4e8f23a"
+          },
+          {
+            "bytes": 10835,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "516b24e051bf5630880ebbd55c40a25ce9552ebaf8970a53e8976eb70e522406"
+          },
+          {
+            "bytes": 1083,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "a825bd853ab71619a4923d7b4311221427848070ff44d990da39b0b274c1683f"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "typenum",
+        "purl": "pkg:cargo/typenum@1.20.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.20.1"
+      },
+      {
+        "checksum": "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "(MIT OR Apache-2.0) AND Unicode-3.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 9723,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          },
+          {
+            "bytes": 1995,
+            "classification": "MIT",
+            "name": "LICENSE-UNICODE",
+            "sha256": "f7db81051789b729fea528a63ec4c938fdcb93d9d61d97dc8cc2e9df6d47f2a1"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "unicode-ident",
+        "purl": "pkg:cargo/unicode-ident@1.0.27",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.27"
+      },
+      {
+        "checksum": "fc1de2c688dc15305988b563c3854064043356019f97a4b46276fe734c4f07ea",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10849,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5"
+          },
+          {
+            "bytes": 1070,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "6b50510a0400c72172355cc5d2ba0f2c5c2eb33149b8f96539dc345fdc484920"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "universal-hash",
+        "purl": "pkg:cargo/universal-hash@0.5.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.5.1"
+      },
+      {
+        "checksum": "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT/Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 1085,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "b7e650f3fce5c53249d1cdc608b54df156a97edd636cf9d23498d0cfe7aec63e"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "version_check",
+        "purl": "pkg:cargo/version_check@0.9.5",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.9.5"
+      },
+      {
+        "checksum": "d674d135b4a8c1d7e813e2f8d1c9a58308aee4a680323066025e53132218bd91",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Zlib OR MIT OR Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 12,
+            "classification": "NONE",
+            "name": "LICENSE",
+            "sha256": "b72b2d40a984de67680d4b874dea846f5e389599bbe495b22f63e87c6f1d5f0c"
+          },
+          {
+            "bytes": 11351,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "50d26cd90660ea5dfca5db399824028bca4eda4ee5be5d50a1b0be573936cabe"
+          },
+          {
+            "bytes": 1078,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "b405b5dbae5d4473f5f932af2b5d47df6114036a0b1382d9f6c411a62b71a547"
+          },
+          {
+            "bytes": 865,
+            "classification": "Zlib",
+            "name": "LICENSE-ZLIB",
+            "sha256": "23f99ac423f5950bbd814d05e77e5e7be5183903133f3938be2a313cb8070205"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "visibility",
+        "purl": "pkg:cargo/visibility@0.1.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.1.1"
+      },
+      {
+        "checksum": "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 10847,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+          },
+          {
+            "bytes": 12243,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-Apache-2.0_WITH_LLVM-exception",
+            "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5"
+          },
+          {
+            "bytes": 1023,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "wasi",
+        "purl": "pkg:cargo/wasi@0.11.1+wasi-snapshot-preview1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.11.1+wasi-snapshot-preview1"
+      },
+      {
+        "checksum": "5c839a674fcd7a98952e593242ea400abe93992746761e38641405d28b00f419",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT/Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 11357,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1"
+          },
+          {
+            "bytes": 1073,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "ce7bc3499fee93d5022ef430d5e4201e79a6d9154f3974e42f41349f0569e09b"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "winapi",
+        "purl": "pkg:cargo/winapi@0.3.9",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.3.9"
+      },
+      {
+        "checksum": "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT/Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "winapi-i686-pc-windows-gnu",
+        "purl": "pkg:cargo/winapi-i686-pc-windows-gnu@0.4.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.4.0"
+      },
+      {
+        "checksum": "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "MIT/Apache-2.0",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "winapi-x86_64-pc-windows-gnu",
+        "purl": "pkg:cargo/winapi-x86_64-pc-windows-gnu@0.4.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.4.0"
+      },
+      {
+        "checksum": "e5fe1f8f1b06191a00962174c61aa5005e0bb391a6d80d07e24d115c01a92ed8",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "BSD-2-Clause OR Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 11350,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "9d185ac6703c4b0453974c0d85e9eee43e6941009296bb1f5eb0b54e2329e9f3"
+          },
+          {
+            "bytes": 1275,
+            "classification": "BSD-2-Clause",
+            "name": "LICENSE-BSD",
+            "sha256": "83c1763356e822adde0a2cae748d938a73fdc263849ccff6b27776dff213bd32"
+          },
+          {
+            "bytes": 1060,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "1a2f5c12ddc934d58956aa5dbdd3255fe55fd957633ab7d0d39e4f0daa73f7df"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "zerocopy",
+        "purl": "pkg:cargo/zerocopy@0.8.63",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.8.63"
+      },
+      {
+        "checksum": "863ad3ac83293fb4d740aedbfdc9240dd8d1a50c1099acd76ce80ce7c7230c7f",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "BSD-2-Clause OR Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 11350,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "9d185ac6703c4b0453974c0d85e9eee43e6941009296bb1f5eb0b54e2329e9f3"
+          },
+          {
+            "bytes": 1275,
+            "classification": "BSD-2-Clause",
+            "name": "LICENSE-BSD",
+            "sha256": "83c1763356e822adde0a2cae748d938a73fdc263849ccff6b27776dff213bd32"
+          },
+          {
+            "bytes": 1060,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "1a2f5c12ddc934d58956aa5dbdd3255fe55fd957633ab7d0d39e4f0daa73f7df"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock"
+        ],
+        "name": "zerocopy-derive",
+        "purl": "pkg:cargo/zerocopy-derive@0.8.63",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.8.63"
+      },
+      {
+        "checksum": "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 11358,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          },
+          {
+            "bytes": 1082,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "8c7516d4b27b1e495be5e38b612298b63de48d05f49cdac94f70f3cd70f8864b"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "zeroize",
+        "purl": "pkg:cargo/zeroize@1.9.1",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.9.1"
+      },
+      {
+        "checksum": "3c50655cbb0fe3fc43170059e702f1ce5e19b84cec58dc87b037a09935c2f328",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "cargo",
+        "licenseDeclared": "Apache-2.0 OR MIT",
+        "licenseEvidence": "exact cached crates.io normalized Cargo.toml",
+        "licenseFileDeclared": null,
+        "licenseFiles": [
+          {
+            "bytes": 11358,
+            "classification": "Apache-2.0",
+            "name": "LICENSE-APACHE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          },
+          {
+            "bytes": 1082,
+            "classification": "MIT",
+            "name": "LICENSE-MIT",
+            "sha256": "b8c6939380a400f53e11923d50fcc4dd2fa1ba8339fd9d04cda38a0251b6c9b0"
+          }
+        ],
+        "lockfiles": [
+          "cashu-wrapper/frost-participant-3of4/Cargo.lock",
+          "cashu-wrapper/frost-public-inspect/Cargo.lock"
+        ],
+        "name": "zeroize_derive",
+        "purl": "pkg:cargo/zeroize_derive@1.5.0",
+        "sourceLocator": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.5.0"
+      }
+    ],
+    "go": [
+      {
+        "checksums": [
+          "h1:64BXFSNzV1koQHPqljB4LaD6lZPQEQNZ38zMImajCRo=",
+          "h1:9JgnRkOL8J1UKuGlpJs7oL5tFRgrBgyM/uhwfS+cUiI="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": true,
+        "ecosystem": "go",
+        "goModSum": "h1:64BXFSNzV1koQHPqljB4LaD6lZPQEQNZ38zMImajCRo=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 802,
+            "classification": "ISC",
+            "name": "LICENSE",
+            "sha256": "10db068dbe11e2b3d652a3d4ae3cdd7998b84b12cdefe3d8083a2b63c295c13f"
+          }
+        ],
+        "name": "github.com/btcsuite/btcd/btcec/v2",
+        "purl": "pkg:golang/github.com/btcsuite/btcd/btcec/v2@v2.4.0",
+        "source": "go.mod",
+        "sourceSum": "h1:9JgnRkOL8J1UKuGlpJs7oL5tFRgrBgyM/uhwfS+cUiI=",
+        "version": "v2.4.0"
+      },
+      {
+        "checksums": [
+          "h1:+hGB2I4vhCEwdceY35lf75XZZzMtm3VDOVt8hj7qkCs=",
+          "h1:6Lihx2hP2BwZ/9ybNp3r4QdiV8e4uBYm+rE45GGH8HU="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": true,
+        "ecosystem": "go",
+        "goModSum": "h1:+hGB2I4vhCEwdceY35lf75XZZzMtm3VDOVt8hj7qkCs=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11358,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          }
+        ],
+        "name": "github.com/cometbft/cometbft",
+        "purl": "pkg:golang/github.com/cometbft/cometbft@v1.0.0",
+        "source": "go.mod",
+        "sourceSum": "h1:6Lihx2hP2BwZ/9ybNp3r4QdiV8e4uBYm+rE45GGH8HU=",
+        "version": "v1.0.0"
+      },
+      {
+        "checksums": [
+          "h1:EkQiqVSu/p2ebrZEnB2z6Re7r8XNe//M7ylR0qEwWm0=",
+          "h1:gGBwvsJi/gnHJEtwYfjPIGs2AKg/Vfa1ZuKCPD1/Ko4="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": true,
+        "ecosystem": "go",
+        "goModSum": "h1:EkQiqVSu/p2ebrZEnB2z6Re7r8XNe//M7ylR0qEwWm0=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11358,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          }
+        ],
+        "name": "github.com/cometbft/cometbft/api",
+        "purl": "pkg:golang/github.com/cometbft/cometbft/api@v1.0.0",
+        "source": "go.mod",
+        "sourceSum": "h1:gGBwvsJi/gnHJEtwYfjPIGs2AKg/Vfa1ZuKCPD1/Ko4=",
+        "version": "v1.0.0"
+      },
+      {
+        "checksums": [
+          "h1:1jcaCB/ufaK+sKp1NBhlGmpz41jOoPQ35bpF36t7BBo=",
+          "h1:EndNeuB0l9syBZhut0wns3gV1hL8zX8LIu6ZiVHWLIQ="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:1jcaCB/ufaK+sKp1NBhlGmpz41jOoPQ35bpF36t7BBo=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1559,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "79d57737a077fa42d2017297e74c5ad0f1f6597db0747799f2e1c0f698bc85ea"
+          }
+        ],
+        "name": "github.com/DataDog/zstd",
+        "purl": "pkg:golang/github.com/DataDog/zstd@v1.4.5",
+        "source": "go.mod",
+        "sourceSum": "h1:EndNeuB0l9syBZhut0wns3gV1hL8zX8LIu6ZiVHWLIQ=",
+        "version": "v1.4.5"
+      },
+      {
+        "checksums": [
+          "h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=",
+          "h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1058,
+            "classification": "MIT",
+            "name": "LICENSE",
+            "sha256": "0db7c9ebb3717e526f34f87dd1ee8bc77d36846e29cb0cec9246f7138fbe962b"
+          }
+        ],
+        "name": "github.com/beorn7/perks",
+        "purl": "pkg:golang/github.com/beorn7/perks@v1.0.1",
+        "source": "go.mod",
+        "sourceSum": "h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=",
+        "version": "v1.0.1"
+      },
+      {
+        "checksums": [
+          "h1:7SFka0XMvUgj3hfZtydOrQY2mwhPclbT2snogU7SQQc=",
+          "h1:q0rUy8C/TYNBQS1+CGKw68tLOFYSNEs0TFnxxnS9+4U="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:7SFka0XMvUgj3hfZtydOrQY2mwhPclbT2snogU7SQQc=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 802,
+            "classification": "ISC",
+            "name": "LICENSE",
+            "sha256": "8d0335679b3906ffe7221872250859edcc90f78466f5e9e3e000e48993ff96ef"
+          }
+        ],
+        "name": "github.com/btcsuite/btcd/chaincfg/chainhash",
+        "purl": "pkg:golang/github.com/btcsuite/btcd/chaincfg/chainhash@v1.0.1",
+        "source": "go.mod",
+        "sourceSum": "h1:q0rUy8C/TYNBQS1+CGKw68tLOFYSNEs0TFnxxnS9+4U=",
+        "version": "v1.0.1"
+      },
+      {
+        "checksums": [
+          "h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=",
+          "h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1068,
+            "classification": "MIT",
+            "name": "LICENSE.txt",
+            "sha256": "f566a9f97bacdaf00d9f21dd991e81dc11201c4e016c86b470799429a1c9a79c"
+          }
+        ],
+        "name": "github.com/cespare/xxhash/v2",
+        "purl": "pkg:golang/github.com/cespare/xxhash/v2@v2.3.0",
+        "source": "go.mod",
+        "sourceSum": "h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=",
+        "version": "v2.3.0"
+      },
+      {
+        "checksums": [
+          "h1:5bA+k2Y6r+oz/6Z/RFlNeVCesGARKuC6YymtcDrbC/I=",
+          "h1:m4UIW4CDjx+R5cybPsNrRbreomiFqt8o1h1wUVazSd8="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:m4UIW4CDjx+R5cybPsNrRbreomiFqt8o1h1wUVazSd8=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11357,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+          }
+        ],
+        "name": "github.com/cockroachdb/errors",
+        "purl": "pkg:golang/github.com/cockroachdb/errors@v1.11.3",
+        "source": "go.mod",
+        "sourceSum": "h1:5bA+k2Y6r+oz/6Z/RFlNeVCesGARKuC6YymtcDrbC/I=",
+        "version": "v1.11.3"
+      },
+      {
+        "checksums": [
+          "h1:9/y3cnZ5GKakj/H4y9r9GTjCvAFta7KLgSHPJJYc52M=",
+          "h1:giXvy4KSc/6g/esnpM7Geqxka4WSqI1SZc7sMJFd3y4="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:9/y3cnZ5GKakj/H4y9r9GTjCvAFta7KLgSHPJJYc52M=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11357,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+          }
+        ],
+        "name": "github.com/cockroachdb/fifo",
+        "purl": "pkg:golang/github.com/cockroachdb/fifo@v0.0.0-20240606204812-0bbfbd93a7ce",
+        "source": "go.mod",
+        "sourceSum": "h1:giXvy4KSc/6g/esnpM7Geqxka4WSqI1SZc7sMJFd3y4=",
+        "version": "v0.0.0-20240606204812-0bbfbd93a7ce"
+      },
+      {
+        "checksums": [
+          "h1:Vz9DsVWQQhf3vs21MhPMZpMGSht7O/2vFW2xusFUVOs=",
+          "h1:r6VH0faHjZeQy818SGhaone5OnYfxFR/+AzdY3sf5aE="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:Vz9DsVWQQhf3vs21MhPMZpMGSht7O/2vFW2xusFUVOs=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11357,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+          }
+        ],
+        "name": "github.com/cockroachdb/logtags",
+        "purl": "pkg:golang/github.com/cockroachdb/logtags@v0.0.0-20230118201751-21c54148d20b",
+        "source": "go.mod",
+        "sourceSum": "h1:r6VH0faHjZeQy818SGhaone5OnYfxFR/+AzdY3sf5aE=",
+        "version": "v0.0.0-20230118201751-21c54148d20b"
+      },
+      {
+        "checksums": [
+          "h1:4exszw1r40423ZsmkG/09AFEG83I0uDgfujJdbL6kYU=",
+          "h1:CUh2IPtR4swHlEj48Rhfzw6l/d0qA31fItcIszQVIsA="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:4exszw1r40423ZsmkG/09AFEG83I0uDgfujJdbL6kYU=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1487,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "d1f46db68f5899a5f99a10f001a2d5262598273fe5c33e07f728d90914613e56"
+          }
+        ],
+        "name": "github.com/cockroachdb/pebble",
+        "purl": "pkg:golang/github.com/cockroachdb/pebble@v1.1.2",
+        "source": "go.mod",
+        "sourceSum": "h1:CUh2IPtR4swHlEj48Rhfzw6l/d0qA31fItcIszQVIsA=",
+        "version": "v1.1.2"
+      },
+      {
+        "checksums": [
+          "h1:BVNblN9mBWFyMyqK1k3AAiSxhvhfK2oOZZ2lK+dpvRg=",
+          "h1:u1PMllDkdFfPWaNGMyLD1+so+aq3uUItthCFqzwPJ30="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:BVNblN9mBWFyMyqK1k3AAiSxhvhfK2oOZZ2lK+dpvRg=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11357,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+          }
+        ],
+        "name": "github.com/cockroachdb/redact",
+        "purl": "pkg:golang/github.com/cockroachdb/redact@v1.1.5",
+        "source": "go.mod",
+        "sourceSum": "h1:u1PMllDkdFfPWaNGMyLD1+so+aq3uUItthCFqzwPJ30=",
+        "version": "v1.1.5"
+      },
+      {
+        "checksums": [
+          "h1:7nc4anLGjupUW/PeY5qiNYsdNXj7zopG+eqsS7To5IQ=",
+          "h1:zuQyyAKVxetITBuuhv3BI9cMrmStnpT18zmgmTxunpo="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:7nc4anLGjupUW/PeY5qiNYsdNXj7zopG+eqsS7To5IQ=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11357,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+          }
+        ],
+        "name": "github.com/cockroachdb/tokenbucket",
+        "purl": "pkg:golang/github.com/cockroachdb/tokenbucket@v0.0.0-20230807174530-cc333fc44b06",
+        "source": "go.mod",
+        "sourceSum": "h1:zuQyyAKVxetITBuuhv3BI9cMrmStnpT18zmgmTxunpo=",
+        "version": "v0.0.0-20230807174530-cc333fc44b06"
+      },
+      {
+        "checksums": [
+          "h1:EBrFs1GDRiTqrWXYi4v90Awf/gcdD5ExzdPbg4X8+mk=",
+          "h1:SylKuLseMLQKw3+i8y8KozZyJcQSL98qEe2CGMCGTYE="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:EBrFs1GDRiTqrWXYi4v90Awf/gcdD5ExzdPbg4X8+mk=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11358,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          }
+        ],
+        "name": "github.com/cometbft/cometbft-db",
+        "purl": "pkg:golang/github.com/cometbft/cometbft-db@v1.0.1",
+        "source": "go.mod",
+        "sourceSum": "h1:SylKuLseMLQKw3+i8y8KozZyJcQSL98qEe2CGMCGTYE=",
+        "version": "v1.0.1"
+      },
+      {
+        "checksums": [
+          "h1:79USr0oyXAbxg3rspGh/m4SWNyoz/GLaAh0QlCe2fro=",
+          "h1:yWChEv5IUEYURQasfyBW5ffkMHR/90hiHgbNgrtp4j0="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:yWChEv5IUEYURQasfyBW5ffkMHR/90hiHgbNgrtp4j0=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1745,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "369124fea6f5c2a4eb29ce462519a2d06c4e6e4ba27ba8116534d454faccf823"
+          }
+        ],
+        "name": "github.com/cosmos/gogoproto",
+        "purl": "pkg:golang/github.com/cosmos/gogoproto@v1.7.0",
+        "source": "go.mod",
+        "sourceSum": "h1:79USr0oyXAbxg3rspGh/m4SWNyoz/GLaAh0QlCe2fro=",
+        "version": "v1.7.0"
+      },
+      {
+        "checksums": [
+          "h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=",
+          "h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 766,
+            "classification": "ISC",
+            "name": "LICENSE",
+            "sha256": "1b93a317849ee09d3d7e4f1d20c2b78ddb230b4becb12d7c224c927b9d470251"
+          }
+        ],
+        "name": "github.com/davecgh/go-spew",
+        "purl": "pkg:golang/github.com/davecgh/go-spew@v1.1.2-0.20180830191138-d8f796af33cc",
+        "source": "go.mod",
+        "sourceSum": "h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=",
+        "version": "v1.1.2-0.20180830191138-d8f796af33cc"
+      },
+      {
+        "checksums": [
+          "h1:2OfgNZ5wDpcsFmHmCK5gZTPcCXqlm2ArzUIkw9czNJo=",
+          "h1:zPMNGQCm0g4QTY27fOCorQW7EryeQ/U0x++OzVrdms8="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:2OfgNZ5wDpcsFmHmCK5gZTPcCXqlm2ArzUIkw9czNJo=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 854,
+            "classification": "ISC",
+            "name": "LICENSE",
+            "sha256": "480be5fb1be03ff19fd71d863f453f16262e98d4e568f5bccfcb7aa3ccf8cf0d"
+          }
+        ],
+        "name": "github.com/decred/dcrd/crypto/blake256",
+        "purl": "pkg:golang/github.com/decred/dcrd/crypto/blake256@v1.1.0",
+        "source": "go.mod",
+        "sourceSum": "h1:zPMNGQCm0g4QTY27fOCorQW7EryeQ/U0x++OzVrdms8=",
+        "version": "v1.1.0"
+      },
+      {
+        "checksums": [
+          "h1:NMZiJj8QnKe1LgsbDayM4UoHwbvwDRwnI3hwNaAHRnc=",
+          "h1:ZXNYxsqcloTdSy/rNShjYzMhyjf0LaoftYK0p+A3h40="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:ZXNYxsqcloTdSy/rNShjYzMhyjf0LaoftYK0p+A3h40=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 854,
+            "classification": "ISC",
+            "name": "LICENSE",
+            "sha256": "480be5fb1be03ff19fd71d863f453f16262e98d4e568f5bccfcb7aa3ccf8cf0d"
+          }
+        ],
+        "name": "github.com/decred/dcrd/dcrec/secp256k1/v4",
+        "purl": "pkg:golang/github.com/decred/dcrd/dcrec/secp256k1/v4@v4.4.0",
+        "source": "go.mod",
+        "sourceSum": "h1:NMZiJj8QnKe1LgsbDayM4UoHwbvwDRwnI3hwNaAHRnc=",
+        "version": "v4.4.0"
+      },
+      {
+        "checksums": [
+          "h1:Pv98CIbtB3LkMWmXi4Joa5OOcwbmnX88sF5qbK3r3Ps=",
+          "h1:lc76E2QywIyW8WuBnwl8Lc4bkmQH4+w1gwTf25trprY="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:lc76E2QywIyW8WuBnwl8Lc4bkmQH4+w1gwTf25trprY=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1093,
+            "classification": "MIT",
+            "name": "LICENSE",
+            "sha256": "2827c6e8f8f8bab4a1bf311afb5b0947cedcb1a1ec79e0be9f0b4140da7528c4"
+          }
+        ],
+        "name": "github.com/getsentry/sentry-go",
+        "purl": "pkg:golang/github.com/getsentry/sentry-go@v0.27.0",
+        "source": "go.mod",
+        "sourceSum": "h1:Pv98CIbtB3LkMWmXi4Joa5OOcwbmnX88sF5qbK3r3Ps=",
+        "version": "v0.27.0"
+      },
+      {
+        "checksums": [
+          "h1:MRVx0/zhvdseW+Gza6N9rVzU/IVzaeE1SFI4raAhmBU=",
+          "h1:NwTd00d/i8cPZ3xOwwiv2PO5MOcx78fFErGNcVmBjv0="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:NwTd00d/i8cPZ3xOwwiv2PO5MOcx78fFErGNcVmBjv0=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1063,
+            "classification": "MIT",
+            "name": "LICENSE",
+            "sha256": "1ea87f17c186a528a91ff8d81073d9ee434f40a3ad8067d83158f5c5188c0be2"
+          }
+        ],
+        "name": "github.com/go-kit/log",
+        "purl": "pkg:golang/github.com/go-kit/log@v0.2.1",
+        "source": "go.mod",
+        "sourceSum": "h1:MRVx0/zhvdseW+Gza6N9rVzU/IVzaeE1SFI4raAhmBU=",
+        "version": "v0.2.1"
+      },
+      {
+        "checksums": [
+          "h1:WYhtIu8zTZfxdn5+rREduYbwxfcBr/Vr6KEVveWlfTs=",
+          "h1:wGYYu3uicYdqXVgoYbvnkrPVXkuLM1p1ifugDMEdRi4="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:WYhtIu8zTZfxdn5+rREduYbwxfcBr/Vr6KEVveWlfTs=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1077,
+            "classification": "MIT",
+            "name": "LICENSE",
+            "sha256": "1b582013d963b973548e8a51b99fc2e8e1937855698c6a7b460886ac2e90017e"
+          }
+        ],
+        "name": "github.com/go-logfmt/logfmt",
+        "purl": "pkg:golang/github.com/go-logfmt/logfmt@v0.6.0",
+        "source": "go.mod",
+        "sourceSum": "h1:wGYYu3uicYdqXVgoYbvnkrPVXkuLM1p1ifugDMEdRi4=",
+        "version": "v0.6.0"
+      },
+      {
+        "checksums": [
+          "h1:Ov1cvc58UF3b5XjBnZv7+opcTcQFZebYjWzi34vdm4Q=",
+          "h1:P1XiOD3dCwIKUDQYPy72D8LYyHL2YPYrpS2s69NZV8Q="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:P1XiOD3dCwIKUDQYPy72D8LYyHL2YPYrpS2s69NZV8Q=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1681,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "3f571768c0ba2f330e5fee90de89bfe5141f48c1939be8008fa61461c30ca07f"
+          }
+        ],
+        "name": "github.com/gogo/protobuf",
+        "purl": "pkg:golang/github.com/gogo/protobuf@v1.3.2",
+        "source": "go.mod",
+        "sourceSum": "h1:Ov1cvc58UF3b5XjBnZv7+opcTcQFZebYjWzi34vdm4Q=",
+        "version": "v1.3.2"
+      },
+      {
+        "checksums": [
+          "h1:i7eJL8qZTpSEXOPTxNKhASYpMn+8e5Q6AdndVa1dWek=",
+          "h1:lnTiLA8Wa4RWRcIUkrtSVa5nRhsEGBg48fD6rSs7xps="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:lnTiLA8Wa4RWRcIUkrtSVa5nRhsEGBg48fD6rSs7xps=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1480,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "8778a9fc1eaffb03ab873caae251df2d224f6b5502be8777d3cd573a4dd43903"
+          }
+        ],
+        "name": "github.com/golang/protobuf",
+        "purl": "pkg:golang/github.com/golang/protobuf@v1.5.4",
+        "source": "go.mod",
+        "sourceSum": "h1:i7eJL8qZTpSEXOPTxNKhASYpMn+8e5Q6AdndVa1dWek=",
+        "version": "v1.5.4"
+      },
+      {
+        "checksums": [
+          "h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=",
+          "h1:yAGX7huGHXlcLOEtBnF4w7FQwA26wojNCwOYAEhLjQM="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1486,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "f69f157b0be75da373605dbc8bbf142e8924ee82d8f44f11bcaf351335bf98cf"
+          }
+        ],
+        "name": "github.com/golang/snappy",
+        "purl": "pkg:golang/github.com/golang/snappy@v0.0.4",
+        "source": "go.mod",
+        "sourceSum": "h1:yAGX7huGHXlcLOEtBnF4w7FQwA26wojNCwOYAEhLjQM=",
+        "version": "v0.0.4"
+      },
+      {
+        "checksums": [
+          "h1:CVpQJjYgC4VbzxeGVHfvZrv1ctoYCAI8vbl07Fcxlyg=",
+          "h1:qOPhT0dTNdNzV6Z/lhRX0YXUafgPLFUh+gZMl761Gm4="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:qOPhT0dTNdNzV6Z/lhRX0YXUafgPLFUh+gZMl761Gm4=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11358,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          }
+        ],
+        "name": "github.com/google/btree",
+        "purl": "pkg:golang/github.com/google/btree@v1.1.3",
+        "source": "go.mod",
+        "sourceSum": "h1:CVpQJjYgC4VbzxeGVHfvZrv1ctoYCAI8vbl07Fcxlyg=",
+        "version": "v1.1.3"
+      },
+      {
+        "checksums": [
+          "h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=",
+          "h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1479,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "17b5d209ba8f9684257ecfcff87df6ceda6194143a8fbd074f29727cff6f0c40"
+          }
+        ],
+        "name": "github.com/google/go-cmp",
+        "purl": "pkg:golang/github.com/google/go-cmp@v0.6.0",
+        "source": "go.mod",
+        "sourceSum": "h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=",
+        "version": "v0.6.0"
+      },
+      {
+        "checksums": [
+          "h1:UzfcAexk9Vhv8+9pNOgRu41f16lHq725vPwnSeiG/Us=",
+          "h1:iVyU4/qPKHY5h/wSd6rZZCDcLJNxiWO6dvsYES2Sb20="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:iVyU4/qPKHY5h/wSd6rZZCDcLJNxiWO6dvsYES2Sb20=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11358,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          }
+        ],
+        "name": "github.com/google/orderedcode",
+        "purl": "pkg:golang/github.com/google/orderedcode@v0.0.1",
+        "source": "go.mod",
+        "sourceSum": "h1:UzfcAexk9Vhv8+9pNOgRu41f16lHq725vPwnSeiG/Us=",
+        "version": "v0.0.1"
+      },
+      {
+        "checksums": [
+          "h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=",
+          "h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1480,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "0a8d61ed3cbfd5312326e8126c31ce9c627a283adc99131b56896d29ada04b2d"
+          }
+        ],
+        "name": "github.com/google/uuid",
+        "purl": "pkg:golang/github.com/google/uuid@v1.6.0",
+        "source": "go.mod",
+        "sourceSum": "h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=",
+        "version": "v1.6.0"
+      },
+      {
+        "checksums": [
+          "h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=",
+          "h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1312,
+            "classification": "BSD-2-Clause",
+            "name": "LICENSE",
+            "sha256": "2be1b548b0387ca8948e1bb9434e709126904d15f622cc2d0d8e7f186e4d122d"
+          }
+        ],
+        "name": "github.com/gorilla/websocket",
+        "purl": "pkg:golang/github.com/gorilla/websocket@v1.5.3",
+        "source": "go.mod",
+        "sourceSum": "h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg=",
+        "version": "v1.5.3"
+      },
+      {
+        "checksums": [
+          "h1:QeFd9opnmA6QUJc5vARoKUSoFhyfM2/ZepoAG6RGpeM=",
+          "h1:a+bsQ5rvGLjzHuww6tVxozPZFVghXaHOwFs4luLUK2k="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:QeFd9opnmA6QUJc5vARoKUSoFhyfM2/ZepoAG6RGpeM=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 15957,
+            "classification": "MPL-2.0",
+            "name": "LICENSE",
+            "sha256": "6c7088eb877b5d7e6e0e9d27e822ea25fcda2e83f9eba59bb5f1418a656796e0"
+          }
+        ],
+        "name": "github.com/hashicorp/golang-lru/v2",
+        "purl": "pkg:golang/github.com/hashicorp/golang-lru/v2@v2.0.7",
+        "source": "go.mod",
+        "sourceSum": "h1:a+bsQ5rvGLjzHuww6tVxozPZFVghXaHOwFs4luLUK2k=",
+        "version": "v2.0.7"
+      },
+      {
+        "checksums": [
+          "h1:In6xLpyWOi1+C7tXUUWv2ot1QvBjxevKAaI6IXrJmUc=",
+          "h1:pMDklpSncoRMuLFrf1W9Ss9KT+0rH90U12bZKk7uwG0="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:pMDklpSncoRMuLFrf1W9Ss9KT+0rH90U12bZKk7uwG0=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 16733,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "0d9e582ee4bff57bf1189c9e514e6da7ce277f9cd3bc2d488b22fbb39a6d87cf"
+          }
+        ],
+        "name": "github.com/klauspost/compress",
+        "purl": "pkg:golang/github.com/klauspost/compress@v1.17.11",
+        "source": "go.mod",
+        "sourceSum": "h1:In6xLpyWOi1+C7tXUUWv2ot1QvBjxevKAaI6IXrJmUc=",
+        "version": "v1.17.11"
+      },
+      {
+        "checksums": [
+          "h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=",
+          "h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1052,
+            "classification": "MIT",
+            "name": "License",
+            "sha256": "283c28b781bc7487bd7bcaf453cbd811f5ee8d7ce625cfcf8dcacae6ba1f4bb5"
+          }
+        ],
+        "name": "github.com/kr/pretty",
+        "purl": "pkg:golang/github.com/kr/pretty@v0.3.1",
+        "source": "go.mod",
+        "sourceSum": "h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=",
+        "version": "v0.3.1"
+      },
+      {
+        "checksums": [
+          "h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=",
+          "h1:eLer722TekiGuMkidMxC/pM04lWEeraHUUmBw8l2grE="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:eLer722TekiGuMkidMxC/pM04lWEeraHUUmBw8l2grE=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1052,
+            "classification": "MIT",
+            "name": "License",
+            "sha256": "283c28b781bc7487bd7bcaf453cbd811f5ee8d7ce625cfcf8dcacae6ba1f4bb5"
+          }
+        ],
+        "name": "github.com/kr/text",
+        "purl": "pkg:golang/github.com/kr/text@v0.2.0",
+        "source": "go.mod",
+        "sourceSum": "h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=",
+        "version": "v0.2.0"
+      },
+      {
+        "checksums": [
+          "h1:AlVN5x4E4T544tWzH6hKfbfQvm3HdbOxrmggDNAPY9o=",
+          "h1:YXG7RB+JIjhP29X+OtkiDnYaXQwpS4JEWq7dtCCRUEw="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:AlVN5x4E4T544tWzH6hKfbfQvm3HdbOxrmggDNAPY9o=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1110,
+            "classification": "MIT",
+            "name": "LICENSE.md",
+            "sha256": "3e2d79d27727d59ab1c9752f57654733d6c8824936c22800594dccfe8864ec28"
+          }
+        ],
+        "name": "github.com/lib/pq",
+        "purl": "pkg:golang/github.com/lib/pq@v1.10.9",
+        "source": "go.mod",
+        "sourceSum": "h1:YXG7RB+JIjhP29X+OtkiDnYaXQwpS4JEWq7dtCCRUEw=",
+        "version": "v1.10.9"
+      },
+      {
+        "checksums": [
+          "h1:GGYsuwP/fPD6Y9hMiXuapVvlIUEhFhMTh0rxU3ik1LQ=",
+          "h1:kbnuUMoHYyVl7szWjSxJnxw11k2U709jqFPPmIUyD6Q="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:GGYsuwP/fPD6Y9hMiXuapVvlIUEhFhMTh0rxU3ik1LQ=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11358,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          }
+        ],
+        "name": "github.com/minio/highwayhash",
+        "purl": "pkg:golang/github.com/minio/highwayhash@v1.0.3",
+        "source": "go.mod",
+        "sourceSum": "h1:kbnuUMoHYyVl7szWjSxJnxw11k2U709jqFPPmIUyD6Q=",
+        "version": "v1.0.3"
+      },
+      {
+        "checksums": [
+          "h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=",
+          "h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1546,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "aa1376b9bc5dea6f30cdefde40c176a254f247d2814d0a9929395138631b2ae0"
+          }
+        ],
+        "name": "github.com/munnerz/goautoneg",
+        "purl": "pkg:golang/github.com/munnerz/goautoneg@v0.0.0-20191010083416-a7dc8b61c822",
+        "source": "go.mod",
+        "sourceSum": "h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=",
+        "version": "v0.0.0-20191010083416-a7dc8b61c822"
+      },
+      {
+        "checksums": [
+          "h1:FatpGJD2jmJfhZiFDElaC0QhZUDQnxUeAwTGkfAHN3I=",
+          "h1:hVoHR2EVESiICEMbg137etN/Lx+lSrHPTD39Z/uE+2s="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:hVoHR2EVESiICEMbg137etN/Lx+lSrHPTD39Z/uE+2s=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1888,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "46d4a3f0dcf172e75c70456ee9945ae69f2cfa0ba0cba7eacb9434eafea778dc"
+          }
+        ],
+        "name": "github.com/oasisprotocol/curve25519-voi",
+        "purl": "pkg:golang/github.com/oasisprotocol/curve25519-voi@v0.0.0-20220708102147-0a8a51822cae",
+        "source": "go.mod",
+        "sourceSum": "h1:FatpGJD2jmJfhZiFDElaC0QhZUDQnxUeAwTGkfAHN3I=",
+        "version": "v0.0.0-20220708102147-0a8a51822cae"
+      },
+      {
+        "checksums": [
+          "h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=",
+          "h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1312,
+            "classification": "BSD-2-Clause",
+            "name": "LICENSE",
+            "sha256": "8d427fd87bc9579ea368fde3d49f9ca22eac857f91a9dec7e3004bdfab7dee86"
+          }
+        ],
+        "name": "github.com/pkg/errors",
+        "purl": "pkg:golang/github.com/pkg/errors@v0.9.1",
+        "source": "go.mod",
+        "sourceSum": "h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=",
+        "version": "v0.9.1"
+      },
+      {
+        "checksums": [
+          "h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=",
+          "h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1445,
+            "classification": "BSD-2-Clause",
+            "name": "LICENSE",
+            "sha256": "2eb550be6801c1ea434feba53bf6d12e7c71c90253e0a9de4a4f46cf88b56477"
+          }
+        ],
+        "name": "github.com/pmezard/go-difflib",
+        "purl": "pkg:golang/github.com/pmezard/go-difflib@v1.0.1-0.20181226105442-5d4384ee4fb2",
+        "source": "go.mod",
+        "sourceSum": "h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=",
+        "version": "v1.0.1-0.20181226105442-5d4384ee4fb2"
+      },
+      {
+        "checksums": [
+          "h1:PIEt8X02hGcP8JWbeHyeZ53Y/jReSnHgO035n//V5WE=",
+          "h1:cxppBPuYhUnsO6yo/aoRol4L7q7UFfdm+bR9r+8l63Y="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:PIEt8X02hGcP8JWbeHyeZ53Y/jReSnHgO035n//V5WE=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11357,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+          },
+          {
+            "bytes": 631,
+            "classification": "NOASSERTION",
+            "name": "NOTICE",
+            "sha256": "8548bfb2bc1913396df38c548a6ec60b8dbcac3b0800485a40569c8bdd184471"
+          }
+        ],
+        "name": "github.com/prometheus/client_golang",
+        "purl": "pkg:golang/github.com/prometheus/client_golang@v1.20.5",
+        "source": "go.mod",
+        "sourceSum": "h1:cxppBPuYhUnsO6yo/aoRol4L7q7UFfdm+bR9r+8l63Y=",
+        "version": "v1.20.5"
+      },
+      {
+        "checksums": [
+          "h1:OrxVMOVHjw3lKMa8+x6HeMGkHMQyHDk9E3jmP2AmGiY=",
+          "h1:ZKSh/rekM+n3CeS952MLRAdFwIKqeY8b62p8ais2e9E="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:OrxVMOVHjw3lKMa8+x6HeMGkHMQyHDk9E3jmP2AmGiY=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11357,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+          },
+          {
+            "bytes": 167,
+            "classification": "NOASSERTION",
+            "name": "NOTICE",
+            "sha256": "6c79faa15168885fb88a316ae0df18f486deafddefdc16826cdc56dfbd421e24"
+          }
+        ],
+        "name": "github.com/prometheus/client_model",
+        "purl": "pkg:golang/github.com/prometheus/client_model@v0.6.1",
+        "source": "go.mod",
+        "sourceSum": "h1:ZKSh/rekM+n3CeS952MLRAdFwIKqeY8b62p8ais2e9E=",
+        "version": "v0.6.1"
+      },
+      {
+        "checksums": [
+          "h1:3gv/GThfX0cV2lpO7gkTUwZru38mxevy90Bj8YFSRQQ=",
+          "h1:zr29OCN/2BsJRaFwG8QOBr41D6kkchKbpeNH7pAjb/s="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:zr29OCN/2BsJRaFwG8QOBr41D6kkchKbpeNH7pAjb/s=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11357,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+          },
+          {
+            "bytes": 178,
+            "classification": "NOASSERTION",
+            "name": "NOTICE",
+            "sha256": "600244c8052c8c1d307043fafacbc83b429c171dd8e08f5a537c0a54014585ee"
+          }
+        ],
+        "name": "github.com/prometheus/common",
+        "purl": "pkg:golang/github.com/prometheus/common@v0.61.0",
+        "source": "go.mod",
+        "sourceSum": "h1:3gv/GThfX0cV2lpO7gkTUwZru38mxevy90Bj8YFSRQQ=",
+        "version": "v0.61.0"
+      },
+      {
+        "checksums": [
+          "h1:YagwOFzUgYfKKHX6Dr+sHT7km/hxC76UB0learggepc=",
+          "h1:fB45yRUv8NstnjriLhBQLuOUt+WW4BsoGhij/e3PBqk="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:fB45yRUv8NstnjriLhBQLuOUt+WW4BsoGhij/e3PBqk=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11357,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+          },
+          {
+            "bytes": 237,
+            "classification": "NOASSERTION",
+            "name": "NOTICE",
+            "sha256": "497fcdb9fae55924c12f55f05cbe83a096662e5c591d79b74e4a8f23bab5ffee"
+          }
+        ],
+        "name": "github.com/prometheus/procfs",
+        "purl": "pkg:golang/github.com/prometheus/procfs@v0.15.1",
+        "source": "go.mod",
+        "sourceSum": "h1:YagwOFzUgYfKKHX6Dr+sHT7km/hxC76UB0learggepc=",
+        "version": "v0.15.1"
+      },
+      {
+        "checksums": [
+          "h1:N/ElC8H3+5XpJzTSTfLsJV/mx9Q9g7kxmchpfZyxgzM=",
+          "h1:bCqnVzQkZxMG4s8nGwiZ5l3QUCyqpo9Y+/ZMZ9VjZe4="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:bCqnVzQkZxMG4s8nGwiZ5l3QUCyqpo9Y+/ZMZ9VjZe4=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1516,
+            "classification": "BSD-2-Clause",
+            "name": "LICENSE",
+            "sha256": "d2571186acad91c8a3121fb31f1aa5963e82ccd08608d00cef3eb3f3a6c8ad38"
+          }
+        ],
+        "name": "github.com/rcrowley/go-metrics",
+        "purl": "pkg:golang/github.com/rcrowley/go-metrics@v0.0.0-20201227073835-cf1acfcdf475",
+        "source": "go.mod",
+        "sourceSum": "h1:N/ElC8H3+5XpJzTSTfLsJV/mx9Q9g7kxmchpfZyxgzM=",
+        "version": "v0.0.0-20201227073835-cf1acfcdf475"
+      },
+      {
+        "checksums": [
+          "h1:cWPaGQEPrBb5/AsnsZesgZZ9yb1OQ+GOISoDNXVBh4M=",
+          "h1:ddIwULY96R17DhadqLgMfk9H9tvdUzkipdSkR5nkCZA="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:ddIwULY96R17DhadqLgMfk9H9tvdUzkipdSkR5nkCZA=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1479,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "4835612df0098ca95f8e7d9e3bffcb02358d435dbb38057c844c99d7f725eb20"
+          }
+        ],
+        "name": "github.com/rogpeppe/go-internal",
+        "purl": "pkg:golang/github.com/rogpeppe/go-internal@v1.11.0",
+        "source": "go.mod",
+        "sourceSum": "h1:cWPaGQEPrBb5/AsnsZesgZZ9yb1OQ+GOISoDNXVBh4M=",
+        "version": "v1.11.0"
+      },
+      {
+        "checksums": [
+          "h1:XyqrcTp5zjWr1wsJ8PIRZssZ8b/WMcMf71DJnit4EMU=",
+          "h1:eU3gRzXLRK57F5rKMGMZURNdIG4EoAmX8k94r9wXWHA="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:XyqrcTp5zjWr1wsJ8PIRZssZ8b/WMcMf71DJnit4EMU=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1080,
+            "classification": "MIT",
+            "name": "LICENSE",
+            "sha256": "c21f3b628875c093885ba085d13959b5e78841d64a8fe76c10ba7293aec32fc7"
+          }
+        ],
+        "name": "github.com/rs/cors",
+        "purl": "pkg:golang/github.com/rs/cors@v1.11.1",
+        "source": "go.mod",
+        "sourceSum": "h1:eU3gRzXLRK57F5rKMGMZURNdIG4EoAmX8k94r9wXWHA=",
+        "version": "v1.11.1"
+      },
+      {
+        "checksums": [
+          "h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOfJA=",
+          "h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1103,
+            "classification": "MIT",
+            "name": "LICENSE",
+            "sha256": "f8e536c1c7b695810427095dc85f5f80d44ff7c10535e8a9486cf393e2599189"
+          }
+        ],
+        "name": "github.com/stretchr/testify",
+        "purl": "pkg:golang/github.com/stretchr/testify@v1.10.0",
+        "source": "go.mod",
+        "sourceSum": "h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOfJA=",
+        "version": "v1.10.0"
+      },
+      {
+        "checksums": [
+          "h1:epCh84lMvA70Z7CTTCmYQn2CKbY8j86K7/FAIr141uY=",
+          "h1:q4W45IWZaF22tdD+VEXcAWRA037jwmWEB5VWYORlTpc="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:q4W45IWZaF22tdD+VEXcAWRA037jwmWEB5VWYORlTpc=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1318,
+            "classification": "BSD-2-Clause",
+            "name": "LICENSE",
+            "sha256": "7df695202f82a52f8891a9913438c7fde15bd71034fd1853b9ed46503ea52a19"
+          }
+        ],
+        "name": "github.com/syndtr/goleveldb",
+        "purl": "pkg:golang/github.com/syndtr/goleveldb@v1.0.1-0.20210819022825-2ae1ddf74ef7",
+        "source": "go.mod",
+        "sourceSum": "h1:epCh84lMvA70Z7CTTCmYQn2CKbY8j86K7/FAIr141uY=",
+        "version": "v1.0.1-0.20210819022825-2ae1ddf74ef7"
+      },
+      {
+        "checksums": [
+          "h1:RwoQn3GkWiMkzlX562cLB7OxWvjH1L8xutO2WoJcRoY=",
+          "h1:kDsLvtWBEx7MV9tJOj9bnXsPbxwJQ6csT/x4KIN4Ssk="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:kDsLvtWBEx7MV9tJOj9bnXsPbxwJQ6csT/x4KIN4Ssk=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1453,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+          }
+        ],
+        "name": "golang.org/x/crypto",
+        "purl": "pkg:golang/golang.org/x/crypto@v0.30.0",
+        "source": "go.mod",
+        "sourceSum": "h1:RwoQn3GkWiMkzlX562cLB7OxWvjH1L8xutO2WoJcRoY=",
+        "version": "v0.30.0"
+      },
+      {
+        "checksums": [
+          "h1:FRnLl4eNAQl8hwxVVC17teOw8kdjVDVAiFMtgUdTSRQ=",
+          "h1:zk2irFbV9DP96SEBUUAy67IdHUaZuSnrz1n472HUCLE="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:zk2irFbV9DP96SEBUUAy67IdHUaZuSnrz1n472HUCLE=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1479,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "2d36597f7117c38b006835ae7f537487207d8ec407aa9d9980794b2030cbc067"
+          }
+        ],
+        "name": "golang.org/x/exp",
+        "purl": "pkg:golang/golang.org/x/exp@v0.0.0-20231110203233-9a3e6036ecaa",
+        "source": "go.mod",
+        "sourceSum": "h1:FRnLl4eNAQl8hwxVVC17teOw8kdjVDVAiFMtgUdTSRQ=",
+        "version": "v0.0.0-20231110203233-9a3e6036ecaa"
+      },
+      {
+        "checksums": [
+          "h1:CwU0IoeOlnQQWJ6ioyFrfRuomB8GKF6KbYXZVyeXNfs=",
+          "h1:ZqPmj8Kzc+Y6e0+skZsuACbx+wzMgo5MQsJh9Qd6aYI="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:CwU0IoeOlnQQWJ6ioyFrfRuomB8GKF6KbYXZVyeXNfs=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1453,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+          }
+        ],
+        "name": "golang.org/x/net",
+        "purl": "pkg:golang/golang.org/x/net@v0.32.0",
+        "source": "go.mod",
+        "sourceSum": "h1:ZqPmj8Kzc+Y6e0+skZsuACbx+wzMgo5MQsJh9Qd6aYI=",
+        "version": "v0.32.0"
+      },
+      {
+        "checksums": [
+          "h1:3NQrjDixjgGwUOCaF8w2+VYHv0Ve/vGYSbdkTa98gmQ=",
+          "h1:Czt+wKu1gCyEFDUtn0jG5QVvpJ6rzVqr5aXyt9drQfk="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:Czt+wKu1gCyEFDUtn0jG5QVvpJ6rzVqr5aXyt9drQfk=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1453,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+          }
+        ],
+        "name": "golang.org/x/sync",
+        "purl": "pkg:golang/golang.org/x/sync@v0.10.0",
+        "source": "go.mod",
+        "sourceSum": "h1:3NQrjDixjgGwUOCaF8w2+VYHv0Ve/vGYSbdkTa98gmQ=",
+        "version": "v0.10.0"
+      },
+      {
+        "checksums": [
+          "h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=",
+          "h1:Fksou7UEQUWlKvIdsqzJmUmCX3cZuD2+P3XyyzwMhlA="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1453,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+          }
+        ],
+        "name": "golang.org/x/sys",
+        "purl": "pkg:golang/golang.org/x/sys@v0.28.0",
+        "source": "go.mod",
+        "sourceSum": "h1:Fksou7UEQUWlKvIdsqzJmUmCX3cZuD2+P3XyyzwMhlA=",
+        "version": "v0.28.0"
+      },
+      {
+        "checksums": [
+          "h1:4IBbMaMmOPCJ8SecivzSH54+73PCFmPWxNTLm+vZkEQ=",
+          "h1:zyQAAkrwaneQ066sspRyJaG9VNi/YJ1NfzcGB3hZ/qo="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:4IBbMaMmOPCJ8SecivzSH54+73PCFmPWxNTLm+vZkEQ=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1453,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+          }
+        ],
+        "name": "golang.org/x/text",
+        "purl": "pkg:golang/golang.org/x/text@v0.21.0",
+        "source": "go.mod",
+        "sourceSum": "h1:zyQAAkrwaneQ066sspRyJaG9VNi/YJ1NfzcGB3hZ/qo=",
+        "version": "v0.21.0"
+      },
+      {
+        "checksums": [
+          "h1:UqMtugtsSgubUsoxbuAoiCXvqvErP7Gf0so0mK9tHxU=",
+          "h1:pPJltXNxVzT4pK9yD8vR9X75DaWYYmLGMsEvBfFQZzQ="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:UqMtugtsSgubUsoxbuAoiCXvqvErP7Gf0so0mK9tHxU=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11358,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          }
+        ],
+        "name": "google.golang.org/genproto/googleapis/rpc",
+        "purl": "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20240903143218-8af14fe29dc1",
+        "source": "go.mod",
+        "sourceSum": "h1:pPJltXNxVzT4pK9yD8vR9X75DaWYYmLGMsEvBfFQZzQ=",
+        "version": "v0.0.0-20240903143218-8af14fe29dc1"
+      },
+      {
+        "checksums": [
+          "h1:+q1XYFJjShcqn0QZHvCyeR4CXPA+llXIeUIfIe00waw=",
+          "h1:oI5oTa11+ng8r8XMMN7jAOmWfPZWbYpCFaMUTACxkM0="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:+q1XYFJjShcqn0QZHvCyeR4CXPA+llXIeUIfIe00waw=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 11358,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          },
+          {
+            "bytes": 554,
+            "classification": "Apache-2.0",
+            "name": "NOTICE.txt",
+            "sha256": "693ff28ec216d5112ac1bbfe64ef539005867d1c7bd427b57d579683293b947f"
+          }
+        ],
+        "name": "google.golang.org/grpc",
+        "purl": "pkg:golang/google.golang.org/grpc@v1.68.1",
+        "source": "go.mod",
+        "sourceSum": "h1:oI5oTa11+ng8r8XMMN7jAOmWfPZWbYpCFaMUTACxkM0=",
+        "version": "v1.68.1"
+      },
+      {
+        "checksums": [
+          "h1:8Ar7bF+apOIoThw1EdZl0p1oWvMqTHmpA2fRTyZO8io=",
+          "h1:9fA7Ob0pmnwhb644+1+CVWFRbNajQ6iRojtC/QF5bRE="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:9fA7Ob0pmnwhb644+1+CVWFRbNajQ6iRojtC/QF5bRE=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 1479,
+            "classification": "BSD-3-Clause",
+            "name": "LICENSE",
+            "sha256": "4835612df0098ca95f8e7d9e3bffcb02358d435dbb38057c844c99d7f725eb20"
+          }
+        ],
+        "name": "google.golang.org/protobuf",
+        "purl": "pkg:golang/google.golang.org/protobuf@v1.35.2",
+        "source": "go.mod",
+        "sourceSum": "h1:8Ar7bF+apOIoThw1EdZl0p1oWvMqTHmpA2fRTyZO8io=",
+        "version": "v1.35.2"
+      },
+      {
+        "checksums": [
+          "h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=",
+          "h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA="
+        ],
+        "compatibilityReview": "NOT_PERFORMED",
+        "direct": false,
+        "ecosystem": "go",
+        "goModSum": "h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=",
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "go.mod/go.sum have no license declaration field",
+        "licenseFiles": [
+          {
+            "bytes": 2151,
+            "classification": "Apache-2.0",
+            "name": "LICENSE",
+            "sha256": "d18f6323b71b0b768bb5e9616e36da390fbd39369a81807cca352de4e4e6aa0b"
+          },
+          {
+            "bytes": 560,
+            "classification": "Apache-2.0",
+            "name": "NOTICE",
+            "sha256": "f6c2dd3a67b576eafb89b80200b8b1627230bf3821a0c14cb99a22ac19107d00"
+          }
+        ],
+        "name": "gopkg.in/yaml.v3",
+        "purl": "pkg:golang/gopkg.in/yaml.v3@v3.0.1",
+        "source": "go.mod",
+        "sourceSum": "h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=",
+        "version": "v3.0.1"
+      }
+    ],
+    "npm": [
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-6ck7cHdGnvg+ZNGQduaJ5YyNMrLh9Qf1534GR6IxEXX1OuF0SS7I2qXo8p6zD3kRaemynnjJPqjaHgs1EJhAWg==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "@cashu/cashu-ts",
+        "purl": "pkg:npm/@cashu%2Fcashu-ts@5.0.0-rc.4",
+        "repository": "git+https://github.com/cashubtc/cashu-ts",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "5.0.0-rc.4"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-bysYuiVfhxNJuldNXlFEitTVdNnYUc+XNJZd7Qm2a5j1vZHgY+fazadNFWFaMK/2vye0JVlxV3gHmC0WDfAOQw==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "@noble/ciphers",
+        "purl": "pkg:npm/@noble%2Fciphers@2.1.1",
+        "repository": "git+https://github.com/paulmillr/noble-ciphers.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "2.1.1"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-vs1Az2OOTBiP4q0pwjW5aF0xp9n4MxVrmkFBxc6EKZc6ddYx5gaZiAsZoq0uRRXWbi3AT/sBqn05eRPtn1JCPw==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "@noble/curves",
+        "purl": "pkg:npm/@noble%2Fcurves@2.0.1",
+        "repository": "git+https://github.com/paulmillr/noble-curves.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "2.0.1"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-P4/62zrgfH33CneE3Dn4WhJVA22YUU0eR51wKIan4NVRvwsA0YnPTwWGpNbpuacSujmSFLvyzpyuR30+fbq2Ew==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "@noble/curves",
+        "purl": "pkg:npm/@noble%2Fcurves@2.4.0",
+        "repository": "git+https://github.com/paulmillr/noble-curves.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "2.4.0"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "@noble/hashes",
+        "purl": "pkg:npm/@noble%2Fhashes@2.0.1",
+        "repository": "git+https://github.com/paulmillr/noble-hashes.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "2.0.1"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "@noble/hashes",
+        "purl": "pkg:npm/@noble%2Fhashes@2.4.0",
+        "repository": "git+https://github.com/paulmillr/noble-hashes.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "2.4.0"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-3E1kpuZginKkek01ovG8krQ0Z44E3DHPjc5S2rjJw9lZn3KSQOs8S7wqikF/AH7iRanHypj85uGyxk0XAyC37w==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "@scure/base",
+        "purl": "pkg:npm/@scure%2Fbase@2.0.0",
+        "repository": "git+https://github.com/paulmillr/scure-base.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "2.0.0"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-thZ1TuJwFwBblOhgsjDKvvGirBxNp+wSvY/DR6tJBJOTDhdAAcHJ8Vbr2eFnqaxeca4+t0i9KBf+uHYGWwZORg==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "@scure/base",
+        "purl": "pkg:npm/@scure%2Fbase@2.4.0",
+        "repository": "git+https://github.com/paulmillr/scure-base.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "2.4.0"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-4Md1NI5BzoVP+bhyJaY3K6yMesEFzNS1sE/cP+9nuvE7p/b0kx9XbpDHHFl8dHtufcbdHRUUQdRqLIPHN/s7yA==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "@scure/bip32",
+        "purl": "pkg:npm/@scure%2Fbip32@2.0.1",
+        "repository": "git+https://github.com/paulmillr/scure-bip32.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "2.0.1"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-i3DS0CptAocyvqE4n3SUkpzeQK4vJMFwWLofTwRiiKo2aWojBOfyMCgfKw9HVpO6fSY5AK86sHS/Uzn8kK9Few==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "@scure/bip32",
+        "purl": "pkg:npm/@scure%2Fbip32@2.4.0",
+        "repository": "git+https://github.com/paulmillr/scure-bip32.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "2.4.0"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-PsxdFj/d2AcJcZDX1FXN3dDgitDDTmwf78rKZq1a6c1P1Nan1X/Sxc7667zU3U+AN60g7SxxP0YCVw2H/hBycg==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "@scure/bip39",
+        "purl": "pkg:npm/@scure%2Fbip39@2.0.1",
+        "repository": "git+https://github.com/paulmillr/scure-bip39.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "2.0.1"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "@types/bun",
+        "purl": "pkg:npm/@types%2Fbun@1.4.2",
+        "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "1.4.2"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-ldVPDCzj7fsaGZrLB0NuHuTvJcsNasysBAqMolr/cgxrLd1xbqxIr3XJiPnHHJUCxj5sNF1vnRj9aWnrVh5Jcg==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "@types/node",
+        "purl": "pkg:npm/@types%2Fnode@26.6.4",
+        "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "26.6.4"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "bun-types",
+        "purl": "pkg:npm/bun-types@1.4.2",
+        "repository": "https://github.com/oven-sh/bun",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "1.4.2"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-hJP/BO6mjB+tX6hToIO1kmxYLNmun90wYbfcoAoLpKEyDYal/k33dg0TAfoUe2TDsbbLoVIzljJ3BN2UbR5EOg==",
+        "licenseDeclared": "Apache-2.0",
+        "licenseEvidence": "installed package.json",
+        "name": "dexie",
+        "purl": "pkg:npm/dexie@4.4.6",
+        "repository": "https://github.com/dexie/Dexie.js.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "4.4.6"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-CpDtEU1BM2AYjUwB8YnDM30unve8Uaf+FpB2P5qTP0RrB1Oz9zGzGD+n3jh6DSNXSg1Cpq7M6N6eazTYCJZ1HA==",
+        "licenseDeclared": "Unlicense",
+        "licenseEvidence": "installed package.json",
+        "name": "nostr-tools",
+        "purl": "pkg:npm/nostr-tools@2.25.5",
+        "repository": "git+https://github.com/nbd-wtf/nostr-tools.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "2.25.5"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+        "licenseDeclared": "Apache-2.0",
+        "licenseEvidence": "installed package.json",
+        "name": "typescript",
+        "purl": "pkg:npm/typescript@5.9.3",
+        "repository": "https://github.com/microsoft/TypeScript.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "5.9.3"
+      },
+      {
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "npm",
+        "integrity": "sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==",
+        "licenseDeclared": "MIT",
+        "licenseEvidence": "installed package.json",
+        "name": "undici-types",
+        "purl": "pkg:npm/undici-types@8.9.0",
+        "repository": "git+https://github.com/nodejs/undici.git",
+        "source": "cashu-wrapper/ts/bun.lock",
+        "version": "8.9.0"
+      }
+    ],
+    "vendoredArchives": [
+      {
+        "archive": "cashu-wrapper/vendor/cashu-coco-sqlite-bun-2.0.0-plebeian-r1.tgz",
+        "archiveEmbeddedLicenseDeclared": "NOASSERTION",
+        "archiveSha256": "351b94a57a505551b179c8cbf73be1aa0eb9d77d8393aa9c32a7f9ad32c7dcdf",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "vendored-npm-archive",
+        "exactPinnedSourceTreeLicense": "MIT",
+        "exactPinnedSourceTreeLicenseEvidence": {
+          "commit": "60b7b070393eaad8746cb74a03c42017186da647",
+          "copyright": "Copyright (c) 2025 Cashu",
+          "rootLicenseSha256": "d07c9840ea5567e0965b73fdad27039f88e89430e71a66ee19745d36e5b5c9f9",
+          "tree": "b82bd005d076776ddb529120739632d1708f2bc8"
+        },
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "license absent from embedded package.json",
+        "name": "@cashu/coco-sqlite-bun",
+        "noticeReview": "REQUIRED_BEFORE_REDISTRIBUTION",
+        "repository": null,
+        "version": "2.0.0-plebeian-r1"
+      },
+      {
+        "archive": "cashu-wrapper/vendor/coco-60b7b070393eaad8746cb74a03c42017186da647/cashu-coco-core-2.0.0.tgz",
+        "archiveEmbeddedLicenseDeclared": "NOASSERTION",
+        "archiveSha256": "c41c4b95f90e360cee66b06e6abe354419567f38c798abfcf6202a610200b090",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "vendored-npm-archive",
+        "exactPinnedSourceTreeLicense": "MIT",
+        "exactPinnedSourceTreeLicenseEvidence": {
+          "commit": "60b7b070393eaad8746cb74a03c42017186da647",
+          "copyright": "Copyright (c) 2025 Cashu",
+          "rootLicenseSha256": "d07c9840ea5567e0965b73fdad27039f88e89430e71a66ee19745d36e5b5c9f9",
+          "tree": "b82bd005d076776ddb529120739632d1708f2bc8"
+        },
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "license absent from embedded package.json",
+        "name": "@cashu/coco-core",
+        "noticeReview": "REQUIRED_BEFORE_REDISTRIBUTION",
+        "repository": {
+          "directory": "packages/core",
+          "type": "git",
+          "url": "https://github.com/cashubtc/coco"
+        },
+        "version": "2.0.0"
+      },
+      {
+        "archive": "cashu-wrapper/vendor/coco-60b7b070393eaad8746cb74a03c42017186da647/cashu-coco-indexeddb-2.0.0.tgz",
+        "archiveEmbeddedLicenseDeclared": "NOASSERTION",
+        "archiveSha256": "b3c70d4d9d655e055f216afcf7882cfd1825bc1a7754fd801616f27ced9daabf",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "vendored-npm-archive",
+        "exactPinnedSourceTreeLicense": "MIT",
+        "exactPinnedSourceTreeLicenseEvidence": {
+          "commit": "60b7b070393eaad8746cb74a03c42017186da647",
+          "copyright": "Copyright (c) 2025 Cashu",
+          "rootLicenseSha256": "d07c9840ea5567e0965b73fdad27039f88e89430e71a66ee19745d36e5b5c9f9",
+          "tree": "b82bd005d076776ddb529120739632d1708f2bc8"
+        },
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "license absent from embedded package.json",
+        "name": "@cashu/coco-indexeddb",
+        "noticeReview": "REQUIRED_BEFORE_REDISTRIBUTION",
+        "repository": {
+          "directory": "packages/indexeddb",
+          "type": "git",
+          "url": "https://github.com/cashubtc/coco"
+        },
+        "version": "2.0.0"
+      },
+      {
+        "archive": "cashu-wrapper/vendor/coco-60b7b070393eaad8746cb74a03c42017186da647-mint-request-fetch-r1/cashu-coco-core-2.0.0.tgz",
+        "archiveEmbeddedLicenseDeclared": "NOASSERTION",
+        "archiveSha256": "468bcc2f57792f8de7890d280286fe8cf0ab6d20dcbbc37a4a75e6bba07b5c81",
+        "compatibilityReview": "NOT_PERFORMED",
+        "ecosystem": "vendored-npm-archive",
+        "exactPinnedSourceTreeLicense": "MIT",
+        "exactPinnedSourceTreeLicenseEvidence": {
+          "commit": "60b7b070393eaad8746cb74a03c42017186da647",
+          "copyright": "Copyright (c) 2025 Cashu",
+          "rootLicenseSha256": "d07c9840ea5567e0965b73fdad27039f88e89430e71a66ee19745d36e5b5c9f9",
+          "tree": "b82bd005d076776ddb529120739632d1708f2bc8"
+        },
+        "licenseDeclared": "NOASSERTION",
+        "licenseEvidence": "license absent from embedded package.json",
+        "name": "@cashu/coco-core",
+        "noticeReview": "REQUIRED_BEFORE_REDISTRIBUTION",
+        "repository": {
+          "directory": "packages/core",
+          "type": "git",
+          "url": "https://github.com/cashubtc/coco"
+        },
+        "version": "2.0.0"
+      }
+    ]
+  },
+  "counts": {
+    "cargo": 93,
+    "cargoUnresolved": 0,
+    "declaredLicenseCountsExcludingVendored": {
+      "(MIT OR Apache-2.0) AND Unicode-3.0": 1,
+      "Apache-2.0": 2,
+      "Apache-2.0 OR BSL-1.0": 1,
+      "Apache-2.0 OR MIT": 19,
+      "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT": 1,
+      "BSD-2-Clause OR Apache-2.0 OR MIT": 2,
+      "BSD-3-Clause": 1,
+      "GPL-3.0-only": 2,
+      "MIT": 19,
+      "MIT OR Apache-2.0": 52,
+      "MIT/Apache-2.0": 7,
+      "NOASSERTION": 58,
+      "Unlicense": 1,
+      "Unlicense OR MIT": 2,
+      "Zlib OR MIT OR Apache-2.0": 1
+    },
+    "go": 58,
+    "goWithoutExactLicenseFile": 0,
+    "licenseFileClassificationCounts": {
+      "Apache-2.0": 101,
+      "BSD-2-Clause": 7,
+      "BSD-3-Clause": 19,
+      "ISC": 5,
+      "MIT": 96,
+      "MIT OR Apache-2.0": 1,
+      "MPL-2.0": 1,
+      "NOASSERTION": 4,
+      "NONE": 1,
+      "Unlicense OR MIT": 2,
+      "Zlib": 1
+    },
+    "npm": 18,
+    "vendoredArchives": 4
+  },
+  "method": {
+    "cargo": "package.license from exact cached normalized Cargo.toml; license files separately hashed",
+    "compatibility": "not assessed",
+    "go": "license declaration remains NOASSERTION; exact top-level license files separately hashed and conservatively classified",
+    "npm": "exact installed package.json declarations copied from the supplementary inventory",
+    "vendoredArchives": "archive declaration remains NOASSERTION; exact pinned Coco source-tree root license recorded separately"
+  },
+  "publicationScope": {
+    "compatibilityReview": "NOT_PERFORMED",
+    "localFilesystemPathsRemoved": true,
+    "sourceCandidateCommit": "0abbf066dd6974bdf95698fd2f0e47f93a96695d",
+    "sourceCandidateTree": "1f12bd1dbf14d53bacaca8e92ac4bb5d74a0171c",
+    "successorAdjustment": "two local Rust packages declared GPL-3.0-only"
+  },
+  "schema": "PLEBEIAN_AUCTIONS_DEPENDENCY_LICENSE_MAPPING_V1"
+}

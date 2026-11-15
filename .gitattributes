@@ -1,0 +1,2 @@
+third_party/sources/coco/patches/*.patch -whitespace
+third_party/licenses/npm/** -whitespace

@@ -47,6 +47,7 @@
 		"friday-ledger.test.ts",
 		"friday-mint-transport.test.ts",
 		"friday-sqlite.test.ts",
+		"coco-sqlite-bun-declaration-conformance.test.ts",
 		"friday-sqlite.live.test.ts",
 		"friday-site-live.ts",
 		"friday-mint-down-live.ts",
