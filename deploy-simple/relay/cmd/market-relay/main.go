@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -35,6 +36,7 @@ type config struct {
 	DataDir         string
 	RawEventStore   string
 	MaxQueryLimit   int
+	MaxConnections  int
 	SupportedNIPs   []int
 	ReadHeaderMs    time.Duration
 	ShutdownTimeout time.Duration
@@ -78,7 +80,26 @@ func main() {
 		policies.RejectEventsWithBase64Media,
 		policies.RejectUnprefixedNostrReferences,
 	)
-	relay.OnRequest = policies.SeqRequest(policies.NoComplexFilters)
+	relay.OnRequest = policies.SeqRequest(
+		policies.NoComplexFilters,
+		policies.NoSearchQueries,
+	)
+
+	// Hard cap on concurrent WebSocket clients. RejectConnection runs before
+	// the upgrade and answers 429, so /healthz and NIP-11 stay reachable while
+	// the relay is saturated. The small check/increment race can overshoot by
+	// the number of simultaneous upgrades, which is acceptable.
+	var activeConnections atomic.Int64
+	relay.RejectConnection = func(_ *http.Request) bool {
+		return activeConnections.Load() >= int64(cfg.MaxConnections)
+	}
+	relay.OnConnect = func(context.Context) {
+		activeConnections.Add(1)
+	}
+	relay.OnDisconnect = func(context.Context) {
+		activeConnections.Add(-1)
+	}
+
 	relay.UseEventstore(store, cfg.MaxQueryLimit)
 
 	router := relay.Router()
@@ -124,6 +145,7 @@ func loadConfig() (config, error) {
 		DataDir:         envOr("RELAY_DATA_DIR", "/var/lib/market-relay"),
 		RawEventStore:   envOr("RELAY_RAW_DB_DIR", "/var/lib/market-relay/raw"),
 		MaxQueryLimit:   envOrInt("RELAY_MAX_QUERY_LIMIT", 500),
+		MaxConnections:  envOrInt("RELAY_MAX_CONNECTIONS", 150),
 		SupportedNIPs:   envOrInts("RELAY_SUPPORTED_NIPS", []int{1, 11}),
 		ReadHeaderMs:    time.Duration(envOrInt("RELAY_READ_HEADER_TIMEOUT_MS", 10000)) * time.Millisecond,
 		ShutdownTimeout: time.Duration(envOrInt("RELAY_SHUTDOWN_TIMEOUT_MS", 10000)) * time.Millisecond,

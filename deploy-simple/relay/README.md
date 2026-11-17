@@ -19,6 +19,15 @@ search filters were never served by this relay, and indexing every event
 pressure. No `search/` directory is created or read anymore; an existing one
 can be deleted after the new binary is verified.
 
+## Limits
+
+- `RELAY_MAX_CONNECTIONS` (default `150`) caps concurrent WebSocket clients.
+  Over the cap the relay answers HTTP 429 before upgrading, so `/healthz` and
+  NIP-11 stay reachable while saturated.
+- `RELAY_MAX_QUERY_LIMIT` (default `500`) caps events per REQ.
+- Search filters are rejected (`NoSearchQueries`) because the relay does not
+  advertise NIP-50.
+
 ## Deployment Model
 
 The relay is built from this repository and deployed by
