@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"iter"
 	"log"
@@ -22,6 +23,7 @@ import (
 	"fiatjaf.com/nostr/khatru"
 	"fiatjaf.com/nostr/khatru/policies"
 	"fiatjaf.com/nostr/nip11"
+	"github.com/PlebeianTech/market/deploy-simple/relay/internal/searchindex"
 )
 
 var version = "dev"
@@ -38,20 +40,34 @@ type config struct {
 	SearchIndexDir  string
 	RawEventStore   string
 	MaxQueryLimit   int
+	SearchKinds     []nostr.Kind
 	SupportedNIPs   []int
 	ReadHeaderMs    time.Duration
 	ShutdownTimeout time.Duration
 }
 
 type compositeStore struct {
-	raw    *eventstoreboltdb.BoltBackend
-	search *eventstorebleve.BleveBackend
+	raw         *eventstoreboltdb.BoltBackend
+	search      *eventstorebleve.BleveBackend
+	searchKinds map[nostr.Kind]bool
 }
 
 func main() {
+	rebuildTo := flag.String("rebuild-search-to", "", "Build a compact, kind-scoped search index in a new directory while the relay is stopped")
+	flag.Parse()
+
 	cfg, err := loadConfig()
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if *rebuildTo != "" {
+		count, err := searchindex.Rebuild(filepath.Join(cfg.RawEventStore, "events.db"), *rebuildTo, 2<<30, kindSet(cfg.SearchKinds))
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("compact search index complete: %d events at %s; active index unchanged", count, *rebuildTo)
+		return
 	}
 
 	store, cleanup, err := openStore(cfg)
@@ -138,6 +154,12 @@ func loadConfig() (config, error) {
 		ShutdownTimeout: time.Duration(envOrInt("RELAY_SHUTDOWN_TIMEOUT_MS", 10000)) * time.Millisecond,
 	}
 
+	searchKinds, err := envKinds("RELAY_SEARCH_KINDS", []int{0, 30402})
+	if err != nil {
+		return config{}, err
+	}
+	cfg.SearchKinds = searchKinds
+
 	for _, dir := range []string{cfg.DataDir, cfg.RawEventStore} {
 		if err := os.MkdirAll(filepath.Clean(dir), 0o755); err != nil {
 			return config{}, fmt.Errorf("create relay dir %s: %w", dir, err)
@@ -159,28 +181,33 @@ func openStore(cfg config) (eventstore.Store, func(), error) {
 		Path:          cfg.SearchIndexDir,
 		RawEventStore: rawStore,
 	}
+	if err := searchindex.Prepare(cfg.SearchIndexDir, rawStore.DB); err != nil {
+		rawStore.Close()
+		return nil, nil, fmt.Errorf("prepare search index: %w", err)
+	}
 	if err := searchStore.Init(); err != nil {
-		if strings.Contains(err.Error(), "metadata missing") {
-			if removeErr := os.RemoveAll(cfg.SearchIndexDir); removeErr != nil {
-				return nil, nil, fmt.Errorf("reset invalid Bleve index %s: %w", cfg.SearchIndexDir, removeErr)
-			}
-			if retryErr := searchStore.Init(); retryErr != nil {
-				return nil, nil, fmt.Errorf("reinit Bleve search store after reset: %w", retryErr)
-			}
-		} else {
-			return nil, nil, fmt.Errorf("init Bleve search store: %w", err)
-		}
+		rawStore.Close()
+		return nil, nil, fmt.Errorf("init Bleve search store: %w", err)
 	}
 
-	cleanup := func() {
-		closeMaybe(searchStore)
-		closeMaybe(rawStore)
+	store := &compositeStore{
+		raw:         rawStore,
+		search:      searchStore,
+		searchKinds: kindSet(cfg.SearchKinds),
 	}
+	return store, store.Close, nil
+}
 
-	return &compositeStore{
-		raw:    rawStore,
-		search: searchStore,
-	}, cleanup, nil
+func kindSet(kinds []nostr.Kind) map[nostr.Kind]bool {
+	set := make(map[nostr.Kind]bool, len(kinds))
+	for _, kind := range kinds {
+		set[kind] = true
+	}
+	return set
+}
+
+func (s *compositeStore) searchable(kind nostr.Kind) bool {
+	return s.searchKinds[kind]
 }
 
 func closeMaybe(v any) {
@@ -201,10 +228,35 @@ func (s *compositeStore) Close() {
 }
 
 func (s *compositeStore) QueryEvents(filter nostr.Filter, maxLimit int) iter.Seq[nostr.Event] {
-	if len(strings.TrimSpace(filter.Search)) >= 2 {
-		return s.search.QueryEvents(filter, maxLimit)
+	if len(strings.TrimSpace(filter.Search)) < 2 {
+		return s.raw.QueryEvents(filter, maxLimit)
 	}
-	return s.raw.QueryEvents(filter, maxLimit)
+
+	// Even on a legacy index that still contains non-marketplace documents,
+	// never return kinds outside the configured search scope.
+	filter.Kinds = s.scopedKinds(filter.Kinds)
+	if len(filter.Kinds) == 0 {
+		return func(func(nostr.Event) bool) {}
+	}
+
+	return s.search.QueryEvents(filter, maxLimit)
+}
+
+func (s *compositeStore) scopedKinds(kinds []nostr.Kind) []nostr.Kind {
+	if len(kinds) == 0 {
+		out := make([]nostr.Kind, 0, len(s.searchKinds))
+		for kind := range s.searchKinds {
+			out = append(out, kind)
+		}
+		return out
+	}
+	out := make([]nostr.Kind, 0, len(kinds))
+	for _, kind := range kinds {
+		if s.searchable(kind) {
+			out = append(out, kind)
+		}
+	}
+	return out
 }
 
 func (s *compositeStore) DeleteEvent(id nostr.ID) error {
@@ -221,13 +273,17 @@ func (s *compositeStore) SaveEvent(evt nostr.Event) error {
 	if err := s.raw.SaveEvent(evt); err != nil {
 		return err
 	}
-	if err := s.search.SaveEvent(evt); err != nil {
-		return err
+	if !s.searchable(evt.Kind) {
+		return nil
 	}
-	return nil
+	return s.search.SaveEvent(evt)
 }
 
 func (s *compositeStore) ReplaceEvent(evt nostr.Event) error {
+	if !s.searchable(evt.Kind) {
+		return s.raw.ReplaceEvent(evt)
+	}
+
 	filter := nostr.Filter{Kinds: []nostr.Kind{evt.Kind}, Authors: []nostr.PubKey{evt.PubKey}}
 	if evt.Kind.IsAddressable() {
 		filter.Tags = nostr.TagMap{"d": []string{evt.Tags.GetD()}}
@@ -318,4 +374,42 @@ func envOrInts(key string, fallback []int) []int {
 		return fallback
 	}
 	return values
+}
+
+// envKinds parses RELAY_SEARCH_KINDS and fails closed. A typo or an
+// out-of-range value must not silently truncate to a different kind.
+func envKinds(key string, fallback []int) ([]nostr.Kind, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		value = joinInts(fallback)
+	}
+
+	parts := strings.Split(value, ",")
+	kinds := make([]nostr.Kind, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		parsed, err := strconv.Atoi(part)
+		if err != nil {
+			return nil, fmt.Errorf("%s: invalid kind %q: %w", key, part, err)
+		}
+		if parsed < 0 || parsed > 65535 {
+			return nil, fmt.Errorf("%s: kind %d out of range 0..65535", key, parsed)
+		}
+		kinds = append(kinds, nostr.Kind(parsed))
+	}
+	if len(kinds) == 0 {
+		return nil, fmt.Errorf("%s: no valid kinds", key)
+	}
+	return kinds, nil
+}
+
+func joinInts(values []int) string {
+	parts := make([]string, len(values))
+	for i, value := range values {
+		parts[i] = strconv.Itoa(value)
+	}
+	return strings.Join(parts, ",")
 }
