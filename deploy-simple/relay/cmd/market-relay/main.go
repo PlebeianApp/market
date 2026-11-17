@@ -160,7 +160,7 @@ func loadConfig() (config, error) {
 		ShutdownTimeout: time.Duration(envOrInt("RELAY_SHUTDOWN_TIMEOUT_MS", 10000)) * time.Millisecond,
 	}
 
-	searchKinds := envOrInts("RELAY_SEARCH_KINDS", []int{0, 30023, 30402})
+	searchKinds := envOrInts("RELAY_SEARCH_KINDS", []int{0, 30402})
 	cfg.SearchKinds = make([]nostr.Kind, 0, len(searchKinds))
 	for _, kind := range searchKinds {
 		cfg.SearchKinds = append(cfg.SearchKinds, nostr.Kind(kind))

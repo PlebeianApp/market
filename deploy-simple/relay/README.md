@@ -13,9 +13,12 @@ This directory contains the declarative relay deployment assets for both
 ## Search
 
 The relay advertises NIP-50 and keeps a Bleve index scoped to marketplace
-events. `RELAY_SEARCH_KINDS` (default `0,30023,30402`) controls which kinds are
-indexed; everything else is stored in BoltDB only. In particular kind 1059
-gift wraps and kind 1 notes are not indexed.
+events. `RELAY_SEARCH_KINDS` (default `0,30402`) controls which kinds are indexed;
+everything else is stored in BoltDB only. Those are the two kinds the app
+searches: profiles (0) and product listings (30402). Kind 30023 (long-form)
+is not searched by the app; add it only if long-form marketplace articles
+should be searchable by external NIP-50 clients. Kind 1059 gift wraps and
+kind 1 notes are never indexed.
 
 The index uses a compact mapping (`internal/searchindex`): content, kind,
 pubkey suffix, and `created_at`, with no stored fields, term vectors, or doc
