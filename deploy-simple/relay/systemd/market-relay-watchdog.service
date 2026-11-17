@@ -1,0 +1,6 @@
+[Unit]
+Description=market-relay health watchdog
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/market-relay-watchdog

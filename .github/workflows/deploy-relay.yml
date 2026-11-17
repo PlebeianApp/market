@@ -65,6 +65,10 @@ jobs:
         run: |
           cp deploy-simple/relay/install-relay.sh relay-package/install-relay.sh
           cp deploy-simple/relay/systemd/market-relay.service relay-package/market-relay.service
+          cp deploy-simple/relay/systemd/20-limits.conf relay-package/20-limits.conf
+          cp deploy-simple/relay/systemd/market-relay-watchdog.service relay-package/market-relay-watchdog.service
+          cp deploy-simple/relay/systemd/market-relay-watchdog.timer relay-package/market-relay-watchdog.timer
+          cp deploy-simple/relay/market-relay-watchdog.sh relay-package/market-relay-watchdog.sh
           cp deploy-simple/relay/config/staging.env relay-package/staging.env
           cp deploy-simple/relay/config/production.env relay-package/production.env
           cp deploy-simple/caddyfiles/Caddyfile.staging relay-package/Caddyfile.staging
