@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"iter"
 	"log"
@@ -22,6 +23,7 @@ import (
 	"fiatjaf.com/nostr/khatru"
 	"fiatjaf.com/nostr/khatru/policies"
 	"fiatjaf.com/nostr/nip11"
+	"github.com/PlebeianTech/market/deploy-simple/relay/internal/searchindex"
 )
 
 var version = "dev"
@@ -38,20 +40,34 @@ type config struct {
 	SearchIndexDir  string
 	RawEventStore   string
 	MaxQueryLimit   int
+	SearchKinds     []nostr.Kind
 	SupportedNIPs   []int
 	ReadHeaderMs    time.Duration
 	ShutdownTimeout time.Duration
 }
 
 type compositeStore struct {
-	raw    *eventstoreboltdb.BoltBackend
-	search *eventstorebleve.BleveBackend
+	raw         *eventstoreboltdb.BoltBackend
+	search      *eventstorebleve.BleveBackend
+	searchKinds map[nostr.Kind]bool
 }
 
 func main() {
+	rebuildTo := flag.String("rebuild-search-to", "", "Build a compact, kind-scoped search index in a new directory while the relay is stopped")
+	flag.Parse()
+
 	cfg, err := loadConfig()
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if *rebuildTo != "" {
+		count, err := searchindex.Rebuild(filepath.Join(cfg.RawEventStore, "events.db"), *rebuildTo, 2<<30, kindSet(cfg.SearchKinds))
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("compact search index complete: %d events at %s; active index unchanged", count, *rebuildTo)
+		return
 	}
 
 	store, cleanup, err := openStore(cfg)
@@ -87,6 +103,12 @@ func main() {
 		policies.RejectUnprefixedNostrReferences,
 	)
 	relay.OnRequest = policies.SeqRequest(policies.NoComplexFilters)
+	relay.OnCount = func(_ context.Context, filter nostr.Filter) (bool, string) {
+		if len(strings.TrimSpace(filter.Search)) >= 2 {
+			return true, "count with search filter is not supported"
+		}
+		return false, ""
+	}
 	relay.UseEventstore(store, cfg.MaxQueryLimit)
 
 	router := relay.Router()
@@ -138,6 +160,12 @@ func loadConfig() (config, error) {
 		ShutdownTimeout: time.Duration(envOrInt("RELAY_SHUTDOWN_TIMEOUT_MS", 10000)) * time.Millisecond,
 	}
 
+	searchKinds := envOrInts("RELAY_SEARCH_KINDS", []int{0, 30023, 30402})
+	cfg.SearchKinds = make([]nostr.Kind, 0, len(searchKinds))
+	for _, kind := range searchKinds {
+		cfg.SearchKinds = append(cfg.SearchKinds, nostr.Kind(kind))
+	}
+
 	for _, dir := range []string{cfg.DataDir, cfg.RawEventStore} {
 		if err := os.MkdirAll(filepath.Clean(dir), 0o755); err != nil {
 			return config{}, fmt.Errorf("create relay dir %s: %w", dir, err)
@@ -159,6 +187,9 @@ func openStore(cfg config) (eventstore.Store, func(), error) {
 		Path:          cfg.SearchIndexDir,
 		RawEventStore: rawStore,
 	}
+	if err := searchindex.Prepare(cfg.SearchIndexDir, rawStore.DB); err != nil {
+		return nil, nil, fmt.Errorf("prepare search index: %w", err)
+	}
 	if err := searchStore.Init(); err != nil {
 		if strings.Contains(err.Error(), "metadata missing") {
 			if removeErr := os.RemoveAll(cfg.SearchIndexDir); removeErr != nil {
@@ -178,9 +209,22 @@ func openStore(cfg config) (eventstore.Store, func(), error) {
 	}
 
 	return &compositeStore{
-		raw:    rawStore,
-		search: searchStore,
+		raw:         rawStore,
+		search:      searchStore,
+		searchKinds: kindSet(cfg.SearchKinds),
 	}, cleanup, nil
+}
+
+func kindSet(kinds []nostr.Kind) map[nostr.Kind]bool {
+	set := make(map[nostr.Kind]bool, len(kinds))
+	for _, kind := range kinds {
+		set[kind] = true
+	}
+	return set
+}
+
+func (s *compositeStore) searchable(kind nostr.Kind) bool {
+	return s.searchKinds[kind]
 }
 
 func closeMaybe(v any) {
@@ -221,13 +265,17 @@ func (s *compositeStore) SaveEvent(evt nostr.Event) error {
 	if err := s.raw.SaveEvent(evt); err != nil {
 		return err
 	}
-	if err := s.search.SaveEvent(evt); err != nil {
-		return err
+	if !s.searchable(evt.Kind) {
+		return nil
 	}
-	return nil
+	return s.search.SaveEvent(evt)
 }
 
 func (s *compositeStore) ReplaceEvent(evt nostr.Event) error {
+	if !s.searchable(evt.Kind) {
+		return s.raw.ReplaceEvent(evt)
+	}
+
 	filter := nostr.Filter{Kinds: []nostr.Kind{evt.Kind}, Authors: []nostr.PubKey{evt.PubKey}}
 	if evt.Kind.IsAddressable() {
 		filter.Tags = nostr.TagMap{"d": []string{evt.Tags.GetD()}}

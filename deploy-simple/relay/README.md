@@ -10,6 +10,31 @@ This directory contains the declarative relay deployment assets for both
 - `systemd/market-relay.service` - Systemd unit template used on every host
 - `install-relay.sh` - Idempotent remote installer used by GitHub Actions
 
+## Search
+
+The relay advertises NIP-50 and keeps a Bleve index scoped to marketplace
+events. `RELAY_SEARCH_KINDS` (default `0,30023,30402`) controls which kinds are
+indexed; everything else is stored in BoltDB only. In particular kind 1059
+gift wraps and kind 1 notes are not indexed.
+
+The index uses a compact mapping (`internal/searchindex`): content, kind,
+pubkey suffix, and `created_at`, with no stored fields, term vectors, or doc
+values. New installs create it automatically. On an existing host, rebuild it
+offline after stopping the relay:
+
+```
+sudo systemctl stop market-relay
+sudo -u deployer sh -c '. /etc/market-relay.env; /usr/local/bin/market-relay --rebuild-search-to /var/lib/market-relay/search-new'
+sudo mv /var/lib/market-relay/search /var/lib/market-relay/search-old
+sudo mv /var/lib/market-relay/search-new /var/lib/market-relay/search
+sudo chown -R deployer:deployer /var/lib/market-relay/search
+sudo systemctl start market-relay
+```
+
+Keep `search-old` until the rollback window closes. A missing index over a
+non-empty raw store refuses startup; the rebuild command is the only way to
+create a replacement.
+
 ## Deployment Model
 
 The relay is built from this repository and deployed by
