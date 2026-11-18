@@ -6,15 +6,27 @@ This feature allows users to register custom vanity URLs for their profile/shop 
 
 Vanity URLs provide users with memorable, shareable links like `/alice-store` that display their profile page directly. URLs are time-limited subscriptions purchased via Bitcoin Lightning zaps.
 
+## Unified storefront identity
+
+New registrations use the unified storefront identity flow in the storefront
+builder: one `storefront-register` zap and one `name` tag grant both
+`/{name}` and `{name}@{configured-domain}` for the same pubkey and expiry.
+The `vanity-urls` registry and this guide's `vanity-register` flow are legacy
+read/compatibility paths only; new invoices under the old label are not
+accepted. Existing legacy entries resolve until expiry and prevent a different
+pubkey from claiming the same name in the unified registry. Pending legacy
+invoices must be recreated through the unified storefront identity flow.
+
 ## Architecture
 
 ### Backend (`src/server/`)
 
-- **VanityManager.ts** - Manages the vanity URL registry
+- **VanityManager.ts** - Reads the legacy vanity URL registry during migration
   - Handles kind `30000` events with `d=vanity-urls` tag
-  - Processes zap receipts (kind `9735`) with `["L", "vanity-register"]` label
-  - Validates reserved names and name format
-  - Calculates validity period based on zap amount
+- **StorefrontIdentityManager.ts** - Handles new unified identity purchases
+  - One `storefront-register` zap writes a single `name` record
+  - The record powers both `/{name}` and `{name}@{domain}`
+  - Legacy vanity and NIP-05 registries remain read-only during migration
 
 ### Frontend
 
@@ -26,7 +38,7 @@ Vanity URLs provide users with memorable, shareable links like `/alice-store` th
 
 ## Data Format
 
-### Vanity Registry Event (Kind 30000)
+### Legacy Vanity Registry Event (Kind 30000)
 
 ```json
 {
@@ -39,27 +51,34 @@ Vanity URLs provide users with memorable, shareable links like `/alice-store` th
 }
 ```
 
-### Zap Request for Registration
+### Unified Identity Zap Request
 
 ```json
 {
 	"kind": 9734,
 	"tags": [
-		["L", "vanity-register"],
-		["vanity", "alice-store"],
+		["L", "storefront-register"],
+		["name", "alice-store"],
+		["tier", "6mo"],
+		["count", "2"],
 		["p", "<app_pubkey>"],
-		["amount", "10000000"]
+		["amount", "20000000"]
 	]
 }
 ```
 
 ## Pricing
 
-| Duration   | Amount      | Validity   |
-| ---------- | ----------- | ---------- |
-| Dev (test) | 10 sats     | 90 seconds |
-| 6 Months   | 10,000 sats | 180 days   |
-| 1 Year     | 18,000 sats | 365 days   |
+| Duration   | Both identities | One matching legacy identity |
+| ---------- | --------------- | ---------------------------- |
+| Dev (test) | 20 sats         | 10 sats                      |
+| 6 Months   | 20,000 sats     | 10,000 sats                  |
+| 1 Year     | 36,000 sats     | 18,000 sats                  |
+
+The single invoice price is the sum of the existing vanity and NIP-05 prices.
+When the buyer already owns exactly one matching legacy entry, the invoice
+covers the missing identity and the unified expiry is extended from the later
+legacy expiry.
 
 > Note: Dev tier only available in development mode (`NODE_ENV=development`)
 
@@ -73,7 +92,12 @@ The following patterns are reserved and cannot be registered:
 
 See full list in `src/server/VanityManager.ts` and `src/lib/stores/vanity.ts`.
 
-## Registration Flow
+## Legacy Registration Flow
+
+The following flow documents old invoices and events. The dashboard redirects
+legacy purchase-page bookmarks to the storefront builder, and the server no
+longer creates invoices for `vanity-register`; use the unified `storefront-register`
+flow described above for new identities.
 
 1. User chooses vanity name in dashboard
 2. User clicks on a pricing tier

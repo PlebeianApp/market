@@ -1,5 +1,6 @@
 import type { NostrEvent } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent } from '@nostr-dev-kit/ndk'
+import { verifyEvent, type Event } from 'nostr-tools/pure'
 import type { EventSigner } from './EventSigner'
 
 export interface PricingTier {
@@ -50,6 +51,8 @@ export interface LnurlInvoiceData {
 
 export type LnurlResolver = (lightningIdentifier: string) => string
 
+export type PurchaseValidationStage = 'invoice' | 'receipt'
+
 export interface ZapPurchaseConfig {
 	zapLabel: string
 	registryEventKind: number
@@ -59,8 +62,16 @@ export interface ZapPurchaseConfig {
 }
 
 export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
+	private static readonly MAX_OUTSTANDING_INVOICES = 2000
+	private static readonly OUTSTANDING_INVOICE_TTL_SECONDS = 24 * 60 * 60
 	protected registry: Map<string, TEntry> = new Map()
 	private processedReceipts: Set<string> = new Set()
+	private issuedInvoices = new Map<
+		string,
+		{ requestId: string; requesterPubkey: string; registryKey: string; amountMsats: number; providerPubkey: string; issuedAt: number }
+	>()
+	private receiptProviderPubkeyResolver?: () => Promise<string | null>
+	private cachedReceiptProvider: { pubkey: string; expiresAt: number } | null = null
 	protected eventSigner: EventSigner
 	protected ndk: NDK | null = null
 	protected appPubkey: string = ''
@@ -80,16 +91,43 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 	// --- Optional hooks (override in subclass) ---
 	protected onEntryRegistered?(key: string, entry: TEntry): void
 	protected onRegistryRebuilt?(): void
+	protected validatePurchaseAmount?(
+		amountSats: number,
+		key: string,
+		pubkey: string,
+		zapRequest: NostrEvent,
+		stage: PurchaseValidationStage,
+	): string | null
+	protected async applyPurchase(key: string, requesterPubkey: string, validitySeconds: number, now: number): Promise<void> {
+		let validUntil = now + validitySeconds
+		const existing = this.registry.get(key)
+		if (existing && existing.pubkey === requesterPubkey && existing.validUntil > now) {
+			validUntil = existing.validUntil + validitySeconds
+		}
+
+		const entry = this.createEntry(key, requesterPubkey, validUntil)
+		this.registry.set(key, entry)
+		this.onEntryRegistered?.(key, entry)
+		await this.publishRegistry()
+	}
+
 	public setNDK(ndk: NDK): void {
 		this.ndk = ndk
 	}
 	public setAppPubkey(pubkey: string): void {
 		this.appPubkey = pubkey
 	}
+	public setReceiptProviderPubkeyResolver(resolver: () => Promise<string | null>): void {
+		this.receiptProviderPubkeyResolver = resolver
+	}
 
 	// Handle a registry event (rebuild in-memory state from a Nostr event).
 	// Called when a registry kind(kind 30000)) event is received.
 	public async handleRegistryEvent(event: NostrEvent): Promise<void> {
+		if (!this.appPubkey || event.pubkey !== this.appPubkey) {
+			console.warn(`[${this.config.registryDTag}] Ignoring registry event from an unexpected author`)
+			return
+		}
 		console.log(`[${this.config.registryDTag}] Processing registry event: ${event.id}`)
 
 		const entries = this.extractEntriesFromEvent(event)
@@ -111,15 +149,14 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 	// Validates - duplicity, recency, label tag, payment amount, and domain-specific rules.
 	// On success, creates/extends the registry entry and publishes the updated registry.
 	public async handleZapReceipt(event: NostrEvent): Promise<void> {
+		if (event.kind !== 9735) return
 		const eventId = event.id
 		if (!eventId) return
 		if (this.processedReceipts.has(eventId)) return
-		this.processedReceipts.add(eventId)
-
-		// Bound the dedup set to prevent unbounded memory growth
-		if (this.processedReceipts.size > 2000) {
-			this.processedReceipts.clear()
-			this.processedReceipts.add(eventId)
+		try {
+			if (!verifyEvent(event as unknown as Event)) return
+		} catch {
+			return
 		}
 
 		// Skip old receipts (prevents re-processing on server restart)
@@ -141,6 +178,12 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 			console.error(`[${this.config.registryDTag}] Failed to parse zap request from receipt`)
 			return
 		}
+		if (!zapRequest || !Array.isArray(zapRequest.tags) || typeof zapRequest.pubkey !== 'string') return
+		try {
+			if (!verifyEvent(zapRequest as unknown as Event)) return
+		} catch {
+			return
+		}
 
 		// Check for matching purchase label
 		const labelTag = zapRequest.tags.find((t) => t[0] === 'L' && t[1] === this.config.zapLabel)
@@ -155,6 +198,30 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 			return
 		}
 
+		const bolt11Tag = event.tags.find((t) => t[0] === 'bolt11')
+		const bolt11 = bolt11Tag?.[1]
+		if (!bolt11) {
+			console.error(`[${this.config.registryDTag}] No bolt11 found in zap receipt`)
+			return
+		}
+		if (!event.tags.some((tag) => tag[0] === 'p' && tag[1] === this.appPubkey)) return
+		if (this.appPubkey && !zapRequest.tags.some((tag) => tag[0] === 'p' && tag[1] === this.appPubkey)) return
+		const requestAmountMsats = Number(zapRequest.tags.find((tag) => tag[0] === 'amount')?.[1])
+		if (!Number.isSafeInteger(requestAmountMsats) || requestAmountMsats <= 0) return
+
+		const nowSeconds = Math.floor(Date.now() / 1000)
+		const authorization = this.issuedInvoices.get(bolt11)
+		if (authorization && authorization.issuedAt + (this.config.maxReceiptAge ?? 300) < nowSeconds) return
+		let expectedProviderPubkey: string | null | undefined = authorization?.providerPubkey
+		if (authorization) {
+			if (zapRequest.id !== authorization.requestId || zapRequest.pubkey !== authorization.requesterPubkey) return
+			if (key !== authorization.registryKey || requestAmountMsats !== authorization.amountMsats) return
+		} else {
+			expectedProviderPubkey = await this.resolveReceiptProviderPubkey()
+			if (!expectedProviderPubkey) return
+		}
+		if (!expectedProviderPubkey || event.pubkey.toLowerCase() !== expectedProviderPubkey.toLowerCase()) return
+
 		const requesterPubkey = zapRequest.pubkey
 
 		// Domain-specific validation
@@ -164,18 +231,17 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 			return
 		}
 
-		// Verify bolt11 invoice exists in receipt
-		const bolt11Tag = event.tags.find((t) => t[0] === 'bolt11')
-		if (!bolt11Tag) {
-			console.error(`[${this.config.registryDTag}] No bolt11 found in zap receipt`)
-			return
-		}
-
 		// Extract payment amount and match to pricing tier
 		const amountTag = zapRequest.tags.find((t) => t[0] === 'amount')
 		const amountMsats = amountTag ? parseInt(amountTag[1]) : 0
 		const amountSats = Math.floor(amountMsats / 1000)
 		console.log(`[${this.config.registryDTag}] Zap amount: ${amountSats} sats`)
+
+		const amountValidationError = this.validatePurchaseAmount?.(amountSats, key, requesterPubkey, zapRequest, 'receipt')
+		if (amountValidationError) {
+			console.error(`[${this.config.registryDTag}] Purchase amount validation failed: ${amountValidationError}`)
+			return
+		}
 
 		const validitySeconds = this.matchPricingTier(amountSats)
 		if (validitySeconds === null) {
@@ -183,27 +249,30 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 			return
 		}
 
-		// Calculate validity, extending if same owner renews
 		const now = Math.floor(Date.now() / 1000)
-		let validUntil = now + validitySeconds
-
-		const existing = this.registry.get(key)
-		if (existing && existing.pubkey === requesterPubkey && existing.validUntil > now) {
-			validUntil = existing.validUntil + validitySeconds
+		await this.applyPurchase(key, requesterPubkey, validitySeconds, now)
+		this.issuedInvoices.delete(bolt11)
+		this.processedReceipts.add(eventId)
+		if (this.processedReceipts.size > 2000) {
+			this.processedReceipts.clear()
+			this.processedReceipts.add(eventId)
 		}
 
-		console.log(`[${this.config.registryDTag}] Registration valid until: ${new Date(validUntil * 1000).toISOString()}`)
+		console.log(`[${this.config.registryDTag}] Registered: ${key} -> ${requesterPubkey}`)
+	}
 
-		// Create and store the entry
-		const entry = this.createEntry(key, requesterPubkey, validUntil)
-		this.registry.set(key, entry)
-		this.onEntryRegistered?.(key, entry)
-
-		await this.publishRegistry()
-
-		console.log(
-			`[${this.config.registryDTag}] Registered: ${key} -> ${requesterPubkey} (valid until ${new Date(validUntil * 1000).toISOString()})`,
-		)
+	private async resolveReceiptProviderPubkey(): Promise<string | null> {
+		const now = Date.now()
+		if (this.cachedReceiptProvider && this.cachedReceiptProvider.expiresAt > now) return this.cachedReceiptProvider.pubkey
+		if (!this.receiptProviderPubkeyResolver) return null
+		try {
+			const pubkey = await this.receiptProviderPubkeyResolver()
+			if (!pubkey || !/^[0-9a-f]{64}$/i.test(pubkey)) return null
+			this.cachedReceiptProvider = { pubkey: pubkey.toLowerCase(), expiresAt: now + 5 * 60 * 1000 }
+			return this.cachedReceiptProvider.pubkey
+		} catch {
+			return null
+		}
 	}
 
 	//Load existing registry state from the relay on startup.
@@ -224,7 +293,9 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 			})
 
 			if (events.size > 0) {
-				const latestEvent = Array.from(events)[0]
+				const latestEvent = Array.from(events).sort(
+					(left, right) => (right.created_at ?? 0) - (left.created_at ?? 0) || left.id.localeCompare(right.id),
+				)[0]
 				await this.handleRegistryEvent(latestEvent.rawEvent())
 				console.log(`[${this.config.registryDTag}] Loaded existing registry`)
 			} else {
@@ -272,6 +343,10 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		toLnurlpEndpoint: LnurlResolver,
 	): Promise<ZapInvoiceResult> {
 		const { amountSats, registryKey, zapRequest } = request
+		this.pruneIssuedInvoices()
+		if (this.issuedInvoices.size >= ZapPurchaseManager.MAX_OUTSTANDING_INVOICES) {
+			throw new ZapInvoiceError('Too many pending purchase invoices; try again later', 503)
+		}
 
 		// --- Validate request basics ---
 		if (!Number.isFinite(amountSats) || amountSats <= 0) {
@@ -283,8 +358,14 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		if (!zapRequest || !Array.isArray(zapRequest.tags)) {
 			throw new ZapInvoiceError('zapRequest is required', 400)
 		}
-		if (!zapRequest.sig) {
-			throw new ZapInvoiceError('zapRequest must be signed', 400)
+		let isZapRequestValid = false
+		try {
+			isZapRequestValid = verifyEvent(zapRequest as unknown as Event)
+		} catch {
+			isZapRequestValid = false
+		}
+		if (!isZapRequestValid) {
+			throw new ZapInvoiceError('zapRequest signature is invalid', 400)
 		}
 
 		// Validate zap request tags
@@ -315,6 +396,16 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		if (validationError) {
 			throw new ZapInvoiceError(validationError, 400)
 		}
+		const amountValidationError = this.validatePurchaseAmount?.(
+			amountSats,
+			registryKey,
+			zapRequest.pubkey,
+			zapRequest as NostrEvent,
+			'invoice',
+		)
+		if (amountValidationError) {
+			throw new ZapInvoiceError(amountValidationError, 400)
+		}
 
 		// --- Resolve LNURL-pay endpoint ---
 		const lnurlEndpoint = toLnurlpEndpoint(lightningIdentifier)
@@ -334,6 +425,9 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		}
 		if (!lnurlData.allowsNostr) {
 			throw new ZapInvoiceError('App Lightning address does not support Nostr zaps (allowsNostr=false)', 400)
+		}
+		if (!lnurlData.nostrPubkey || !/^[0-9a-f]{64}$/i.test(lnurlData.nostrPubkey)) {
+			throw new ZapInvoiceError('App Lightning address does not provide a valid zap receipt pubkey', 400)
 		}
 
 		// --- Validate amount bounds ---
@@ -365,8 +459,30 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		if (!invoiceData.pr) {
 			throw new ZapInvoiceError('Invoice missing pr', 502)
 		}
+		if (this.issuedInvoices.has(invoiceData.pr)) {
+			throw new ZapInvoiceError('Invoice provider returned a duplicate purchase invoice', 502)
+		}
+		if (this.issuedInvoices.size >= ZapPurchaseManager.MAX_OUTSTANDING_INVOICES) {
+			throw new ZapInvoiceError('Too many pending purchase invoices; try again later', 503)
+		}
+
+		this.issuedInvoices.set(invoiceData.pr, {
+			requestId: (zapRequest as NostrEvent).id ?? '',
+			requesterPubkey: zapRequest.pubkey,
+			registryKey,
+			amountMsats: amountMsatsToSend,
+			providerPubkey: lnurlData.nostrPubkey.toLowerCase(),
+			issuedAt: Math.floor(Date.now() / 1000),
+		})
 
 		return { pr: invoiceData.pr }
+	}
+
+	private pruneIssuedInvoices(): void {
+		const expiresBefore = Math.floor(Date.now() / 1000) - ZapPurchaseManager.OUTSTANDING_INVOICE_TTL_SECONDS
+		for (const [bolt11, authorization] of Array.from(this.issuedInvoices.entries())) {
+			if (authorization.issuedAt < expiresBefore) this.issuedInvoices.delete(bolt11)
+		}
 	}
 
 	/**

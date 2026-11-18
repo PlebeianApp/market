@@ -17,6 +17,30 @@ Proposed
 - Current code: `src/server/ZapPurchaseManager.ts`, `src/server/VanityManager.ts`,
   `src/server/Nip05Manager.ts`, `src/lib/zapPurchase.ts`, `src/routes/$vanityName.tsx`
 
+## Implementation update — 2026-10-23
+
+The unified identity purchase path is implemented: one `storefront-register`
+zap with one `name` tag writes a kind-30000 `name` entry that backs both the
+vanity route and `/.well-known/nostr.json`. The storefront publish dialog
+accepts one name, adds the current site's hostname to form the NIP-05 address,
+and uses the name as the vanity path.
+The invoice uses the sum of the existing NIP-05 and vanity prices; when exactly
+one matching legacy identity is held by the buyer, it charges only the missing
+identity's existing price and extends the unified expiry from the later legacy
+expiry. New names use the intersection of the vanity and NIP-05 grammars and
+the union of their reserved-name lists. Active legacy entries remain
+lookup-compatible and block a unified claim by a different pubkey; legacy
+purchase labels are no longer routed to a sale manager. Legacy managers remain
+registry readers only. Their purchase labels are not accepted for new invoices
+or registry activation; pending old invoices need to be re-created through the
+unified flow after cutover.
+
+The unified registry `d` tag is derived as
+`${handlerId}-storefront-names`, using the resolved instance handler ID. ADR-018
+does not yet provide its proposed dedicated `instanceNamespace` field; changing
+this derivation remains a follow-up when that config decision is implemented.
+The ADR remains Proposed for its other open questions and page-builder details.
+
 ## Context
 
 ### The feature in Feynman terms
@@ -114,8 +138,9 @@ replacing `VanityManagerImpl` and `Nip05ManagerImpl` as the sale mechanism.
 - Reserved names are the union of the two current lists. Validation additionally
   rejects any name currently held in either legacy registry by a different
   pubkey, for the whole compatibility window.
-- Pricing collapses to one table (the two existing tables are already
-  numerically identical), so the merge is not a price increase.
+- The unified term is priced as the sum of the existing vanity and NIP-05
+  prices. For an author completing exactly one matching legacy identity, only
+  the missing identity's existing price is charged.
 
 `/.well-known/nostr.json` is served from the unified registry, with legacy
 `nip05-names` entries merged in read-only until they expire.
@@ -159,7 +184,7 @@ An unregistered or expired name keeps the current not-found treatment.
 ### Guardrails
 
 - The domain shown in the builder and used for the NIP-05 identifier comes from
-  runtime instance config (ADR-018), never a literal.
+  the current site's hostname, never a literal or a separately entered domain.
 - The block renderer is covered by a unit test asserting that a hostile page
   event (script URLs, `javascript:` hrefs, unknown block types, oversized
   payloads) renders inert.
@@ -317,9 +342,11 @@ sheet-based on small screens.
 
 ## Open Questions
 
-- Should one pubkey be allowed multiple names (aliases resolving to the same
-  page), or is the one-name-per-pubkey constraint permanent? Aliases complicate
-  the reverse lookup maps that both current managers maintain.
+- **Unified names per pubkey (resolved for initial implementation):** one
+  active unified name per pubkey. Legacy vanity/NIP-05 aliases remain visible
+  during compatibility, but a pubkey cannot add a second unified name until the
+  first expires. Supporting aliases would require an explicit dashboard
+  selection model and is deferred.
 - Should the page be addressable per name (`d=storefront-page-alice`) rather than
   per pubkey, so that a seller who owns two names can publish two pages? Cheaper
   to decide now than to migrate later.

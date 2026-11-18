@@ -7,6 +7,7 @@ interface UseBugReportsInfiniteScrollOptions {
 	maxReports?: number
 	threshold?: number
 	autoLoad?: boolean
+	enabled?: boolean
 }
 
 interface UseBugReportsInfiniteScrollReturn {
@@ -29,9 +30,10 @@ export const useBugReportsInfiniteScroll = ({
 	maxReports = 500,
 	threshold = 1000,
 	autoLoad = true,
+	enabled = true,
 }: UseBugReportsInfiniteScrollOptions = {}): UseBugReportsInfiniteScrollReturn => {
 	// Fetch all reports at once
-	const { data: allReports = [], isLoading, isError, error } = useQuery(bugReportsQueryOptions(maxReports))
+	const { data: allReports = [], isLoading, isError, error } = useQuery({ ...bugReportsQueryOptions(maxReports), enabled })
 
 	// Track current chunk (page)
 	const [currentChunk, setCurrentChunk] = useState(1)

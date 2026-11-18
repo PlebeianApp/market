@@ -61,16 +61,12 @@ export const dashboardNavigation: NavSection[] = [
 		title: 'ACCOUNT',
 		items: [
 			{
-				title: '✨ Vanity URL',
-				path: '/dashboard/account/vanity-url',
-			},
-			{
-				title: '📧 Nostr Address',
-				path: '/dashboard/account/nostr-address',
-			},
-			{
 				title: '👤 Profile',
 				path: '/dashboard/account/profile',
+			},
+			{
+				title: '🎨 Storefront',
+				path: '/dashboard/account/profile-page',
 			},
 			{
 				title: '💳 Make Payments',

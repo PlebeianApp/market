@@ -11,6 +11,7 @@ export interface ZapPurchaseInvoiceOptions {
 	registryTag: string
 	registryKey: string
 	amountSats: number
+	extraTags?: string[][]
 }
 
 export interface ZapPurchaseInvoiceResult {
@@ -19,7 +20,7 @@ export interface ZapPurchaseInvoiceResult {
 }
 
 export async function zapPurchase(opts: ZapPurchaseInvoiceOptions): Promise<ZapPurchaseInvoiceResult> {
-	const { ndk, appPubkey, appRelay, zapLabel, registryTag, registryKey, amountSats } = opts
+	const { ndk, appPubkey, appRelay, zapLabel, registryTag, registryKey, amountSats, extraTags = [] } = opts
 
 	// Build and sign a kind-9734 zap request
 	const zapRequest = new NDKEvent(ndk)
@@ -30,6 +31,7 @@ export async function zapPurchase(opts: ZapPurchaseInvoiceOptions): Promise<ZapP
 		['amount', (amountSats * 1000).toString()],
 		['L', zapLabel],
 		[registryTag, registryKey],
+		...extraTags,
 		['relays', ...Array.from(new Set([appRelay, ...ZAP_RELAYS].filter(Boolean)))],
 	]
 
@@ -90,5 +92,22 @@ export async function purchaseNip05ForPubkey(
 		registryTag: 'nip05',
 		registryKey: options.username.toLowerCase(),
 		amountSats: options.amountSats,
+	})
+}
+
+export async function purchaseStorefrontIdentity(
+	ctx: PurchaseContext,
+	options: { name: string; tier: string; count: number; amountSats: number },
+): Promise<ZapPurchaseInvoiceResult> {
+	return zapPurchase({
+		...ctx,
+		zapLabel: 'storefront-register',
+		registryTag: 'name',
+		registryKey: options.name.toLowerCase(),
+		amountSats: options.amountSats,
+		extraTags: [
+			['tier', options.tier],
+			['count', options.count.toString()],
+		],
 	})
 }

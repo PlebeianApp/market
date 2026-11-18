@@ -1,5 +1,6 @@
 import { defaultRelaysUrls, type Stage } from '@/lib/constants'
 import { computeNdkConfig, resolveMainRelay } from '@/lib/relay-policy'
+import { connectToFirstRelay } from '@/lib/nostr/connect'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
 import { fetchUserRelayListWithPreferences } from '@/queries/relay-list'
 import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
@@ -88,42 +89,18 @@ const WATCHDOG_OFFLINE_THRESHOLD_MS = 15_000
  * Helper to connect an NDK instance with timeout.
  * Returns true if at least one relay connected.
  *
- * If `ndk.connect()` doesn't resolve within `timeoutMs` we still count
- * the call a success when any relay actually came up — partial-connect
- * is the normal happy path on a slow network. We only warn when zero
- * relays connected, and we never dump the timeout Error's stack trace
- * (it's expected, not a bug).
+ * Readiness follows the first connected relay, not the slowest pool member.
+ * Other relays continue connecting in the background.
  */
 async function connectNdkWithTimeout(ndk: NDK, timeoutMs: number, label: string): Promise<boolean> {
-	let timedOut = false
 	try {
-		await Promise.race([
-			ndk.connect(),
-			new Promise<never>((_, reject) =>
-				setTimeout(() => {
-					timedOut = true
-					reject(new Error(`${label} connection timeout`))
-				}, timeoutMs),
-			),
-		])
-		return true
+		const connected = await connectToFirstRelay(ndk, timeoutMs)
+		if (!connected) console.warn(`${label} connection failed: no relay connected within ${timeoutMs}ms`)
+		return connected
 	} catch (error) {
-		let connectedCount = 0
-		try {
-			connectedCount = ndk.pool?.connectedRelays().length ?? 0
-		} catch {
-			// Ignore pool access errors — we'll fall through to the
-			// connected-zero branch below.
-		}
-
+		const connectedCount = ndk.pool.connectedRelays().length
 		if (connectedCount > 0) {
-			// At least one relay made it. Treat as success and log
-			// informationally — no stack trace, no "warn" prefix.
-			if (timedOut) {
-				console.log(`✅ ${label} partially connected to ${connectedCount} relays (slow handshake)`)
-			} else {
-				console.log(`✅ ${label} connected to ${connectedCount} relays (with non-fatal errors)`)
-			}
+			console.warn(`${label} connection encountered an error with ${connectedCount} relays still connected:`, error)
 			return true
 		}
 
@@ -455,7 +432,7 @@ export const ndkActions = {
 		// and sends it to the browser — one decision point, no client/server
 		// drift. When disabled (staging, CI/E2E), don't create a zap NDK at all.
 		const externalZapRelaysEnabled = configStore.state.config.externalZapRelaysEnabled !== false
-		const zapNdk = externalZapRelaysEnabled ? new NDK({ explicitRelayUrls: zapRelayUrls }) : null
+		const zapNdk = externalZapRelaysEnabled ? new NDK({ explicitRelayUrls: zapRelayUrls, enableOutboxModel: false }) : null
 
 		ndkStore.setState((s) => ({ ...s, ndk, zapNdk, explicitRelayUrls, writeRelayUrls }))
 
@@ -946,7 +923,13 @@ export const ndkActions = {
 	 */
 	createZapReceiptSubscription: (onZapEvent: (event: NDKEvent) => void, bolt11?: string): (() => void) => {
 		const state = ndkStore.state
-		if (!state.zapNdk || !state.isZapNdkConnected) {
+		// When external zap relays are disabled (e.g. local-only test or staging
+		// configuration), the dedicated zap NDK is intentionally absent. The
+		// already-configured application NDK can still observe receipts published
+		// to its own relay without opening any additional network path.
+		const receiptNdk = state.zapNdk ?? state.ndk
+		const isReceiptNdkConnected = state.zapNdk ? state.isZapNdkConnected : state.isConnected
+		if (!receiptNdk || !isReceiptNdkConnected) {
 			console.warn('Zap NDK not connected. Cannot create zap subscription.')
 			return () => {}
 		}
@@ -956,7 +939,7 @@ export const ndkActions = {
 			since: Math.floor(Date.now() / 1000) - 60, // Look back 1 minute for recent zaps
 		}
 
-		const subscription = state.zapNdk.subscribe(filters, { closeOnEose: false })
+		const subscription = receiptNdk.subscribe(filters, { closeOnEose: false })
 
 		subscription.on('event', (event: NDKEvent) => {
 			// If we're monitoring a specific invoice, filter by bolt11

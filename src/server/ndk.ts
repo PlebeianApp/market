@@ -18,7 +18,7 @@ export async function ensureInvoiceNdkConnected(): Promise<NDK> {
 		throw new Error('Missing APP_RELAY_URL')
 	}
 	if (!invoiceNdk) {
-		invoiceNdk = new NDK({ explicitRelayUrls: [RELAY_URL] })
+		invoiceNdk = new NDK({ explicitRelayUrls: [RELAY_URL], enableOutboxModel: false })
 	}
 	if (!invoiceNdkConnectPromise) {
 		invoiceNdkConnectPromise = invoiceNdk.connect().catch((error) => {

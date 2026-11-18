@@ -6,12 +6,14 @@ import { BootstrapManagerImpl } from './BootstrapManager'
 import { BlacklistManagerImpl } from './BlacklistManager'
 import { VanityManagerImpl } from './VanityManager'
 import { Nip05ManagerImpl } from './Nip05Manager'
+import { StorefrontIdentityManager } from './StorefrontIdentityManager'
 import { EventValidator } from './EventValidator'
 import { EventSigner } from './EventSigner'
 import { NDKService } from './NDKService'
 import NDK from '@nostr-dev-kit/ndk'
 import { ZAP_RELAYS } from '../lib/constants'
 import type { ZapPurchaseManager, ZapPurchaseEntry } from './ZapPurchaseManager'
+import { getInstanceConfig } from './runtime'
 
 export class EventHandler {
 	private static instance: EventHandler
@@ -24,6 +26,7 @@ export class EventHandler {
 	private blacklistManager: BlacklistManagerImpl
 	private vanityManager: VanityManagerImpl
 	private nip05Manager: Nip05ManagerImpl
+	private storefrontIdentityManager: StorefrontIdentityManager
 	private eventValidator: EventValidator
 	private eventSigner: EventSigner
 	private ndkService: NDKService
@@ -31,7 +34,7 @@ export class EventHandler {
 	private zapNdk: NDK | null = null
 	private handledZapReceiptIds: Set<string> = new Set()
 
-	// Registered zap purchase managers (vanity URLs, nip05)
+	// Only unified storefront identity purchases are accepted.
 	private purchaseManagers: ZapPurchaseManager<ZapPurchaseEntry>[] = []
 
 	private constructor() {
@@ -46,6 +49,7 @@ export class EventHandler {
 		this.blacklistManager = null as any
 		this.vanityManager = null as any
 		this.nip05Manager = null as any
+		this.storefrontIdentityManager = null as any
 	}
 
 	public static getInstance(): EventHandler {
@@ -75,9 +79,15 @@ export class EventHandler {
 		this.blacklistManager = new BlacklistManagerImpl(this.eventSigner, this.ndkService)
 		this.vanityManager = new VanityManagerImpl(this.eventSigner)
 		this.nip05Manager = new Nip05ManagerImpl(this.eventSigner)
+		this.storefrontIdentityManager = new StorefrontIdentityManager(
+			this.eventSigner,
+			getInstanceConfig().handlerId,
+			this.vanityManager,
+			this.nip05Manager,
+		)
 
-		// Register all zap purchase managers
-		this.purchaseManagers = [this.vanityManager, this.nip05Manager]
+		// Legacy registries remain lookup-only; new purchases use one identity manager.
+		this.purchaseManagers = [this.storefrontIdentityManager]
 
 		// Initialize NDK service and load existing data with timeout
 		try {
@@ -106,7 +116,7 @@ export class EventHandler {
 
 		// Set up NDK for blacklist and vanity managers
 		if (config.relayUrl) {
-			this.ndk = new NDK({ explicitRelayUrls: [config.relayUrl] })
+			this.ndk = new NDK({ explicitRelayUrls: [config.relayUrl], enableOutboxModel: false })
 			try {
 				await Promise.race([
 					this.ndk.connect(),
@@ -124,6 +134,9 @@ export class EventHandler {
 				// Initialize NIP-05
 				this.nip05Manager.setNDK(this.ndk)
 				await this.nip05Manager.loadExistingNip05Registry(this.eventSigner.getAppPubkey())
+
+				this.storefrontIdentityManager.setNDK(this.ndk)
+				await this.storefrontIdentityManager.loadExistingRegistry(this.eventSigner.getAppPubkey())
 
 				// Subscribe to zap receipts for all purchase managers (app relay)
 				this.subscribeToZapPurchases(this.ndk, 'App relay')
@@ -143,7 +156,7 @@ export class EventHandler {
 				? [config.relayUrl].filter(Boolean)
 				: Array.from(new Set([config.relayUrl, ...ZAP_RELAYS].filter(Boolean)))
 			console.log(`Connecting to zap relays: ${zapRelayUrls.join(', ')}`)
-			this.zapNdk = new NDK({ explicitRelayUrls: zapRelayUrls })
+			this.zapNdk = new NDK({ explicitRelayUrls: zapRelayUrls, enableOutboxModel: false })
 			try {
 				await Promise.race([
 					this.zapNdk.connect(),
@@ -162,9 +175,7 @@ export class EventHandler {
 	}
 
 	/**
-	 * Subscribe to zap receipts for all registered purchase managers.
-	 * Each manager self-filters by its own label tag, so a single subscription
-	 * routes receipts to vanity URLs, badges, NIP-05.
+	 * Subscribe to zap receipts and route them to the unified identity manager.
 	 */
 	private subscribeToZapPurchases(ndk: NDK, label: string): void {
 		const appPubkey = this.eventSigner.getAppPubkey()
@@ -189,7 +200,7 @@ export class EventHandler {
 						this.handledZapReceiptIds.add(event.id)
 					}
 				}
-				// Route to all purchase managers; each filters by its own label
+				// The unified manager filters receipts by its zap label.
 				const raw = event.rawEvent()
 				for (const manager of this.purchaseManagers) {
 					await manager.handleZapReceipt(raw)
@@ -263,8 +274,8 @@ export class EventHandler {
 			await this.blacklistManager.handleBlacklistEvent(event)
 		}
 
-		// Route registry events to matching purchase managers
-		for (const manager of this.purchaseManagers) {
+		// Keep legacy registries readable while routing unified identity events.
+		for (const manager of [...this.purchaseManagers, this.vanityManager, this.nip05Manager]) {
 			if (
 				event.kind === manager.config.registryEventKind &&
 				event.tags.some((tag) => tag[0] === 'd' && tag[1] === manager.config.registryDTag)
@@ -340,6 +351,10 @@ export class EventHandler {
 	 */
 	public getNip05Manager(): Nip05ManagerImpl {
 		return this.nip05Manager
+	}
+
+	public getStorefrontIdentityManager(): StorefrontIdentityManager {
+		return this.storefrontIdentityManager
 	}
 
 	public getStats() {

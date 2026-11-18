@@ -179,7 +179,7 @@ export class VanityManagerImpl extends ZapPurchaseManager<VanityEntry> {
 		return this.loadExistingRegistry(appPubkey)
 	}
 
-	private isValidVanityName(name: string): boolean {
+	public isValidVanityName(name: string): boolean {
 		// Allow alphanumeric, hyphens, underscores, 3-30 characters
 		const regex = /^[a-z0-9][a-z0-9_-]{1,28}[a-z0-9]$/
 		return regex.test(name.toLowerCase())

@@ -16,6 +16,9 @@ import { productsQueryOptions } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
 import { SelectableBadge } from '@/components/shared/SelectableBadge'
+import { configStore } from '@/lib/stores/config'
+import { storefrontNameFromHostname } from '@/lib/storefront-url'
+import { VanityStorefrontPage } from '@/components/pages/VanityStorefrontPage'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -46,6 +49,12 @@ export const Route = createFileRoute('/')({
 })
 
 function Index() {
+	const { config } = useStore(configStore)
+	const name = storefrontNameFromHostname(window.location.hostname, config.storefrontBaseUrl)
+	return name ? <VanityStorefrontPage name={name} subdomain /> : <MarketplaceHome />
+}
+
+function MarketplaceHome() {
 	const navigate = useNavigate()
 	const { tag } = Route.useSearch()
 	const { isAuthenticated } = useStore(authStore)

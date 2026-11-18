@@ -8,6 +8,7 @@ export interface VanityEntry {
 	vanityName: string
 	pubkey: string
 	validUntil: number
+	isUnified?: boolean
 }
 
 export interface VanitySettings {
@@ -19,7 +20,7 @@ export interface VanitySettings {
 /**
  * Fetches vanity registry (kind 30000 with d=vanity-urls) for the app
  */
-export const fetchVanitySettings = async (appPubkey?: string): Promise<VanitySettings | null> => {
+export const fetchVanitySettings = async (appPubkey?: string, handlerId?: string): Promise<VanitySettings | null> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -35,9 +36,13 @@ export const fetchVanitySettings = async (appPubkey?: string): Promise<VanitySet
 		'#d': ['vanity-urls'],
 		limit: 1,
 	}
+	const unifiedDTag = `${handlerId || 'plebeian-market-handler'}-storefront-names`
+	const unifiedFilter: NDKFilter = { ...vanityFilter, '#d': [unifiedDTag] }
 
-	const events = await ndk.fetchEvents(vanityFilter)
-	const eventArray = Array.from(events)
+	const [legacyEvents, unifiedEvents] = await Promise.all([ndk.fetchEvents(vanityFilter), ndk.fetchEvents(unifiedFilter)])
+	const eventArray = [...legacyEvents, ...unifiedEvents].sort(
+		(a, b) => (b.created_at ?? 0) - (a.created_at ?? 0) || a.id.localeCompare(b.id),
+	)
 
 	if (eventArray.length === 0) {
 		console.log(`No vanity registry found for app pubkey: ${targetPubkey}`)
@@ -49,30 +54,46 @@ export const fetchVanitySettings = async (appPubkey?: string): Promise<VanitySet
 		}
 	}
 
-	// Get the latest event
-	const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
-
-	// Extract vanity entries from 'vanity' tags
-	// Format: ["vanity", vanityName, pubkey, validUntil]
-	const entries = latestEvent.tags
-		.filter((tag) => tag[0] === 'vanity' && tag[1] && tag[2] && tag[3])
-		.map((tag) => ({
-			vanityName: tag[1].toLowerCase(),
-			pubkey: tag[2],
-			validUntil: parseInt(tag[3]) || 0,
-		}))
+	const entriesByName = new Map<string, VanityEntry>()
+	const now = Math.floor(Date.now() / 1000)
+	for (const event of [...eventArray].reverse()) {
+		const isUnified = event.tags.some((tag) => tag[0] === 'd' && tag[1] === unifiedDTag)
+		const entries = isUnified
+			? event.tags
+					.filter((tag) => tag[0] === 'name' && tag[1] && tag[2] && tag[3])
+					.map((tag) => ({
+						vanityName: tag[1].toLowerCase(),
+						pubkey: tag[2],
+						validUntil: Number.parseInt(tag[3], 10) || 0,
+						isUnified: true,
+					}))
+			: event.tags
+					.filter((tag) => tag[0] === 'vanity' && tag[1] && tag[2] && tag[3])
+					.map((tag) => ({
+						vanityName: tag[1].toLowerCase(),
+						pubkey: tag[2],
+						validUntil: Number.parseInt(tag[3], 10) || 0,
+						isUnified: false,
+					}))
+		for (const entry of entries) {
+			const current = entriesByName.get(entry.vanityName)
+			if (!current || (entry.isUnified && (entry.validUntil > now || current.validUntil <= now))) {
+				entriesByName.set(entry.vanityName, entry)
+			}
+		}
+	}
 
 	return {
-		entries,
-		lastUpdated: latestEvent.created_at ?? 0,
-		event: latestEvent,
+		entries: Array.from(entriesByName.values()),
+		lastUpdated: eventArray[0].created_at ?? 0,
+		event: eventArray[0],
 	}
 }
 
 /**
  * Hook to fetch vanity settings for the app
  */
-export const useVanitySettings = (appPubkey?: string) => {
+export const useVanitySettings = (appPubkey?: string, handlerId?: string) => {
 	const queryClient = useQueryClient()
 	const ndk = ndkActions.getNDK()
 
@@ -83,7 +104,7 @@ export const useVanitySettings = (appPubkey?: string) => {
 		const vanityFilter = {
 			kinds: [30000],
 			authors: [appPubkey],
-			'#d': ['vanity-urls'],
+			'#d': ['vanity-urls', `${handlerId || 'plebeian-market-handler'}-storefront-names`],
 		}
 
 		const subscription = ndk.subscribe(vanityFilter, {
@@ -92,18 +113,18 @@ export const useVanitySettings = (appPubkey?: string) => {
 
 		// Event handler for vanity updates
 		subscription.on('event', (newEvent) => {
-			queryClient.invalidateQueries({ queryKey: configKeys.vanity(appPubkey) })
+			queryClient.invalidateQueries({ queryKey: configKeys.vanity(appPubkey, handlerId) })
 		})
 
 		// Clean up subscription when unmounting
 		return () => {
 			subscription.stop()
 		}
-	}, [appPubkey, ndk, queryClient])
+	}, [appPubkey, handlerId, ndk, queryClient])
 
 	return useQuery({
-		queryKey: configKeys.vanity(appPubkey || ''),
-		queryFn: () => fetchVanitySettings(appPubkey),
+		queryKey: configKeys.vanity(appPubkey || '', handlerId),
+		queryFn: () => fetchVanitySettings(appPubkey, handlerId),
 		enabled: !!appPubkey,
 		staleTime: 30000,
 		refetchOnMount: true,

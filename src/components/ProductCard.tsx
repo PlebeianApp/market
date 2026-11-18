@@ -26,9 +26,11 @@ import { TestListingNotice } from './TestListingNotice'
 
 export interface ProductCardProps extends React.HTMLAttributes<HTMLDivElement> {
 	product: NDKEvent
+	appearance?: 'marketplace' | 'storefront'
 }
 
-export function ProductCard({ product, className }: ProductCardProps) {
+export function ProductCard({ product, className, appearance = 'marketplace' }: ProductCardProps) {
+	const isStorefront = appearance === 'storefront'
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
@@ -93,18 +95,27 @@ export function ProductCard({ product, className }: ProductCardProps) {
 			to={`/products/${product.id}`}
 			onClick={handleProductClick}
 			className={cn(
-				'border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:shadow-md transition-shadow duration-200 cursor-pointer',
+				'flex flex-col w-full max-w-full overflow-hidden transition-shadow duration-200 cursor-pointer',
+				isStorefront
+					? 'group rounded-none bg-transparent text-foreground'
+					: 'border border-zinc-800 rounded-lg bg-white shadow-sm hover:shadow-md',
 				className,
 			)}
 			data-testid="product-card"
+			data-appearance={appearance}
 		>
 			{/* Square aspect ratio container for image */}
-			<div className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
+			<div
+				className={cn('relative aspect-square overflow-hidden block', isStorefront ? 'rounded-2xl bg-muted' : 'border-b border-zinc-800')}
+			>
 				{images && images.length > 0 ? (
 					<Media
 						src={images[0][1]}
 						alt={title}
-						className="w-full h-full object-cover rounded-t-[calc(var(--radius)-1px)] hover:scale-105 transition-transform duration-200"
+						className={cn(
+							'w-full h-full object-cover hover:scale-105 transition-transform duration-200',
+							!isStorefront && 'rounded-t-[calc(var(--radius)-1px)]',
+						)}
 					/>
 				) : (
 					<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 rounded-lg hover:bg-gray-200 transition-colors duration-200">
@@ -117,9 +128,14 @@ export function ProductCard({ product, className }: ProductCardProps) {
 				{testLabelCoordinate && <TestListingNotice coordinate={testLabelCoordinate} variant="icon" className="absolute top-2 right-2" />}
 			</div>
 
-			<div className="p-2 flex flex-col gap-2 flex-grow">
+			<div className={cn('flex flex-col gap-2 flex-grow', isStorefront ? 'py-5' : 'p-2')}>
 				{/* Product title */}
-				<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">
+				<h2
+					className={cn(
+						'font-medium overflow-hidden text-ellipsis',
+						isStorefront ? 'text-lg leading-snug' : 'text-sm border-b border-[var(--light-gray)] pb-2 whitespace-nowrap',
+					)}
+				>
 					{title}
 				</h2>
 

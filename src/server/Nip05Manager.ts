@@ -170,7 +170,7 @@ export class Nip05ManagerImpl extends ZapPurchaseManager<Nip05Entry> {
 		return this.loadExistingRegistry(appPubkey)
 	}
 
-	private isValidUsername(name: string): boolean {
+	public isValidUsername(name: string): boolean {
 		// Allow alphanumeric, hyphens, underscores, dots, 1-30 characters
 		const regex = /^[a-z0-9][a-z0-9._-]{0,28}[a-z0-9]$|^[a-z0-9]$/
 		return regex.test(name.toLowerCase())

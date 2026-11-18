@@ -37,6 +37,7 @@ export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProp
 		maxReports: 100,
 		threshold: 1000,
 		autoLoad: true,
+		enabled: isOpen && activeTab === 'viewer',
 	})
 
 	// Gather system information from browser

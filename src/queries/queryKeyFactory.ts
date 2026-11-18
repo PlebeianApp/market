@@ -103,8 +103,8 @@ export const configKeys = {
 	admins: (appPubkey: string) => [...configKeys.all, 'admins', appPubkey] as const,
 	editors: (appPubkey: string) => [...configKeys.all, 'editors', appPubkey] as const,
 	blacklist: (appPubkey: string) => [...configKeys.all, 'blacklist', appPubkey] as const,
-	vanity: (appPubkey: string) => [...configKeys.all, 'vanity', appPubkey] as const,
-	nip05: (appPubkey: string) => [...configKeys.all, 'nip05', appPubkey] as const,
+	vanity: (appPubkey: string, handlerId?: string) => [...configKeys.all, 'vanity', appPubkey, handlerId] as const,
+	nip05: (appPubkey: string, handlerId?: string) => [...configKeys.all, 'nip05', appPubkey, handlerId] as const,
 	featuredProducts: (appPubkey: string) => [...configKeys.all, 'featuredProducts', appPubkey] as const,
 	featuredCollections: (appPubkey: string) => [...configKeys.all, 'featuredCollections', appPubkey] as const,
 	featuredAuctions: (appPubkey: string) => [...configKeys.all, 'featuredAuctions', appPubkey] as const,
@@ -202,4 +202,10 @@ export const liveActivityKeys = {
 	all: ['liveActivities'] as const,
 	byCoord: (auctionCoord: string) => [...liveActivityKeys.all, 'byCoord', auctionCoord] as const,
 	chatMessages: (liveActivityCoord: string) => [...liveActivityKeys.all, 'chat', liveActivityCoord] as const,
+} as const
+
+export const storefrontKeys = {
+	all: ['storefront'] as const,
+	/** One author's storefront page document (kind 30024, d=storefront-page). */
+	page: (pubkey: string) => [...storefrontKeys.all, 'page', pubkey] as const,
 } as const
